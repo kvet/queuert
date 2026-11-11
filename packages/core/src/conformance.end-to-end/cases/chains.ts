@@ -54,10 +54,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                   assert.deepEqual(job.id, chain.id);
                   assert.deepEqual(job.chainId, chain.id);
 
-                  return withCaseTransaction(stateAdapter, async (txCtx, txHooks) => {
+                  return withCaseTransaction(stateAdapter, async (txCtx) => {
                     const completedJob = await complete({
                       ...txCtx,
-                      txHooks,
                       continueWith: {
                         typeName: "linear_next",
                         input: { valueNext: job.input.value + 1 },
@@ -77,10 +76,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                   assert.notDeepEqual(job.id, chain.id);
                   assert.deepEqual(job.chainId, chain.id);
 
-                  return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+                  return withCaseTransaction(stateAdapter, async (txCtx) =>
                     complete({
                       ...txCtx,
-                      txHooks,
                       continueWith: {
                         typeName: "linear_next_next",
                         input: { valueNextNext: job.input.valueNext + 1 },
@@ -94,10 +92,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                   assert.notDeepEqual(job.id, chain.id);
                   assert.deepEqual(job.chainId, chain.id);
 
-                  return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+                  return withCaseTransaction(stateAdapter, async (txCtx) =>
                     complete({
                       ...txCtx,
-                      txHooks,
                       output: {
                         result: job.input.valueNextNext,
                       },
@@ -109,10 +106,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "linear",
             input: { value: 1 },
           }),
@@ -155,10 +151,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
             processors: {
               main: {
                 attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
                     complete({
                       ...txCtx,
-                      txHooks,
                       continueWith: {
                         typeName: job.input.value % 2 === 0 ? "branch1" : "branch2",
                         input: { valueBranched: job.input.value },
@@ -168,10 +163,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               },
               branch1: {
                 attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
                     complete({
                       ...txCtx,
-                      txHooks,
                       output: {
                         result1: job.input.valueBranched,
                       },
@@ -180,10 +174,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               },
               branch2: {
                 attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
                     complete({
                       ...txCtx,
-                      txHooks,
                       output: {
                         result2: job.input.valueBranched,
                       },
@@ -194,18 +187,16 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           }),
         });
 
-        const evenChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const evenChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "main",
             input: { value: 2 },
           }),
         );
-        const oddChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const oddChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "main",
             input: { value: 3 },
           }),
@@ -252,11 +243,10 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
             processors: {
               main: {
                 attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) => {
+                  withCaseTransaction(stateAdapter, async (txCtx) => {
                     if (job.input.value % 2 === 0) {
                       return complete({
                         ...txCtx,
-                        txHooks,
                         continueWith: {
                           typeName: "branch1",
                           input: { valueBranched1: job.input.value },
@@ -265,7 +255,6 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                     }
                     return complete({
                       ...txCtx,
-                      txHooks,
                       continueWith: {
                         typeName: "branch2",
                         input: { valueBranched2: job.input.value },
@@ -275,10 +264,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               },
               branch1: {
                 attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
                     complete({
                       ...txCtx,
-                      txHooks,
                       output: {
                         result: job.input.valueBranched1,
                       },
@@ -287,10 +275,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               },
               branch2: {
                 attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
                     complete({
                       ...txCtx,
-                      txHooks,
                       output: {
                         result: job.input.valueBranched2,
                       },
@@ -301,18 +288,16 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           }),
         });
 
-        const evenChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const evenChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "main",
             input: { value: 2 },
           }),
         );
-        const oddChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const oddChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "main",
             input: { value: 3 },
           }),
@@ -352,27 +337,25 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
             processors: {
               loop: {
                 attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
                     job.input.counter < 3
                       ? complete({
                           ...txCtx,
-                          txHooks,
                           continueWith: {
                             typeName: "loop",
                             input: { counter: job.input.counter + 1 },
                           },
                         })
-                      : complete({ ...txCtx, txHooks, output: { done: true } }),
+                      : complete({ ...txCtx, output: { done: true } }),
                   ),
               },
             },
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "loop",
             input: { counter: 0 },
           }),
@@ -411,10 +394,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
             processors: {
               start: {
                 attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
                     complete({
                       ...txCtx,
-                      txHooks,
                       continueWith: {
                         typeName: "end",
                         input: { result: job.input.value + 1 },
@@ -424,11 +406,10 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               },
               end: {
                 attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) => {
+                  withCaseTransaction(stateAdapter, async (txCtx) => {
                     if (job.input.result < 3) {
                       return complete({
                         ...txCtx,
-                        txHooks,
                         continueWith: {
                           typeName: "start",
                           input: { value: job.input.result },
@@ -437,7 +418,6 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                     } else {
                       return complete({
                         ...txCtx,
-                        txHooks,
                         output: { finalResult: job.input.result },
                       });
                     }
@@ -447,10 +427,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "start",
             input: { value: 0 },
           }),
@@ -484,10 +463,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               entryA: {
                 attemptHandler: async ({ job, complete }) => {
                   assert.equal(job.chainTypeName, "entryA");
-                  return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+                  return withCaseTransaction(stateAdapter, async (txCtx) =>
                     complete({
                       ...txCtx,
-                      txHooks,
                       continueWith: { typeName: "shared", input: { data: 1 } },
                     }),
                   );
@@ -496,10 +474,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               entryB: {
                 attemptHandler: async ({ job, complete }) => {
                   assert.equal(job.chainTypeName, "entryB");
-                  return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+                  return withCaseTransaction(stateAdapter, async (txCtx) =>
                     complete({
                       ...txCtx,
-                      txHooks,
                       continueWith: { typeName: "shared", input: { data: 2 } },
                     }),
                   );
@@ -508,8 +485,8 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               shared: {
                 attemptHandler: async ({ job, complete }) => {
                   assert.ok(["entryA", "entryB"].includes(job.chainTypeName));
-                  return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: { done: true } }),
+                  return withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: { done: true } }),
                   );
                 },
               },
@@ -517,18 +494,16 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           }),
         });
 
-        const chainA = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chainA = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "entryA",
             input: { fromA: true },
           }),
         );
-        const chainB = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chainB = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "entryB",
             input: { fromB: true },
           }),
@@ -573,23 +548,19 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
             processors: {
               parent: {
                 attemptHandler: async ({ job, complete }) => {
-                  const independentChain = await withCaseTransaction(
-                    stateAdapter,
-                    async (txCtx, txHooks) =>
-                      client.createChain({
-                        ...txCtx,
-                        txHooks,
-                        typeName: "independent",
-                        input: { fromParent: job.input.value },
-                      }),
+                  const independentChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+                    client.createChain({
+                      ...txCtx,
+                      typeName: "independent",
+                      input: { fromParent: job.input.value },
+                    }),
                   );
 
                   independentChainCreated.resolve(independentChain.id);
 
-                  return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+                  return withCaseTransaction(stateAdapter, async (txCtx) =>
                     complete({
                       ...txCtx,
-                      txHooks,
                       output: {
                         childChainId: independentChain.id,
                       },
@@ -599,10 +570,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               },
               independent: {
                 attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
                     complete({
                       ...txCtx,
-                      txHooks,
                       output: {
                         result: job.input.fromParent * 2,
                       },
@@ -613,10 +583,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           }),
         });
 
-        const parentChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const parentChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "parent",
             input: { value: 42 },
           }),
@@ -658,10 +627,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
             processors: {
               step1: {
                 attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
                     complete({
                       ...txCtx,
-                      txHooks,
                       continueWith: { typeName: "step2", id: userId, input: null },
                     }),
                   ),
@@ -669,8 +637,8 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               step2: {
                 attemptHandler: async ({ job, complete }) => {
                   assert.equal(job.id, userId);
-                  return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: { id: job.id } }),
+                  return withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: { id: job.id } }),
                   );
                 },
               },
@@ -678,8 +646,8 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "step1", input: null }),
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "step1", input: null }),
         );
 
         await workerRunner.start();
@@ -716,11 +684,10 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
             processors: {
               step1: {
                 attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) => {
+                  withCaseTransaction(stateAdapter, async (txCtx) => {
                     try {
                       return await complete({
                         ...txCtx,
-                        txHooks,
                         continueWith: { typeName: "step2", id: "bad-id", input: null },
                       });
                     } catch (err) {
@@ -731,16 +698,16 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               },
               step2: {
                 attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: null }),
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: null }),
                   ),
               },
             },
           }),
         });
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "step1", input: null }),
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "step1", input: null }),
         );
 
         await workerRunner.start();
@@ -781,38 +748,36 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               step1: {
                 backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
                 attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) => {
+                  withCaseTransaction(stateAdapter, async (txCtx) => {
                     if (job.attempt > 1) {
                       collisionOccurred = true;
                       return complete({
                         ...txCtx,
-                        txHooks,
                         continueWith: { typeName: "step2", input: null },
                       });
                     }
                     return complete({
                       ...txCtx,
-                      txHooks,
                       continueWith: { typeName: "step2", id: sharedId, input: null },
                     });
                   }),
               },
               step2: {
                 attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: null }),
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: null }),
                   ),
               },
             },
           }),
         });
 
-        const chain1 = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "step1", input: null }),
+        const chain1 = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "step1", input: null }),
         );
 
-        const chain2 = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "step1", input: null }),
+        const chain2 = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "step1", input: null }),
         );
 
         await workerRunner.start();

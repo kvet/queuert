@@ -12,7 +12,7 @@
 import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
-import { createClient, createWorkerRunner, createProcessors, withTxHooks } from "queuert";
+import { createClient, createWorkerRunner, createProcessors } from "queuert";
 import { z } from "zod";
 
 import { createZodCodecJobTypes } from "./zod-codec-adapter.ts";
@@ -60,17 +60,14 @@ await using workerRunner = createWorkerRunner({
           );
 
           const from = new Date(job.input.runAt.getTime() - 24 * 60 * 60 * 1000);
-          return withTxHooks(async (txHooks) =>
-            stateAdapter.withTransaction(async (ctx) =>
-              complete({
-                ...ctx,
-                txHooks,
-                continueWith: {
-                  typeName: "render-report",
-                  input: { reportId: job.input.reportId, from, to: job.input.runAt },
-                },
-              }),
-            ),
+          return stateAdapter.withTransaction(async (ctx) =>
+            complete({
+              ...ctx,
+              continueWith: {
+                typeName: "render-report",
+                input: { reportId: job.input.reportId, from, to: job.input.runAt },
+              },
+            }),
           );
         },
       },
@@ -79,14 +76,11 @@ await using workerRunner = createWorkerRunner({
           const hours = (job.input.to.getTime() - job.input.from.getTime()) / 3_600_000;
           console.log(`Rendering ${job.input.reportId} over a ${hours}h window`);
 
-          return withTxHooks(async (txHooks) =>
-            stateAdapter.withTransaction(async (ctx) =>
-              complete({
-                ...ctx,
-                txHooks,
-                output: { renderedAt: new Date(), rowCount: 128 },
-              }),
-            ),
+          return stateAdapter.withTransaction(async (ctx) =>
+            complete({
+              ...ctx,
+              output: { renderedAt: new Date(), rowCount: 128 },
+            }),
           );
         },
       },
@@ -97,15 +91,12 @@ await using workerRunner = createWorkerRunner({
 await workerRunner.start();
 
 const runAt = new Date("2024-06-01T09:00:00.000Z");
-const chain = await withTxHooks(async (txHooks) =>
-  stateAdapter.withTransaction(async (ctx) =>
-    client.createChain({
-      ...ctx,
-      txHooks,
-      typeName: "schedule-report",
-      input: { reportId: "weekly-sales", runAt },
-    }),
-  ),
+const chain = await stateAdapter.withTransaction(async (ctx) =>
+  client.createChain({
+    ...ctx,
+    typeName: "schedule-report",
+    input: { reportId: "weekly-sales", runAt },
+  }),
 );
 
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });

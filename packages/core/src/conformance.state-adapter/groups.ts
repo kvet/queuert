@@ -52,16 +52,22 @@ import {
 } from "./cases/start-job-attempt.ts";
 import { startWorkerGroup } from "./cases/start-worker.ts";
 import { stopWorkerGroup } from "./cases/stop-worker.ts";
+import { txCallbacksGroup, txCallbacksSavepointGroup } from "./cases/tx-callbacks.ts";
 import { unblockJobsGroup, unblockJobsConcurrentTransactionsGroup } from "./cases/unblock-jobs.ts";
 import {
   withTransactionGroup,
   withTransactionConcurrentTransactionsGroup,
 } from "./cases/with-transaction.ts";
-import type { SchemaFenceConformanceContext, StateAdapterConformanceContext } from "./types.ts";
+import type {
+  SavepointConformanceContext,
+  SchemaFenceConformanceContext,
+  StateAdapterConformanceContext,
+} from "./types.ts";
 
 export const stateAdapterBaseGroups: ConformanceGroup<StateAdapterConformanceContext>[] = [
   withTransactionGroup,
   isTransactionGroup,
+  txCallbacksGroup,
   getChainsGroup,
   getJobsGroup,
   getWorkersGroup,
@@ -129,4 +135,9 @@ export const stateAdapterSchemaFenceConcurrentTransactionGroups: ConformanceGrou
  */
 export const stateAdapterCountCapGroups: ConformanceGroup<StateAdapterConformanceContext>[] = [
   countCapGroup,
+];
+
+/** The cases that need a savepoint of an open transaction. */
+export const stateAdapterSavepointGroups: ConformanceGroup<SavepointConformanceContext>[] = [
+  txCallbacksSavepointGroup,
 ];

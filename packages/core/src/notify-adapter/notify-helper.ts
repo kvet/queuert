@@ -1,20 +1,17 @@
 import { noop, noopAsync } from "@queuert/helpers";
 
-import type { TxHooks } from "../tx-hooks/tx-hooks.ts";
 import type { NotifyAdapter } from "./notify-adapter.ts";
 
-type NotifyTxHooks = Pick<TxHooks, "onCommit">;
-
 export type NotifyHelper = {
-  notifyJobsScheduled: (txHooks: NotifyTxHooks, typeNames: string[]) => void;
-  notifyChainsCompleted: (txHooks: NotifyTxHooks, chainIds: string[]) => void;
-  notifyJobAttemptsLost: (txHooks: NotifyTxHooks, jobIds: string[]) => void;
+  notifyJobsScheduled: (typeNames: string[]) => Promise<void>;
+  notifyChainsCompleted: (chainIds: string[]) => Promise<void>;
+  notifyJobAttemptsLost: (jobIds: string[]) => Promise<void>;
   listenJobScheduled: NotifyAdapter["listenJobScheduled"];
   listenChainCompleted: NotifyAdapter["listenChainCompleted"];
   listenJobAttemptLost: NotifyAdapter["listenJobAttemptLost"];
 };
 
-const notifyOnCommit = (notify: (values: string[]) => Promise<void>) => {
+const batchNotify = (notify: (values: string[]) => Promise<void>) => {
   let pending: Set<string> | undefined;
   let sending: Promise<void> = Promise.resolve();
   const sendPending = async (): Promise<void> => {
@@ -22,7 +19,8 @@ const notifyOnCommit = (notify: (values: string[]) => Promise<void>) => {
     pending = undefined;
     return notify(Array.from(batch)).catch(noop);
   };
-  const send = async (values: string[]): Promise<void> => {
+  return async (values: string[]): Promise<void> => {
+    if (values.length === 0) return;
     if (pending === undefined) {
       pending = new Set(values);
       sending = Promise.resolve().then(sendPending);
@@ -31,18 +29,12 @@ const notifyOnCommit = (notify: (values: string[]) => Promise<void>) => {
     }
     return sending;
   };
-  return (txHooks: NotifyTxHooks, values: string[]): void => {
-    if (values.length === 0) return;
-    txHooks.onCommit(async () => send(values));
-  };
 };
 
 export const createNotifyHelper = ({ adapter }: { adapter: NotifyAdapter }): NotifyHelper => ({
-  notifyJobsScheduled: notifyOnCommit(async (typeNames) => adapter.notifyJobsScheduled(typeNames)),
-  notifyChainsCompleted: notifyOnCommit(async (chainIds) =>
-    adapter.notifyChainsCompleted(chainIds),
-  ),
-  notifyJobAttemptsLost: notifyOnCommit(async (jobIds) => adapter.notifyJobAttemptsLost(jobIds)),
+  notifyJobsScheduled: batchNotify(async (typeNames) => adapter.notifyJobsScheduled(typeNames)),
+  notifyChainsCompleted: batchNotify(async (chainIds) => adapter.notifyChainsCompleted(chainIds)),
+  notifyJobAttemptsLost: batchNotify(async (jobIds) => adapter.notifyJobAttemptsLost(jobIds)),
   listenJobScheduled: async (typeNames, onNotification) =>
     adapter.listenJobScheduled(typeNames, onNotification).catch(() => noopAsync),
   listenChainCompleted: async (chainId, onNotification) =>

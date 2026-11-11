@@ -2,6 +2,7 @@ import type { PgStateProvider } from "@queuert/postgres";
 import type { ExtractTablesWithRelations } from "drizzle-orm";
 import type { NodePgDatabase, NodePgQueryResultHKT } from "drizzle-orm/node-postgres";
 import { PgTransaction } from "drizzle-orm/pg-core";
+import { type TxHooks, withTxHooks } from "queuert";
 
 export type DrizzlePgTransaction<TSchema extends Record<string, unknown>> = PgTransaction<
   NodePgQueryResultHKT,
@@ -10,6 +11,7 @@ export type DrizzlePgTransaction<TSchema extends Record<string, unknown>> = PgTr
 >;
 export type DrizzlePgContext<TSchema extends Record<string, unknown>> = {
   tx: DrizzlePgTransaction<TSchema>;
+  txHooks: TxHooks;
 };
 
 export const createDrizzlePgStateProvider = <TSchema extends Record<string, unknown>>({
@@ -25,8 +27,15 @@ export const createDrizzlePgStateProvider = <TSchema extends Record<string, unkn
   prepareStatements?: boolean;
 }): PgStateProvider<DrizzlePgContext<TSchema>> => {
   return {
-    withTransaction: async (cb) => db.transaction(async (tx) => cb({ tx })),
+    withTransaction: async (cb) =>
+      withTxHooks(async (txHooks) => db.transaction(async (tx) => cb({ tx, txHooks }))),
     isTransaction: (txCtx) => txCtx.tx instanceof PgTransaction,
+    onTransactionCommit: (txCtx, callback) => {
+      txCtx.txHooks.onCommit(callback);
+    },
+    onTransactionRollback: (txCtx, callback) => {
+      txCtx.txHooks.onRollback(callback);
+    },
     classifyError: ({ error }) => {
       type DriverError = { code?: unknown; message?: unknown; cause?: DriverError };
       const driverError = [

@@ -36,8 +36,8 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               test: {
                 attemptHandler: async ({ job, complete }) => {
                   await sleep(50);
-                  return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: { result: job.input.value } }),
+                  return withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: { result: job.input.value } }),
                   );
                 },
               },
@@ -46,8 +46,8 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         });
 
         await workerRunner.start();
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "test", input: { value: 1 } }),
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "test", input: { value: 1 } }),
         );
 
         const signal = AbortSignal.timeout(2000);
@@ -77,8 +77,8 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                 test: {
                   attemptHandler: async ({ job, complete }) => {
                     await sleep(50);
-                    return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                      complete({ ...txCtx, txHooks, output: { result: job.input.value } }),
+                    return withCaseTransaction(stateAdapter, async (txCtx) =>
+                      complete({ ...txCtx, output: { result: job.input.value } }),
                     );
                   },
                 },
@@ -92,10 +92,9 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           await workerRunner.start();
         }
 
-        const chains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chains = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChains({
             ...txCtx,
-            txHooks,
             items: Array.from({ length: 5 }, (_, i) => ({
               typeName: "test",
               input: { value: i },
@@ -137,8 +136,8 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               blocker: {
                 attemptHandler: async ({ complete }) => {
                   await sleep(25);
-                  return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: { allowed: true } }),
+                  return withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: { allowed: true } }),
                   );
                 },
               },
@@ -155,8 +154,8 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               main: {
                 attemptHandler: async ({ complete }) => {
                   await sleep(25);
-                  return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: { done: true } }),
+                  return withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: { done: true } }),
                   );
                 },
               },
@@ -166,16 +165,14 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         await workerRunner1.start();
         await workerRunner2.start();
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) => {
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) => {
           const blockerChain = await client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "blocker",
             input: null,
           });
           return client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "main",
             input: null,
             blockers: [blockerChain],
@@ -209,10 +206,9 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               step1: {
                 attemptHandler: async ({ complete }) => {
                   await sleep(25);
-                  return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+                  return withCaseTransaction(stateAdapter, async (txCtx) =>
                     complete({
                       ...txCtx,
-                      txHooks,
                       continueWith: { typeName: "step2", input: null },
                     }),
                   );
@@ -231,8 +227,8 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               step2: {
                 attemptHandler: async ({ complete }) => {
                   await sleep(25);
-                  return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: { finished: true } }),
+                  return withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: { finished: true } }),
                   );
                 },
               },
@@ -242,8 +238,8 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         await workerRunner1.start();
         await workerRunner2.start();
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "step1", input: null }),
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "step1", input: null }),
         );
 
         const signal = AbortSignal.timeout(100);
@@ -289,16 +285,15 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         });
 
         await workerRunner.start();
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "test", input: null }),
         );
 
         await jobStarted.promise;
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...chain,
             handler: async ({ job, completeJob }) =>
               completeJob(job, async ({ complete }) =>
@@ -348,8 +343,8 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                       await jobCompleted.promise;
                       await sleep(10);
 
-                      return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                        complete({ ...txCtx, txHooks, output: { result: "recovered" } }),
+                      return withCaseTransaction(stateAdapter, async (txCtx) =>
+                        complete({ ...txCtx, output: { result: "recovered" } }),
                       );
                     }
 
@@ -368,8 +363,8 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         await using zombieWorkerRunner = createTestWorkerRunner(zombieClient);
         await zombieWorkerRunner.start();
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "test", input: null }),
         );
 
         await jobStarted.promise;
@@ -409,8 +404,8 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                   throw new Error("first attempt fails");
                 }
 
-                return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                  complete({ ...txCtx, txHooks, output: { result: "retried" } }),
+                return withCaseTransaction(stateAdapter, async (txCtx) =>
+                  complete({ ...txCtx, output: { result: "retried" } }),
                 );
               },
               backoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
@@ -430,8 +425,8 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         });
 
         await failingWorkerRunner.start();
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "test", input: null }),
         );
         await firstAttemptStarted.promise;
 
@@ -461,10 +456,9 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         const spyNotifyAdapter = createSpyNotifyAdapter(notifyAdapter);
         const client = createClient({ stateAdapter, notifyAdapter: spyNotifyAdapter, jobTypes });
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChains({
             ...txCtx,
-            txHooks,
             items: [
               { typeName: "first", input: null },
               { typeName: "first", input: null },
@@ -523,8 +517,8 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 test: {
                   attemptHandler: async ({ complete }) =>
-                    withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                      complete({ ...txCtx, txHooks, output: null }),
+                    withCaseTransaction(stateAdapter, async (txCtx) =>
+                      complete({ ...txCtx, output: null }),
                     ),
                 },
               },
@@ -542,8 +536,8 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           { timeoutMs: 2000 },
         );
         recording = true;
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "test", input: null }),
         );
         await client.awaitChain(chain, { timeoutMs: 2000 });
         await retryUntilPasses(
@@ -565,10 +559,9 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         const spyNotifyAdapter = createSpyNotifyAdapter(notifyAdapter);
         const client = createClient({ stateAdapter, notifyAdapter: spyNotifyAdapter, jobTypes });
 
-        const chains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chains = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChains({
             ...txCtx,
-            txHooks,
             items: [
               { typeName: "test", input: null },
               { typeName: "test", input: null },
@@ -602,11 +595,10 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         });
         spyNotifyAdapter.calls.length = 0;
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) => {
+        await withCaseTransaction(stateAdapter, async (txCtx) => {
           for (const chain of chains) {
             await client.completeChain({
               ...txCtx,
-              txHooks,
               ...chain,
               handler: async ({ job, completeJob }) =>
                 completeJob(job, async ({ complete }) => complete({ output: null })),

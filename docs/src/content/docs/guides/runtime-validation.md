@@ -68,13 +68,11 @@ const jobTypes = createSuperjsonJobTypes<{
 A failed validation throws `JobTypeValidationError`. A `code` identifies which boundary rejected the value, and `typeName` identifies the job type:
 
 ```ts
-import { JobTypeValidationError, withTxHooks } from "queuert";
+import { JobTypeValidationError } from "queuert";
 
 try {
-  await withTxHooks(async (txHooks) =>
-    stateProvider.withTransaction(async (txCtx) =>
-      client.createChain({ ...txCtx, txHooks, typeName: "send-email", input: untrusted }),
-    ),
+  await stateProvider.withTransaction(async (txCtx) =>
+    client.createChain({ ...txCtx, typeName: "send-email", input: untrusted }),
   );
 } catch (err) {
   if (err instanceof JobTypeValidationError && err.code === "invalid_input") {

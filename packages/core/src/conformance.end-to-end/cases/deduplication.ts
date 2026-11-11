@@ -26,32 +26,26 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const [chain1, chain2, chain3] = await withCaseTransaction(
-          stateAdapter,
-          async (txCtx, txHooks) => [
-            await client.createChain({
-              ...txCtx,
-              txHooks,
-              typeName: "test",
-              input: { value: 1 },
-              deduplication: { key: "same-key", scope: "running" },
-            }),
-            await client.createChain({
-              ...txCtx,
-              txHooks,
-              typeName: "test",
-              input: { value: 2 },
-              deduplication: { key: "same-key", scope: "running" },
-            }),
-            await client.createChain({
-              ...txCtx,
-              txHooks,
-              typeName: "test",
-              input: { value: 3 },
-              deduplication: { key: "different-key", scope: "running" },
-            }),
-          ],
-        );
+        const [chain1, chain2, chain3] = await withCaseTransaction(stateAdapter, async (txCtx) => [
+          await client.createChain({
+            ...txCtx,
+            typeName: "test",
+            input: { value: 1 },
+            deduplication: { key: "same-key", scope: "running" },
+          }),
+          await client.createChain({
+            ...txCtx,
+            typeName: "test",
+            input: { value: 2 },
+            deduplication: { key: "same-key", scope: "running" },
+          }),
+          await client.createChain({
+            ...txCtx,
+            typeName: "test",
+            input: { value: 3 },
+            deduplication: { key: "different-key", scope: "running" },
+          }),
+        ]);
 
         assert.equal(chain1.deduplicated, false);
         assert.equal(chain2.deduplicated, true);
@@ -59,10 +53,9 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
         assert.equal(chain3.deduplicated, false);
         assert.notEqual(chain3.id, chain1.id);
 
-        const completed1 = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const completed1 = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...chain1,
             handler: async ({ job, completeJob }) => {
               return completeJob(job, async ({ complete }) =>
@@ -72,10 +65,9 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
           }),
         );
 
-        const completed3 = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const completed3 = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...chain3,
             handler: async ({ job, completeJob }) => {
               return completeJob(job, async ({ complete }) =>
@@ -115,10 +107,9 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain1 = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain1 = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "step1",
             input: { value: 1 },
             deduplication: { key: "multi-step-key", scope: "running" },
@@ -127,10 +118,9 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         assert.equal(chain1.deduplicated, false);
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...chain1,
             handler: async ({ job, completeJob }) => {
               if (job.typeName === "step1") {
@@ -142,10 +132,9 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
           }),
         );
 
-        const chain2 = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain2 = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "step1",
             input: { value: 2 },
             deduplication: { key: "multi-step-key", scope: "running" },
@@ -155,10 +144,9 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
         assert.equal(chain2.deduplicated, true);
         assert.equal(chain2.id, chain1.id);
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...chain1,
             handler: async ({ job, completeJob }) => {
               if (job.typeName === "step2") {
@@ -170,10 +158,9 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
           }),
         );
 
-        const chain3 = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain3 = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "step1",
             input: { value: 3 },
             deduplication: { key: "multi-step-key", scope: "running" },
@@ -203,20 +190,18 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "step1",
             input: { value: 1 },
             deduplication: { key: "any-multi-step-key", scope: "any" },
           }),
         );
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...chain,
             handler: async ({ job, completeJob }) => {
               if (job.typeName === "step1") {
@@ -233,10 +218,9 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
           }),
         );
 
-        const matched = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const matched = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "step1",
             input: { value: 2 },
             deduplication: { key: "any-multi-step-key", scope: "any" },
@@ -264,20 +248,18 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain1 = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain1 = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: { value: 1 },
             deduplication: { key: "coexist-key", scope: "running" },
           }),
         );
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...chain1,
             handler: async ({ job, completeJob }) => {
               return completeJob(job, async ({ complete }) => complete({ output: { result: 1 } }));
@@ -285,10 +267,9 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
           }),
         );
 
-        const chain2 = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain2 = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: { value: 2 },
             deduplication: { key: "coexist-key", scope: "running" },
@@ -298,10 +279,9 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
         assert.equal(chain2.deduplicated, false);
         assert.notEqual(chain2.id, chain1.id);
 
-        const chain3 = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain3 = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: { value: 3 },
             deduplication: { key: "coexist-key", scope: "running" },
@@ -327,20 +307,18 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const allChain1 = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const allChain1 = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: { value: 1 },
             deduplication: { key: "all-key", scope: "any" },
           }),
         );
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...allChain1,
             handler: async ({ job, completeJob }) => {
               await completeJob(job, async ({ complete }) =>
@@ -350,10 +328,9 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
           }),
         );
 
-        const allChain2 = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const allChain2 = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: { value: 2 },
             deduplication: { key: "all-key", scope: "any" },
@@ -363,20 +340,18 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
         assert.equal(allChain2.deduplicated, true);
         assert.equal(allChain2.id, allChain1.id);
 
-        const completedChain1 = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const completedChain1 = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: { value: 3 },
             deduplication: { key: "completed-key", scope: "running" },
           }),
         );
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...completedChain1,
             handler: async ({ job, completeJob }) => {
               await completeJob(job, async ({ complete }) =>
@@ -386,10 +361,9 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
           }),
         );
 
-        const completedChain2 = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const completedChain2 = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: { value: 4 },
             deduplication: { key: "completed-key", scope: "running" },
@@ -399,10 +373,9 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
         assert.equal(completedChain2.deduplicated, false);
         assert.notEqual(completedChain2.id, completedChain1.id);
 
-        const completed2 = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const completed2 = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...completedChain2,
             handler: async ({ job, completeJob }) => {
               return completeJob(job, async ({ complete }) =>
@@ -435,17 +408,15 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const [chainA, chainB] = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) => [
+        const [chainA, chainB] = await withCaseTransaction(stateAdapter, async (txCtx) => [
           await client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "typeA",
             input: { value: 1 },
             deduplication: { key: "shared-key", scope: "running" },
           }),
           await client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "typeB",
             input: { value: 2 },
             deduplication: { key: "shared-key", scope: "running" },
@@ -472,30 +443,27 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const [chain1, chain2, chain3] = await withCaseTransaction(
-          stateAdapter,
-          async (txCtx, txHooks) =>
-            client.createChains({
-              ...txCtx,
-              txHooks,
-              items: [
-                {
-                  typeName: "test",
-                  input: { value: 1 },
-                  deduplication: { key: "same-key", scope: "running" },
-                },
-                {
-                  typeName: "test",
-                  input: { value: 2 },
-                  deduplication: { key: "same-key", scope: "running" },
-                },
-                {
-                  typeName: "test",
-                  input: { value: 3 },
-                  deduplication: { key: "different-key", scope: "running" },
-                },
-              ],
-            }),
+        const [chain1, chain2, chain3] = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChains({
+            ...txCtx,
+            items: [
+              {
+                typeName: "test",
+                input: { value: 1 },
+                deduplication: { key: "same-key", scope: "running" },
+              },
+              {
+                typeName: "test",
+                input: { value: 2 },
+                deduplication: { key: "same-key", scope: "running" },
+              },
+              {
+                typeName: "test",
+                input: { value: 3 },
+                deduplication: { key: "different-key", scope: "running" },
+              },
+            ],
+          }),
         );
 
         assert.equal(chain1.deduplicated, false);
@@ -520,20 +488,18 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const existing = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const existing = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: { value: 100 },
             deduplication: { key: "existing-key", scope: "running" },
           }),
         );
 
-        const [chain1, chain2] = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const [chain1, chain2] = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChains({
             ...txCtx,
-            txHooks,
             items: [
               {
                 typeName: "test",
@@ -570,20 +536,18 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const anyChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const anyChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: { value: 1 },
             deduplication: { key: "any-key", scope: "any" },
           }),
         );
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...anyChain,
             handler: async ({ job, completeJob }) => {
               await completeJob(job, async ({ complete }) =>
@@ -593,20 +557,18 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
           }),
         );
 
-        const incompleteChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const incompleteChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: { value: 2 },
             deduplication: { key: "incomplete-key", scope: "running" },
           }),
         );
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...incompleteChain,
             handler: async ({ job, completeJob }) => {
               await completeJob(job, async ({ complete }) =>
@@ -618,10 +580,9 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const [anyResult, incompleteResult] = await withCaseTransaction(
           stateAdapter,
-          async (txCtx, txHooks) =>
+          async (txCtx) =>
             client.createChains({
               ...txCtx,
-              txHooks,
               items: [
                 {
                   typeName: "test",
@@ -663,10 +624,9 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const [chainA, chainB] = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const [chainA, chainB] = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChains({
             ...txCtx,
-            txHooks,
             items: [
               {
                 typeName: "typeA",
@@ -705,10 +665,9 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
         for (const deduplication of [{ key: "k" }, { key: "k", scope: "incomplete" }]) {
           await assert.rejects(
             async () =>
-              withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+              withCaseTransaction(stateAdapter, async (txCtx) =>
                 client.createChain({
                   ...txCtx,
-                  txHooks,
                   typeName: "test",
                   input: null,
                   deduplication: deduplication as any,

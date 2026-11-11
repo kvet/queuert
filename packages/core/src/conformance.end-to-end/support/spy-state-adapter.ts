@@ -50,6 +50,12 @@ export const createSpyStateAdapter = <
     calls,
 
     config: stateAdapter.config,
+    onTransactionCommit: (txCtx, callback) => {
+      stateAdapter.onTransactionCommit(txCtx, callback);
+    },
+    onTransactionRollback: (txCtx, callback) => {
+      stateAdapter.onTransactionRollback(txCtx, callback);
+    },
     withTransaction: async (fn) => {
       const call = record({ txCtx: undefined, name: "withTransaction" });
       try {

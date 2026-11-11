@@ -37,6 +37,23 @@ describe("createLatch", () => {
       latch.throwIfTripped("fence cannot be called after the attempt handler has ended");
     }).toThrow(new Error("fence cannot be called after the attempt handler has ended"));
   });
+
+  test("holds true once tripped without a value", () => {
+    const latch = createLatch("closed");
+
+    expect(latch.value).toBeUndefined();
+    latch.trip();
+    expect(latch.value).toBe(true);
+  });
+
+  test("holds the value of the call that tripped it", () => {
+    const latch = createLatch<{ id: string }>("closed");
+    const first = { id: "first" };
+
+    expect(latch.trip(first)).toBe(true);
+    expect(latch.trip({ id: "second" })).toBe(false);
+    expect(latch.value).toBe(first);
+  });
 });
 
 describe("createResettableLatch", () => {
@@ -55,6 +72,17 @@ describe("createResettableLatch", () => {
       latch.throwIfTripped();
     }).not.toThrow();
     expect(latch.trip()).toBe(true);
+  });
+
+  test("reset clears the held value", () => {
+    const latch = createResettableLatch<string>("pending");
+
+    latch.trip("first");
+    latch.reset();
+
+    expect(latch.value).toBeUndefined();
+    expect(latch.trip("second")).toBe(true);
+    expect(latch.value).toBe("second");
   });
 });
 

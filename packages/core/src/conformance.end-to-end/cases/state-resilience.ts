@@ -77,8 +77,8 @@ const completesChainsOverFlakyStateAdapter = async ({
           processors: {
             test: {
               attemptHandler: async ({ job, complete }) =>
-                withCaseTransaction(flakyStateAdapter, async (txCtx, txHooks) =>
-                  complete({ ...txCtx, txHooks, output: { result: job.input.value * 2 } }),
+                withCaseTransaction(flakyStateAdapter, async (txCtx) =>
+                  complete({ ...txCtx, output: { result: job.input.value * 2 } }),
                 ),
             },
           },
@@ -87,10 +87,9 @@ const completesChainsOverFlakyStateAdapter = async ({
     ),
   );
 
-  const chains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+  const chains = await withCaseTransaction(stateAdapter, async (txCtx) =>
     client.createChains({
       ...txCtx,
-      txHooks,
       items: Array.from({ length: 20 }, (_, i) => ({
         typeName: "test",
         input: { value: i },
@@ -207,16 +206,16 @@ export const stateResilienceGroup: ConformanceGroup<StateAdapterConformanceConte
             processors: {
               test: {
                 attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: null }),
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: null }),
                   ),
               },
             },
           }),
         });
 
-        const firstChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+        const firstChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "test", input: null }),
         );
 
         await workerRunner.start();
@@ -227,8 +226,8 @@ export const stateResilienceGroup: ConformanceGroup<StateAdapterConformanceConte
         assert.equal(completedFirstChain.status, "completed");
 
         failuresLeft = 1;
-        const secondChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+        const secondChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "test", input: null }),
         );
         const completedSecondChain = await client.awaitChain(secondChain, {
           pollIntervalMs: 100,
@@ -277,8 +276,8 @@ export const stateResilienceGroup: ConformanceGroup<StateAdapterConformanceConte
                     await sleep(Number.POSITIVE_INFINITY, { signal });
                     throw new Error("lease lost");
                   }
-                  return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: null }),
+                  return withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: null }),
                   );
                 },
               },
@@ -286,10 +285,9 @@ export const stateResilienceGroup: ConformanceGroup<StateAdapterConformanceConte
           }),
         });
 
-        const chains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chains = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChains({
             ...txCtx,
-            txHooks,
             items: [
               { typeName: "test", input: null },
               { typeName: "test", input: null },

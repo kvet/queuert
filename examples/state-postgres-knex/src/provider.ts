@@ -1,7 +1,8 @@
 import type { PgStateProvider } from "@queuert/postgres";
 import type { Knex } from "knex";
+import { type TxHooks, withTxHooks } from "queuert";
 
-export type KnexPgContext = { trx: Knex.Transaction };
+export type KnexPgContext = { trx: Knex.Transaction; txHooks: TxHooks };
 
 const POSITIONAL_PARAM = /\$(\d+)/g;
 
@@ -30,8 +31,16 @@ export const createKnexPgStateProvider = ({
 }): PgStateProvider<KnexPgContext> => {
   return {
     withTransaction: async (cb) =>
-      knex.transaction(async (trx) => cb({ trx }), { doNotRejectOnRollback: false }),
+      withTxHooks(async (txHooks) =>
+        knex.transaction(async (trx) => cb({ trx, txHooks }), { doNotRejectOnRollback: false }),
+      ),
     isTransaction: (txCtx) => txCtx.trx.isTransaction === true,
+    onTransactionCommit: (txCtx, callback) => {
+      txCtx.txHooks.onCommit(callback);
+    },
+    onTransactionRollback: (txCtx, callback) => {
+      txCtx.txHooks.onRollback(callback);
+    },
     classifyError: ({ error }) => {
       const driverError = error as { code?: unknown; message?: unknown } | undefined;
       if (driverError?.code !== "42P01") return undefined;

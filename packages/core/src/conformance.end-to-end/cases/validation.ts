@@ -196,10 +196,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
         await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes: simpleJobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "main",
             input: { value: 42 },
           }),
@@ -234,8 +233,8 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
         });
 
         const at = new Date("2024-01-01T00:00:00.000Z");
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "timed", input: { at } }),
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "timed", input: { at } }),
         );
 
         assert.deepEqual(chain.input, { at });
@@ -252,10 +251,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
 
         await assert.rejects(
           async () =>
-            withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+            withCaseTransaction(stateAdapter, async (txCtx) =>
               client.createChain({
                 ...txCtx,
-                txHooks,
                 // @ts-expect-error testing runtime validation
                 typeName: "nonexistent",
                 input: { value: 1 },
@@ -274,10 +272,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
 
         await assert.rejects(
           async () =>
-            withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+            withCaseTransaction(stateAdapter, async (txCtx) =>
               client.createChain({
                 ...txCtx,
-                txHooks,
                 typeName: "main",
                 // @ts-expect-error testing runtime validation
                 input: { value: "not-a-number" },
@@ -296,11 +293,10 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
 
         await assert.rejects(
           async () =>
-            withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+            withCaseTransaction(stateAdapter, async (txCtx) =>
               // @ts-expect-error testing runtime validation - no blockers
               client.createChain({
                 ...txCtx,
-                txHooks,
                 typeName: "main",
                 input: { id: "main-1" },
               }),
@@ -337,24 +333,21 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
         });
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) => {
+        await withCaseTransaction(stateAdapter, async (txCtx) => {
           const authChain = await client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "auth",
             input: { token: "stored" },
           });
           const forgedAuthChain = { ...authChain, input: { token: "forged" } };
           await client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "main",
             input: null,
             blockers: [forgedAuthChain],
           });
           await client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "main",
             input: null,
             blockers: [{ id: authChain.id }],
@@ -382,18 +375,17 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
             processors: {
               main: {
                 attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: { result: 84 } }),
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: { result: 84 } }),
                   ),
               },
             },
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "main",
             input: { value: 42 },
           }),
@@ -422,9 +414,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
               main: {
                 attemptHandler: async ({ complete }) => {
                   try {
-                    return await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+                    return await withCaseTransaction(stateAdapter, async (txCtx) =>
                       // @ts-expect-error testing runtime validation
-                      complete({ ...txCtx, txHooks, output: { result: "not-a-number" } }),
+                      complete({ ...txCtx, output: { result: "not-a-number" } }),
                     );
                   } catch (error) {
                     validationFailed.resolve(error);
@@ -436,10 +428,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
           }),
         });
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "main",
             input: { value: 42 },
           }),
@@ -469,28 +460,26 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
             processors: {
               step1: {
                 attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
                     complete({
                       ...txCtx,
-                      txHooks,
                       continueWith: { typeName: "step2", input: { data: 1 } },
                     }),
                   ),
               },
               step2: {
                 attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: { result: 42 } }),
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: { result: 42 } }),
                   ),
               },
             },
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "step1",
             input: { value: 1 },
           }),
@@ -523,10 +512,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
               step1: {
                 attemptHandler: async ({ complete }) => {
                   try {
-                    return await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+                    return await withCaseTransaction(stateAdapter, async (txCtx) =>
                       complete({
                         ...txCtx,
-                        txHooks,
                         continueWith: { typeName: "step2", input: { data: 1 } },
                       }),
                     );
@@ -538,18 +526,17 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
               },
               step2: {
                 attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: { result: 1 } }),
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: { result: 1 } }),
                   ),
               },
             },
           }),
         });
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "step1",
             input: { value: 1 },
           }),
@@ -567,19 +554,17 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
         await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes: simpleJobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "main",
             input: { value: 42 },
           }),
         );
 
-        const completedChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const completedChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...chain,
             handler: async ({ job, completeJob }) =>
               completeJob(job, async ({ complete }) => complete({ output: { result: 84 } })),
@@ -599,10 +584,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
         await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes: simpleJobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "main",
             input: { value: 42 },
           }),
@@ -610,10 +594,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
 
         await assert.rejects(
           async () =>
-            withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+            withCaseTransaction(stateAdapter, async (txCtx) =>
               client.completeChain({
                 ...txCtx,
-                txHooks,
                 ...chain,
                 handler: async ({ job, completeJob }) =>
                   completeJob(job, async ({ complete }) =>
@@ -645,27 +628,25 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
             processors: {
               step2: {
                 attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: { result: 42 } }),
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: { result: 42 } }),
                   ),
               },
             },
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "step1",
             input: { value: 1 },
           }),
         );
 
-        const partialChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const partialChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...chain,
             handler: async ({ job, completeJob }) => {
               if (job.typeName === "step1") {
@@ -701,10 +682,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
           jobTypes: continuationNoFollowUpJobTypes,
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "step1",
             input: { value: 1 },
           }),
@@ -712,10 +692,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
 
         await assert.rejects(
           async () =>
-            withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+            withCaseTransaction(stateAdapter, async (txCtx) =>
               client.completeChain({
                 ...txCtx,
-                txHooks,
                 typeName: "step1",
                 id: chain.id,
                 handler: async ({ job, completeJob }) => {
@@ -740,10 +719,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
 
         await assert.rejects(
           async () =>
-            withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+            withCaseTransaction(stateAdapter, async (txCtx) =>
               client.createChain({
                 ...txCtx,
-                txHooks,
                 typeName: "timed",
                 input: { at: "2024-01-01" as unknown as Date },
               }),
@@ -774,10 +752,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
 
         await assert.rejects(
           async () =>
-            withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+            withCaseTransaction(stateAdapter, async (txCtx) =>
               client.createChain({
                 ...txCtx,
-                txHooks,
                 typeName: "timed",
                 input: { at: new Date("2024-01-01T00:00:00.000Z") },
               }),
@@ -806,8 +783,8 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
             processors: {
               timed: {
                 attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: { doneAt } }),
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: { doneAt } }),
                   ),
               },
             },
@@ -817,10 +794,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
         const first = new Date("2024-01-01T00:00:00.000Z");
         const second = new Date("2024-02-01T00:00:00.000Z");
         const pending = new Date("2024-04-01T00:00:00.000Z");
-        const chains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chains = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChains({
             ...txCtx,
-            txHooks,
             items: [
               { typeName: "timed", input: { at: first } },
               { typeName: "timed", input: { at: second } },
@@ -830,8 +806,8 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
         await workerRunner.start();
         await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
         await workerRunner.close();
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "timed", input: { at: pending } }),
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "timed", input: { at: pending } }),
         );
 
         const page = await client.listJobs({ typeName: "timed", limit: 10 });
@@ -851,10 +827,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
         await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
         await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
         const writer = createClient({ stateAdapter, notifyAdapter, jobTypes: codecJobTypes });
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           writer.createChain({
             ...txCtx,
-            txHooks,
             typeName: "timed",
             input: { at: new Date("2024-01-01T00:00:00.000Z") },
           }),
@@ -886,10 +861,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
         await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
         await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
         const writer = createClient({ stateAdapter, notifyAdapter, jobTypes: codecJobTypes });
-        const [first, second] = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const [first, second] = await withCaseTransaction(stateAdapter, async (txCtx) =>
           writer.createChains({
             ...txCtx,
-            txHooks,
             items: [
               { typeName: "timed", input: { at: new Date("2024-01-01T00:00:00.000Z") } },
               { typeName: "timed", input: { at: new Date("2024-02-01T00:00:00.000Z") } },
@@ -927,8 +901,8 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
               timed: {
                 attemptHandler: async ({ job, complete }) => {
                   assert.deepEqual(job.input, { at });
-                  return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: { doneAt } }),
+                  return withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: { doneAt } }),
                   );
                 },
               },
@@ -936,8 +910,8 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "timed", input: { at } }),
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "timed", input: { at } }),
         );
 
         await workerRunner.start();
@@ -955,10 +929,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
         await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes: codecJobTypes });
 
-        const gatedChains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) => {
+        const gatedChains = await withCaseTransaction(stateAdapter, async (txCtx) => {
           const [first, second] = await client.createChains({
             ...txCtx,
-            txHooks,
             items: [
               { typeName: "timed", input: { at: new Date("2024-01-01T00:00:00.000Z") } },
               { typeName: "timed", input: { at: new Date("2024-02-01T00:00:00.000Z") } },
@@ -966,7 +939,6 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
           });
           return client.createChains({
             ...txCtx,
-            txHooks,
             items: [
               { typeName: "gated", input: null, blockers: [{ id: first.id }] },
               { typeName: "gated", input: null, blockers: [{ id: second.id }] },

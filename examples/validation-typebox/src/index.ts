@@ -12,7 +12,7 @@ import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import { Type } from "@sinclair/typebox";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
-import { createClient, createWorkerRunner, createProcessors, withTxHooks } from "queuert";
+import { createClient, createWorkerRunner, createProcessors } from "queuert";
 
 import { createTypeBoxJobTypes } from "./typebox-adapter.ts";
 
@@ -100,17 +100,14 @@ await using workerRunner = createWorkerRunner({
           console.log(`Fetching data from ${job.input.url}`);
           const data = { items: [1, 2, 3], source: job.input.url };
 
-          return withTxHooks(async (txHooks) =>
-            stateAdapter.withTransaction(async (ctx) =>
-              complete({
-                ...ctx,
-                txHooks,
-                continueWith: {
-                  typeName: "process-data",
-                  input: { data },
-                },
-              }),
-            ),
+          return stateAdapter.withTransaction(async (ctx) =>
+            complete({
+              ...ctx,
+              continueWith: {
+                typeName: "process-data",
+                input: { data },
+              },
+            }),
           );
         },
       },
@@ -119,17 +116,14 @@ await using workerRunner = createWorkerRunner({
           console.log("Processing data:", job.input.data);
           const data = job.input.data as { items: number[] };
 
-          return withTxHooks(async (txHooks) =>
-            stateAdapter.withTransaction(async (ctx) =>
-              complete({
-                ...ctx,
-                txHooks,
-                output: {
-                  processed: true,
-                  itemCount: data.items?.length ?? 0,
-                },
-              }),
-            ),
+          return stateAdapter.withTransaction(async (ctx) =>
+            complete({
+              ...ctx,
+              output: {
+                processed: true,
+                itemCount: data.items?.length ?? 0,
+              },
+            }),
           );
         },
       },
@@ -138,10 +132,8 @@ await using workerRunner = createWorkerRunner({
           console.log(`Processing batch ${job.input.batchId}`);
           console.log("Blockers completed:", job.blockers.length);
 
-          return withTxHooks(async (txHooks) =>
-            stateAdapter.withTransaction(async (ctx) =>
-              complete({ ...ctx, txHooks, output: { success: true } }),
-            ),
+          return stateAdapter.withTransaction(async (ctx) =>
+            complete({ ...ctx, output: { success: true } }),
           );
         },
       },
@@ -149,16 +141,13 @@ await using workerRunner = createWorkerRunner({
         attemptHandler: async ({ job, complete }) => {
           console.log(`Authenticating with token: ${job.input.token.substring(0, 8)}...`);
 
-          return withTxHooks(async (txHooks) =>
-            stateAdapter.withTransaction(async (ctx) =>
-              complete({
-                ...ctx,
-                txHooks,
-                output: {
-                  userId: `user-${job.input.token.substring(0, 4)}`,
-                },
-              }),
-            ),
+          return stateAdapter.withTransaction(async (ctx) =>
+            complete({
+              ...ctx,
+              output: {
+                userId: `user-${job.input.token.substring(0, 4)}`,
+              },
+            }),
           );
         },
       },
@@ -170,15 +159,12 @@ await workerRunner.start();
 
 // Run a chain
 console.log("\n=== Running fetch-data chain ===");
-const chain = await withTxHooks(async (txHooks) =>
-  stateAdapter.withTransaction(async (ctx) =>
-    client.createChain({
-      ...ctx,
-      txHooks,
-      typeName: "fetch-data",
-      input: { url: "https://api.example.com/data" },
-    }),
-  ),
+const chain = await stateAdapter.withTransaction(async (ctx) =>
+  client.createChain({
+    ...ctx,
+    typeName: "fetch-data",
+    input: { url: "https://api.example.com/data" },
+  }),
 );
 
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });

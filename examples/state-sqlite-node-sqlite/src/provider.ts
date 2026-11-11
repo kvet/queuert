@@ -1,8 +1,9 @@
 import type { DatabaseSync, SQLInputValue, StatementSync } from "node:sqlite";
 
 import type { AsyncRwLock, SqliteStateProvider } from "@queuert/sqlite";
+import { type TxHooks, withTxHooks } from "queuert";
 
-export type NodeSqliteContext = { db: DatabaseSync };
+export type NodeSqliteContext = { db: DatabaseSync; txHooks: TxHooks };
 
 export const createNodeSqliteStateProvider = ({
   db,
@@ -25,25 +26,32 @@ export const createNodeSqliteStateProvider = ({
   };
 
   return {
-    withTransaction: async (fn) => {
-      using _h = await lock.acquireWrite();
-      db.exec("BEGIN");
-      try {
-        const result = await fn({ db });
-        db.exec("COMMIT");
-        return result;
-      } catch (error) {
-        if (db.isTransaction) {
-          try {
-            db.exec("ROLLBACK");
-          } catch {
-            // ignore rollback errors
+    withTransaction: async (fn) =>
+      withTxHooks(async (txHooks) => {
+        using _h = await lock.acquireWrite();
+        db.exec("BEGIN");
+        try {
+          const result = await fn({ db, txHooks });
+          db.exec("COMMIT");
+          return result;
+        } catch (error) {
+          if (db.isTransaction) {
+            try {
+              db.exec("ROLLBACK");
+            } catch {
+              // ignore rollback errors
+            }
           }
+          throw error;
         }
-        throw error;
-      }
-    },
+      }),
     isTransaction: (txCtx) => txCtx.db.isTransaction,
+    onTransactionCommit: (txCtx, callback) => {
+      txCtx.txHooks.onCommit(callback);
+    },
+    onTransactionRollback: (txCtx, callback) => {
+      txCtx.txHooks.onRollback(callback);
+    },
     classifyError: ({ error }) => {
       const tableName = /no such table: (\S+)/.exec(
         String((error as { message?: unknown } | undefined)?.message),

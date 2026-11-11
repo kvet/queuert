@@ -7,6 +7,7 @@ import {
   createWorkerRunner,
   createProcessors,
   defineJobTypes,
+  type TxHooks,
   withTxHooks,
 } from "queuert";
 import { expectTypeOf, it, onTestFinished, vi } from "vitest";
@@ -67,7 +68,9 @@ it("infers custom ID types through the full stack", async () => {
         test: {
           attemptHandler: async ({ job, complete, fence }) => {
             expectTypeOf(job.id).toEqualTypeOf<`job.${UUID}`>();
-            expectTypeOf(fence).parameter(0).toEqualTypeOf<{ db: Database.Database }>();
+            expectTypeOf(fence)
+              .parameter(0)
+              .toEqualTypeOf<Partial<{ db: Database.Database; txHooks: TxHooks }>>();
 
             await withTransaction(async (db) => fence({ db }));
 

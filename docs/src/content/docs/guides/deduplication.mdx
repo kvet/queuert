@@ -31,29 +31,23 @@ Deduplication prevents duplicate chains from being created. When you start a cha
 
 ```ts
 // First call creates the chain
-const chain1 = await withTxHooks(async (txHooks) =>
-  stateProvider.withTransaction(async (txCtx) =>
-    client.createChain({
-      ...txCtx,
-      txHooks,
-      typeName: "sync-user",
-      input: { userId: "123" },
-      deduplication: { key: "sync:user:123", scope: "running" },
-    }),
-  ),
+const chain1 = await stateProvider.withTransaction(async (txCtx) =>
+  client.createChain({
+    ...txCtx,
+    typeName: "sync-user",
+    input: { userId: "123" },
+    deduplication: { key: "sync:user:123", scope: "running" },
+  }),
 );
 
 // Second call with same key returns existing chain
-const chain2 = await withTxHooks(async (txHooks) =>
-  stateProvider.withTransaction(async (txCtx) =>
-    client.createChain({
-      ...txCtx,
-      txHooks,
-      typeName: "sync-user",
-      input: { userId: "123" },
-      deduplication: { key: "sync:user:123", scope: "running" },
-    }),
-  ),
+const chain2 = await stateProvider.withTransaction(async (txCtx) =>
+  client.createChain({
+    ...txCtx,
+    typeName: "sync-user",
+    input: { userId: "123" },
+    deduplication: { key: "sync:user:123", scope: "running" },
+  }),
 );
 
 chain2.deduplicated; // true — returned existing chain
@@ -69,19 +63,16 @@ The required `scope` option (a missing or unknown value throws a `TypeError`) co
 
 ```ts
 // Only one active health check at a time, but can start new after completion
-await withTxHooks(async (txHooks) =>
-  stateProvider.withTransaction(async (txCtx) =>
-    client.createChain({
-      ...txCtx,
-      txHooks,
-      typeName: "health-check",
-      input: { serviceId: "api-server" },
-      deduplication: {
-        key: "health:api-server",
-        scope: "running",
-      },
-    }),
-  ),
+await stateProvider.withTransaction(async (txCtx) =>
+  client.createChain({
+    ...txCtx,
+    typeName: "health-check",
+    input: { serviceId: "api-server" },
+    deduplication: {
+      key: "health:api-server",
+      scope: "running",
+    },
+  }),
 );
 ```
 

@@ -1,15 +1,16 @@
 import { describe, expect, test } from "vitest";
 
 import { createSpyNotifyAdapter } from "../conformance.end-to-end/support/spy-notify-adapter.ts";
-import { type TxHooks, createTxHooks } from "../tx-hooks/tx-hooks.ts";
 import { noopNotifyAdapter } from "./notify-adapter.noop.ts";
 import type { NotifyAdapter } from "./notify-adapter.ts";
 import { type NotifyHelper, createNotifyHelper } from "./notify-helper.ts";
 
-const bufferNotifyAll = (txHooks: TxHooks, notifyHelper: NotifyHelper, id: string): void => {
-  notifyHelper.notifyJobsScheduled(txHooks, [`type-${id}`]);
-  notifyHelper.notifyChainsCompleted(txHooks, [`chain-${id}`]);
-  notifyHelper.notifyJobAttemptsLost(txHooks, [id]);
+const notifyAll = async (notifyHelper: NotifyHelper, id: string): Promise<void> => {
+  await Promise.all([
+    notifyHelper.notifyJobsScheduled([`type-${id}`]),
+    notifyHelper.notifyChainsCompleted([`chain-${id}`]),
+    notifyHelper.notifyJobAttemptsLost([id]),
+  ]);
 };
 
 const failingAdapter = (): NotifyAdapter => {
@@ -29,15 +30,11 @@ const failingAdapter = (): NotifyAdapter => {
 };
 
 describe("notify helper", () => {
-  test("flushes buffered notifications in one call per kind", async () => {
+  test("sends notifications made in the same tick in one call per kind", async () => {
     const notifyAdapter = createSpyNotifyAdapter(noopNotifyAdapter);
     const notifyHelper = createNotifyHelper({ adapter: notifyAdapter });
-    const { txHooks, flush } = createTxHooks();
 
-    bufferNotifyAll(txHooks, notifyHelper, "a");
-    bufferNotifyAll(txHooks, notifyHelper, "b");
-
-    await flush();
+    await Promise.all([notifyAll(notifyHelper, "a"), notifyAll(notifyHelper, "b")]);
 
     expect(notifyAdapter.calls).toEqual([
       { name: "notifyJobsScheduled", args: ["type-a", "type-b"] },
@@ -46,93 +43,48 @@ describe("notify helper", () => {
     ]);
   });
 
-  test("merges batches from several calls into one adapter call without duplicates", async () => {
+  test("merges values of the same tick without duplicates", async () => {
     const notifyAdapter = createSpyNotifyAdapter(noopNotifyAdapter);
     const notifyHelper = createNotifyHelper({ adapter: notifyAdapter });
-    const { txHooks, flush } = createTxHooks();
 
-    notifyHelper.notifyJobsScheduled(txHooks, ["type-a", "type-b"]);
-    notifyHelper.notifyJobsScheduled(txHooks, ["type-b", "type-c"]);
-
-    await flush();
+    await Promise.all([
+      notifyHelper.notifyJobsScheduled(["type-a", "type-b"]),
+      notifyHelper.notifyJobsScheduled(["type-b", "type-c"]),
+    ]);
 
     expect(notifyAdapter.calls).toEqual([
       { name: "notifyJobsScheduled", args: ["type-a", "type-b", "type-c"] },
     ]);
   });
 
-  test("merges notifications of transactions that flush together into one adapter call", async () => {
+  test("sends notifications of separate ticks in separate calls", async () => {
     const notifyAdapter = createSpyNotifyAdapter(noopNotifyAdapter);
     const notifyHelper = createNotifyHelper({ adapter: notifyAdapter });
-    const first = createTxHooks();
-    const second = createTxHooks();
 
-    notifyHelper.notifyJobsScheduled(first.txHooks, ["type-a"]);
-    notifyHelper.notifyJobsScheduled(second.txHooks, ["type-a", "type-b"]);
-
-    await Promise.all([first.flush(), second.flush()]);
+    await notifyHelper.notifyJobsScheduled(["type-a"]);
+    await notifyHelper.notifyJobsScheduled(["type-b"]);
 
     expect(notifyAdapter.calls).toEqual([
-      { name: "notifyJobsScheduled", args: ["type-a", "type-b"] },
+      { name: "notifyJobsScheduled", args: ["type-a"] },
+      { name: "notifyJobsScheduled", args: ["type-b"] },
     ]);
   });
 
-  test("registers no tx hooks for an empty batch", () => {
-    const notifyHelper = createNotifyHelper({ adapter: noopNotifyAdapter });
-    const registered: (() => void | Promise<void>)[] = [];
-    const recordingTxHooks: Pick<TxHooks, "onCommit"> = {
-      onCommit: (callback) => {
-        registered.push(callback);
-      },
-    };
-
-    notifyHelper.notifyJobsScheduled(recordingTxHooks, []);
-    notifyHelper.notifyChainsCompleted(recordingTxHooks, []);
-    notifyHelper.notifyJobAttemptsLost(recordingTxHooks, []);
-
-    expect(registered).toEqual([]);
-  });
-
-  test("savepoint rollback drops notifications buffered in scope", async () => {
+  test("does not call the notify adapter for an empty batch", async () => {
     const notifyAdapter = createSpyNotifyAdapter(noopNotifyAdapter);
     const notifyHelper = createNotifyHelper({ adapter: notifyAdapter });
-    const { txHooks, flush } = createTxHooks();
 
-    bufferNotifyAll(txHooks, notifyHelper, "before");
-    const sp = txHooks.createSavepoint();
-    bufferNotifyAll(txHooks, notifyHelper, "inside");
-    sp.rollback();
-
-    await flush();
-
-    expect(notifyAdapter.calls).toEqual([
-      { name: "notifyJobsScheduled", args: ["type-before"] },
-      { name: "notifyChainsCompleted", args: ["chain-before"] },
-      { name: "notifyJobAttemptsLost", args: ["before"] },
-    ]);
-  });
-
-  test("does not call the notify adapter when every notification was rolled back", async () => {
-    const notifyAdapter = createSpyNotifyAdapter(noopNotifyAdapter);
-    const notifyHelper = createNotifyHelper({ adapter: notifyAdapter });
-    const { txHooks, flush } = createTxHooks();
-
-    const sp = txHooks.createSavepoint();
-    bufferNotifyAll(txHooks, notifyHelper, "inside");
-    sp.rollback();
-
-    await flush();
+    await notifyHelper.notifyJobsScheduled([]);
+    await notifyHelper.notifyChainsCompleted([]);
+    await notifyHelper.notifyJobAttemptsLost([]);
 
     expect(notifyAdapter.calls).toEqual([]);
   });
 
   test("swallows notify adapter failures", async () => {
     const notifyHelper = createNotifyHelper({ adapter: failingAdapter() });
-    const { txHooks, flush } = createTxHooks();
 
-    bufferNotifyAll(txHooks, notifyHelper, "a");
-
-    await expect(flush()).resolves.toBeUndefined();
+    await expect(notifyAll(notifyHelper, "a")).resolves.toBeUndefined();
     const disposers = await Promise.all([
       notifyHelper.listenJobScheduled(["type-a"], () => {}),
       notifyHelper.listenChainCompleted("chain-a", () => {}),

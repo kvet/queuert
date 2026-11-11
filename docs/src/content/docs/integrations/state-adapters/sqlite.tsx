@@ -20,7 +20,7 @@ import { TabItem, Tabs } from "../../../../components/mdx/Tabs.tsx";
 export const meta = {
   title: "SQLite State Adapter",
   description:
-    "Store chains, jobs and workers in SQLite with better-sqlite3, node:sqlite, bun:sqlite, Bun SQL, Drizzle, Kysely, Prisma or Knex.",
+    "Store chains, jobs and workers in SQLite with better-sqlite3, node:sqlite, bun:sqlite, Bun SQL, Drizzle, Kysely, Prisma, Knex or MikroORM.",
 };
 
 const options = (): FieldItem[] => [
@@ -86,6 +86,7 @@ const Page = () => (
               packages: "@prisma/client · @prisma/adapter-better-sqlite3 · better-sqlite3",
             },
             { name: "Knex", tab: "Knex", packages: "knex · better-sqlite3" },
+            { name: "MikroORM", tab: "MikroORM", packages: "@mikro-orm/sqlite · kysely" },
           ],
         },
       ]}
@@ -173,6 +174,25 @@ const Page = () => (
           title="src/index.ts"
         />
       </TabItem>
+      <TabItem label="MikroORM">
+        <ExampleCode example="state-sqlite-mikro-orm" file="src/provider.ts" />
+        <p>
+          <code>skipTables</code> keeps MikroORM's schema diff from dropping Queuert's tables, which{" "}
+          <code>migrateToLatest()</code> manages:
+        </p>
+        <ExampleCode
+          example="state-sqlite-mikro-orm"
+          file="src/index.ts"
+          region="orm"
+          title="src/index.ts"
+        />
+        <ExampleCode
+          example="state-sqlite-mikro-orm"
+          file="src/index.ts"
+          region="adapter"
+          title="src/index.ts"
+        />
+      </TabItem>
     </Tabs>
 
     <h2>Configuration</h2>
@@ -200,11 +220,15 @@ const Page = () => (
       table. <code>createSqliteStateProviderConformanceContext</code> prepares the context they run
       against: it takes a <code>createStateProvider</code> factory and a{" "}
       <code>withNonTransactionContext</code> that runs a callback with a context outside any
-      transaction, and migrates the schema once. Each case then builds its own adapter over a new
-      provider from your factory, with the tables cleared, and closes both when it ends. The suite
-      drives no test runner: your test file owns the database in its own hooks and registers one
-      test per case. The node:sqlite example runs under <code>node:test</code>, the Bun examples
-      under <code>bun:test</code> and the others under vitest:
+      transaction, and migrates the schema once. An optional <code>withSavepoint</code> runs a
+      callback in a savepoint of a transaction, opened the way your application opens one, and
+      passes it the savepoint's context; when you give it, the cases check that{" "}
+      <code>onTransactionCommit</code> and <code>onTransactionRollback</code> follow savepoints.
+      Each case then builds its own adapter over a new provider from your factory, with the tables
+      cleared, and closes both when it ends. The suite drives no test runner: your test file owns
+      the database in its own hooks and registers one test per case. The node:sqlite example runs
+      under <code>node:test</code>, the Bun examples under <code>bun:test</code> and the others
+      under vitest:
     </p>
     <Tabs syncKey="sqlite-driver">
       <TabItem label="better-sqlite3">
@@ -266,6 +290,14 @@ const Page = () => (
       <TabItem label="Knex">
         <ExampleCode
           example="state-sqlite-knex"
+          file="src/provider.spec.ts"
+          region="conformance"
+          title="src/provider.spec.ts"
+        />
+      </TabItem>
+      <TabItem label="MikroORM">
+        <ExampleCode
+          example="state-sqlite-mikro-orm"
           file="src/provider.spec.ts"
           region="conformance"
           title="src/provider.spec.ts"
@@ -280,7 +312,11 @@ const Page = () => (
     <p>
       Transactions you pass to <code>complete</code> or to client methods must be serialized with
       the worker's own statements the way the provider's <code>withTransaction</code> is, for
-      example by holding its <a href="#asyncrwlock">AsyncRwLock</a> write lock:
+      example by holding its <a href="#asyncrwlock">AsyncRwLock</a> write lock. They also supply the{" "}
+      <code>txHooks</code> field the provider's context requires, created with{" "}
+      <code>withTxHooks</code> around the transaction. The MikroORM provider takes them from
+      MikroORM's transaction events and its single connection serializes writers, so a plain{" "}
+      <code>em.transactional</code> needs neither:
     </p>
     <Tabs syncKey="sqlite-driver">
       <TabItem label="better-sqlite3">
@@ -342,6 +378,14 @@ const Page = () => (
       <TabItem label="Knex">
         <ExampleCode
           example="state-sqlite-knex"
+          file="src/index.ts"
+          region="create-chain"
+          title="src/index.ts"
+        />
+      </TabItem>
+      <TabItem label="MikroORM">
+        <ExampleCode
+          example="state-sqlite-mikro-orm"
           file="src/index.ts"
           region="create-chain"
           title="src/index.ts"
@@ -370,7 +414,7 @@ const Page = () => (
     <p>
       Custom <code>SqliteStateProvider</code> implementations must serialize writes: use{" "}
       <code>createAsyncRwLock()</code>, or rely on a single-connection pool that holds its one
-      connection for the whole transaction, as the Kysely and Knex examples do.
+      connection for the whole transaction, as the Kysely, Knex and MikroORM examples do.
     </p>
 
     <h2>Write fence</h2>
@@ -421,6 +465,7 @@ const Page = () => (
         "state-sqlite-kysely",
         "state-sqlite-prisma",
         "state-sqlite-knex",
+        "state-sqlite-mikro-orm",
       ]}
     />
     <p>

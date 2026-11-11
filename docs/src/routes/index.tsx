@@ -100,7 +100,7 @@ const integrations: {
   },
   {
     title: "ORMs",
-    items: ["Kysely", "Drizzle", "Prisma", "Knex"],
+    items: ["Kysely", "Drizzle", "Prisma", "Knex", "MikroORM"],
     href: "/integrations/state-adapters/",
     customAdapter: false,
   },

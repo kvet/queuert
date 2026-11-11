@@ -1,6 +1,5 @@
 # Short term
 
-- [REF] txHooks provider
 - [EPIC] SQLite production-readiness
   - [REF] sync sqlite api
   - [TASK] IPC notify adapter in a new `@queuert/ipc` package — sync-ready, socket per process, one registry file per process in a shared `directory`. See `design/ipc-notify.md`.

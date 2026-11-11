@@ -1,7 +1,8 @@
 import type { SqliteStateProvider } from "@queuert/sqlite";
 import type { Knex } from "knex";
+import { type TxHooks, withTxHooks } from "queuert";
 
-export type KnexSqliteContext = { trx: Knex.Transaction };
+export type KnexSqliteContext = { trx: Knex.Transaction; txHooks: TxHooks };
 
 // Knex's sqlite dialects default to a pool of size 1 and hold that connection
 // for the duration of `knex.transaction()`. Non-tx queries block on connection
@@ -14,8 +15,16 @@ export const createKnexSqliteStateProvider = ({
 }): SqliteStateProvider<KnexSqliteContext> => {
   return {
     withTransaction: async (cb) =>
-      knex.transaction(async (trx) => cb({ trx }), { doNotRejectOnRollback: false }),
+      withTxHooks(async (txHooks) =>
+        knex.transaction(async (trx) => cb({ trx, txHooks }), { doNotRejectOnRollback: false }),
+      ),
     isTransaction: (txCtx) => txCtx.trx.isTransaction === true,
+    onTransactionCommit: (txCtx, callback) => {
+      txCtx.txHooks.onCommit(callback);
+    },
+    onTransactionRollback: (txCtx, callback) => {
+      txCtx.txHooks.onRollback(callback);
+    },
     classifyError: ({ error }) => {
       const tableName = /no such table: (\S+)/.exec(
         String((error as { message?: unknown } | undefined)?.message),

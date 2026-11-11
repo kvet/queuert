@@ -56,7 +56,7 @@ attemptHandler: async ({ job, complete }) => {
 },
 ```
 
-Observability events and notifications produced by `complete` are buffered in `txHooks` and released only after your transaction commits. If it rolls back, nothing leaks out.
+`complete` registers its observability events and notifications through the state provider's `onTransactionCommit`, so they are released only after your transaction commits. If it rolls back, nothing leaks out; see [Tx Hooks](../../guides/tx-hooks/).
 
 ## The Attempt Lifecycle
 
@@ -69,12 +69,12 @@ Observability events and notifications produced by `complete` are buffered in `t
         <Node variant="ghost" sub="no transaction held">your work</Node>
         <Arrow />
         <Group title="your transaction" dashed>
-          <Node tone="green" sub={"your domain writes\ncomplete({ ...txCtx, txHooks, outcome })"}>commit</Node>
+          <Node tone="green" sub={"your domain writes\ncomplete({ ...txCtx, outcome })"}>commit</Node>
         </Group>
       </Flow>
     </Group>
     <Arrow />
-    <Node sub="complete() hooks flushed · else one reschedule under the attempt token">commit detection</Node>
+    <Node sub="complete() commit callbacks ran · else one reschedule under the attempt token">commit detection</Node>
     <Rows spine columns="minmax(5.5rem, auto) auto">
       <Flow>
         <Arrow label="complete() committed" tone="green" />
@@ -90,21 +90,21 @@ Observability events and notifications produced by `complete` are buffered in `t
 
 1. **Acquire.** The worker starts an attempt under its id, which it holds while the worker's lease is live; see [Worker Runner](../worker-runner/#worker-lease).
 2. **Handler.** Your handler does its work, then opens a transaction, calls `complete` in it, and returns the `complete` result.
-3. **Commit detection.** The worker records the attempt as completed if a `complete` call's `txHooks` flushed, and otherwise fails it; see [Errors and Commit Detection](#errors-and-commit-detection).
+3. **Commit detection.** The worker records the attempt as completed if the commit callbacks of a `complete` call ran, and otherwise fails it; see [Errors and Commit Detection](#errors-and-commit-detection).
 
 ## `complete`
 
-`complete` ends the attempt. Whether the job ends up completed depends on the outcome you pass. It takes your transaction context and `txHooks` spread alongside exactly one outcome — the same convention as `client.createChain`:
+`complete` ends the attempt. Whether the job ends up completed depends on the outcome you pass. It takes your transaction context spread alongside exactly one outcome — the same convention as `client.createChain`:
 
-- `complete({ ...txCtx, txHooks, output })` — completes the job and its chain, and unblocks jobs waiting on the chain.
-- `complete({ ...txCtx, txHooks, continueWith: { typeName, input, blockers?, schedule? } })` — completes the job and adds the next job to the chain.
-- `complete({ ...txCtx, txHooks, reschedule: { afterMs } | { at } })` — returns the job to pending without counting the attempt as failed.
+- `complete({ ...txCtx, output })` — completes the job and its chain, and unblocks jobs waiting on the chain.
+- `complete({ ...txCtx, continueWith: { typeName, input, blockers?, schedule? } })` — completes the job and adds the next job to the chain.
+- `complete({ ...txCtx, reschedule: { afterMs } | { at } })` — returns the job to pending without counting the attempt as failed.
 
-The transaction context and `txHooks` are required. `complete` performs several writes (for example completing the chain and unblocking its dependents), so it always needs your transaction. It throws if the state adapter's `isTransaction` reports the context as outside an open transaction, for example when you pass a pool or the root ORM handle. On PostgreSQL, Queuert supports only READ COMMITTED, the default; see [PostgreSQL State Adapter](/queuert/integrations/state-adapters/postgres/#isolation-level). On SQLite it must hold the provider's write lock; see [SQLite State Adapter](/queuert/integrations/state-adapters/sqlite/#asyncrwlock).
+The transaction context is required, including every field the provider's context type requires, such as the `txHooks` of a provider that carries them in its context. `complete` performs several writes (for example completing the chain and unblocking its dependents), so it always needs your transaction. It throws if the state adapter's `isTransaction` reports the context as outside an open transaction, for example when you pass a pool or the root ORM handle. On PostgreSQL, Queuert supports only READ COMMITTED, the default; see [PostgreSQL State Adapter](/queuert/integrations/state-adapters/postgres/#isolation-level). On SQLite it must hold the provider's write lock; see [SQLite State Adapter](/queuert/integrations/state-adapters/sqlite/#asyncrwlock).
 
 **Return the `complete` result from the handler.** The handler's return type is the finished job, so forgetting `complete` is a compile error. Return it out of your transaction and hooks callbacks: `return withTxHooks(async (txHooks) => db.transaction(async (tx) => complete({ tx, txHooks, output })))`. The type only proves `complete` was called; the worker does not compare the returned value at runtime, and whether the attempt completed is decided by [commit detection](#errors-and-commit-detection).
 
-**One successful `complete` per `txHooks`.** A second successful call with the same `txHooks` throws, so a loop that retries your transaction either opens `withTxHooks` inside the loop, once per try, or wraps the callback it reruns in `txHooks.retryBoundary`. A call that threw before writing (for example a validation error), one rolled back by `txHooks.withSavepoint`, or one in a try that `txHooks.retryBoundary` rolled back does not count, so you can catch the error and call `complete` again. `complete` cannot be called after the handler has ended.
+**One `complete` per attempt.** A second or concurrent call throws an `Error` before writing anything and leaves the attempt running, whether or not the first one's transaction has committed yet. A call that threw before writing (for example a validation error), or whose transaction or savepoint rolled back, does not count, so you can catch the error and call `complete` again. `complete` cannot be called after the handler has ended.
 
 ## Attempt Ownership
 
@@ -114,7 +114,7 @@ When `complete`'s write misses, `complete` writes nothing, throws and aborts the
 
 ### `fence`
 
-`complete` checks ownership for its own transaction only. For writes in the other transactions your handler opens, call `fence({ ...txCtx })` at the start of that transaction. It takes the same transaction context as `complete`, with the same isolation and SQLite write-lock requirements. It locks the job row and its chain head and checks that the job is `running` under this attempt's token. Reclaiming the job, completing it with `client.completeChain` and deleting its chain all lock or update the same rows, so they wait until your transaction commits or rolls back: every write that commits after a successful `fence` committed while the attempt owned the job.
+`complete` checks ownership for its own transaction only. For writes in the other transactions your handler opens, call `fence({ ...txCtx })` at the start of that transaction. It takes the same transaction context as `complete`, with the same isolation and SQLite write-lock requirements, though like a read it needs only part of it: `fence({ tx })` without the `txHooks` some providers carry is enough. It locks the job row and its chain head and checks that the job is `running` under this attempt's token. Reclaiming the job, completing it with `client.completeChain` and deleting its chain all lock or update the same rows, so they wait until your transaction commits or rolls back: every write that commits after a successful `fence` committed while the attempt owned the job.
 
 ```typescript
 attemptHandler: async ({ signal, fence, complete }) => {
@@ -135,14 +135,14 @@ When the attempt no longer owns the job, `fence` throws the same error `complete
 
 ## Errors and Commit Detection
 
-The attempt counts as completed once the `txHooks` of a successful `complete` call flush, so a successful attempt needs no extra database round-trip. If no `complete` call's hooks flushed — the handler threw before committing, or returned without calling `complete` — the attempt fails: the worker runs one reschedule under the attempt token, which retries the job with backoff while the attempt still owns it and matches nothing if a `complete` committed or the attempt was lost. An error thrown after a committed `complete` does not roll the completion back; it is reported as a `workerError`.
+The attempt counts as completed once a successful `complete` call's commit callbacks run, which the state provider's `onTransactionCommit` does after your transaction commits, so a successful attempt needs no extra database round-trip. If no `complete` call's commit callbacks ran — the handler threw before committing, or returned without calling `complete` — the attempt fails: the worker runs one reschedule under the attempt token, which retries the job with backoff while the attempt still owns it and matches nothing if a `complete` committed or the attempt was lost. An error thrown after a committed `complete` does not roll the completion back; it is reported as a `workerError`.
 
-Flushed hooks stand for a committed write only when these preconditions hold:
+Commit callbacks stand for a committed write only when the state provider meets these requirements:
 
-- **`withTxHooks` wraps your transaction from outside**, so the hooks flush after COMMIT. Opened inside the transaction, they flush before COMMIT, and a COMMIT that then fails leaves nothing written.
-- **A `complete` inside a database savepoint that may be rolled back is also wrapped in `txHooks.withSavepoint`** (or a `createSavepoint` handle rolled back alongside the database savepoint), so rolling back the savepoint discards the buffered write too. Rolling back only the database savepoint undoes the write but leaves `complete`'s buffered result in the hooks. See [Tx Hooks](../../guides/tx-hooks/#savepoints).
-- **A `complete` inside a callback the driver may rerun is wrapped in `txHooks.retryBoundary`**, so a rolled-back try's write is not counted. See [Tx Hooks](../../guides/tx-hooks/#drivers-that-rerun-the-callback).
-- **The transaction rejects when it rolls back**, so the hooks discard. A knex transaction resolves after a bare `trx.rollback()` unless it is given `{ doNotRejectOnRollback: false }`. See [Tx Hooks](../../guides/tx-hooks/#a-resolved-transaction-counts-as-committed).
+- **Commit callbacks run only after COMMIT.** A provider that carries `TxHooks` in its context creates them with `withTxHooks` around the transaction, so they flush after COMMIT; created inside the transaction, they would flush before COMMIT, and a COMMIT that then fails leaves nothing written. When you open the transaction yourself for such a provider, wrap it the same way.
+- **Callbacks follow savepoints.** A `complete` inside a database savepoint that rolls back must have its commit callbacks dropped with it. A provider with transaction events does this itself; with `TxHooks` in the context, pair the database savepoint with `txHooks.withSavepoint` (or a `createSavepoint` handle rolled back alongside it) and pass the savepoint's hooks to `complete`. See [Tx Hooks](../../guides/tx-hooks/#savepoints).
+- **A try the driver reruns drops its callbacks.** When the driver reruns the transaction callback, the rolled-back try's `complete` must not count. With `TxHooks`, wrap the rerun callback in `txHooks.retryBoundary`. See [Tx Hooks](../../guides/tx-hooks/#drivers-that-rerun-the-callback).
+- **A rolled-back transaction is reported as rolled back.** A knex transaction resolves after a bare `trx.rollback()`, which `withTxHooks` takes for a commit, unless it is given `{ doNotRejectOnRollback: false }`. See [Tx Hooks](../../guides/tx-hooks/#a-resolved-transaction-counts-as-committed). MikroORM fires no rollback event when PostgreSQL answers COMMIT with ROLLBACK after a caught statement error, so let statement errors propagate out of `em.transactional`.
 
 If any of them is broken, the worker can count the attempt as completed although nothing was written. The job then stays `running` until the worker is next idle and reclaims it as a failed attempt; see [Worker Runner](../worker-runner/#reclaim).
 

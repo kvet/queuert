@@ -44,26 +44,21 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-// Start with blockers (txHooks required — see Tx Hooks guide)
-await withTxHooks(async (txHooks) =>
-  stateProvider.withTransaction(async (txCtx) => {
-    const fetchBlockers = await client.createChains({
-      ...txCtx,
-      txHooks,
-      items: [
-        { typeName: "fetch-data", input: { url: "/a" } },
-        { typeName: "fetch-data", input: { url: "/b" } },
-      ],
-    });
-    await client.createChain({
-      ...txCtx,
-      txHooks,
-      typeName: "process-all",
-      input: { ids: ["a", "b", "c"] },
-      blockers: fetchBlockers,
-    });
-  }),
-);
+await stateProvider.withTransaction(async (txCtx) => {
+  const fetchBlockers = await client.createChains({
+    ...txCtx,
+    items: [
+      { typeName: "fetch-data", input: { url: "/a" } },
+      { typeName: "fetch-data", input: { url: "/b" } },
+    ],
+  });
+  await client.createChain({
+    ...txCtx,
+    typeName: "process-all",
+    input: { ids: ["a", "b", "c"] },
+    blockers: fetchBlockers,
+  });
+});
 
 // Access completed blockers in worker
 const workerRunner = createWorkerRunner({

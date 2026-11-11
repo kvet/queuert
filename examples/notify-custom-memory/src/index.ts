@@ -1,13 +1,7 @@
 import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
-import {
-  createClient,
-  createProcessors,
-  createWorkerRunner,
-  defineJobTypes,
-  withTxHooks,
-} from "queuert";
+import { createClient, createProcessors, createWorkerRunner, defineJobTypes } from "queuert";
 
 import { createMemoryNotifyAdapter } from "./notify-adapter.ts";
 
@@ -44,14 +38,11 @@ await using workerRunner = createWorkerRunner({
       generate_report: {
         attemptHandler: async ({ job, complete }) => {
           console.log(`Generating ${job.input.reportType} report...`);
-          return withTxHooks(async (txHooks) =>
-            stateAdapter.withTransaction(async (ctx) =>
-              complete({
-                ...ctx,
-                txHooks,
-                output: { reportId: `RPT-${Date.now()}`, rowCount: 42 },
-              }),
-            ),
+          return stateAdapter.withTransaction(async (ctx) =>
+            complete({
+              ...ctx,
+              output: { reportId: `RPT-${Date.now()}`, rowCount: 42 },
+            }),
           );
         },
       },
@@ -62,15 +53,12 @@ await using workerRunner = createWorkerRunner({
 await workerRunner.start();
 
 console.log("Requesting sales report...");
-const chain = await withTxHooks(async (txHooks) =>
-  stateAdapter.withTransaction(async (ctx) =>
-    client.createChain({
-      ...ctx,
-      txHooks,
-      typeName: "generate_report",
-      input: { reportType: "sales" },
-    }),
-  ),
+const chain = await stateAdapter.withTransaction(async (ctx) =>
+  client.createChain({
+    ...ctx,
+    typeName: "generate_report",
+    input: { reportType: "sales" },
+  }),
 );
 
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });

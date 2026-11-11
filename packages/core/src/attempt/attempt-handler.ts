@@ -1,4 +1,4 @@
-import { serializeError, createLatch } from "@queuert/helpers";
+import { serializeError, createLatch, createResettableLatch } from "@queuert/helpers";
 
 import {
   type AnyAttemptMiddleware,
@@ -16,8 +16,7 @@ import { completeChain, continueChain, rescheduleJobs } from "../implementation.
 import type { JobAttemptSpanHandle } from "../observability-adapter/observability-adapter.ts";
 import type { Helpers } from "../setup-helpers.ts";
 import type { BaseTxContext, StateJob, StateJobInfo } from "../state-adapter/state-adapter.ts";
-import { requireTxCtx, requireTxHooks } from "../state-adapter/tx-context.ts";
-import { type TxHooks, createTxHooks } from "../tx-hooks/tx-hooks.ts";
+import { requireTxCtx } from "../state-adapter/tx-context.ts";
 import type { AnyAttemptHandler, AnyCompleteOptions } from "./attempt-handler.types.ts";
 import { type AttemptOwnership, startAttemptOwnership } from "./attempt-ownership.ts";
 
@@ -41,19 +40,11 @@ const createAttemptWrites = (
   },
 ) => {
   const closed = createLatch();
-  let committed: CompleteWrite | null = null;
-
-  const completeSlots = new WeakMap<
-    TxHooks,
-    { write: CompleteWrite | null; inProgress: boolean }
-  >();
-  const getCompleteSlot = (txHooks: TxHooks) => {
-    const existing = completeSlots.get(txHooks);
-    if (existing !== undefined) return existing;
-    const created = { write: null, inProgress: false };
-    completeSlots.set(txHooks, created);
-    return created;
-  };
+  const inProgress = createResettableLatch("complete is already in progress for this attempt");
+  const written = createResettableLatch<CompleteWrite>(
+    "complete already succeeded for this attempt",
+  );
+  const committed = createLatch<CompleteWrite>();
 
   const readLossError = async (txCtx: BaseTxContext): Promise<Error> => {
     const [job] = await helpers.stateAdapter.getJobs({ txCtx, jobIds: [stateJob.id] });
@@ -73,34 +64,22 @@ const createAttemptWrites = (
 
   const complete = async (options: AnyCompleteOptions) => {
     closed.throwIfTripped("complete cannot be called after the attempt handler has ended");
-    const { txHooks, output, continueWith, reschedule, ...txCtxFields } = options;
+    const { output, continueWith, reschedule, ...txCtxFields } = options;
     const outcomeKeys = ["output", "continueWith", "reschedule"].filter((key) => key in options);
     if (outcomeKeys.length !== 1) {
       throw new Error("complete requires exactly one of output, continueWith or reschedule");
     }
-    requireTxHooks(txHooks, "complete");
     const txCtx = requireTxCtx(helpers.stateAdapter, txCtxFields, "complete");
+    inProgress.throwIfTripped();
+    written.throwIfTripped();
 
-    const completeSlot = getCompleteSlot(txHooks);
-    if (completeSlot.inProgress) {
-      throw new Error("complete is already in progress with these txHooks");
-    }
-    if (completeSlot.write !== null) {
-      throw new Error(
-        "complete already succeeded with these txHooks; wrap a callback the driver reruns in txHooks.retryBoundary, or give a retried transaction its own withTxHooks",
-      );
-    }
-    txHooks.onRollback(() => {
-      completeSlot.write = null;
-    });
-    completeSlot.inProgress = true;
+    inProgress.trip();
     try {
       const stateJobWritten =
         "reschedule" in options
           ? (
               await rescheduleJobs(helpers, {
                 txCtx,
-                txHooks,
                 jobs: [{ jobId: stateJob.id, schedule: reschedule, attemptToken }],
               })
             )[0]
@@ -109,7 +88,6 @@ const createAttemptWrites = (
                 job: stateJob,
                 output,
                 txCtx,
-                txHooks,
                 attemptToken,
                 workerId,
               })
@@ -117,7 +95,6 @@ const createAttemptWrites = (
                 job: stateJob,
                 continueWith,
                 txCtx,
-                txHooks,
                 attemptToken,
                 workerId,
               });
@@ -129,20 +106,23 @@ const createAttemptWrites = (
         stateJob: stateJobWritten,
         job: mapStateJobToJob(stateJobWritten, helpers.jobTypes),
       };
-      completeSlot.write = write;
-      txHooks.onCommit(() => {
+      helpers.stateAdapter.onTransactionRollback(txCtx, () => {
+        if (written.value === write) written.reset();
+      });
+      written.trip(write);
+      helpers.stateAdapter.onTransactionCommit(txCtx, () => {
         helpers.observabilityHelper.jobAttemptCompleted(stateJob, {
           output: write.stateJob.output,
           continuedWith: write.stateJob.continuation,
           workerId,
         });
       });
-      txHooks.onCommit(() => {
-        committed = write;
+      helpers.stateAdapter.onTransactionCommit(txCtx, () => {
+        committed.trip(write);
       });
       return write.job;
     } finally {
-      completeSlot.inProgress = false;
+      inProgress.reset();
     }
   };
 
@@ -164,7 +144,7 @@ const createAttemptWrites = (
     fence,
     close: () => {
       closed.trip();
-      return committed;
+      return committed.value ?? null;
     },
   };
 };
@@ -229,9 +209,9 @@ const rescheduleFailedAttempt = async (
     failure: unknown;
   },
 ): Promise<boolean> => {
-  const { txHooks, flush } = createTxHooks();
+  let rescheduledJob: StateJob | undefined;
   try {
-    const [rescheduledJob] = await rescheduleJobs(helpers, {
+    [rescheduledJob] = await helpers.stateAdapter.rescheduleJobs({
       jobs: [
         {
           jobId: stateJob.id,
@@ -240,23 +220,18 @@ const rescheduleFailedAttempt = async (
           attemptToken,
         },
       ],
-      txHooks,
     });
-    if (!rescheduledJob) return false;
   } catch (rescheduleError) {
     span?.end({ status: "failed", error: failure });
     throw rescheduleError;
   }
+  if (!rescheduledJob) return false;
 
-  txHooks.onCommit(() => {
-    helpers.observabilityHelper.jobAttemptFailed(stateJob, { workerId, error: failure });
-  });
-  if (span !== undefined) {
-    txHooks.onCommit(() => {
-      span.end({ status: "failed", error: failure });
-    });
-  }
-  await flush();
+  const notified = helpers.notifyHelper.notifyJobsScheduled([rescheduledJob.typeName]);
+  helpers.observabilityHelper.jobRescheduled(rescheduledJob);
+  helpers.observabilityHelper.jobAttemptFailed(stateJob, { workerId, error: failure });
+  span?.end({ status: "failed", error: failure });
+  await notified;
   return true;
 };
 

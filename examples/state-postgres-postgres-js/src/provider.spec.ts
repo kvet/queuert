@@ -46,7 +46,7 @@ describe("state-postgres-postgres-js migrator conformance", () => {
   let context: PgMigratorConformanceContext;
 
   beforeAll(async () => {
-    pg = await acquirePostgres("postgres:18", import.meta.url);
+    pg = await acquirePostgres("postgres:18", `${import.meta.url}#migrator`);
     sql = postgres(pg.connectionString, { max: 10 });
     context = createPgMigratorConformanceContext({
       stateProvider: createPostgresJsStateProvider({ sql }),

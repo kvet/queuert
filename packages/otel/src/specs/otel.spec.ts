@@ -23,7 +23,6 @@ import {
   createWorkerRunner,
   createProcessors,
   defineJobTypes,
-  withTxHooks,
 } from "queuert";
 import {
   createInProcessNotifyAdapter,
@@ -103,16 +102,18 @@ const it = baseIt
   .extend(
     "stateAdapter",
     async () =>
-      createInProcessStateAdapter() as unknown as StateAdapter<{ $test: true }, string, string>,
+      createInProcessStateAdapter() as unknown as StateAdapter<
+        { $test: true; txHooks: TxHooks },
+        string,
+        string
+      >,
   )
   .extend("notifyAdapter", async (): Promise<NotifyAdapter> => createInProcessNotifyAdapter())
   .extend(
     "withTransaction",
     async ({ stateAdapter }) =>
-      async <T>(cb: (txCtx: { $test: true }, txHooks: TxHooks) => Promise<T>): Promise<T> =>
-        withTxHooks(async (txHooks) =>
-          stateAdapter.withTransaction(txHooks.retryBoundary(async (txCtx) => cb(txCtx, txHooks))),
-        ),
+      async <T>(cb: (txCtx: { $test: true; txHooks: TxHooks }) => Promise<T>): Promise<T> =>
+        stateAdapter.withTransaction(cb),
   )
   .extend("log", async () => vi.fn<Log>())
   .extend(
@@ -365,8 +366,8 @@ describe("Metrics", () => {
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
-              return withTransaction(async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: { result: true } }),
+              return withTransaction(async (txCtx) =>
+                complete({ ...txCtx, output: { result: true } }),
               );
             },
           },
@@ -374,10 +375,9 @@ describe("Metrics", () => {
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
+    const chain = await withTransaction(async (txCtx) =>
       client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "test",
         input: { test: true },
       }),
@@ -447,19 +447,16 @@ describe("Metrics", () => {
               if (job.attempt < 2) {
                 throw new Error("Unexpected error");
               }
-              return withTransaction(async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: null }),
-              );
+              return withTransaction(async (txCtx) => complete({ ...txCtx, output: null }));
             },
           },
         },
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
+    const chain = await withTransaction(async (txCtx) =>
       client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "test",
         input: null,
       }),
@@ -517,23 +514,20 @@ describe("Metrics", () => {
           test: {
             attemptHandler: async ({ job, complete }) => {
               if (job.attempt < 2) {
-                return withTransaction(async (txCtx, txHooks) =>
-                  complete({ ...txCtx, txHooks, reschedule: { afterMs: 100 } }),
+                return withTransaction(async (txCtx) =>
+                  complete({ ...txCtx, reschedule: { afterMs: 100 } }),
                 );
               }
-              return withTransaction(async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: null }),
-              );
+              return withTransaction(async (txCtx) => complete({ ...txCtx, output: null }));
             },
           },
         },
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
+    const chain = await withTransaction(async (txCtx) =>
       client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "test",
         input: null,
       }),
@@ -599,10 +593,9 @@ describe("Metrics", () => {
         processors: {
           linear: {
             attemptHandler: async ({ job, complete }) =>
-              withTransaction(async (txCtx, txHooks) =>
+              withTransaction(async (txCtx) =>
                 complete({
                   ...txCtx,
-                  txHooks,
                   continueWith: {
                     typeName: "linear_next",
                     input: { valueNext: job.input.value + 1 },
@@ -612,10 +605,9 @@ describe("Metrics", () => {
           },
           linear_next: {
             attemptHandler: async ({ job, complete }) =>
-              withTransaction(async (txCtx, txHooks) =>
+              withTransaction(async (txCtx) =>
                 complete({
                   ...txCtx,
-                  txHooks,
                   continueWith: {
                     typeName: "linear_next_next",
                     input: { valueNextNext: job.input.valueNext + 1 },
@@ -625,10 +617,9 @@ describe("Metrics", () => {
           },
           linear_next_next: {
             attemptHandler: async ({ job, complete }) =>
-              withTransaction(async (txCtx, txHooks) =>
+              withTransaction(async (txCtx) =>
                 complete({
                   ...txCtx,
-                  txHooks,
                   output: { result: job.input.valueNextNext },
                 }),
               ),
@@ -637,10 +628,9 @@ describe("Metrics", () => {
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
+    const chain = await withTransaction(async (txCtx) =>
       client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "linear",
         input: { value: 1 },
       }),
@@ -719,17 +709,16 @@ describe("Metrics", () => {
         processors: {
           blocker: {
             attemptHandler: async ({ job, complete }) =>
-              withTransaction(async (txCtx, txHooks) =>
+              withTransaction(async (txCtx) =>
                 job.input.value < 1
                   ? complete({
                       ...txCtx,
-                      txHooks,
                       continueWith: {
                         typeName: "blocker",
                         input: { value: job.input.value + 1 },
                       },
                     })
-                  : complete({ ...txCtx, txHooks, output: { done: true } }),
+                  : complete({ ...txCtx, output: { done: true } }),
               ),
           },
           main: {
@@ -740,10 +729,9 @@ describe("Metrics", () => {
               },
               complete,
             }) => {
-              return withTransaction(async (txCtx, txHooks) =>
+              return withTransaction(async (txCtx) =>
                 complete({
                   ...txCtx,
-                  txHooks,
                   output: {
                     finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
                   },
@@ -755,17 +743,15 @@ describe("Metrics", () => {
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) => {
+    const chain = await withTransaction(async (txCtx) => {
       const dependencyChain = await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "blocker",
         input: { value: 0 },
       });
 
       return client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "main",
         input: { start: true },
         blockers: [dependencyChain],
@@ -824,19 +810,17 @@ describe("Metrics", () => {
       jobTypes,
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
+    const chain = await withTransaction(async (txCtx) =>
       client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "test",
         input: { value: 42 },
       }),
     );
 
-    await withTransaction(async (txCtx, txHooks) =>
+    await withTransaction(async (txCtx) =>
       client.completeChain({
         ...txCtx,
-        txHooks,
         ...chain,
         handler: async ({ job, completeJob }) => {
           return completeJob(job, async ({ complete }) => complete({ output: { result: 84 } }));
@@ -894,9 +878,7 @@ describe("Metrics", () => {
             attemptHandler: async ({ complete }) => {
               jobStarted.resolve();
               await handlerReleased.promise;
-              return withTransaction(async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: null }),
-              );
+              return withTransaction(async (txCtx) => complete({ ...txCtx, output: null }));
             },
           },
         },
@@ -911,16 +893,14 @@ describe("Metrics", () => {
         processors: {
           test: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: null }),
-              ),
+              withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
           },
         },
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
-      client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+    const chain = await withTransaction(async (txCtx) =>
+      client.createChain({ ...txCtx, typeName: "test", input: null }),
     );
 
     await leaseLosingWorkerRunner.start();
@@ -1010,9 +990,7 @@ describe("Metrics", () => {
               started.resolve();
               await takenOver.promise;
               const completeAsWorker = async () =>
-                withTransaction(async (txCtx, txHooks) =>
-                  complete({ ...txCtx, txHooks, output: { by: "worker" } }),
-                );
+                withTransaction(async (txCtx) => complete({ ...txCtx, output: { by: "worker" } }));
               await expect(completeAsWorker()).rejects.toThrow(JobAlreadyCompletedError);
               attemptEnded.resolve();
               return completeAsWorker();
@@ -1022,16 +1000,15 @@ describe("Metrics", () => {
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
-      client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+    const chain = await withTransaction(async (txCtx) =>
+      client.createChain({ ...txCtx, typeName: "test", input: null }),
     );
 
     await workerRunner.start();
     await started.promise;
-    await withTransaction(async (txCtx, txHooks) =>
+    await withTransaction(async (txCtx) =>
       client.completeChain({
         ...txCtx,
-        txHooks,
         ...chain,
         handler: async ({ job, completeJob }) =>
           completeJob(job, async ({ complete }) => complete({ output: { by: "workerless" } })),
@@ -1085,24 +1062,20 @@ describe("Metrics", () => {
             attemptHandler: async ({ complete }) => {
               started.resolve();
               await deleted.promise;
-              return withTransaction(async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: null }),
-              );
+              return withTransaction(async (txCtx) => complete({ ...txCtx, output: null }));
             },
           },
         },
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
-      client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+    const chain = await withTransaction(async (txCtx) =>
+      client.createChain({ ...txCtx, typeName: "test", input: null }),
     );
 
     await workerRunner.start();
     await started.promise;
-    await withTransaction(async (txCtx, txHooks) =>
-      client.deleteChains({ ...txCtx, txHooks, ids: [chain.id] }),
-    );
+    await withTransaction(async (txCtx) => client.deleteChains({ ...txCtx, ids: [chain.id] }));
     deleted.resolve();
     await workerRunner.close();
 
@@ -1112,63 +1085,6 @@ describe("Metrics", () => {
       { method: "workerStarted" },
       { method: "jobAttemptStarted" },
       { method: "chainDeleted" },
-      { method: "jobAttemptLost" },
-      { method: "workerStopped" },
-    ]);
-  });
-
-  it("tracks a lost attempt when its complete committed outside its hooks flush", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    observabilityAdapter,
-    log,
-    expectMetrics,
-  }) => {
-    const jobTypes = defineJobTypes<{
-      test: { entry: true; input: null; output: null };
-    }>();
-
-    const client = createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    await using workerRunner = createWorkerRunner({
-      client,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          test: {
-            attemptHandler: async ({ complete }) =>
-              withTxHooks(async (txHooks) => {
-                await stateAdapter.withTransaction(async (txCtx) =>
-                  complete({ ...txCtx, txHooks, output: null }),
-                );
-                throw new Error("after the transaction committed");
-              }),
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, txHooks) =>
-      client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
-    );
-
-    await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
-    await workerRunner.close();
-
-    await expectMetrics([
-      { method: "chainCreated" },
-      { method: "jobCreated" },
-      { method: "workerStarted" },
-      { method: "jobAttemptStarted" },
       { method: "jobAttemptLost" },
       { method: "workerStopped" },
     ]);
@@ -1223,17 +1139,15 @@ describe("Metrics", () => {
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
-              return withTransaction(async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: null }),
-              );
+              return withTransaction(async (txCtx) => complete({ ...txCtx, output: null }));
             },
           },
         },
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
-      client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+    const chain = await withTransaction(async (txCtx) =>
+      client.createChain({ ...txCtx, typeName: "test", input: null }),
     );
 
     await workerRunner.start();
@@ -1281,17 +1195,15 @@ describe("Metrics", () => {
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
-              return withTransaction(async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: null }),
-              );
+              return withTransaction(async (txCtx) => complete({ ...txCtx, output: null }));
             },
           },
         },
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
-      client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+    const chain = await withTransaction(async (txCtx) =>
+      client.createChain({ ...txCtx, typeName: "test", input: null }),
     );
 
     await workerRunner.start();
@@ -1325,13 +1237,11 @@ describe("Metrics", () => {
       jobTypes,
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
-      client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+    const chain = await withTransaction(async (txCtx) =>
+      client.createChain({ ...txCtx, typeName: "test", input: null }),
     );
 
-    await withTransaction(async (txCtx, txHooks) =>
-      client.deleteChains({ ...txCtx, txHooks, ids: [chain.id] }),
-    );
+    await withTransaction(async (txCtx) => client.deleteChains({ ...txCtx, ids: [chain.id] }));
 
     await expectMetrics([
       { method: "chainCreated", args: { typeName: "test" } },
@@ -1360,19 +1270,16 @@ describe("Metrics", () => {
       jobTypes,
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
+    const chain = await withTransaction(async (txCtx) =>
       client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "test",
         input: null,
         schedule: { afterMs: 60 * 60 * 1000 },
       }),
     );
 
-    await withTransaction(async (txCtx, txHooks) =>
-      client.rescheduleJob({ ...txCtx, txHooks, id: chain.id }),
-    );
+    await withTransaction(async (txCtx) => client.rescheduleJob({ ...txCtx, id: chain.id }));
 
     await expectMetrics([
       { method: "chainCreated", args: { typeName: "test" } },
@@ -1402,10 +1309,9 @@ describe("Metrics", () => {
     });
 
     const create = async () =>
-      withTransaction(async (txCtx, txHooks) =>
+      withTransaction(async (txCtx) =>
         client.createChain({
           ...txCtx,
-          txHooks,
           typeName: "test",
           input: null,
           deduplication: { key: "same-key", scope: "any" },
@@ -1459,8 +1365,8 @@ describe("Spans", () => {
         processors: {
           test: {
             attemptHandler: async ({ complete }) => {
-              return withTransaction(async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: { result: true } }),
+              return withTransaction(async (txCtx) =>
+                complete({ ...txCtx, output: { result: true } }),
               );
             },
           },
@@ -1468,10 +1374,9 @@ describe("Spans", () => {
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
+    const chain = await withTransaction(async (txCtx) =>
       client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "test",
         input: { test: true },
       }),
@@ -1534,19 +1439,16 @@ describe("Spans", () => {
               if (job.attempt < 2) {
                 throw new Error("Unexpected error");
               }
-              return withTransaction(async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: null }),
-              );
+              return withTransaction(async (txCtx) => complete({ ...txCtx, output: null }));
             },
           },
         },
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
+    const chain = await withTransaction(async (txCtx) =>
       client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "test",
         input: null,
       }),
@@ -1615,23 +1517,20 @@ describe("Spans", () => {
           test: {
             attemptHandler: async ({ job, complete }) => {
               if (job.attempt < 2) {
-                return withTransaction(async (txCtx, txHooks) =>
-                  complete({ ...txCtx, txHooks, reschedule: { afterMs: 100 } }),
+                return withTransaction(async (txCtx) =>
+                  complete({ ...txCtx, reschedule: { afterMs: 100 } }),
                 );
               }
-              return withTransaction(async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: null }),
-              );
+              return withTransaction(async (txCtx) => complete({ ...txCtx, output: null }));
             },
           },
         },
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
+    const chain = await withTransaction(async (txCtx) =>
       client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "test",
         input: null,
       }),
@@ -1707,10 +1606,9 @@ describe("Spans", () => {
         processors: {
           linear: {
             attemptHandler: async ({ job, complete }) =>
-              withTransaction(async (txCtx, txHooks) =>
+              withTransaction(async (txCtx) =>
                 complete({
                   ...txCtx,
-                  txHooks,
                   continueWith: {
                     typeName: "linear_next",
                     input: { valueNext: job.input.value + 1 },
@@ -1720,10 +1618,9 @@ describe("Spans", () => {
           },
           linear_next: {
             attemptHandler: async ({ job, complete }) =>
-              withTransaction(async (txCtx, txHooks) =>
+              withTransaction(async (txCtx) =>
                 complete({
                   ...txCtx,
-                  txHooks,
                   continueWith: {
                     typeName: "linear_next_next",
                     input: { valueNextNext: job.input.valueNext + 1 },
@@ -1733,10 +1630,9 @@ describe("Spans", () => {
           },
           linear_next_next: {
             attemptHandler: async ({ job, complete }) =>
-              withTransaction(async (txCtx, txHooks) =>
+              withTransaction(async (txCtx) =>
                 complete({
                   ...txCtx,
-                  txHooks,
                   output: { result: job.input.valueNextNext },
                 }),
               ),
@@ -1745,10 +1641,9 @@ describe("Spans", () => {
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
+    const chain = await withTransaction(async (txCtx) =>
       client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "linear",
         input: { value: 1 },
       }),
@@ -1833,10 +1728,9 @@ describe("Spans", () => {
         processors: {
           linear: {
             attemptHandler: async ({ job, complete }) =>
-              withTransaction(async (txCtx, txHooks) =>
+              withTransaction(async (txCtx) =>
                 complete({
                   ...txCtx,
-                  txHooks,
                   continueWith: {
                     typeName: "linear_next",
                     input: { valueNext: job.input.value + 1 },
@@ -1846,10 +1740,9 @@ describe("Spans", () => {
           },
           linear_next: {
             attemptHandler: async ({ job, complete }) =>
-              withTransaction(async (txCtx, txHooks) =>
+              withTransaction(async (txCtx) =>
                 complete({
                   ...txCtx,
-                  txHooks,
                   output: { result: job.input.valueNext },
                 }),
               ),
@@ -1858,10 +1751,9 @@ describe("Spans", () => {
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
+    const chain = await withTransaction(async (txCtx) =>
       untracedClient.createChain({
         ...txCtx,
-        txHooks,
         typeName: "linear",
         input: { value: 1 },
       }),
@@ -1887,84 +1779,6 @@ describe("Spans", () => {
       { typeName: "linear_next", traceContext: null, chainTraceContext: null },
     ]);
     await expectSpans([]);
-  });
-
-  it("tracks an attempt as failed when its complete committed outside its hooks flush", async ({
-    stateAdapter,
-    notifyAdapter,
-    withTransaction,
-    observabilityAdapter,
-    log,
-    expectSpans,
-  }) => {
-    const jobTypes = defineJobTypes<{
-      first: { entry: true; input: null; continueWith: { typeName: "second" } };
-      second: { input: null; output: null };
-    }>();
-
-    const client = createClient({
-      stateAdapter,
-      notifyAdapter,
-      observabilityAdapter,
-      log,
-      jobTypes,
-    });
-    await using workerRunner = createWorkerRunner({
-      client,
-      concurrency: 1,
-      processors: createProcessors({
-        client,
-        jobTypes,
-        processors: {
-          first: {
-            attemptHandler: async ({ complete }) =>
-              withTxHooks(async (txHooks) => {
-                await stateAdapter.withTransaction(async (txCtx) =>
-                  complete({
-                    ...txCtx,
-                    txHooks,
-                    continueWith: { typeName: "second", input: null },
-                  }),
-                );
-                throw new Error("after the transaction committed");
-              }),
-          },
-          second: {
-            attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: null }),
-              ),
-          },
-        },
-      }),
-    });
-
-    const chain = await withTransaction(async (txCtx, txHooks) =>
-      client.createChain({ ...txCtx, txHooks, typeName: "first", input: null }),
-    );
-
-    await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
-    await workerRunner.close();
-
-    await expectSpans([
-      { name: "create chain.first", kind: "PRODUCER" },
-      { name: "create job.first", kind: "PRODUCER", parentName: "create chain.first" },
-      { name: "create job.second", kind: "PRODUCER", parentName: "create chain.first" },
-      {
-        name: "start job-attempt.first",
-        kind: "CONSUMER",
-        parentName: "create job.first",
-        status: "ERROR",
-      },
-      {
-        name: "complete chain.first",
-        kind: "CONSUMER",
-        parentName: "start job-attempt.second",
-        links: 1,
-      },
-      { name: "start job-attempt.second", kind: "CONSUMER", parentName: "create job.second" },
-    ]);
   });
 
   it("tracks spans for blocker chains with blocker links", async ({
@@ -2006,17 +1820,16 @@ describe("Spans", () => {
         processors: {
           blocker: {
             attemptHandler: async ({ job, complete }) =>
-              withTransaction(async (txCtx, txHooks) =>
+              withTransaction(async (txCtx) =>
                 job.input.value < 1
                   ? complete({
                       ...txCtx,
-                      txHooks,
                       continueWith: {
                         typeName: "blocker",
                         input: { value: job.input.value + 1 },
                       },
                     })
-                  : complete({ ...txCtx, txHooks, output: { done: true } }),
+                  : complete({ ...txCtx, output: { done: true } }),
               ),
           },
           main: {
@@ -2027,10 +1840,9 @@ describe("Spans", () => {
               },
               complete,
             }) => {
-              return withTransaction(async (txCtx, txHooks) =>
+              return withTransaction(async (txCtx) =>
                 complete({
                   ...txCtx,
-                  txHooks,
                   output: {
                     finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
                   },
@@ -2042,17 +1854,15 @@ describe("Spans", () => {
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) => {
+    const chain = await withTransaction(async (txCtx) => {
       const dependencyChain = await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "blocker",
         input: { value: 0 },
       });
 
       return client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "main",
         input: { start: true },
         blockers: [dependencyChain],
@@ -2137,9 +1947,7 @@ describe("Spans", () => {
         processors: {
           blocker: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: { done: true } }),
-              ),
+              withTransaction(async (txCtx) => complete({ ...txCtx, output: { done: true } })),
           },
           main: {
             attemptHandler: async ({
@@ -2149,10 +1957,9 @@ describe("Spans", () => {
               },
               complete,
             }) => {
-              return withTransaction(async (txCtx, txHooks) =>
+              return withTransaction(async (txCtx) =>
                 complete({
                   ...txCtx,
-                  txHooks,
                   output: {
                     finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
                   },
@@ -2165,10 +1972,9 @@ describe("Spans", () => {
     });
 
     // Create and complete the blocker chain first
-    const dependencyChain = await withTransaction(async (txCtx, txHooks) =>
+    const dependencyChain = await withTransaction(async (txCtx) =>
       client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "blocker",
         input: { value: 1 },
       }),
@@ -2179,10 +1985,9 @@ describe("Spans", () => {
     await workerRunner.stop();
 
     // Now create main chain with already-completed blocker
-    const chain = await withTransaction(async (txCtx, txHooks) =>
+    const chain = await withTransaction(async (txCtx) =>
       client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "main",
         input: { start: true },
         blockers: [dependencyChain],
@@ -2253,30 +2058,27 @@ describe("Spans", () => {
       jobTypes,
     });
 
-    const [completedChain, runningChain] = await withTransaction(async (txCtx, txHooks) =>
+    const [completedChain, runningChain] = await withTransaction(async (txCtx) =>
       client.createChains({
         ...txCtx,
-        txHooks,
         items: [
           { typeName: "completed", input: null },
           { typeName: "running", input: null },
         ],
       }),
     );
-    await withTransaction(async (txCtx, txHooks) =>
+    await withTransaction(async (txCtx) =>
       client.completeChain({
         ...txCtx,
-        txHooks,
         ...completedChain,
         handler: async ({ job, completeJob }) =>
           completeJob(job, async ({ complete }) => complete({ output: null })),
       }),
     );
 
-    await withTransaction(async (txCtx, txHooks) =>
+    await withTransaction(async (txCtx) =>
       client.createChains({
         ...txCtx,
-        txHooks,
         items: [
           { typeName: "alpha", input: null, blockers: [completedChain, runningChain] },
           { typeName: "beta", input: null, blockers: [runningChain] },
@@ -2337,20 +2139,18 @@ describe("Spans", () => {
       jobTypes,
     });
 
-    await withTransaction(async (txCtx, txHooks) =>
+    await withTransaction(async (txCtx) =>
       client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "test",
         input: { value: 1 },
         deduplication: { key: "existing", scope: "running" },
       }),
     );
 
-    const [newChain, deduplicatedChain] = await withTransaction(async (txCtx, txHooks) =>
+    const [newChain, deduplicatedChain] = await withTransaction(async (txCtx) =>
       client.createChains({
         ...txCtx,
-        txHooks,
         items: [
           { typeName: "test", input: { value: 2 } },
           {
@@ -2406,24 +2206,21 @@ describe("Spans", () => {
       jobTypes,
     });
 
-    await withTransaction(async (txCtx, txHooks) => [
+    await withTransaction(async (txCtx) => [
       await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "test",
         input: { value: 1 },
         deduplication: { key: "same-key", scope: "running" },
       }),
       await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "test",
         input: { value: 2 },
         deduplication: { key: "same-key", scope: "running" },
       }),
       await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "test",
         input: { value: 3 },
         deduplication: { key: "different-key", scope: "running" },
@@ -2475,19 +2272,17 @@ describe("Spans", () => {
       jobTypes,
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
+    const chain = await withTransaction(async (txCtx) =>
       client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "test",
         input: { value: 42 },
       }),
     );
 
-    await withTransaction(async (txCtx, txHooks) =>
+    await withTransaction(async (txCtx) =>
       client.completeChain({
         ...txCtx,
-        txHooks,
         ...chain,
         handler: async ({ job, completeJob }) => {
           return completeJob(job, async ({ complete }) => complete({ output: { result: 84 } }));
@@ -2531,19 +2326,17 @@ describe("Spans", () => {
       jobTypes,
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
+    const chain = await withTransaction(async (txCtx) =>
       client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "awaiting-approval",
         input: { requestId: "req-123" },
       }),
     );
 
-    const completedChain = await withTransaction(async (txCtx, txHooks) =>
+    const completedChain = await withTransaction(async (txCtx) =>
       client.completeChain({
         ...txCtx,
-        txHooks,
         ...chain,
         handler: async ({ job, completeJob }) => {
           if (job.typeName === "awaiting-approval") {
@@ -2631,8 +2424,8 @@ describe("Gauges", () => {
         processors: {
           test: {
             attemptHandler: async ({ job, complete }) => {
-              return withTransaction(async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: { result: job.input.test } }),
+              return withTransaction(async (txCtx) =>
+                complete({ ...txCtx, output: { result: job.input.test } }),
               );
             },
           },
@@ -2640,10 +2433,9 @@ describe("Gauges", () => {
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
+    const chain = await withTransaction(async (txCtx) =>
       client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "test",
         input: { test: true },
       }),
@@ -2708,16 +2500,16 @@ describe("Gauges", () => {
           email: {
             attemptHandler: async ({ complete }) => {
               processedTypes.push("email");
-              return withTransaction(async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: { sent: true } }),
+              return withTransaction(async (txCtx) =>
+                complete({ ...txCtx, output: { sent: true } }),
               );
             },
           },
           sms: {
             attemptHandler: async ({ complete }) => {
               processedTypes.push("sms");
-              return withTransaction(async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: { sent: true } }),
+              return withTransaction(async (txCtx) =>
+                complete({ ...txCtx, output: { sent: true } }),
               );
             },
           },
@@ -2725,18 +2517,16 @@ describe("Gauges", () => {
       }),
     });
 
-    const emailChain = await withTransaction(async (txCtx, txHooks) =>
+    const emailChain = await withTransaction(async (txCtx) =>
       client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "email",
         input: { to: "test@example.com" },
       }),
     );
-    const smsChain = await withTransaction(async (txCtx, txHooks) =>
+    const smsChain = await withTransaction(async (txCtx) =>
       client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "sms",
         input: { phone: "+1234567890" },
       }),
@@ -2807,8 +2597,8 @@ describe("Rollback", () => {
       jobTypes,
     });
 
-    await withTransaction(async (txCtx, txHooks) => {
-      await client.createChain({ ...txCtx, txHooks, typeName: "test", input: null });
+    await withTransaction(async (txCtx) => {
+      await client.createChain({ ...txCtx, typeName: "test", input: null });
       throw new Error("simulated rollback");
     }).catch(() => {});
 
@@ -2852,16 +2642,14 @@ describe("Rollback", () => {
       jobTypes,
     });
 
-    await withTransaction(async (txCtx, txHooks) => {
+    await withTransaction(async (txCtx) => {
       const blocker = await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "blocker",
         input: null,
       });
       await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "main",
         input: null,
         blockers: [blocker],
@@ -2910,14 +2698,13 @@ describe("Rollback", () => {
       jobTypes,
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
-      client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+    const chain = await withTransaction(async (txCtx) =>
+      client.createChain({ ...txCtx, typeName: "test", input: null }),
     );
 
-    await withTransaction(async (txCtx, txHooks) => {
+    await withTransaction(async (txCtx) => {
       await client.completeChain({
         ...txCtx,
-        txHooks,
         ...chain,
         handler: async ({ job, completeJob }) =>
           completeJob(job, async ({ complete }) => complete({ output: { result: 42 } })),
@@ -2982,16 +2769,14 @@ describe("Rollback", () => {
         processors: {
           test: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: null }),
-              ),
+              withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
           },
         },
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
-      client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+    const chain = await withTransaction(async (txCtx) =>
+      client.createChain({ ...txCtx, typeName: "test", input: null }),
     );
 
     await workerRunner.start();
@@ -3067,17 +2852,15 @@ describe("Rollback", () => {
                 handlerFailed = true;
                 throw new Error("simulated handler failure");
               }
-              return withTransaction(async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: null }),
-              );
+              return withTransaction(async (txCtx) => complete({ ...txCtx, output: null }));
             },
           },
         },
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
-      client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+    const chain = await withTransaction(async (txCtx) =>
+      client.createChain({ ...txCtx, typeName: "test", input: null }),
     );
 
     await workerRunner.start();
@@ -3142,10 +2925,9 @@ describe("Rollback", () => {
         processors: {
           linear: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, txHooks) => {
+              withTransaction(async (txCtx) => {
                 const result = await complete({
                   ...txCtx,
-                  txHooks,
                   continueWith: { typeName: "linear_next", input: null },
                 });
                 if (throwOnce) {
@@ -3157,16 +2939,14 @@ describe("Rollback", () => {
           },
           linear_next: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: null }),
-              ),
+              withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
           },
         },
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
-      client.createChain({ ...txCtx, txHooks, typeName: "linear", input: null }),
+    const chain = await withTransaction(async (txCtx) =>
+      client.createChain({ ...txCtx, typeName: "linear", input: null }),
     );
 
     await workerRunner.start();
@@ -3247,24 +3027,20 @@ describe("Rollback", () => {
         processors: {
           test: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: null }),
-              ),
+              withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
           },
         },
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) => {
+    const chain = await withTransaction(async (txCtx) => {
       const created = await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "test",
         input: null,
       });
       await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "dependent",
         input: null,
         blockers: [created],
@@ -3341,16 +3117,14 @@ describe("Rollback", () => {
       jobTypes,
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) => {
+    const chain = await withTransaction(async (txCtx) => {
       const created = await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "test",
         input: null,
       });
       await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "dependent",
         input: null,
         blockers: [created],
@@ -3359,10 +3133,9 @@ describe("Rollback", () => {
     });
 
     // First attempt: unblockJobs fails inside finishJob → entire transaction rolls back
-    await withTransaction(async (txCtx, txHooks) =>
+    await withTransaction(async (txCtx) =>
       erroringClient.completeChain({
         ...txCtx,
-        txHooks,
         ...chain,
         handler: async ({ job, completeJob }) =>
           completeJob(job, async ({ complete }) => complete({ output: { result: 42 } })),
@@ -3370,10 +3143,9 @@ describe("Rollback", () => {
     ).catch(() => {});
 
     // Second attempt: succeeds
-    await withTransaction(async (txCtx, txHooks) =>
+    await withTransaction(async (txCtx) =>
       client.completeChain({
         ...txCtx,
-        txHooks,
         ...chain,
         handler: async ({ job, completeJob }) =>
           completeJob(job, async ({ complete }) => complete({ output: { result: 42 } })),
@@ -3450,26 +3222,23 @@ describe("Rollback", () => {
         processors: {
           linear: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, txHooks) =>
+              withTransaction(async (txCtx) =>
                 complete({
                   ...txCtx,
-                  txHooks,
                   continueWith: { typeName: "linear_next", input: null },
                 }),
               ),
           },
           linear_next: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: null }),
-              ),
+              withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
           },
         },
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
-      client.createChain({ ...txCtx, txHooks, typeName: "linear", input: null }),
+    const chain = await withTransaction(async (txCtx) =>
+      client.createChain({ ...txCtx, typeName: "linear", input: null }),
     );
 
     await workerRunner.start();
@@ -3516,8 +3285,8 @@ describe("Rollback", () => {
       jobTypes,
     });
 
-    await withTransaction(async (txCtx, txHooks) => {
-      await client.createChain({ ...txCtx, txHooks, typeName: "test", input: null });
+    await withTransaction(async (txCtx) => {
+      await client.createChain({ ...txCtx, typeName: "test", input: null });
       throw new Error("simulated rollback");
     }).catch(() => {});
 
@@ -3576,10 +3345,9 @@ describe("Rollback", () => {
         processors: {
           linear: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, txHooks) => {
+              withTransaction(async (txCtx) => {
                 const result = await complete({
                   ...txCtx,
-                  txHooks,
                   continueWith: { typeName: "linear_next", input: null },
                 });
                 if (throwOnce) {
@@ -3591,16 +3359,14 @@ describe("Rollback", () => {
           },
           linear_next: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: null }),
-              ),
+              withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
           },
         },
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
-      client.createChain({ ...txCtx, txHooks, typeName: "linear", input: null }),
+    const chain = await withTransaction(async (txCtx) =>
+      client.createChain({ ...txCtx, typeName: "linear", input: null }),
     );
 
     await workerRunner.start();
@@ -3689,14 +3455,13 @@ describe("Rollback", () => {
         processors: {
           test: {
             attemptHandler: async ({ complete }) =>
-              withTransaction(async (txCtx, txHooks) => {
+              withTransaction(async (txCtx) => {
                 await client.createChain({
                   ...txCtx,
-                  txHooks,
                   typeName: "other",
                   input: null,
                 });
-                const result = await complete({ ...txCtx, txHooks, output: null });
+                const result = await complete({ ...txCtx, output: null });
                 if (throwOnce) {
                   throwOnce = false;
                   throw new Error("user error after complete");
@@ -3708,8 +3473,8 @@ describe("Rollback", () => {
       }),
     });
 
-    const chain = await withTransaction(async (txCtx, txHooks) =>
-      client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+    const chain = await withTransaction(async (txCtx) =>
+      client.createChain({ ...txCtx, typeName: "test", input: null }),
     );
 
     await workerRunner.start();

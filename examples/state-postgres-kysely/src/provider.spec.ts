@@ -51,7 +51,7 @@ describe("state-postgres-kysely migrator conformance", () => {
   let context: PgMigratorConformanceContext;
 
   beforeAll(async () => {
-    pg = await acquirePostgres("postgres:18", import.meta.url);
+    pg = await acquirePostgres("postgres:18", `${import.meta.url}#migrator`);
     const pool = new Pool({ connectionString: pg.connectionString, idleTimeoutMillis: 0 });
     db = new Kysely<Database>({ dialect: new PostgresDialect({ pool }) });
     context = createPgMigratorConformanceContext({

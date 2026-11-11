@@ -5,6 +5,8 @@ import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.
 const dummyProvider = {
   withTransaction: async <T>(fn: (ctx: any) => Promise<T>) => fn({}),
   isTransaction: () => true,
+  onTransactionCommit: () => {},
+  onTransactionRollback: () => {},
   executeSql: async () => [],
   classifyError: () => undefined,
 };

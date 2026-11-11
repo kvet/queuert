@@ -75,7 +75,7 @@ Once a concept has a word, that word is the only one for it — everywhere, incl
 
 ### Type Naming Scheme
 
-- **`New<Entity>` for something a caller asks to create**: `NewJob` (`typeName`, `id?`, `input`, `schedule?`, `blockers`) is the job passed to `continueWith`; `NewChain` adds `deduplication?` and is what `createChain` and the `createChains` items accept. Method option types build on these (`NewChain & { txHooks } & tx context`) instead of restating their fields.
+- **`New<Entity>` for something a caller asks to create**: `NewJob` (`typeName`, `id?`, `input`, `schedule?`, `blockers`) is the job passed to `continueWith`; `NewChain` adds `deduplication?` and is what `createChain` and the `createChains` items accept. Method option types build on these (`NewChain & tx context`) instead of restating their fields.
 - **`Any<Name>` only for the type-erased counterpart of a generic public type**, used by internal code that handles every job type and so cannot be generic over the definitions (`AnyJob`, `AnyChain`, `AnyNewJob`, `AnyAttemptMiddleware`). Define it next to the generic type it mirrors, never inside the implementation file that consumes it. A union over all type names is not erased — express it with the generic type and its default type parameter (`NewChain<TJobId, TJobTypeDefinitions>`), not a separate `Any…` name.
 - **Define a shape once.** When the same fields appear in a client method, a handler outcome and the implementation, extract the generic type plus its `Any…` counterpart rather than keeping parallel copies.
 

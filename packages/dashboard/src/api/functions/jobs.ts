@@ -1,6 +1,6 @@
 import { RpcError } from "@queuert/rpc";
 import type { ServerFn } from "@queuert/rpc/server";
-import { JobNotFoundError, JobNotReschedulableError, type Page, withTxHooks } from "queuert";
+import { JobNotFoundError, JobNotReschedulableError, type Page } from "queuert";
 import { helpersSymbol } from "queuert/internal";
 import * as v from "valibot";
 
@@ -128,12 +128,8 @@ export const rescheduleJob: ServerFn<{ id: string }, UnknownJob> = createServerF
   .handler(async ({ data, client }) => {
     try {
       const { stateAdapter } = client[helpersSymbol];
-      return await withTxHooks(async (txHooks) =>
-        stateAdapter.withTransaction(
-          txHooks.retryBoundary(async (txCtx) =>
-            client.rescheduleJob({ id: data.id, txHooks, ...txCtx }),
-          ),
-        ),
+      return await stateAdapter.withTransaction(async (txCtx) =>
+        client.rescheduleJob({ id: data.id, ...txCtx }),
       );
     } catch (err) {
       if (err instanceof JobNotFoundError) throw jobNotFound();

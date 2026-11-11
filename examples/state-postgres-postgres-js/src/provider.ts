@@ -1,8 +1,9 @@
 import type { PgStateProvider } from "@queuert/postgres";
 import type { RuntimeType } from "@queuert/typed-sql";
 import type postgres from "postgres";
+import { type TxHooks, withTxHooks } from "queuert";
 
-export type PostgresJsContext = { txSql: postgres.TransactionSql };
+export type PostgresJsContext = { txSql: postgres.TransactionSql; txHooks: TxHooks };
 
 const TEXT_OID = 25;
 const UUID_OID = 2950;
@@ -44,8 +45,15 @@ export const createPostgresJsStateProvider = ({
   };
 
   return {
-    withTransaction: async (cb) => sql.begin(async (txSql) => cb({ txSql }) as any),
+    withTransaction: async (cb) =>
+      withTxHooks(async (txHooks) => sql.begin(async (txSql) => cb({ txSql, txHooks }) as any)),
     isTransaction: (txCtx) => typeof txCtx.txSql.savepoint === "function",
+    onTransactionCommit: (txCtx, callback) => {
+      txCtx.txHooks.onCommit(callback);
+    },
+    onTransactionRollback: (txCtx, callback) => {
+      txCtx.txHooks.onRollback(callback);
+    },
     classifyError: ({ error }) => {
       const driverError = error as { code?: unknown; message?: unknown } | undefined;
       if (driverError?.code !== "42P01") return undefined;

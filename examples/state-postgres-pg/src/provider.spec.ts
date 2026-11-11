@@ -53,7 +53,7 @@ describe("state-postgres-pg migrator conformance", () => {
   let context: PgMigratorConformanceContext;
 
   beforeAll(async () => {
-    pg = await acquirePostgres("postgres:18", import.meta.url);
+    pg = await acquirePostgres("postgres:18", `${import.meta.url}#migrator`);
     pool = new Pool({ connectionString: pg.connectionString, idleTimeoutMillis: 0 });
     context = createPgMigratorConformanceContext({
       stateProvider: createPgPoolStateProvider({ pool }),

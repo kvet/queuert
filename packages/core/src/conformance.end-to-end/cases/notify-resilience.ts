@@ -40,8 +40,8 @@ export const notifyResilienceGroup: ConformanceGroup<StateAdapterConformanceCont
             processors: {
               test: {
                 attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: { result: job.input.value * 2 } }),
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: { result: job.input.value * 2 } }),
                   ),
               },
             },
@@ -49,10 +49,9 @@ export const notifyResilienceGroup: ConformanceGroup<StateAdapterConformanceCont
         });
 
         await workerRunner.start();
-        const chains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chains = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChains({
             ...txCtx,
-            txHooks,
             items: Array.from({ length: 20 }, (_, i) => ({
               typeName: "test",
               input: { value: i },

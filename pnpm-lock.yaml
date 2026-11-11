@@ -1580,6 +1580,30 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
+  examples/state-postgres-mikro-orm:
+    devDependencies:
+      '@mikro-orm/core':
+        specifier: 7.2.8
+        version: 7.2.8
+      '@mikro-orm/postgresql':
+        specifier: 7.2.8
+        version: 7.2.8(@mikro-orm/core@7.2.8)
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
+      '@queuert/testcontainers':
+        specifier: workspace:*
+        version: link:../../packages-internal/testcontainers
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages-internal/tsconfig
+      kysely:
+        specifier: 0.29.8
+        version: 0.29.8
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+
   examples/state-postgres-multi-worker:
     devDependencies:
       '@queuert/postgres':
@@ -1777,6 +1801,27 @@ importers:
       better-sqlite3:
         specifier: 13.0.3
         version: 13.0.3
+      kysely:
+        specifier: 0.29.8
+        version: 0.29.8
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+
+  examples/state-sqlite-mikro-orm:
+    devDependencies:
+      '@mikro-orm/core':
+        specifier: 7.2.8
+        version: 7.2.8
+      '@mikro-orm/sqlite':
+        specifier: 7.2.8
+        version: 7.2.8(@mikro-orm/core@7.2.8)
+      '@queuert/sqlite':
+        specifier: workspace:*
+        version: link:../../packages/sqlite
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages-internal/tsconfig
       kysely:
         specifier: 0.29.8
         version: 0.29.8
@@ -2574,6 +2619,33 @@ packages:
     resolution: {integrity: sha512-v8satFmBB+DqDzYohnm1u2JOvxx6Hl3pUvqzJvfs2Zk/ngZ1aRUhsWpXvwPkNeGN9c2NCm/38H29ZqXQUjf8dw==}
     peerDependencies:
       rollup: '>=2'
+
+  '@mikro-orm/core@7.2.8':
+    resolution: {integrity: sha512-9E7wApevmNrqswey8pVT65nyBz1ejOafcdyHV2aKU9FmxnWr/MbfOVNlnpMe6D3+r+wsrVyx3dBJ0mHqTYQTCw==}
+    engines: {node: '>= 22.17.0'}
+    peerDependencies:
+      dataloader: 2.2.3
+    peerDependenciesMeta:
+      dataloader:
+        optional: true
+
+  '@mikro-orm/postgresql@7.2.8':
+    resolution: {integrity: sha512-spAGvR8xfXGK0+mwsAsN3Kt5cg2Ge3DgXT3rNOeA7IxaBXpl+NMwXu5cSWes4jHlhWKJ4jzXyTo6xH+we9fbNA==}
+    engines: {node: '>= 22.17.0'}
+    peerDependencies:
+      '@mikro-orm/core': 7.2.8
+
+  '@mikro-orm/sql@7.2.8':
+    resolution: {integrity: sha512-551INWnMri4veRmOVcGeM4hCn559OgXzxhZqWmVYeF5RDpavlVPBbYdiPaBd7NIOssPEG+LkcDH7lt2l67U4PQ==}
+    engines: {node: '>= 22.17.0'}
+    peerDependencies:
+      '@mikro-orm/core': 7.2.8
+
+  '@mikro-orm/sqlite@7.2.8':
+    resolution: {integrity: sha512-N5Z64HwRD1LY3Zi369IxVLEXdJUjElOr3APXSR8czmYTZtcaY6A/8bk1+kgYX19LiF3lwFY80xmxZnCrtx1eOg==}
+    engines: {node: '>= 22.17.0'}
+    peerDependencies:
+      '@mikro-orm/core': 7.2.8
 
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     resolution: {integrity: sha512-oTXEIha4SsuXdTA4Iyskj0kpdx2yVXdhd75c2v3xGrHFfVMsbhTPZU/nMPL4sWKo4pBHm3aucLaqGlF696dTyQ==}
@@ -5832,6 +5904,11 @@ packages:
   pg-connection-string@2.6.2:
     resolution: {integrity: sha512-ch6OwaeaPYcova4kKZ15sbJ2hKb/VP48ZD2gE7i1J+L4MspCtBMAx8nMgz7bksc7IojCIIWuEhHibSMFH8m8oA==}
 
+  pg-cursor@2.22.1:
+    resolution: {integrity: sha512-X10ldv3wwBONQkOSwgWEbaEITMGLd92V2Zd+xsFPhDt3nhhU3hpAT08SERBChnIFmomczLax6lKXLJrHPPXfxA==}
+    peerDependencies:
+      pg: ^8
+
   pg-int8@1.0.1:
     resolution: {integrity: sha512-WCtabS6t3c8SkpDBUlb1kjOs7l66xsGdKpIPZsg4wR+B3+u9UAum2odSsF9tnvxg80h4ZxLWMy4pRjOsFIqQpw==}
     engines: {node: '>=4.0.0'}
@@ -5908,9 +5985,17 @@ packages:
     resolution: {integrity: sha512-suDmjLVQg78nMK2UZ454hAG+OAW+HQPZ6n++TNDUX+L0+uUlLywnoxJKDou51Zm+zTCjrCl0Nq6J9C5hP9vK/Q==}
     engines: {node: '>=0.10.0'}
 
+  postgres-date@2.1.0:
+    resolution: {integrity: sha512-K7Juri8gtgXVcDfZttFKVmhglp7epKb1K4pgrkLxehjqkrgPhfG6OO8LHLkfaqkbpjNRnra018XwAr1yQFWGcA==}
+    engines: {node: '>=12'}
+
   postgres-interval@1.2.0:
     resolution: {integrity: sha512-9ZhXKM/rw350N1ovuWHbGxnGh/SNJ4cnxHiM0rxE4VN41wsg8P8zWn9hv/buK00RP4WvlOyr/RBDiptyxVbkZQ==}
     engines: {node: '>=0.10.0'}
+
+  postgres-interval@4.1.0:
+    resolution: {integrity: sha512-nJLACcOHi2iyRuMJeW6CuIA0Dc0i1YEpRr26XDyHAfxPjYUJOFxwZjmOc5oFFctTTh/OlRAMlnlXEJvr170fJg==}
+    engines: {node: '>=12'}
 
   postgres@3.4.7:
     resolution: {integrity: sha512-Jtc2612XINuBjIl/QTWsV5UvE8UHuNblcO3vVADSrKsrc6RqGX6lOW1cEo3CM2v0XG4Nat8nI+YM7/f26VxXLw==}
@@ -7263,6 +7348,33 @@ snapshots:
       vfile: 6.0.3
     transitivePeerDependencies:
       - supports-color
+
+  '@mikro-orm/core@7.2.8': {}
+
+  '@mikro-orm/postgresql@7.2.8(@mikro-orm/core@7.2.8)':
+    dependencies:
+      '@mikro-orm/core': 7.2.8
+      '@mikro-orm/sql': 7.2.8(@mikro-orm/core@7.2.8)
+      kysely: 0.29.8
+      pg: 8.23.1
+      pg-cursor: 2.22.1(pg@8.23.1)
+      postgres-array: 3.0.4
+      postgres-date: 2.1.0
+      postgres-interval: 4.1.0
+    transitivePeerDependencies:
+      - pg-native
+
+  '@mikro-orm/sql@7.2.8(@mikro-orm/core@7.2.8)':
+    dependencies:
+      '@mikro-orm/core': 7.2.8
+      kysely: 0.29.8
+
+  '@mikro-orm/sqlite@7.2.8(@mikro-orm/core@7.2.8)':
+    dependencies:
+      '@mikro-orm/core': 7.2.8
+      '@mikro-orm/sql': 7.2.8(@mikro-orm/core@7.2.8)
+      better-sqlite3: 13.0.3
+      kysely: 0.29.8
 
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
@@ -10329,6 +10441,10 @@ snapshots:
 
   pg-connection-string@2.6.2: {}
 
+  pg-cursor@2.22.1(pg@8.23.1):
+    dependencies:
+      pg: 8.23.1
+
   pg-int8@1.0.1: {}
 
   pg-pool@3.14.0(pg@8.23.1):
@@ -10421,9 +10537,13 @@ snapshots:
 
   postgres-date@1.0.7: {}
 
+  postgres-date@2.1.0: {}
+
   postgres-interval@1.2.0:
     dependencies:
       xtend: 4.0.2
+
+  postgres-interval@4.1.0: {}
 
   postgres@3.4.7: {}
 

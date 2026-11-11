@@ -8,7 +8,6 @@ import {
   createWorkerRunner,
   createProcessors,
   defineJobTypes,
-  withTxHooks,
 } from "queuert";
 
 import { createPinoLog } from "./log.ts";
@@ -91,14 +90,11 @@ await using workerRunner = createWorkerRunner({
           log.info("Starting to process greeting");
           log.info({ name: job.input.name }, "Generating greeting");
 
-          return withTxHooks(async (txHooks) =>
-            stateAdapter.withTransaction(async (ctx) =>
-              complete({
-                ...ctx,
-                txHooks,
-                output: { greeting: `Hello, ${job.input.name}!` },
-              }),
-            ),
+          return stateAdapter.withTransaction(async (ctx) =>
+            complete({
+              ...ctx,
+              output: { greeting: `Hello, ${job.input.name}!` },
+            }),
           );
         },
       },
@@ -113,10 +109,8 @@ await using workerRunner = createWorkerRunner({
 
           log.info("Job succeeded");
 
-          return withTxHooks(async (txHooks) =>
-            stateAdapter.withTransaction(async (ctx) =>
-              complete({ ...ctx, txHooks, output: { success: true as const } }),
-            ),
+          return stateAdapter.withTransaction(async (ctx) =>
+            complete({ ...ctx, output: { success: true as const } }),
           );
         },
         backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },
@@ -130,28 +124,22 @@ await workerRunner.start();
 
 // Run successful job
 logger.info("--- Running successful job ---");
-const successChain = await withTxHooks(async (txHooks) =>
-  stateAdapter.withTransaction(async (ctx) =>
-    client.createChain({
-      ...ctx,
-      txHooks,
-      typeName: "greet",
-      input: { name: "World" },
-    }),
-  ),
+const successChain = await stateAdapter.withTransaction(async (ctx) =>
+  client.createChain({
+    ...ctx,
+    typeName: "greet",
+    input: { name: "World" },
+  }),
 );
 await client.awaitChain(successChain, { timeoutMs: 5000 });
 
 // Run job that fails then succeeds (demonstrates error logging with stack trace)
 logger.info("--- Running job that fails first attempt ---");
-const failThenSucceedChain = await withTxHooks(async (txHooks) =>
-  stateAdapter.withTransaction(async (ctx) =>
-    client.createChain({
-      ...ctx,
-      txHooks,
-      typeName: "might-fail",
-      input: { shouldFail: true },
-    }),
-  ),
+const failThenSucceedChain = await stateAdapter.withTransaction(async (ctx) =>
+  client.createChain({
+    ...ctx,
+    typeName: "might-fail",
+    input: { shouldFail: true },
+  }),
 );
 await client.awaitChain(failThenSucceedChain, { timeoutMs: 5000 });

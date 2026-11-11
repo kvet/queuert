@@ -136,8 +136,9 @@ const flushHooks = (registry: AsyncTxHooks): Promise<void> | undefined => {
 /**
  * Create a new tx hooks handle.
  *
- * Returns `txHooks` (pass to mutating client methods), `flush` (call after commit),
- * and `discard` (call on rollback).
+ * Returns `txHooks` (carried in a state provider's transaction context, where the provider's
+ * `onTransactionCommit` and `onTransactionRollback` register on them), `flush` (call after
+ * commit), and `discard` (call on rollback).
  */
 export const createTxHooks = (): TxHooksHandle => {
   const txHooks = new AsyncTxHooks();
@@ -150,7 +151,13 @@ export const createTxHooks = (): TxHooksHandle => {
   };
 };
 
-/** Execute a callback with auto-managed tx hooks. Flushes on success, discards on error. */
+/**
+ * Execute a callback with auto-managed tx hooks. Flushes on success, discards on error.
+ *
+ * Wrap the transaction from outside, so the hooks flush after COMMIT. A state provider without
+ * transaction events of its own calls it in `withTransaction`; open your own transaction inside it
+ * and pass `txHooks` in the transaction context.
+ */
 export const withTxHooks = async <T>(cb: (txHooks: TxHooks) => Promise<T>): Promise<T> => {
   const txHooks = new AsyncTxHooks();
   try {

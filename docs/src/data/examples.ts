@@ -160,6 +160,18 @@ export const examples: Example[] = [
     guide: statePostgres,
   },
   {
+    name: "state-postgres-mikro-orm",
+    category: "state",
+    page: "state-adapters",
+    label: "MikroORM",
+    description:
+      "PostgreSQL state storage via @queuert/postgres with MikroORM — commit and rollback callbacks from MikroORM's transaction events, so calls take `{ em }` alone.",
+    runtime: "Node.js",
+    services: ["PostgreSQL"],
+    files: providerFiles,
+    guide: statePostgres,
+  },
+  {
     name: "state-postgres-prisma",
     category: "state",
     page: "state-adapters",
@@ -253,6 +265,18 @@ export const examples: Example[] = [
     runtime: "Node.js",
     services: [],
     files: stateProviderFiles,
+    guide: stateSqlite,
+  },
+  {
+    name: "state-sqlite-mikro-orm",
+    category: "state",
+    page: "state-adapters",
+    label: "MikroORM",
+    description:
+      "SQLite state storage via @queuert/sqlite with MikroORM — commit and rollback callbacks from MikroORM's transaction events, so calls take `{ em }` alone. MikroORM's SQLite driver holds its one better-sqlite3 connection for the whole transaction, so no external lock is needed.",
+    runtime: "Node.js",
+    services: [],
+    files: providerFiles,
     guide: stateSqlite,
   },
   {

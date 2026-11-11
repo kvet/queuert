@@ -255,6 +255,8 @@ const createValidatingProvider = (
   return {
     withTransaction: inner.withTransaction,
     isTransaction: inner.isTransaction,
+    onTransactionCommit: inner.onTransactionCommit,
+    onTransactionRollback: inner.onTransactionRollback,
     classifyError: inner.classifyError,
     executeSql: async (args) => {
       const next = validationQueue.then(async () =>

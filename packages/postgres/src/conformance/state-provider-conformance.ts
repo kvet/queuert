@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import type { ConformanceTestCase } from "queuert/conformance";
 import {
   type ConformanceGroup,
+  type SavepointConformanceContext,
   type SchemaFenceConformanceContext,
   toConformanceTestCases,
   stateAdapterBaseGroups,
+  stateAdapterSavepointGroups,
   stateAdapterConcurrentTransactionGroups,
   stateAdapterSchemaFenceConcurrentTransactionGroups,
   stateAdapterSchemaFenceGroups,
@@ -18,9 +20,10 @@ import type { PgStateProvider } from "../state-provider/state-provider.pg.ts";
  * The context the {@link pgStateProviderConformanceCases} run against. Get it from
  * {@link createPgStateProviderConformanceContext} and pass it to every case unchanged.
  */
-export type PgStateProviderConformanceContext = SchemaFenceConformanceContext & {
-  createStateProvider: () => Promise<PgStateProvider<any>>;
-};
+export type PgStateProviderConformanceContext = SchemaFenceConformanceContext &
+  SavepointConformanceContext & {
+    createStateProvider: () => Promise<PgStateProvider<any>>;
+  };
 
 const MISSING_TABLE = "public.queuert_conformance_missing";
 
@@ -131,7 +134,7 @@ export const pgStateAdapterConformanceGroups: ConformanceGroup<SchemaFenceConfor
 ];
 
 export const pgStateProviderConformanceGroups: ConformanceGroup<PgStateProviderConformanceContext>[] =
-  [...pgStateAdapterConformanceGroups, classifyErrorGroup];
+  [...pgStateAdapterConformanceGroups, ...stateAdapterSavepointGroups, classifyErrorGroup];
 
 /**
  * Prepares the context the {@link pgStateProviderConformanceCases} run against: migrates the
@@ -144,6 +147,7 @@ export const pgStateProviderConformanceGroups: ConformanceGroup<PgStateProviderC
 export const createPgStateProviderConformanceContext = async ({
   createStateProvider,
   withNonTransactionContext,
+  withSavepoint,
 }: {
   /**
    * Creates the provider under test, over a database the suite may create tables in. Each case's
@@ -156,6 +160,13 @@ export const createPgStateProviderConformanceContext = async ({
    * (e.g. a pool client with no `BEGIN`), so the suite can check `isTransaction` rejects it.
    */
   withNonTransactionContext: <T>(fn: (txCtx: any) => Promise<T>) => Promise<T>;
+  /**
+   * Runs `fn` in a savepoint of `txCtx`'s transaction, opened the way the application opens one,
+   * and passes it the savepoint's context: releases the savepoint when `fn` resolves and rolls it
+   * back when `fn` throws, then rethrows. The suite checks that the provider's `onTransactionCommit` and
+   * `onTransactionRollback` follow it; without it, those cases pass without checking anything.
+   */
+  withSavepoint?: <T>(txCtx: any, fn: (txCtx: any) => Promise<T>) => Promise<T>;
 }): Promise<PgStateProviderConformanceContext> => {
   const ddl = { params: [], paramTypes: {}, columnTypes: {}, readOnly: false };
   const executeDdl = async (sql: string): Promise<void> => {
@@ -175,6 +186,7 @@ export const createPgStateProviderConformanceContext = async ({
   return {
     createStateProvider,
     withNonTransactionContext,
+    withSavepoint,
     createStateAdapter: async () => {
       const stateProvider = await createStateProvider();
       const stateAdapter = createPgStateAdapter({ stateProvider });

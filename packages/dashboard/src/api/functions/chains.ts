@@ -1,6 +1,6 @@
 import { RpcError } from "@queuert/rpc";
 import type { ServerFn } from "@queuert/rpc/server";
-import { BlockerReferenceError, type Client, type Page, withTxHooks } from "queuert";
+import { BlockerReferenceError, type Client, type Page } from "queuert";
 import { helpersSymbol } from "queuert/internal";
 import * as v from "valibot";
 
@@ -172,12 +172,8 @@ const deleteChainNow = async (
 ): Promise<DeleteChainOutcome> => {
   try {
     const { stateAdapter } = client[helpersSymbol];
-    const deleted = await withTxHooks(async (txHooks) =>
-      stateAdapter.withTransaction(
-        txHooks.retryBoundary(async (txCtx) =>
-          client.deleteChains({ ids: [chainId], txHooks, ...txCtx }),
-        ),
-      ),
+    const deleted = await stateAdapter.withTransaction(async (txCtx) =>
+      client.deleteChains({ ids: [chainId], ...txCtx }),
     );
     return { outcome: "deleted", count: deleted.length };
   } catch (err) {

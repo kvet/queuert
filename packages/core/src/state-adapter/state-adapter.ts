@@ -170,6 +170,15 @@ export type StateAdapter<
   /** Whether `txCtx` is in an open transaction, answered without a query. */
   isTransaction: (txCtx: TTxContext) => boolean;
 
+  /** Runs `callback` after `txCtx`'s transaction commits, before the call that opened it settles. */
+  onTransactionCommit: (txCtx: TTxContext, callback: () => void | Promise<void>) => void;
+
+  /**
+   * Runs `callback` synchronously when `txCtx`'s transaction, or the savepoint `txCtx` belongs to,
+   * rolls back. Commit callbacks registered there never run.
+   */
+  onTransactionRollback: (txCtx: TTxContext, callback: () => void) => void;
+
   /** Gets chains by ID in input order; `lock` locks each head row. */
   getChains: (
     params: { chainIds: TJobId[] } & (

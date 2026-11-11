@@ -149,13 +149,6 @@ describe("AttemptComplete", () => {
         terminalCommit({ txHooks, output: { y: "done" } }),
       ).toBeFunction();
     });
-
-    it("rejects a call without txHooks", () => {
-      expectTypeOf(async () =>
-        // @ts-expect-error complete buffers its events in the caller's txHooks
-        terminalCommit({ ...txCtx, output: { y: "done" } }),
-      ).toBeFunction();
-    });
   });
 
   describe("continueWith entry", () => {
@@ -336,10 +329,10 @@ describe("AttemptHandler", () => {
     >();
   });
 
-  it("exposes fence taking the state adapter's transaction context", () => {
+  it("exposes fence taking a partial transaction context, as reads do", () => {
     expectTypeOf<Options["fence"]>().toEqualTypeOf<AttemptFence<InProcessStateAdapter>>();
     expectTypeOf<Parameters<Options["fence"]>[0]>().toEqualTypeOf<
-      GetStateAdapterTxContext<InProcessStateAdapter>
+      Partial<GetStateAdapterTxContext<InProcessStateAdapter>>
     >();
   });
 

@@ -1,4 +1,5 @@
 import type { AsyncRwLock, SqliteStateProvider } from "@queuert/sqlite";
+import { type TxHooks, withTxHooks } from "queuert";
 
 type PrismaDriverAdapterError = {
   meta?: { driverAdapterError?: { cause?: { kind?: unknown; table?: unknown } } };
@@ -9,7 +10,7 @@ export type PrismaLikeClient = {
   $queryRawUnsafe: (sql: string, ...params: unknown[]) => Promise<unknown[]>;
 };
 
-export type PrismaSqliteContext<TPrisma> = { prisma: TPrisma };
+export type PrismaSqliteContext<TPrisma> = { prisma: TPrisma; txHooks: TxHooks };
 
 export const createPrismaSqliteStateProvider = <TPrisma extends PrismaLikeClient>({
   prisma,
@@ -19,11 +20,18 @@ export const createPrismaSqliteStateProvider = <TPrisma extends PrismaLikeClient
   lock: AsyncRwLock;
 }): SqliteStateProvider<PrismaSqliteContext<TPrisma>> => {
   return {
-    withTransaction: async (cb) => {
-      using _h = await lock.acquireWrite();
-      return await prisma.$transaction(async (prisma: TPrisma) => cb({ prisma }));
-    },
+    withTransaction: async (cb) =>
+      withTxHooks(async (txHooks) => {
+        using _h = await lock.acquireWrite();
+        return await prisma.$transaction(async (prisma: TPrisma) => cb({ prisma, txHooks }));
+      }),
     isTransaction: (txCtx) => !("$connect" in txCtx.prisma),
+    onTransactionCommit: (txCtx, callback) => {
+      txCtx.txHooks.onCommit(callback);
+    },
+    onTransactionRollback: (txCtx, callback) => {
+      txCtx.txHooks.onRollback(callback);
+    },
     // Prisma wraps a raw query's driver error and reports a missing table on its cause.
     classifyError: ({ error }) => {
       const cause = (error as PrismaDriverAdapterError | undefined)?.meta?.driverAdapterError

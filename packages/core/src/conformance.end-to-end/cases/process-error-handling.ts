@@ -47,8 +47,8 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
                     throw new Error("Simulated handler error");
                   }
                   assert.ok(job.lastAttemptError?.includes("Error: Simulated handler error"));
-                  return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: { result: job.input.value * 2 } }),
+                  return withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: { result: job.input.value * 2 } }),
                   );
                 },
               },
@@ -56,10 +56,9 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: { value: 10 },
           }),
@@ -99,13 +98,12 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
                   if (job.attempt > 1) {
                     assert.ok(job.lastAttemptError?.includes("Error: Simulated handler error"));
                   }
-                  return withCaseTransaction(stateAdapter, async (txCtx, txHooks) => {
+                  return withCaseTransaction(stateAdapter, async (txCtx) => {
                     if (job.attempt === 1) {
                       throw new Error("Simulated handler error");
                     }
                     return complete({
                       ...txCtx,
-                      txHooks,
                       output: { result: job.input.value * 2 },
                     });
                   });
@@ -115,10 +113,9 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: { value: 10 },
           }),
@@ -158,10 +155,9 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
                   if (job.attempt > 1) {
                     assert.ok(job.lastAttemptError?.includes("Error: Error after complete"));
                   }
-                  return withCaseTransaction(stateAdapter, async (txCtx, txHooks) => {
+                  return withCaseTransaction(stateAdapter, async (txCtx) => {
                     const result = await complete({
                       ...txCtx,
-                      txHooks,
                       output: { result: job.input.value * 2 },
                     });
                     if (job.attempt === 1) {
@@ -175,10 +171,9 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: { value: 10 },
           }),
@@ -224,8 +219,8 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
                       "Attempt handler returned without a committed `complete` call",
                     ),
                   );
-                  return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: { done: true } }),
+                  return withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: { done: true } }),
                   );
                 },
               },
@@ -233,8 +228,8 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "test", input: null }),
         );
 
         await workerRunner.start();
@@ -271,10 +266,9 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
               step1: {
                 backoffConfig: fastBackoff,
                 attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) => {
+                  withCaseTransaction(stateAdapter, async (txCtx) => {
                     const result = await complete({
                       ...txCtx,
-                      txHooks,
                       continueWith: { typeName: "step2", input: { value: job.input.value * 2 } },
                     });
                     if (job.attempt === 1) {
@@ -285,18 +279,17 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
               },
               step2: {
                 attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: { result: job.input.value } }),
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: { result: job.input.value } }),
                   ),
               },
             },
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "step1",
             input: { value: 10 },
           }),
@@ -344,10 +337,9 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
               blocker: {
                 backoffConfig: fastBackoff,
                 attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) => {
+                  withCaseTransaction(stateAdapter, async (txCtx) => {
                     const result = await complete({
                       ...txCtx,
-                      txHooks,
                       output: { done: true },
                     });
                     if (job.attempt === 1) {
@@ -360,8 +352,8 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
                 attemptHandler: async ({ job, complete }) => {
                   const [blocker] = job.blockers;
                   assert.equal((await client.getJob({ id: blocker.id }))?.attempt, 2);
-                  return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: { result: "ok" } }),
+                  return withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: { result: "ok" } }),
                   );
                 },
               },
@@ -369,18 +361,16 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
           }),
         });
 
-        const blockerChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const blockerChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "blocker",
             input: { value: 1 },
           }),
         );
-        const dependentChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const dependentChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "dependent",
             input: null,
             blockers: [blockerChain],
@@ -431,8 +421,8 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
                       throw "string error";
                     case 4:
                       assert.equal(job.lastAttemptError, "string error");
-                      return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                        complete({ ...txCtx, txHooks, output: null }),
+                      return withCaseTransaction(stateAdapter, async (txCtx) =>
+                        complete({ ...txCtx, output: null }),
                       );
                     default:
                       throw new Error(`unexpected attempt ${job.attempt}`);
@@ -443,10 +433,9 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: null,
           }),
@@ -488,8 +477,8 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
                       }),
                     /transaction boom/,
                   );
-                  return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: null }),
+                  return withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: null }),
                   );
                 },
               },
@@ -497,10 +486,9 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: null,
           }),
@@ -537,8 +525,8 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
                   if (job.attempt < 3) {
                     throw new Error(`Simulated error on attempt ${job.attempt}`);
                   }
-                  return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: { result: job.input.value * 2 } }),
+                  return withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: { result: job.input.value * 2 } }),
                   );
                 },
               },
@@ -546,10 +534,9 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: { value: 10 },
           }),
@@ -591,13 +578,12 @@ export const processErrorHandlingPoisonTransactionGroup: ConformanceGroup<EndToE
                 test: {
                   backoffConfig: fastBackoff,
                   attemptHandler: async ({ job, complete }) =>
-                    withCaseTransaction(stateAdapter, async (txCtx, txHooks) => {
+                    withCaseTransaction(stateAdapter, async (txCtx) => {
                       if (job.attempt === 1) {
                         await poisonTransaction(txCtx);
                       }
                       return complete({
                         ...txCtx,
-                        txHooks,
                         output: { result: job.input.value * 2 },
                       });
                     }),
@@ -606,10 +592,9 @@ export const processErrorHandlingPoisonTransactionGroup: ConformanceGroup<EndToE
             }),
           });
 
-          const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+          const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
             client.createChain({
               ...txCtx,
-              txHooks,
               typeName: "test",
               input: { value: 10 },
             }),
@@ -651,8 +636,8 @@ export const processErrorHandlingPoisonTransactionGroup: ConformanceGroup<EndToE
                         await poisonTransaction(txCtx);
                       });
                     }
-                    return withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                      complete({ ...txCtx, txHooks, output: { result: job.input.value * 2 } }),
+                    return withCaseTransaction(stateAdapter, async (txCtx) =>
+                      complete({ ...txCtx, output: { result: job.input.value * 2 } }),
                     );
                   },
                 },
@@ -660,10 +645,9 @@ export const processErrorHandlingPoisonTransactionGroup: ConformanceGroup<EndToE
             }),
           });
 
-          const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+          const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
             client.createChain({
               ...txCtx,
-              txHooks,
               typeName: "test",
               input: { value: 10 },
             }),

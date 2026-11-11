@@ -22,16 +22,13 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Start a job that auto-rejects in 2 hours if not handled
-const chain = await withTxHooks(async (txHooks) =>
-  stateProvider.withTransaction(async (txCtx) =>
-    client.createChain({
-      ...txCtx,
-      txHooks,
-      typeName: "await-approval",
-      input: { requestId: "123" },
-      schedule: { afterMs: 2 * 60 * 60 * 1000 }, // 2 hours
-    }),
-  ),
+const chain = await stateProvider.withTransaction(async (txCtx) =>
+  client.createChain({
+    ...txCtx,
+    typeName: "await-approval",
+    input: { requestId: "123" },
+    schedule: { afterMs: 2 * 60 * 60 * 1000 }, // 2 hours
+  }),
 );
 
 // The worker handles the timeout case (auto-reject) and processes approved requests
@@ -43,19 +40,15 @@ const workerRunner = createWorkerRunner({
     processors: {
       "await-approval": {
         attemptHandler: async ({ complete }) =>
-          withTxHooks(async (txHooks) =>
-            stateProvider.withTransaction(async (txCtx) =>
-              complete({ ...txCtx, txHooks, output: { rejected: true } }),
-            ),
+          stateProvider.withTransaction(async (txCtx) =>
+            complete({ ...txCtx, output: { rejected: true } }),
           ),
       },
       "process-request": {
         attemptHandler: async ({ job, complete }) => {
           await doSomethingWith(job.input.requestId);
-          return withTxHooks(async (txHooks) =>
-            stateProvider.withTransaction(async (txCtx) =>
-              complete({ ...txCtx, txHooks, output: { processed: true } }),
-            ),
+          return stateProvider.withTransaction(async (txCtx) =>
+            complete({ ...txCtx, output: { processed: true } }),
           );
         },
       },
@@ -66,33 +59,30 @@ const workerRunner = createWorkerRunner({
 await workerRunner.start();
 
 // The job can be completed early without a worker (e.g., via API call)
-await withTxHooks(async (txHooks) =>
-  stateProvider.withTransaction(async (txCtx) =>
-    client.completeChain({
-      ...txCtx,
-      txHooks,
-      id: chain.id,
-      typeName: "await-approval",
-      handler: async ({ job, completeJob }) => {
-        if (job.typeName !== "await-approval") {
-          return; // Already past approval stage
-        }
-        // If approved, continue to process-request; otherwise just reject
-        if (userApproved) {
-          await completeJob(job, async ({ complete }) =>
-            complete({
-              continueWith: {
-                typeName: "process-request",
-                input: { requestId: job.input.requestId },
-              },
-            }),
-          );
-        } else {
-          await completeJob(job, async ({ complete }) => complete({ output: { rejected: true } }));
-        }
-      },
-    }),
-  ),
+await stateProvider.withTransaction(async (txCtx) =>
+  client.completeChain({
+    ...txCtx,
+    id: chain.id,
+    typeName: "await-approval",
+    handler: async ({ job, completeJob }) => {
+      if (job.typeName !== "await-approval") {
+        return; // Already past approval stage
+      }
+      // If approved, continue to process-request; otherwise just reject
+      if (userApproved) {
+        await completeJob(job, async ({ complete }) =>
+          complete({
+            continueWith: {
+              typeName: "process-request",
+              input: { requestId: job.input.requestId },
+            },
+          }),
+        );
+      } else {
+        await completeJob(job, async ({ complete }) => complete({ output: { rejected: true } }));
+      }
+    },
+  }),
 );
 ```
 

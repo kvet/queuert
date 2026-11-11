@@ -11,7 +11,6 @@ import {
 } from "../../errors.ts";
 import { createProcessors } from "../../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../../job-types/define-job-types.ts";
-import { withTxHooks } from "../../tx-hooks/tx-hooks.ts";
 import { createWorkerRunner } from "../../worker-runner.ts";
 import { createCaseNotifyAdapter } from "../support/create-case-notify-adapter.ts";
 import { withCaseTransaction } from "../support/with-case-transaction.ts";
@@ -35,10 +34,9 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "report",
             input: { type: "daily" },
             schedule: { afterMs: 60 * 60 * 1000 },
@@ -50,8 +48,8 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
         assert.ok(beforeReschedule!.scheduledAt.getTime() > Date.now() + 30_000);
 
         const before = Date.now();
-        const rescheduled = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.rescheduleJob({ ...txCtx, txHooks, id: chain.id }),
+        const rescheduled = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.rescheduleJob({ ...txCtx, id: chain.id }),
         );
 
         assert.equal(rescheduled.status, "pending");
@@ -72,15 +70,14 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "task", input: null }),
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "task", input: null }),
         );
 
         const futureDate = new Date(Date.now() + 60 * 60 * 1000);
-        const rescheduled = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const rescheduled = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.rescheduleJob({
             ...txCtx,
-            txHooks,
             id: chain.id,
             schedule: { at: futureDate },
           }),
@@ -101,15 +98,14 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "task", input: null }),
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "task", input: null }),
         );
 
         const before = Date.now();
-        const rescheduled = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const rescheduled = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.rescheduleJob({
             ...txCtx,
-            txHooks,
             id: chain.id,
             schedule: { afterMs: 60 * 60 * 1000 },
           }),
@@ -143,26 +139,25 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
             processors: {
               task: {
                 attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: { result: job.input.value * 2 } }),
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: { result: job.input.value * 2 } }),
                   ),
               },
             },
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "task",
             input: { value: 21 },
             schedule: { afterMs: 60 * 60 * 1000 },
           }),
         );
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.rescheduleJob({ ...txCtx, txHooks, id: chain.id }),
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.rescheduleJob({ ...txCtx, id: chain.id }),
         );
 
         await workerRunner.start();
@@ -186,18 +181,18 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "task", input: null }),
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "task", input: null }),
         );
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.deleteChains({ ...txCtx, txHooks, ids: [chain.id] }),
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.deleteChains({ ...txCtx, ids: [chain.id] }),
         );
 
         await assert.rejects(
           async () =>
-            withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-              client.rescheduleJob({ ...txCtx, txHooks, id: chain.id }),
+            withCaseTransaction(stateAdapter, async (txCtx) =>
+              client.rescheduleJob({ ...txCtx, id: chain.id }),
             ),
           JobNotFoundError,
         );
@@ -223,16 +218,16 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
             processors: {
               task: {
                 attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: { done: true as const } }),
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: { done: true as const } }),
                   ),
               },
             },
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "task", input: null }),
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "task", input: null }),
         );
 
         await workerRunner.start();
@@ -240,15 +235,15 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
 
         await assert.rejects(
           async () =>
-            withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-              client.rescheduleJob({ ...txCtx, txHooks, id: chain.id }),
+            withCaseTransaction(stateAdapter, async (txCtx) =>
+              client.rescheduleJob({ ...txCtx, id: chain.id }),
             ),
           JobNotReschedulableError,
         );
       },
     },
     {
-      name: "throws when called without transaction context or txHooks",
+      name: "throws when called without transaction context",
       run: async ({ createStateAdapter, createNotifyAdapter }) => {
         await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
         await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
@@ -262,10 +257,9 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "report",
             input: { type: "daily" },
             schedule: { afterMs: 60_000 },
@@ -277,14 +271,6 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
             // @ts-expect-error missing txCtx
             client.rescheduleJob({ id: chain.id }),
           /requires a transaction context/,
-        );
-        await assert.rejects(
-          async () =>
-            withCaseTransaction(stateAdapter, async (txCtx) =>
-              // @ts-expect-error missing txHooks
-              client.rescheduleJob({ ...txCtx, id: chain.id }),
-            ),
-          /rescheduleJobs requires txHooks/,
         );
       },
     },
@@ -299,10 +285,9 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "task",
             input: null,
             schedule: { afterMs: 60_000 },
@@ -312,14 +297,11 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
         await assert.rejects(
           async () =>
             withNonTransactionContext(async (txCtx) =>
-              withTxHooks(async (txHooks) =>
-                client.rescheduleJob({
-                  ...txCtx,
-                  txHooks,
-                  id: chain.id,
-                  schedule: { afterMs: 0 },
-                }),
-              ),
+              client.rescheduleJob({
+                ...txCtx,
+                id: chain.id,
+                schedule: { afterMs: 0 },
+              }),
             ),
           /not in a transaction/,
         );
@@ -345,16 +327,14 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const blockedChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) => {
+        const blockedChain = await withCaseTransaction(stateAdapter, async (txCtx) => {
           const blockerChain = await client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "blocker",
             input: null,
           });
           return client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "blocked",
             input: null,
             blockers: [blockerChain],
@@ -363,8 +343,8 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
 
         await assert.rejects(
           async () =>
-            withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-              client.rescheduleJob({ ...txCtx, txHooks, id: blockedChain.id }),
+            withCaseTransaction(stateAdapter, async (txCtx) =>
+              client.rescheduleJob({ ...txCtx, id: blockedChain.id }),
             ),
           JobNotReschedulableError,
         );
@@ -381,18 +361,17 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "task",
             input: null,
             schedule: { afterMs: 60 * 60 * 1000 },
           }),
         );
 
-        const rescheduled = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.rescheduleJobs({ ...txCtx, txHooks, ids: [chain.id, chain.id] }),
+        const rescheduled = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.rescheduleJobs({ ...txCtx, ids: [chain.id, chain.id] }),
         );
 
         assert.deepEqual(
@@ -416,10 +395,9 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chains = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChains({
             ...txCtx,
-            txHooks,
             items: [
               { typeName: "task", input: { value: 1 }, schedule: { afterMs: 60 * 60 * 1000 } },
               { typeName: "task", input: { value: 2 }, schedule: { afterMs: 60 * 60 * 1000 } },
@@ -430,8 +408,8 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const before = Date.now();
         const ids = chains.map((c) => c.id);
-        const rescheduled = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.rescheduleJobs({ ...txCtx, txHooks, ids }),
+        const rescheduled = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.rescheduleJobs({ ...txCtx, ids }),
         );
 
         assert.equal(rescheduled.length, 3);
@@ -454,10 +432,9 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chains = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChains({
             ...txCtx,
-            txHooks,
             items: [
               { typeName: "task", input: { value: 1 } },
               { typeName: "task", input: { value: 2 } },
@@ -467,8 +444,8 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const ids = chains.map((c) => c.id);
         const futureDate = new Date(Date.now() + 60 * 60 * 1000);
-        const rescheduled = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.rescheduleJobs({ ...txCtx, txHooks, ids, schedule: { at: futureDate } }),
+        const rescheduled = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.rescheduleJobs({ ...txCtx, ids, schedule: { at: futureDate } }),
         );
 
         assert.equal(rescheduled.length, 2);
@@ -488,8 +465,8 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const rescheduled = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.rescheduleJobs({ ...txCtx, txHooks, ids: [] }),
+        const rescheduled = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.rescheduleJobs({ ...txCtx, ids: [] }),
         );
 
         assert.deepEqual(rescheduled, []);
@@ -506,10 +483,9 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const [chainA, chainB] = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const [chainA, chainB] = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChains({
             ...txCtx,
-            txHooks,
             items: [
               { typeName: "task", input: { value: 1 }, schedule: { afterMs: 60 * 60 * 1000 } },
               { typeName: "task", input: { value: 2 }, schedule: { afterMs: 60 * 60 * 1000 } },
@@ -517,16 +493,15 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
           }),
         );
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.deleteChains({ ...txCtx, txHooks, ids: [chainB.id] }),
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.deleteChains({ ...txCtx, ids: [chainB.id] }),
         );
 
         await assert.rejects(
           async () =>
-            withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+            withCaseTransaction(stateAdapter, async (txCtx) =>
               client.rescheduleJobs({
                 ...txCtx,
-                txHooks,
                 ids: [chainA.id, chainB.id],
               }),
             ),
@@ -557,18 +532,17 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
             processors: {
               task: {
                 attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: { done: true as const } }),
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: { done: true as const } }),
                   ),
               },
             },
           }),
         });
 
-        const completedChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const completedChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "task",
             input: { value: 1 },
           }),
@@ -578,10 +552,9 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
         await client.awaitChain(completedChain, { timeoutMs: 5000, pollIntervalMs: 100 });
         await workerRunner.close();
 
-        const pendingChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const pendingChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "task",
             input: { value: 2 },
             schedule: { afterMs: 60 * 60 * 1000 },
@@ -590,10 +563,9 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
 
         await assert.rejects(
           async () =>
-            withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+            withCaseTransaction(stateAdapter, async (txCtx) =>
               client.rescheduleJobs({
                 ...txCtx,
-                txHooks,
                 ids: [pendingChain.id, completedChain.id],
               }),
             ),
@@ -605,7 +577,7 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
       },
     },
     {
-      name: "rescheduleJobs throws when called without transaction context or txHooks",
+      name: "rescheduleJobs throws when called without transaction context",
       run: async ({ createStateAdapter, createNotifyAdapter }) => {
         await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
         await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
@@ -615,10 +587,9 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "task",
             input: null,
             schedule: { afterMs: 60_000 },
@@ -630,14 +601,6 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
             // @ts-expect-error missing txCtx
             client.rescheduleJobs({ ids: [chain.id] }),
           /requires a transaction context/,
-        );
-        await assert.rejects(
-          async () =>
-            withCaseTransaction(stateAdapter, async (txCtx) =>
-              // @ts-expect-error missing txHooks
-              client.rescheduleJobs({ ...txCtx, ids: [chain.id] }),
-            ),
-          /rescheduleJobs requires txHooks/,
         );
       },
     },
@@ -652,10 +615,9 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "task",
             input: null,
             schedule: { afterMs: 60_000 },
@@ -665,14 +627,11 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
         await assert.rejects(
           async () =>
             withNonTransactionContext(async (txCtx) =>
-              withTxHooks(async (txHooks) =>
-                client.rescheduleJobs({
-                  ...txCtx,
-                  txHooks,
-                  ids: [chain.id],
-                  schedule: { afterMs: 0 },
-                }),
-              ),
+              client.rescheduleJobs({
+                ...txCtx,
+                ids: [chain.id],
+                schedule: { afterMs: 0 },
+              }),
             ),
           /not in a transaction/,
         );

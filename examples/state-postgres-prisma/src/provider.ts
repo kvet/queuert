@@ -1,4 +1,5 @@
 import type { PgStateProvider } from "@queuert/postgres";
+import { type TxHooks, withTxHooks } from "queuert";
 
 // Prisma wraps a raw query's driver error; the SQLSTATE is `originalCode` on its cause.
 type PrismaDriverAdapterError = {
@@ -15,7 +16,7 @@ export type PrismaLikeClient = {
   $executeRawUnsafe: (sql: string, ...params: unknown[]) => Promise<unknown>;
 };
 
-export type PrismaPgContext<TPrisma> = { prisma: TPrisma };
+export type PrismaPgContext<TPrisma> = { prisma: TPrisma; txHooks: TxHooks };
 
 export const createPrismaPgStateProvider = <TPrisma extends PrismaLikeClient>({
   prisma,
@@ -23,9 +24,18 @@ export const createPrismaPgStateProvider = <TPrisma extends PrismaLikeClient>({
   prisma: TPrisma;
 }): PgStateProvider<PrismaPgContext<TPrisma>> => {
   return {
-    withTransaction: async (cb) => prisma.$transaction(async (prisma: TPrisma) => cb({ prisma })),
+    withTransaction: async (cb) =>
+      withTxHooks(async (txHooks) =>
+        prisma.$transaction(async (prisma: TPrisma) => cb({ prisma, txHooks })),
+      ),
     // Prisma hides `$connect` on the interactive transaction client.
     isTransaction: (txCtx) => !("$connect" in txCtx.prisma),
+    onTransactionCommit: (txCtx, callback) => {
+      txCtx.txHooks.onCommit(callback);
+    },
+    onTransactionRollback: (txCtx, callback) => {
+      txCtx.txHooks.onRollback(callback);
+    },
     classifyError: ({ error }) => {
       const cause = (error as PrismaDriverAdapterError | undefined)?.meta?.driverAdapterError
         ?.cause;

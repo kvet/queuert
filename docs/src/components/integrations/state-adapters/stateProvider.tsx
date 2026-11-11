@@ -1,11 +1,19 @@
+import { A } from "@solidjs/router";
+
 import type { FieldItem } from "../../FieldList.tsx";
 
 /** Members of `PgStateProvider` / `SqliteStateProvider`, listed on each backend's page. */
 export const stateProviderMembers = (dialect: "postgres" | "sqlite"): FieldItem[] => [
   {
     name: "withTransaction",
-    description:
-      "Manages connection acquisition and transaction lifecycle. The callback receives a transaction context representing an active transaction.",
+    description: (
+      <>
+        Manages connection acquisition and transaction lifecycle. The callback receives a
+        transaction context representing an active transaction. A provider that carries{" "}
+        <code>txHooks</code> in its context creates them here with <code>withTxHooks</code>, around
+        the transaction, so they flush after COMMIT.
+      </>
+    ),
   },
   {
     name: "isTransaction",
@@ -15,6 +23,29 @@ export const stateProviderMembers = (dialect: "postgres" | "sqlite"): FieldItem[
         without a query. Mutating client methods reject a context that fails it, so passing a pool
         or the root ORM handle instead of the transaction throws instead of autocommitting each
         statement.
+      </>
+    ),
+  },
+  {
+    name: "onTransactionCommit",
+    description: (
+      <>
+        Runs a callback after the context's transaction commits, and awaits it before the call that
+        opened the transaction settles. The client and the worker register every side effect (notify
+        events, observability events) here. A provider over a client with transaction events, such
+        as MikroORM, runs it from those events; any other provider carries <code>txHooks</code> in
+        its transaction context and registers the callback on them. See{" "}
+        <A href="/guides/tx-hooks/">Tx Hooks</A>.
+      </>
+    ),
+  },
+  {
+    name: "onTransactionRollback",
+    description: (
+      <>
+        Runs a callback synchronously when the context's transaction, or the savepoint the context
+        belongs to, rolls back; the commit callbacks registered there never run. Implemented the
+        same way as <code>onTransactionCommit</code>.
       </>
     ),
   },

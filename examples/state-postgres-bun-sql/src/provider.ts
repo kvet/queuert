@@ -1,8 +1,9 @@
 import type { PgStateProvider } from "@queuert/postgres";
 import type { RuntimeType } from "@queuert/typed-sql";
 import type { SQL, TransactionSQL } from "bun";
+import { type TxHooks, withTxHooks } from "queuert";
 
-export type BunSqlContext = { txSql: TransactionSQL };
+export type BunSqlContext = { txSql: TransactionSQL; txHooks: TxHooks };
 
 export const createBunSqlStateProvider = ({
   sql,
@@ -40,8 +41,15 @@ export const createBunSqlStateProvider = ({
   };
 
   return {
-    withTransaction: async (cb) => sql.begin(async (txSql) => cb({ txSql })),
+    withTransaction: async (cb) =>
+      withTxHooks(async (txHooks) => sql.begin(async (txSql) => cb({ txSql, txHooks }))),
     isTransaction: (txCtx) => typeof txCtx.txSql.savepoint === "function",
+    onTransactionCommit: (txCtx, callback) => {
+      txCtx.txHooks.onCommit(callback);
+    },
+    onTransactionRollback: (txCtx, callback) => {
+      txCtx.txHooks.onRollback(callback);
+    },
     classifyError: ({ error }) => {
       const driverError = error as { errno?: unknown; message?: unknown } | undefined;
       if (driverError?.errno !== "42P01") return undefined;

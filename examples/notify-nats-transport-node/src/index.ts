@@ -4,13 +4,7 @@ import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import { acquireNats } from "@queuert/testcontainers";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
-import {
-  createClient,
-  createWorkerRunner,
-  createProcessors,
-  defineJobTypes,
-  withTxHooks,
-} from "queuert";
+import { createClient, createWorkerRunner, createProcessors, defineJobTypes } from "queuert";
 
 // Start NATS using testcontainers
 console.log("Starting NATS...");
@@ -67,17 +61,14 @@ await using workerRunner = createWorkerRunner({
           await new Promise((r) => setTimeout(r, 500));
           const rowCount = Math.floor(Math.random() * 1000) + 100;
           console.log(`Report generated with ${rowCount} rows`);
-          return withTxHooks(async (txHooks) =>
-            stateAdapter.withTransaction(async (ctx) =>
-              complete({
-                ...ctx,
-                txHooks,
-                output: {
-                  reportId: `RPT-${Date.now()}`,
-                  rowCount,
-                },
-              }),
-            ),
+          return stateAdapter.withTransaction(async (ctx) =>
+            complete({
+              ...ctx,
+              output: {
+                reportId: `RPT-${Date.now()}`,
+                rowCount,
+              },
+            }),
           );
         },
       },
@@ -89,15 +80,12 @@ await using workerRunner = createWorkerRunner({
 await workerRunner.start();
 
 console.log("Requesting sales report...");
-const chain = await withTxHooks(async (txHooks) =>
-  stateAdapter.withTransaction(async (ctx) =>
-    client.createChain({
-      ...ctx,
-      txHooks,
-      typeName: "generate_report",
-      input: { reportType: "sales", dateRange: { from: "2024-01-01", to: "2024-12-31" } },
-    }),
-  ),
+const chain = await stateAdapter.withTransaction(async (ctx) =>
+  client.createChain({
+    ...ctx,
+    typeName: "generate_report",
+    input: { reportType: "sales", dateRange: { from: "2024-01-01", to: "2024-12-31" } },
+  }),
 );
 
 // Main thread continues with other work while job processes

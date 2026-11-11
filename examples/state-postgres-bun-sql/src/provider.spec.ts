@@ -47,7 +47,7 @@ describe("state-postgres-bun-sql migrator conformance", () => {
   let context: PgMigratorConformanceContext;
 
   beforeAll(async () => {
-    pg = await acquirePostgres("postgres:18", import.meta.url);
+    pg = await acquirePostgres("postgres:18", `${import.meta.url}#migrator`);
     sql = new SQL(pg.connectionString, { max: 10 });
     context = createPgMigratorConformanceContext({
       stateProvider: createBunSqlStateProvider({ sql }),

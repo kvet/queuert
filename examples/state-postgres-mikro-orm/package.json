@@ -1,0 +1,30 @@
+{
+  "name": "example-state-postgres-mikro-orm",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating the PostgreSQL state adapter with MikroORM, with commit and rollback callbacks from MikroORM's transaction events.",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "exports": {
+    "./provider": "./src/provider.ts"
+  },
+  "scripts": {
+    "start": "node src/index.ts",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@mikro-orm/core": "7.2.8",
+    "@mikro-orm/postgresql": "7.2.8",
+    "@queuert/postgres": "workspace:*",
+    "@queuert/testcontainers": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
+    "kysely": "0.29.8",
+    "queuert": "workspace:*"
+  }
+}

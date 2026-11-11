@@ -35,3 +35,16 @@ export type SchemaFenceConformanceContext = StateAdapterConformanceContext & {
    */
   withWritesFenced: <T>(fn: () => Promise<T>) => Promise<T>;
 };
+
+/**
+ * Context for the savepoint cases: the state adapter context plus an optional way to run a callback
+ * inside a savepoint of an open transaction, the way the application opens one. Without it the
+ * savepoint cases pass without checking anything.
+ */
+export type SavepointConformanceContext = StateAdapterConformanceContext & {
+  /**
+   * Runs `fn` in a savepoint of `txCtx`'s transaction and passes it the savepoint's context:
+   * releases the savepoint when `fn` resolves and rolls it back when `fn` throws, then rethrows.
+   */
+  withSavepoint?: <T>(txCtx: any, fn: (txCtx: any) => Promise<T>) => Promise<T>;
+};

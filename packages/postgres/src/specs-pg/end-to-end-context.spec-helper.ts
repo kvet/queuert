@@ -10,7 +10,10 @@ import {
 
 import { createPgStateProviderConformanceContext } from "../conformance/state-provider-conformance.ts";
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.ts";
-import { withPgPoolNonTransactionContext } from "../state-provider/state-provider.pg-pool.spec-helper.ts";
+import {
+  withPgPoolNonTransactionContext,
+  withPgPoolSavepoint,
+} from "../state-provider/state-provider.pg-pool.spec-helper.ts";
 import {
   type PgPoolContext,
   type PgPoolProvider,
@@ -87,20 +90,10 @@ export const createPgEndToEndContext = async ({
   ...(await createPgStateProviderConformanceContext({
     createStateProvider: async () => createPgPoolProvider({ pool }),
     withNonTransactionContext: withPgPoolNonTransactionContext(pool),
+    withSavepoint: withPgPoolSavepoint,
   })),
+  withSavepoint: withPgPoolSavepoint,
   createNotifyAdapter,
-  withSavepoint: async (txCtx, fn) => {
-    const { poolClient } = txCtx as PgPoolContext;
-    await poolClient.query("SAVEPOINT queuert_test");
-    try {
-      const result = await fn(txCtx);
-      await poolClient.query("RELEASE SAVEPOINT queuert_test");
-      return result;
-    } catch (error) {
-      await poolClient.query("ROLLBACK TO SAVEPOINT queuert_test");
-      throw error;
-    }
-  },
   poisonTransaction: async (txCtx) => {
     const { poolClient } = txCtx as PgPoolContext;
     await poolClient.query("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");

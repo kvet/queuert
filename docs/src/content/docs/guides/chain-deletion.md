@@ -8,10 +8,8 @@ sidebar:
 Chains can be deleted using `deleteChains` (plural) or `deleteChain` (singular). All jobs in the chain (its head job and continuations) are removed together.
 
 ```ts
-await withTxHooks(async (txHooks) =>
-  stateProvider.withTransaction(async (txCtx) =>
-    client.deleteChains({ ...txCtx, txHooks, ids: [chain.id] }),
-  ),
+await stateProvider.withTransaction(async (txCtx) =>
+  client.deleteChains({ ...txCtx, ids: [chain.id] }),
 );
 ```
 
@@ -20,26 +18,20 @@ When a deleted chain has a running job, its attempt is notified as lost: when th
 Use `deleteChain` to target a single chain — it returns the deleted chain or `undefined` if no chain with that ID exists. `deleteChains` silently skips missing IDs and returns the chains that were actually deleted. Both calls are idempotent:
 
 ```ts
-await withTxHooks(async (txHooks) =>
-  stateProvider.withTransaction(async (txCtx) =>
-    client.deleteChain({ ...txCtx, txHooks, id: chain.id }),
-  ),
+await stateProvider.withTransaction(async (txCtx) =>
+  client.deleteChain({ ...txCtx, id: chain.id }),
 );
 ```
 
 If a chain is referenced as a blocker by another chain, deletion is rejected unless both chains are deleted together:
 
 ```ts
-await withTxHooks(async (txHooks) =>
-  stateProvider.withTransaction(async (txCtx) =>
-    client.deleteChains({ ...txCtx, txHooks, ids: [blockerChain.id] }),
-  ),
+await stateProvider.withTransaction(async (txCtx) =>
+  client.deleteChains({ ...txCtx, ids: [blockerChain.id] }),
 ); // throws
 
-await withTxHooks(async (txHooks) =>
-  stateProvider.withTransaction(async (txCtx) =>
-    client.deleteChains({ ...txCtx, txHooks, ids: [mainChain.id, blockerChain.id] }),
-  ),
+await stateProvider.withTransaction(async (txCtx) =>
+  client.deleteChains({ ...txCtx, ids: [mainChain.id, blockerChain.id] }),
 ); // ok
 ```
 
@@ -50,14 +42,11 @@ Deletion never follows blocker relationships on its own. To remove a chain toget
 ```ts
 const blockerChains = await client.getJobBlockers({ jobId: reportChain.id });
 
-await withTxHooks(async (txHooks) =>
-  stateProvider.withTransaction(async (txCtx) =>
-    client.deleteChains({
-      ...txCtx,
-      txHooks,
-      ids: [reportChain.id, ...blockerChains.map((blocker) => blocker.id)],
-    }),
-  ),
+await stateProvider.withTransaction(async (txCtx) =>
+  client.deleteChains({
+    ...txCtx,
+    ids: [reportChain.id, ...blockerChains.map((blocker) => blocker.id)],
+  }),
 );
 ```
 

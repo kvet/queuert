@@ -575,6 +575,14 @@ LEFT JOIN LATERAL (
 
     isTransaction: stateProvider.isTransaction,
 
+    onTransactionCommit: (txCtx, callback) => {
+      stateProvider.onTransactionCommit(txCtx, callback);
+    },
+
+    onTransactionRollback: (txCtx, callback) => {
+      stateProvider.onTransactionRollback(txCtx, callback);
+    },
+
     getChains: async ({
       txCtx,
       chainIds,

@@ -142,8 +142,11 @@ const Page = () => (
       </li>
       <li>
         <strong>Held until commit.</strong> Events emitted inside a database transaction are flushed
-        after it commits and discarded if it rolls back, through the same{" "}
-        <A href="/guides/tx-hooks/">tx hooks</A> that guard notify events.
+        after it commits and discarded if it rolls back, through the state provider's{" "}
+        <A href="/guides/tx-hooks/">
+          <code>onTransactionCommit</code> and <code>onTransactionRollback</code>
+        </A>
+        , which guard notify events too.
       </li>
     </ul>
   </>

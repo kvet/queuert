@@ -1,7 +1,8 @@
 import type { AsyncRwLock, SqliteStateProvider } from "@queuert/sqlite";
 import type Database from "better-sqlite3";
+import { type TxHooks, withTxHooks } from "queuert";
 
-export type DrizzleSqliteContext = { db: Database.Database };
+export type DrizzleSqliteContext = { db: Database.Database; txHooks: TxHooks };
 
 export const createDrizzleSqliteStateProvider = ({
   db,
@@ -44,25 +45,32 @@ export const createDrizzleSqliteStateProvider = ({
   };
 
   return {
-    withTransaction: async (fn) => {
-      using _h = await lock.acquireWrite();
-      try {
-        db.exec("BEGIN");
-        const result = await fn({ db });
-        db.exec("COMMIT");
-        return result;
-      } catch (error) {
-        if (db.inTransaction) {
-          try {
-            db.exec("ROLLBACK");
-          } catch {
-            // ignore rollback errors
+    withTransaction: async (fn) =>
+      withTxHooks(async (txHooks) => {
+        using _h = await lock.acquireWrite();
+        try {
+          db.exec("BEGIN");
+          const result = await fn({ db, txHooks });
+          db.exec("COMMIT");
+          return result;
+        } catch (error) {
+          if (db.inTransaction) {
+            try {
+              db.exec("ROLLBACK");
+            } catch {
+              // ignore rollback errors
+            }
           }
+          throw error;
         }
-        throw error;
-      }
-    },
+      }),
     isTransaction: (txCtx) => txCtx.db.inTransaction,
+    onTransactionCommit: (txCtx, callback) => {
+      txCtx.txHooks.onCommit(callback);
+    },
+    onTransactionRollback: (txCtx, callback) => {
+      txCtx.txHooks.onRollback(callback);
+    },
     classifyError: ({ error }) => {
       const tableName = /no such table: (\S+)/.exec(
         String((error as { message?: unknown } | undefined)?.message),

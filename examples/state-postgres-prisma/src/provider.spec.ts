@@ -66,7 +66,7 @@ describe("state-postgres-prisma migrator conformance", () => {
   let context: PgMigratorConformanceContext;
 
   beforeAll(async () => {
-    pg = await acquirePostgres("postgres:18", import.meta.url);
+    pg = await acquirePostgres("postgres:18", `${import.meta.url}#migrator`);
     execSync("npx prisma db push", {
       cwd: EXAMPLE_DIR,
       env: { ...process.env, DATABASE_URL: pg.connectionString },

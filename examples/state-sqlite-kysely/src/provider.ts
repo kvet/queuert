@@ -1,7 +1,8 @@
 import type { SqliteStateProvider } from "@queuert/sqlite";
 import { CompiledQuery, type Kysely } from "kysely";
+import { type TxHooks, withTxHooks } from "queuert";
 
-export type KyselySqliteContext<TDatabase> = { db: Kysely<TDatabase> };
+export type KyselySqliteContext<TDatabase> = { db: Kysely<TDatabase>; txHooks: TxHooks };
 
 // Kysely's dialect for better-sqlite3 uses a pool of size 1 and holds that
 // connection for the duration of `db.transaction().execute()`. Non-tx queries
@@ -13,8 +14,17 @@ export const createKyselySqliteStateProvider = <TDatabase>({
   db: Kysely<TDatabase>;
 }): SqliteStateProvider<KyselySqliteContext<TDatabase>> => {
   return {
-    withTransaction: async (cb) => db.transaction().execute(async (txDb) => cb({ db: txDb })),
+    withTransaction: async (cb) =>
+      withTxHooks(async (txHooks) =>
+        db.transaction().execute(async (txDb) => cb({ db: txDb, txHooks })),
+      ),
     isTransaction: (txCtx) => txCtx.db.isTransaction,
+    onTransactionCommit: (txCtx, callback) => {
+      txCtx.txHooks.onCommit(callback);
+    },
+    onTransactionRollback: (txCtx, callback) => {
+      txCtx.txHooks.onRollback(callback);
+    },
     classifyError: ({ error }) => {
       const tableName = /no such table: (\S+)/.exec(
         String((error as { message?: unknown } | undefined)?.message),

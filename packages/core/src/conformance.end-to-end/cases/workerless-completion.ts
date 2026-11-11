@@ -12,7 +12,6 @@ import {
 } from "../../errors.ts";
 import { createProcessors } from "../../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../../job-types/define-job-types.ts";
-import { withTxHooks } from "../../tx-hooks/tx-hooks.ts";
 import { createWorkerRunner } from "../../worker-runner.ts";
 import { createCaseNotifyAdapter } from "../support/create-case-notify-adapter.ts";
 import { rejectionOf } from "../support/rejection-of.ts";
@@ -42,27 +41,24 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: { value: 42 },
           }),
         );
 
-        const completedChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const completedChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...chain,
             handler: async ({ job, completeJob }) => {
               assert.deepEqual(job.typeName, "test");
               assert.deepEqual(job.status, "pending");
               assert.deepEqual(job.input, { value: 42 });
 
-              return completeJob(job, async ({ complete, txHooks }) => {
-                assert.notEqual(txHooks, undefined);
+              return completeJob(job, async ({ complete }) => {
                 return complete({ output: { result: 84 } });
               });
             },
@@ -91,10 +87,9 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "awaiting-approval",
             input: { requestId: "req-123" },
           }),
@@ -104,10 +99,9 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
         const initialJob = await client.getJob({ id: chain.id });
         assert.equal(initialJob!.status, "pending");
 
-        const completedChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const completedChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...chain,
             handler: async ({ job, completeJob }) => {
               if (job.typeName === "awaiting-approval") {
@@ -154,19 +148,17 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "start",
             input: { requestId: "req-1" },
           }),
         );
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...chain,
             handler: async ({ job, completeJob }) => {
               if (job.typeName === "start") {
@@ -222,29 +214,26 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const blockerChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const blockerChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "blocker",
             input: null,
           }),
         );
 
-        const starterChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const starterChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "starter",
             input: null,
           }),
         );
 
         const error = await rejectionOf(async () => {
-          await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+          await withCaseTransaction(stateAdapter, async (txCtx) =>
             client.completeChain({
               ...txCtx,
-              txHooks,
               ...starterChain,
               handler: async ({ job, completeJob }) => {
                 if (job.typeName === "starter") {
@@ -298,18 +287,17 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
             processors: {
               "process-approved": {
                 attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                    complete({ ...txCtx, txHooks, output: { done: true } }),
+                  withCaseTransaction(stateAdapter, async (txCtx) =>
+                    complete({ ...txCtx, output: { done: true } }),
                   ),
               },
             },
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "awaiting-approval",
             input: { requestId: "req-123" },
           }),
@@ -319,26 +307,23 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
         const initialJob = await client.getJob({ id: chain.id });
         assert.equal(initialJob!.status, "pending");
 
-        const partiallyCompletedChain = await withCaseTransaction(
-          stateAdapter,
-          async (txCtx, txHooks) =>
-            client.completeChain({
-              ...txCtx,
-              txHooks,
-              ...chain,
-              handler: async ({ job, completeJob }) => {
-                if (job.typeName === "awaiting-approval") {
-                  await completeJob(job, async ({ complete }) =>
-                    complete({
-                      continueWith: {
-                        typeName: "process-approved",
-                        input: { approved: true },
-                      },
-                    }),
-                  );
-                }
-              },
-            }),
+        const partiallyCompletedChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.completeChain({
+            ...txCtx,
+            ...chain,
+            handler: async ({ job, completeJob }) => {
+              if (job.typeName === "awaiting-approval") {
+                await completeJob(job, async ({ complete }) =>
+                  complete({
+                    continueWith: {
+                      typeName: "process-approved",
+                      input: { approved: true },
+                    },
+                  }),
+                );
+              }
+            },
+          }),
         );
 
         await workerRunner.start();
@@ -362,19 +347,17 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: null,
           }),
         );
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...chain,
             handler: async ({ job, completeJob }) => {
               const completed = await completeJob(job, async ({ complete }) =>
@@ -395,10 +378,9 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
 
         await assert.rejects(
           async () =>
-            withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+            withCaseTransaction(stateAdapter, async (txCtx) =>
               client.completeChain({
                 ...txCtx,
-                txHooks,
                 ...chain,
                 handler: async ({ job, completeJob }) =>
                   completeJob(job, async ({ complete }) => complete({ output: { result: false } })),
@@ -423,20 +405,18 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: { value: 42 },
           }),
         );
 
         const handlerCalled = new AbortController();
-        const updatedChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const updatedChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...chain,
             handler: async ({ job }) => {
               assert.partialDeepStrictEqual(job, { typeName: "test", status: "pending" });
@@ -486,8 +466,8 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
                   try {
                     await assert.rejects(
                       async () =>
-                        withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                          complete({ ...txCtx, txHooks, output: { result: "from-worker" } }),
+                        withCaseTransaction(stateAdapter, async (txCtx) =>
+                          complete({ ...txCtx, output: { result: "from-worker" } }),
                         ),
                       JobAlreadyCompletedError,
                     );
@@ -504,10 +484,9 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: null,
           }),
@@ -517,10 +496,9 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
         await jobStarted.promise;
         await sleep(10);
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...chain,
             handler: async ({ job, completeJob }) => {
               await completeJob(job, async ({ complete }) =>
@@ -547,14 +525,13 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "entryA", input: null }),
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "entryA", input: null }),
         );
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...chain,
             handler: async ({ job, completeJob }) => {
               assert.equal(job.chainTypeName, "entryA");
@@ -574,7 +551,7 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
       },
     },
     {
-      name: "completeChain throws when called without transaction context or txHooks",
+      name: "completeChain throws when called without transaction context",
       run: async ({ createStateAdapter, createNotifyAdapter }) => {
         await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
         await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
@@ -588,10 +565,9 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: { value: 42 },
           }),
@@ -608,19 +584,6 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
             }),
           /requires a transaction context/,
         );
-        await withCaseTransaction(stateAdapter, async (txCtx) => {
-          const error = await rejectionOf(async () => {
-            // @ts-expect-error missing txHooks
-            await client.completeChain({
-              ...txCtx,
-              typeName: "test",
-              id: chain.id,
-              handler: async ({ job, completeJob }) =>
-                completeJob(job, async ({ complete }) => complete({ output: { result: 84 } })),
-            });
-          });
-          assert.match((error as Error).message, /completeChain requires txHooks/);
-        });
       },
     },
     {
@@ -634,24 +597,21 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "test", input: { value: 42 } }),
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "test", input: { value: 42 } }),
         );
 
         await withNonTransactionContext(async (txCtx) => {
-          await withTxHooks(async (txHooks) => {
-            const error = await rejectionOf(async () => {
-              await client.completeChain({
-                ...txCtx,
-                txHooks,
-                typeName: "test",
-                id: chain.id,
-                handler: async ({ job, completeJob }) =>
-                  completeJob(job, async ({ complete }) => complete({ output: { result: 84 } })),
-              });
+          const error = await rejectionOf(async () => {
+            await client.completeChain({
+              ...txCtx,
+              typeName: "test",
+              id: chain.id,
+              handler: async ({ job, completeJob }) =>
+                completeJob(job, async ({ complete }) => complete({ output: { result: 84 } })),
             });
-            assert.match((error as Error).message, /not in a transaction/);
           });
+          assert.match((error as Error).message, /not in a transaction/);
         });
 
         const job = await client.getJob({ id: chain.id });
@@ -670,10 +630,9 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "order",
             input: { amount: 42 },
           }),
@@ -681,10 +640,9 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
 
         await assert.rejects(
           async () =>
-            withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+            withCaseTransaction(stateAdapter, async (txCtx) =>
               client.completeChain({
                 ...txCtx,
-                txHooks,
                 typeName: "notification",
                 id: chain.id,
                 handler: async ({ job, completeJob }) =>
@@ -715,19 +673,17 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "review",
             input: { requestId: "req-1" },
           }),
         );
 
-        const completedChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const completedChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...chain,
             handler: async ({ job, completeJob }) => {
               if (job.typeName !== "review") throw new Error("unexpected job type");
@@ -772,25 +728,21 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const [blockerChain, chain] = await withCaseTransaction(
-          stateAdapter,
-          async (txCtx, txHooks) =>
-            client.createChains({
-              ...txCtx,
-              txHooks,
-              items: [
-                { typeName: "blocker", input: null },
-                { typeName: "review", input: { requestId: "req-1" } },
-              ],
-            }),
+        const [blockerChain, chain] = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChains({
+            ...txCtx,
+            items: [
+              { typeName: "blocker", input: null },
+              { typeName: "review", input: { requestId: "req-1" } },
+            ],
+          }),
         );
 
         await assert.rejects(
           async () =>
-            withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+            withCaseTransaction(stateAdapter, async (txCtx) =>
               client.completeChain({
                 ...txCtx,
-                txHooks,
                 ...chain,
                 handler: async ({ job, completeJob }) => {
                   if (job.typeName !== "review") throw new Error("unexpected job type");
@@ -842,13 +794,12 @@ export const workerlessCompletionConcurrentTransactionsGroup: ConformanceGroup<S
 
           const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-          const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-            client.createChain({ ...txCtx, txHooks, typeName: "first", input: null }),
+          const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+            client.createChain({ ...txCtx, typeName: "first", input: null }),
           );
-          await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+          await withCaseTransaction(stateAdapter, async (txCtx) =>
             client.completeChain({
               ...txCtx,
-              txHooks,
               ...chain,
               handler: async ({ job, completeJob }) => {
                 if (job.typeName !== "first") throw new Error(`unexpected ${job.typeName}`);
@@ -879,10 +830,9 @@ export const workerlessCompletionConcurrentTransactionsGroup: ConformanceGroup<S
 
           const handlerEntered = Promise.withResolvers<void>();
           const handlerGate = Promise.withResolvers<void>();
-          const completion = withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+          const completion = withCaseTransaction(stateAdapter, async (txCtx) =>
             client.completeChain({
               ...txCtx,
-              txHooks,
               ...chain,
               handler: async ({ job, completeJob }) => {
                 handlerEntered.resolve();

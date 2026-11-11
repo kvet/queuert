@@ -40,6 +40,12 @@ export const createFlakyStateAdapter = <
         return stateAdapter.withTransaction(fn);
       },
       isTransaction: (txCtx) => stateAdapter.isTransaction(txCtx),
+      onTransactionCommit: (txCtx, callback) => {
+        stateAdapter.onTransactionCommit(txCtx, callback);
+      },
+      onTransactionRollback: (txCtx, callback) => {
+        stateAdapter.onTransactionRollback(txCtx, callback);
+      },
       getChains: wrap(stateAdapter.getChains),
       getJobs: wrap(stateAdapter.getJobs),
       getWorkers: wrap(stateAdapter.getWorkers),

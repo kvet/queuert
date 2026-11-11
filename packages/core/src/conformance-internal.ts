@@ -16,11 +16,15 @@ export type {
 export { notifyAdapterBaseGroups } from "./conformance.notify-adapter/groups.ts";
 export { type ConformanceGroup } from "./conformance/runner.ts";
 export { toConformanceTestCases } from "./conformance/suite.ts";
-export type { SchemaFenceConformanceContext } from "./conformance.state-adapter/types.ts";
+export type {
+  SavepointConformanceContext,
+  SchemaFenceConformanceContext,
+} from "./conformance.state-adapter/types.ts";
 export {
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
   stateAdapterCountCapGroups,
+  stateAdapterSavepointGroups,
   stateAdapterSchemaFenceConcurrentTransactionGroups,
   stateAdapterSchemaFenceGroups,
 } from "./conformance.state-adapter/groups.ts";

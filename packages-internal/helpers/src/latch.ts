@@ -1,24 +1,29 @@
-export type Latch = {
+type TripArgs<T> = [T] extends [true] ? [value?: T] : [value: T];
+
+export type Latch<T = true> = {
   readonly tripped: boolean;
-  trip: () => boolean;
+  readonly value: T | undefined;
+  trip: (...args: TripArgs<T>) => boolean;
   throwIfTripped: (message?: string) => void;
 };
 
-export type ResettableLatch = Latch & {
+export type ResettableLatch<T = true> = Latch<T> & {
   reset: () => void;
 };
 
-class OneShotLatch implements Latch {
+class OneShotLatch<T> implements Latch<T> {
   tripped = false;
+  value: T | undefined = undefined;
   private readonly defaultMessage: string;
 
   constructor(defaultMessage: string) {
     this.defaultMessage = defaultMessage;
   }
 
-  trip(): boolean {
+  trip(...[value = true as T]: TripArgs<T>): boolean {
     if (this.tripped) return false;
     this.tripped = true;
+    this.value = value;
     return true;
   }
 
@@ -27,14 +32,16 @@ class OneShotLatch implements Latch {
   }
 }
 
-class ResettableLatchImpl extends OneShotLatch implements ResettableLatch {
+class ResettableLatchImpl<T> extends OneShotLatch<T> implements ResettableLatch<T> {
   reset(): void {
     this.tripped = false;
+    this.value = undefined;
   }
 }
 
-export const createResettableLatch = (defaultMessage = "Latch is tripped"): ResettableLatch =>
-  new ResettableLatchImpl(defaultMessage);
+export const createResettableLatch = <T = true>(
+  defaultMessage = "Latch is tripped",
+): ResettableLatch<T> => new ResettableLatchImpl<T>(defaultMessage);
 
-export const createLatch = (defaultMessage = "Latch is tripped"): Latch =>
-  new OneShotLatch(defaultMessage);
+export const createLatch = <T = true>(defaultMessage = "Latch is tripped"): Latch<T> =>
+  new OneShotLatch<T>(defaultMessage);

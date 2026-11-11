@@ -10,7 +10,7 @@
 import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
-import { createClient, createWorkerRunner, createProcessors, withTxHooks } from "queuert";
+import { createClient, createWorkerRunner, createProcessors } from "queuert";
 
 import { createSuperjsonJobTypes } from "./superjson-adapter.ts";
 
@@ -52,17 +52,14 @@ await using workerRunner = createWorkerRunner({
             ["yes", 1_204_331n],
             ["no", 987_112n],
           ]);
-          return withTxHooks(async (txHooks) =>
-            stateAdapter.withTransaction(async (ctx) =>
-              complete({
-                ...ctx,
-                txHooks,
-                continueWith: {
-                  typeName: "publish-results",
-                  input: { pollId: job.input.pollId, votes },
-                },
-              }),
-            ),
+          return stateAdapter.withTransaction(async (ctx) =>
+            complete({
+              ...ctx,
+              continueWith: {
+                typeName: "publish-results",
+                input: { pollId: job.input.pollId, votes },
+              },
+            }),
           );
         },
       },
@@ -72,10 +69,8 @@ await using workerRunner = createWorkerRunner({
 
           let total = 0n;
           for (const count of job.input.votes.values()) total += count;
-          return withTxHooks(async (txHooks) =>
-            stateAdapter.withTransaction(async (ctx) =>
-              complete({ ...ctx, txHooks, output: { publishedAt: new Date(), total } }),
-            ),
+          return stateAdapter.withTransaction(async (ctx) =>
+            complete({ ...ctx, output: { publishedAt: new Date(), total } }),
           );
         },
       },
@@ -85,15 +80,12 @@ await using workerRunner = createWorkerRunner({
 
 await workerRunner.start();
 
-const chain = await withTxHooks(async (txHooks) =>
-  stateAdapter.withTransaction(async (ctx) =>
-    client.createChain({
-      ...ctx,
-      txHooks,
-      typeName: "tally-votes",
-      input: { pollId: "budget-2024", closesAt: new Date("2024-06-01T18:00:00.000Z") },
-    }),
-  ),
+const chain = await stateAdapter.withTransaction(async (ctx) =>
+  client.createChain({
+    ...ctx,
+    typeName: "tally-votes",
+    input: { pollId: "budget-2024", closesAt: new Date("2024-06-01T18:00:00.000Z") },
+  }),
 );
 
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });

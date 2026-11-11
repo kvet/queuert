@@ -50,7 +50,7 @@ describe("state-postgres-knex migrator conformance", () => {
   let context: PgMigratorConformanceContext;
 
   beforeAll(async () => {
-    pg = await acquirePostgres("postgres:18", import.meta.url);
+    pg = await acquirePostgres("postgres:18", `${import.meta.url}#migrator`);
     knex = knexFactory({
       client: "pg",
       connection: pg.connectionString,

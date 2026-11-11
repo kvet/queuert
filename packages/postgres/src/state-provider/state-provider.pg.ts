@@ -37,6 +37,19 @@ export type PgStateProvider<TTxContext extends BaseTxContext> = {
   isTransaction: (txCtx: TTxContext) => boolean;
 
   /**
+   * Runs `callback` after `txCtx`'s transaction commits, before the call that opened it settles.
+   * A provider whose driver has no transaction events carries `TxHooks` in its transaction context, creates them
+   * in `withTransaction`, and registers `callback` on them.
+   */
+  onTransactionCommit: (txCtx: TTxContext, callback: () => void | Promise<void>) => void;
+
+  /**
+   * Runs `callback` synchronously when `txCtx`'s transaction, or the savepoint `txCtx` belongs to,
+   * rolls back. Commit callbacks registered there never run.
+   */
+  onTransactionRollback: (txCtx: TTxContext, callback: () => void) => void;
+
+  /**
    * Executes a SQL query.
    * When txCtx is provided, uses that transaction connection.
    * When txCtx is omitted, acquires a connection from the pool, executes, and releases.

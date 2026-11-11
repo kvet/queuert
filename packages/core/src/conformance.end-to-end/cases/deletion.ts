@@ -8,7 +8,6 @@ import type { ConformanceGroup } from "../../conformance/runner.ts";
 import { BlockerReferenceError, JobNotFoundError } from "../../errors.ts";
 import { createProcessors } from "../../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../../job-types/define-job-types.ts";
-import { withTxHooks } from "../../tx-hooks/tx-hooks.ts";
 import { createWorkerRunner } from "../../worker-runner.ts";
 import { createCaseNotifyAdapter } from "../support/create-case-notify-adapter.ts";
 import { createLogCollector } from "../support/log-collector.ts";
@@ -38,19 +37,17 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: { value: 1 },
           }),
         );
 
-        const deletedChains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const deletedChains = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.deleteChains({
             ...txCtx,
-            txHooks,
             ids: [chain.id],
           }),
         );
@@ -91,19 +88,17 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "step1",
             input: { value: 1 },
           }),
         );
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...chain,
             handler: async ({ job, completeJob }) => {
               if (job.typeName === "step1") {
@@ -122,10 +117,9 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
         const continuationId = chainJobs.items[1].id;
 
-        const deletedChains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const deletedChains = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.deleteChains({
             ...txCtx,
-            txHooks,
             ids: [chain.id],
           }),
         );
@@ -154,16 +148,14 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         const { blockerChain, mainChain } = await withCaseTransaction(
           stateAdapter,
-          async (txCtx, txHooks) => {
+          async (txCtx) => {
             const blockerChain = await client.createChain({
               ...txCtx,
-              txHooks,
               typeName: "blocker",
               input: null,
             });
             const mainChain = await client.createChain({
               ...txCtx,
-              txHooks,
               typeName: "main",
               input: null,
               blockers: [blockerChain],
@@ -172,19 +164,17 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           },
         );
 
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...blockerChain,
             handler: async ({ job, completeJob }) =>
               completeJob(job, async ({ complete }) => complete({ output: null })),
           }),
         );
-        await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.completeChain({
             ...txCtx,
-            txHooks,
             ...mainChain,
             handler: async ({ job, completeJob }) =>
               completeJob(job, async ({ complete }) => complete({ output: null })),
@@ -195,10 +185,9 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         await assert.rejects(
           async () =>
-            withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+            withCaseTransaction(stateAdapter, async (txCtx) =>
               client.deleteChains({
                 ...txCtx,
-                txHooks,
                 ids: [blockerChain.id],
               }),
             ),
@@ -229,16 +218,14 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         const { blockerChain, mainChain } = await withCaseTransaction(
           stateAdapter,
-          async (txCtx, txHooks) => {
+          async (txCtx) => {
             const blockerChain = await client.createChain({
               ...txCtx,
-              txHooks,
               typeName: "blocker",
               input: { value: 1 },
             });
             const mainChain = await client.createChain({
               ...txCtx,
-              txHooks,
               typeName: "main",
               input: null,
               blockers: [blockerChain],
@@ -253,20 +240,18 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         await assert.rejects(
           async () =>
-            withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+            withCaseTransaction(stateAdapter, async (txCtx) =>
               client.deleteChains({
                 ...txCtx,
-                txHooks,
                 ids: [blockerChain.id],
               }),
             ),
           BlockerReferenceError,
         );
 
-        const deletedChains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const deletedChains = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.deleteChains({
             ...txCtx,
-            txHooks,
             ids: [mainChain.id, blockerChain.id],
           }),
         );
@@ -339,8 +324,8 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                   }
 
                   try {
-                    return await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                      complete({ ...txCtx, txHooks, output: null }),
+                    return await withCaseTransaction(stateAdapter, async (txCtx) =>
+                      complete({ ...txCtx, output: null }),
                     );
                   } catch (error) {
                     completeError.resolve(error);
@@ -352,10 +337,9 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: { deleteDuringAttempt: true },
           }),
@@ -364,10 +348,9 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         await workerRunner.start();
         await jobStarted.promise;
 
-        const deletedChains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const deletedChains = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.deleteChains({
             ...txCtx,
-            txHooks,
             ids: [chain.id],
           }),
         );
@@ -381,10 +364,9 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         assert.ok((await completeError.promise) instanceof JobNotFoundError);
 
-        const nextChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const nextChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: { deleteDuringAttempt: false },
           }),
@@ -410,10 +392,9 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chains = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChains({
             ...txCtx,
-            txHooks,
             items: [
               { typeName: "test", input: { value: 1 } },
               { typeName: "test", input: { value: 2 } },
@@ -422,10 +403,9 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           }),
         );
 
-        const deletedChains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const deletedChains = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.deleteChains({
             ...txCtx,
-            txHooks,
             ids: chains.map((c) => c.id),
           }),
         );
@@ -465,19 +445,17 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const blocker = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const blocker = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "blocker",
             input: null,
           }),
         );
 
-        const [mainA, mainB] = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const [mainA, mainB] = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChains({
             ...txCtx,
-            txHooks,
             items: [
               { typeName: "main", input: { label: "A" }, blockers: [blocker] },
               { typeName: "main", input: { label: "B" }, blockers: [blocker] },
@@ -494,20 +472,18 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         await assert.rejects(
           async () =>
-            withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+            withCaseTransaction(stateAdapter, async (txCtx) =>
               client.deleteChains({
                 ...txCtx,
-                txHooks,
                 ids: [blocker.id],
               }),
             ),
           BlockerReferenceError,
         );
 
-        const deletedChains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const deletedChains = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.deleteChains({
             ...txCtx,
-            txHooks,
             ids: [mainA.id, mainB.id, blocker.id],
           }),
         );
@@ -516,7 +492,7 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
       },
     },
     {
-      name: "throws when called without transaction context or txHooks",
+      name: "throws when called without transaction context",
       run: async ({ createStateAdapter, createNotifyAdapter }) => {
         await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
         await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
@@ -530,10 +506,9 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: null,
           }),
@@ -544,14 +519,6 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
             // @ts-expect-error missing txCtx
             client.deleteChains({ ids: [chain.id] }),
           /requires a transaction context/,
-        );
-        await assert.rejects(
-          async () =>
-            withCaseTransaction(stateAdapter, async (txCtx) =>
-              // @ts-expect-error missing txHooks
-              client.deleteChains({ ...txCtx, ids: [chain.id] }),
-            ),
-          /deleteChains requires txHooks/,
         );
       },
     },
@@ -566,16 +533,14 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "test", input: null }),
         );
 
         await assert.rejects(
           async () =>
             withNonTransactionContext(async (txCtx) =>
-              withTxHooks(async (txHooks) =>
-                client.deleteChains({ ...txCtx, txHooks, ids: [chain.id] }),
-              ),
+              client.deleteChains({ ...txCtx, ids: [chain.id] }),
             ),
           /not in a transaction/,
         );
@@ -594,17 +559,16 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: { value: 42 },
           }),
         );
 
-        const deleted = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.deleteChain({ ...txCtx, txHooks, id: chain.id }),
+        const deleted = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.deleteChain({ ...txCtx, id: chain.id }),
         );
 
         assert.partialDeepStrictEqual(deleted, {
@@ -629,10 +593,9 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const deleted = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const deleted = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.deleteChain({
             ...txCtx,
-            txHooks,
             id: "00000000-0000-0000-0000-000000000000",
           }),
         );
@@ -657,16 +620,14 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const blockerChain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) => {
+        const blockerChain = await withCaseTransaction(stateAdapter, async (txCtx) => {
           const blockerChain = await client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "blocker",
             input: null,
           });
           await client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "main",
             input: null,
             blockers: [blockerChain],
@@ -676,15 +637,15 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         await assert.rejects(
           async () =>
-            withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-              client.deleteChain({ ...txCtx, txHooks, id: blockerChain.id }),
+            withCaseTransaction(stateAdapter, async (txCtx) =>
+              client.deleteChain({ ...txCtx, id: blockerChain.id }),
             ),
           BlockerReferenceError,
         );
       },
     },
     {
-      name: "deleteChain throws when called without transaction context or txHooks",
+      name: "deleteChain throws when called without transaction context",
       run: async ({ createStateAdapter, createNotifyAdapter }) => {
         await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
         await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
@@ -694,22 +655,14 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "test", input: null }),
         );
 
         await assert.rejects(
           // @ts-expect-error missing txCtx
           async () => client.deleteChain({ id: chain.id }),
           /requires a transaction context/,
-        );
-        await assert.rejects(
-          async () =>
-            withCaseTransaction(stateAdapter, async (txCtx) =>
-              // @ts-expect-error missing txHooks
-              client.deleteChain({ ...txCtx, id: chain.id }),
-            ),
-          /deleteChains requires txHooks/,
         );
       },
     },
@@ -724,16 +677,14 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "test", input: null }),
         );
 
         await assert.rejects(
           async () =>
             withNonTransactionContext(async (txCtx) =>
-              withTxHooks(async (txHooks) =>
-                client.deleteChain({ ...txCtx, txHooks, id: chain.id }),
-              ),
+              client.deleteChain({ ...txCtx, id: chain.id }),
             ),
           /not in a transaction/,
         );
@@ -763,8 +714,8 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                     await fence({ ...txCtx });
                     const pendingDeletion = withCaseTransaction(
                       stateAdapter,
-                      async (deletionTxCtx, txHooks) =>
-                        client.deleteChains({ ...deletionTxCtx, txHooks, ids: [job.chainId] }),
+                      async (deletionTxCtx) =>
+                        client.deleteChains({ ...deletionTxCtx, ids: [job.chainId] }),
                     );
                     await sleep(200);
                     const [fencedJob] = await stateAdapter.getJobs({ txCtx, jobIds: [job.id] });
@@ -785,8 +736,8 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "test", input: null }),
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
+          client.createChain({ ...txCtx, typeName: "test", input: null }),
         );
 
         await workerRunner.start();
@@ -838,8 +789,8 @@ export const deletionNotifyGroup: ConformanceGroup<StateAdapterConformanceContex
                     });
                   }, JobNotFoundError);
                   try {
-                    await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
-                      complete({ ...txCtx, txHooks, output: null }),
+                    await withCaseTransaction(stateAdapter, async (txCtx) =>
+                      complete({ ...txCtx, output: null }),
                     );
                   } catch (error) {
                     assert.ok(error instanceof JobNotFoundError);
@@ -853,10 +804,9 @@ export const deletionNotifyGroup: ConformanceGroup<StateAdapterConformanceContex
           }),
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.createChain({
             ...txCtx,
-            txHooks,
             typeName: "test",
             input: null,
           }),
@@ -865,10 +815,9 @@ export const deletionNotifyGroup: ConformanceGroup<StateAdapterConformanceContex
         await workerRunner.start();
         await jobStarted.promise;
 
-        const deletedChains = await withCaseTransaction(stateAdapter, async (txCtx, txHooks) =>
+        const deletedChains = await withCaseTransaction(stateAdapter, async (txCtx) =>
           client.deleteChains({
             ...txCtx,
-            txHooks,
             ids: [chain.id],
           }),
         );

@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import type { ConformanceTestCase } from "queuert/conformance";
 import {
   type ConformanceGroup,
+  type SavepointConformanceContext,
   type SchemaFenceConformanceContext,
   toConformanceTestCases,
   stateAdapterBaseGroups,
+  stateAdapterSavepointGroups,
   stateAdapterSchemaFenceGroups,
 } from "queuert/conformance-internal";
 
@@ -16,9 +18,10 @@ import type { SqliteStateProvider } from "../state-provider/state-provider.sqlit
  * The context the {@link sqliteStateProviderConformanceCases} run against. Get it from
  * {@link createSqliteStateProviderConformanceContext} and pass it to every case unchanged.
  */
-export type SqliteStateProviderConformanceContext = SchemaFenceConformanceContext & {
-  createStateProvider: () => Promise<SqliteStateProvider<any>>;
-};
+export type SqliteStateProviderConformanceContext = SchemaFenceConformanceContext &
+  SavepointConformanceContext & {
+    createStateProvider: () => Promise<SqliteStateProvider<any>>;
+  };
 
 const MISSING_TABLE = "queuert_conformance_missing";
 
@@ -125,7 +128,7 @@ export const sqliteStateAdapterConformanceGroups: ConformanceGroup<SchemaFenceCo
   [...stateAdapterBaseGroups, ...stateAdapterSchemaFenceGroups];
 
 export const sqliteStateProviderConformanceGroups: ConformanceGroup<SqliteStateProviderConformanceContext>[] =
-  [...sqliteStateAdapterConformanceGroups, classifyErrorGroup];
+  [...sqliteStateAdapterConformanceGroups, ...stateAdapterSavepointGroups, classifyErrorGroup];
 
 /**
  * Prepares the context the {@link sqliteStateProviderConformanceCases} run against: migrates the
@@ -138,6 +141,7 @@ export const sqliteStateProviderConformanceGroups: ConformanceGroup<SqliteStateP
 export const createSqliteStateProviderConformanceContext = async ({
   createStateProvider,
   withNonTransactionContext,
+  withSavepoint,
 }: {
   /**
    * Creates the provider under test, over a database the suite may create tables in. Each case's
@@ -150,6 +154,13 @@ export const createSqliteStateProviderConformanceContext = async ({
    * so the suite can check `isTransaction` rejects it.
    */
   withNonTransactionContext: <T>(fn: (txCtx: any) => Promise<T>) => Promise<T>;
+  /**
+   * Runs `fn` in a savepoint of `txCtx`'s transaction, opened the way the application opens one,
+   * and passes it the savepoint's context: releases the savepoint when `fn` resolves and rolls it
+   * back when `fn` throws, then rethrows. The suite checks that the provider's `onTransactionCommit` and
+   * `onTransactionRollback` follow it; without it, those cases pass without checking anything.
+   */
+  withSavepoint?: <T>(txCtx: any, fn: (txCtx: any) => Promise<T>) => Promise<T>;
 }): Promise<SqliteStateProviderConformanceContext> => {
   const ddl = { params: [], paramTypes: {}, columnTypes: {}, readOnly: false };
   const executeDdl = async (sql: string): Promise<void> => {
@@ -171,6 +182,7 @@ export const createSqliteStateProviderConformanceContext = async ({
   return {
     createStateProvider,
     withNonTransactionContext,
+    withSavepoint,
     createStateAdapter: async () => {
       const stateProvider = await createStateProvider();
       const stateAdapter = createSqliteStateAdapter({ stateProvider });

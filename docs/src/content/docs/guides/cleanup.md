@@ -48,10 +48,8 @@ const cleanupProcessorRegistry = createProcessors({
 
             do {
               if (signal.aborted) {
-                return withTxHooks(async (txHooks) =>
-                  stateProvider.withTransaction(async (txCtx) =>
-                    complete({ ...txCtx, txHooks, reschedule: { afterMs: 0 } }),
-                  ),
+                return stateProvider.withTransaction(async (txCtx) =>
+                  complete({ ...txCtx, reschedule: { afterMs: 0 } }),
                 );
               }
 
@@ -71,16 +69,13 @@ const cleanupProcessorRegistry = createProcessors({
               );
 
               if (chainsToDelete.length > 0) {
-                const deleted = await withTxHooks(async (txHooks) =>
-                  stateProvider.withTransaction(async (txCtx) => {
-                    await fence({ ...txCtx });
-                    return client.deleteChains({
-                      ...txCtx,
-                      txHooks,
-                      ids: chainsToDelete.map((chain) => chain.id),
-                    });
-                  }),
-                );
+                const deleted = await stateProvider.withTransaction(async (txCtx) => {
+                  await fence({ ...txCtx });
+                  return client.deleteChains({
+                    ...txCtx,
+                    ids: chainsToDelete.map((chain) => chain.id),
+                  });
+                });
                 deletedChainCount += deleted.length;
                 roundDeletedCount += deleted.length;
               }
@@ -90,25 +85,22 @@ const cleanupProcessorRegistry = createProcessors({
           }
         } while (!signal.aborted && roundDeletedCount > 0);
 
-        return withTxHooks(async (txHooks) =>
-          stateProvider.withTransaction(async (txCtx) => {
-            const completedJob = await complete({ ...txCtx, txHooks, output: null });
+        return stateProvider.withTransaction(async (txCtx) => {
+          const completedJob = await complete({ ...txCtx, output: null });
 
-            await client.createChain({
-              ...txCtx,
-              txHooks,
-              typeName: "queuert.cleanup",
-              input: null,
-              schedule: { afterMs: CLEANUP_INTERVAL_MS },
-              deduplication: {
-                key: "queuert.cleanup",
-                scope: "running",
-              },
-            });
+          await client.createChain({
+            ...txCtx,
+            typeName: "queuert.cleanup",
+            input: null,
+            schedule: { afterMs: CLEANUP_INTERVAL_MS },
+            deduplication: {
+              key: "queuert.cleanup",
+              scope: "running",
+            },
+          });
 
-            return completedJob;
-          }),
-        );
+          return completedJob;
+        });
       },
     },
   },
@@ -151,16 +143,13 @@ const workerRunner = createWorkerRunner({
 Schedule the initial cleanup at application startup. Deduplication makes this idempotent — calling it multiple times returns the same chain:
 
 ```ts
-await withTxHooks(async (txHooks) =>
-  stateProvider.withTransaction(async (txCtx) =>
-    client.createChain({
-      ...txCtx,
-      txHooks,
-      typeName: "queuert.cleanup",
-      input: null,
-      deduplication: { key: "queuert.cleanup", scope: "running" },
-    }),
-  ),
+await stateProvider.withTransaction(async (txCtx) =>
+  client.createChain({
+    ...txCtx,
+    typeName: "queuert.cleanup",
+    input: null,
+    deduplication: { key: "queuert.cleanup", scope: "running" },
+  }),
 );
 ```
 

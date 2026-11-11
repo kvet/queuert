@@ -226,16 +226,20 @@ describe("job server functions", () => {
       expect((await parseBody(res)).id).toBe(stateChain.head.id);
     });
 
-    it("notifies workers only after the reschedule commits", async () => {
+    it("notifies workers only after the reschedule transaction ends", async () => {
       const events: string[] = [];
       const innerStateAdapter = createInProcessStateAdapter();
       const stateAdapter: typeof innerStateAdapter = {
         ...innerStateAdapter,
-        withTransaction: async (fn) => {
-          const result = await innerStateAdapter.withTransaction(fn);
-          events.push("commit");
-          return result;
-        },
+        withTransaction: async (fn) =>
+          innerStateAdapter.withTransaction(async (txCtx) => {
+            innerStateAdapter.onTransactionCommit(txCtx, () => {
+              events.push("committed");
+            });
+            const result = await fn(txCtx);
+            events.push("callback returned");
+            return result;
+          }),
       };
       const innerNotifyAdapter = createInProcessNotifyAdapter();
       const client = createClient({
@@ -258,7 +262,7 @@ describe("job server functions", () => {
       );
 
       expect(res.status).toBe(200);
-      expect(events).toEqual(["commit", "notify"]);
+      expect(events).toEqual(["callback returned", "committed", "notify"]);
     });
 
     it("returns 404 for missing job", async () => {

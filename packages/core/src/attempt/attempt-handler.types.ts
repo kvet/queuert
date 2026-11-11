@@ -19,7 +19,6 @@ import type {
   GetStateAdapterWorkerId,
   StateAdapter,
 } from "../state-adapter/state-adapter.ts";
-import type { TxHooks } from "../tx-hooks/tx-hooks.ts";
 
 type AttemptContinueWithOutcome<
   TStateAdapter extends StateAdapter<any, any, any>,
@@ -92,14 +91,14 @@ export type AttemptCompleteResult<
       >;
 
 /**
- * Commits an outcome inside the caller's transaction. Takes the transaction context and the
- * `txHooks` of that transaction, spread alongside exactly one outcome key — the same
- * convention as `client.createChain`.
+ * Commits an outcome inside the caller's transaction. Takes that transaction's context, with every
+ * field the state provider's context type requires (`txHooks` included, for a provider that carries
+ * them), spread alongside exactly one outcome key — the same convention as `client.createChain`.
  *
- * `withTxHooks` must wrap the transaction from outside, so the hooks flush after COMMIT:
- * hooks that flush before COMMIT make the worker treat the attempt as completed even if the
- * transaction then rolls back. On PostgreSQL, Queuert supports only READ COMMITTED (the
- * default).
+ * The attempt counts as completed once the state provider runs the commit callbacks `complete`
+ * registered, so the provider must run them only after COMMIT: callbacks that run before COMMIT
+ * make the worker treat the attempt as completed even if the transaction then rolls back. On
+ * PostgreSQL, Queuert supports only READ COMMITTED (the default).
  *
  * Every write is conditional on this attempt still owning the job; if it does not, nothing is
  * written and `complete` throws, so the caller's transaction rolls back. Validation runs before
@@ -109,17 +108,16 @@ export type AttemptCompleteResult<
  * `continueWith` the job is completed and the chain moves on, and with `reschedule` the job goes
  * back to `pending` for a later attempt.
  *
- * `complete` succeeds at most once per `txHooks`; a retried transaction needs its own
- * `withTxHooks`, or a callback the driver reruns is wrapped in `txHooks.retryBoundary`. A call that
- * threw before writing, was rolled back by `txHooks.withSavepoint`, or ran in a try that
- * `txHooks.retryBoundary` rolled back does not count. Its events are released through
- * `txHooks` once the caller's transaction commits.
+ * `complete` succeeds at most once per attempt. A call that threw before writing, or whose
+ * transaction or savepoint the state provider reported as rolled back, does not count, so the
+ * attempt can call `complete` again in a new transaction. Its events are released through the
+ * state provider's `onTransactionCommit` once the caller's transaction commits.
  *
  * The return shape is determined by the outcome's discriminant key, never by the user's data.
  *
- * Misuse throws a plain `Error`: a transaction context outside an open transaction, missing
- * `txHooks`, not exactly one outcome, a second success or a concurrent call with the
- * same `txHooks`, or a call after the handler ended.
+ * Misuse throws a plain `Error`, without aborting `signal`: a transaction context outside an open
+ * transaction, not exactly one outcome, a second success or a concurrent call for the same attempt,
+ * or a call after the handler ended.
  *
  * @throws {@link JobTakenByAnotherWorkerError} if the attempt was reclaimed and the job
  * acquired by another attempt.
@@ -142,16 +140,15 @@ export type AttemptComplete<
   in out TJobTypeName extends string,
   out TChainTypeName extends string,
 > = <TOutcome extends AttemptOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName>>(
-  options: TOutcome & {
-    txHooks: TxHooks;
-  } & GetStateAdapterTxContext<TStateAdapter>,
+  options: TOutcome & GetStateAdapterTxContext<TStateAdapter>,
 ) => Promise<
   AttemptCompleteResult<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TChainTypeName, TOutcome>
 >;
 
 /**
  * Holds the attempt's ownership of the job inside the caller's transaction until it commits or
- * rolls back. Takes the transaction context of that transaction, the same way `complete` does.
+ * rolls back. Takes the transaction context of that transaction; unlike `complete`, it registers no
+ * commit callbacks, so any part of the context that identifies the transaction is enough.
  *
  * `fence` locks the job row and its chain head and checks that this attempt still owns the job.
  * Reclaiming, completing or deleting the job waits for the caller's transaction to end, so every
@@ -172,7 +169,7 @@ export type AttemptComplete<
  * @throws {@link JobNotFoundError} if the job was deleted, and aborts `signal`.
  */
 export type AttemptFence<TStateAdapter extends StateAdapter<any, any, any>> = (
-  options: GetStateAdapterTxContext<TStateAdapter>,
+  options: Partial<GetStateAdapterTxContext<TStateAdapter>>,
 ) => Promise<void>;
 
 /**
@@ -184,9 +181,9 @@ export type AttemptFence<TStateAdapter extends StateAdapter<any, any, any>> = (
  * another of the caller's transactions until it ends). Do the work, then open a transaction and
  * call `complete` inside it. The handler returns what `complete` returned.
  *
- * A `complete` call counts once its `txHooks` flushed — right after COMMIT when
- * `withTxHooks` wraps the transaction — and then completes the attempt without another
- * database call, whatever the handler returns. An error the handler throws afterwards does not
+ * A `complete` call counts once the state provider runs its commit callbacks — right after
+ * COMMIT — and then completes the attempt without another database call, whatever the handler
+ * returns. An error the handler throws afterwards does not
  * undo the completion; it is reported as a worker error. Without a counted `complete` — a throw
  * before it, no call, or a call that rolled back — the attempt fails, and the job is rescheduled
  * with backoff.
@@ -213,7 +210,6 @@ export type AttemptHandler<
 ) => Promise<Exclude<AnyJob, { status: "running" }>>;
 
 export type AnyCompleteOptions = BaseTxContext & {
-  txHooks: TxHooks;
   output?: unknown;
   continueWith?: AnyNewJob;
   reschedule?: ScheduleOptions;

@@ -1,10 +1,26 @@
 import type { Pool, PoolClient } from "pg";
+import { type TxHooks, withTxHooks } from "queuert";
 
 import type { PgStateProvider } from "./state-provider.pg.ts";
 
-export type PgPoolContext = { poolClient: PoolClient };
+/**
+ * Transaction context of {@link createPgPoolProvider}: a `pg` pool client and the `txHooks` its commit and rollback
+ * callbacks register on. `withTransaction` creates both; a transaction you open yourself passes
+ * `txHooks` from `withTxHooks` wrapped around it.
+ */
+export type PgPoolContext = { poolClient: PoolClient; txHooks: TxHooks };
+
+const requireTxHooks = (txCtx: Partial<PgPoolContext>): TxHooks => {
+  if (txCtx.txHooks === undefined) {
+    throw new Error(
+      "The transaction context has no txHooks: open the transaction with the provider's withTransaction, or create txHooks with withTxHooks and pass them in the context",
+    );
+  }
+  return txCtx.txHooks;
+};
 export type PgPoolProvider = PgStateProvider<PgPoolContext>;
 
+/** A PostgreSQL state provider over a `pg` pool; each transaction holds one pool client. */
 export const createPgPoolProvider = ({ pool }: { pool: Pool }): PgPoolProvider => {
   const exec = async (
     client: PoolClient,
@@ -21,19 +37,26 @@ export const createPgPoolProvider = ({ pool }: { pool: Pool }): PgPoolProvider =
   };
 
   return {
-    withTransaction: async (fn) => {
-      const poolClient = await pool.connect();
-      try {
-        await poolClient.query("BEGIN");
-        const result = await fn({ poolClient });
-        await poolClient.query("COMMIT");
-        return result;
-      } catch (error) {
-        await poolClient.query("ROLLBACK").catch(() => {});
-        throw error;
-      } finally {
-        poolClient.release();
-      }
+    withTransaction: async (fn) =>
+      withTxHooks(async (txHooks) => {
+        const poolClient = await pool.connect();
+        try {
+          await poolClient.query("BEGIN");
+          const result = await fn({ poolClient, txHooks });
+          await poolClient.query("COMMIT");
+          return result;
+        } catch (error) {
+          await poolClient.query("ROLLBACK").catch(() => {});
+          throw error;
+        } finally {
+          poolClient.release();
+        }
+      }),
+    onTransactionCommit: (txCtx, callback) => {
+      requireTxHooks(txCtx).onCommit(callback);
+    },
+    onTransactionRollback: (txCtx, callback) => {
+      requireTxHooks(txCtx).onRollback(callback);
     },
     isTransaction: (txCtx) => {
       const status = txCtx.poolClient.getTransactionStatus();

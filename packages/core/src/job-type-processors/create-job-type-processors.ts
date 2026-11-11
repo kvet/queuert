@@ -42,8 +42,8 @@ type MergedDefs<
  *   processors: {
  *     "orders.create": {
  *       attemptHandler: async ({ complete, traceId, log }) =>
- *         withTxHooks(async (txHooks) =>
- *           db.transaction(async (tx) => complete({ tx, txHooks, output: { orderId: "1" } })),
+ *         stateAdapter.withTransaction(async (txCtx) =>
+ *           complete({ ...txCtx, output: { orderId: "1" } }),
  *         ),
  *     },
  *   },

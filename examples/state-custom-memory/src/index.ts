@@ -1,10 +1,4 @@
-import {
-  createClient,
-  createProcessors,
-  createWorkerRunner,
-  defineJobTypes,
-  withTxHooks,
-} from "queuert";
+import { createClient, createProcessors, createWorkerRunner, defineJobTypes } from "queuert";
 
 import { createMemoryStateAdapter } from "./state-adapter.ts";
 
@@ -42,33 +36,27 @@ await using workerRunner = createWorkerRunner({
       resize_image: {
         attemptHandler: async ({ job, complete }) => {
           console.log(`Resizing image ${job.input.imageId}`);
-          return withTxHooks(async (txHooks) =>
-            stateAdapter.withTransaction(async (txCtx) =>
-              complete({
-                ...txCtx,
-                txHooks,
-                continueWith: {
-                  typeName: "publish_image",
-                  input: { imageId: job.input.imageId, width: 800 },
-                },
-              }),
-            ),
+          return stateAdapter.withTransaction(async (txCtx) =>
+            complete({
+              ...txCtx,
+              continueWith: {
+                typeName: "publish_image",
+                input: { imageId: job.input.imageId, width: 800 },
+              },
+            }),
           );
         },
       },
       publish_image: {
         attemptHandler: async ({ job, complete }) => {
           console.log(`Publishing image ${job.input.imageId} at ${job.input.width}px`);
-          return withTxHooks(async (txHooks) =>
-            stateAdapter.withTransaction(async (txCtx) =>
-              complete({
-                ...txCtx,
-                txHooks,
-                output: {
-                  url: `https://cdn.example.com/${job.input.imageId}-${job.input.width}.jpg`,
-                },
-              }),
-            ),
+          return stateAdapter.withTransaction(async (txCtx) =>
+            complete({
+              ...txCtx,
+              output: {
+                url: `https://cdn.example.com/${job.input.imageId}-${job.input.width}.jpg`,
+              },
+            }),
           );
         },
       },
@@ -79,15 +67,12 @@ await using workerRunner = createWorkerRunner({
 await workerRunner.start();
 
 // #region create-chain
-const chain = await withTxHooks(async (txHooks) =>
-  stateAdapter.withTransaction(async (txCtx) =>
-    client.createChain({
-      ...txCtx,
-      txHooks,
-      typeName: "resize_image",
-      input: { imageId: "cat-42" },
-    }),
-  ),
+const chain = await stateAdapter.withTransaction(async (txCtx) =>
+  client.createChain({
+    ...txCtx,
+    typeName: "resize_image",
+    input: { imageId: "cat-42" },
+  }),
 );
 // #endregion
 

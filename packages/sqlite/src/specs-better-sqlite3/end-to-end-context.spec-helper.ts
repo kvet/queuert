@@ -9,6 +9,7 @@ import {
 
 import { createSqliteStateProviderConformanceContext } from "../conformance/state-provider-conformance.ts";
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";
+import { withBetterSqlite3Savepoint } from "../state-provider/state-provider.better-sqlite3.spec-helper.ts";
 import {
   type BetterSqlite3Context,
   type BetterSqlite3Provider,
@@ -83,23 +84,13 @@ export const createSqliteEndToEndContext = async ({
   ...(await createSqliteStateProviderConformanceContext({
     createStateProvider: async () => createBetterSqlite3Provider({ db }),
     withNonTransactionContext: async (fn) => {
-      const sqliteCtx: BetterSqlite3Context = { db };
+      const sqliteCtx = { db } as BetterSqlite3Context;
       return fn(sqliteCtx);
     },
+    withSavepoint: withBetterSqlite3Savepoint,
   })),
+  withSavepoint: withBetterSqlite3Savepoint,
   createNotifyAdapter,
-  withSavepoint: async (txCtx, fn) => {
-    const { db: txDb } = txCtx as BetterSqlite3Context;
-    txDb.exec("SAVEPOINT queuert_test");
-    try {
-      const result = await fn(txCtx);
-      txDb.exec("RELEASE queuert_test");
-      return result;
-    } catch (error) {
-      txDb.exec("ROLLBACK TO queuert_test");
-      throw error;
-    }
-  },
   createFlakyDbStateAdapter: async () => createFlakyStateAdapter(db, failWithDatabaseError),
   createFlakyConnectionStateAdapter: async () =>
     createFlakyStateAdapter(db, failWithConnectionError),

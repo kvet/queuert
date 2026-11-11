@@ -7,6 +7,7 @@ import {
   createSqliteStateProviderConformanceContext,
   sqliteStateProviderConformanceGroups,
 } from "../conformance/state-provider-conformance.ts";
+import { withBetterSqlite3Savepoint } from "../state-provider/state-provider.better-sqlite3.spec-helper.ts";
 import { createBetterSqlite3Provider } from "../state-provider/state-provider.better-sqlite3.ts";
 
 const it = baseIt.extend("conformance", { scope: "file" }, async ({}, { onCleanup }) => {
@@ -17,6 +18,7 @@ const it = baseIt.extend("conformance", { scope: "file" }, async ({}, { onCleanu
   return createSqliteStateProviderConformanceContext({
     createStateProvider: async () => createBetterSqlite3Provider({ db }),
     withNonTransactionContext: async (fn) => fn({ db }),
+    withSavepoint: withBetterSqlite3Savepoint,
   });
 });
 

@@ -3,6 +3,7 @@ import { createAsyncRwLock, createLatch } from "@queuert/helpers";
 import type { DeduplicationOptions } from "../entities/deduplication.ts";
 import type { OrderDirection, Page, PageParams } from "../entities/pagination.ts";
 import type { ScheduleOptions } from "../entities/schedule.ts";
+import { type TxHooks, withTxHooks } from "../tx-hooks/tx-hooks.ts";
 import { resolveStateAdapterConfig } from "./adapter-config.ts";
 import { decodeIdCursor, decodeTimestampWithIdCursor, encodeCursor } from "./cursor.ts";
 import type {
@@ -614,7 +615,20 @@ class JobIndex {
 // ── Adapter ─────────────────────────────────────────────────────────
 
 /** Transaction context for the in-process state adapter. */
-export type InProcessContext = { inTransaction?: boolean; journal?: JournalEntry[] };
+export type InProcessContext = {
+  inTransaction?: boolean;
+  journal?: JournalEntry[];
+  txHooks: TxHooks;
+};
+
+const requireTxHooks = (txCtx: Partial<InProcessContext>): TxHooks => {
+  if (txCtx.txHooks === undefined) {
+    throw new Error(
+      "The transaction context has no txHooks: open the transaction with the provider's withTransaction, or create txHooks with withTxHooks and pass them in the context",
+    );
+  }
+  return txCtx.txHooks;
+};
 
 export type InProcessStateAdapter = StateAdapter<InProcessContext, string, string>;
 
@@ -755,20 +769,27 @@ export const createInProcessStateAdapter = ({
   const adapter: InProcessStateAdapter = {
     config,
 
-    withTransaction: async (fn) => {
-      using _h = await lock.acquireWrite();
-      closed.throwIfTripped();
-      const journal: JournalEntry[] = [];
-      const txCtx: InProcessContext = { inTransaction: true, journal };
-      try {
-        return await fn(txCtx);
-      } catch (error) {
-        idx.rollback(journal);
-        throw error;
-      }
-    },
+    withTransaction: async (fn) =>
+      withTxHooks(async (txHooks) => {
+        using _h = await lock.acquireWrite();
+        closed.throwIfTripped();
+        const journal: JournalEntry[] = [];
+        try {
+          return await fn({ inTransaction: true, journal, txHooks });
+        } catch (error) {
+          idx.rollback(journal);
+          throw error;
+        }
+      }),
 
     isTransaction: (txCtx) => txCtx.inTransaction === true,
+
+    onTransactionCommit: (txCtx, callback) => {
+      requireTxHooks(txCtx).onCommit(callback);
+    },
+    onTransactionRollback: (txCtx, callback) => {
+      requireTxHooks(txCtx).onRollback(callback);
+    },
 
     getChains: async ({ txCtx, chainIds }) =>
       withReadLock(txCtx, () =>

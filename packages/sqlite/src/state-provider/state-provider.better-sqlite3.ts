@@ -1,10 +1,26 @@
 import { type AsyncRwLock, createAsyncRwLock } from "@queuert/helpers";
 import type Database from "better-sqlite3";
+import { type TxHooks, withTxHooks } from "queuert";
 
 import type { SqliteStateProvider } from "./state-provider.sqlite.ts";
 
-export type BetterSqlite3Context = { db: Database.Database };
+/**
+ * Transaction context of {@link createBetterSqlite3Provider}: a better-sqlite3 database and the `txHooks` its commit and rollback
+ * callbacks register on. `withTransaction` creates both; a transaction you open yourself passes
+ * `txHooks` from `withTxHooks` wrapped around it.
+ */
+export type BetterSqlite3Context = { db: Database.Database; txHooks: TxHooks };
 
+const requireTxHooks = (txCtx: Partial<BetterSqlite3Context>): TxHooks => {
+  if (txCtx.txHooks === undefined) {
+    throw new Error(
+      "The transaction context has no txHooks: open the transaction with the provider's withTransaction, or create txHooks with withTxHooks and pass them in the context",
+    );
+  }
+  return txCtx.txHooks;
+};
+
+/** A SQLite state provider over one better-sqlite3 database; transactions run one at a time. */
 export const createBetterSqlite3Provider = ({
   db,
   lock = createAsyncRwLock(),
@@ -43,23 +59,30 @@ export const createBetterSqlite3Provider = ({
   };
 
   return {
-    withTransaction: async (fn) => {
-      using _h = await lock.acquireWrite();
-      try {
-        db.exec("BEGIN");
-        const result = await fn({ db });
-        db.exec("COMMIT");
-        return result;
-      } catch (error) {
-        if (db.inTransaction) {
-          try {
-            db.exec("ROLLBACK");
-          } catch {
-            // ignore rollback errors
+    withTransaction: async (fn) =>
+      withTxHooks(async (txHooks) => {
+        using _h = await lock.acquireWrite();
+        try {
+          db.exec("BEGIN");
+          const result = await fn({ db, txHooks });
+          db.exec("COMMIT");
+          return result;
+        } catch (error) {
+          if (db.inTransaction) {
+            try {
+              db.exec("ROLLBACK");
+            } catch {
+              // ignore rollback errors
+            }
           }
+          throw error;
         }
-        throw error;
-      }
+      }),
+    onTransactionCommit: (txCtx, callback) => {
+      requireTxHooks(txCtx).onCommit(callback);
+    },
+    onTransactionRollback: (txCtx, callback) => {
+      requireTxHooks(txCtx).onRollback(callback);
     },
     isTransaction: (txCtx) => txCtx.db.inTransaction,
     classifyError: ({ error }) => {

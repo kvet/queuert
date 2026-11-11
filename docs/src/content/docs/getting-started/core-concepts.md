@@ -19,7 +19,7 @@ Defines a named job type with its input/output types. Job types are registered w
 
 ### State Adapter
 
-Abstracts database operations for job persistence. The adapter handles job creation, status transitions, attempt tracking, and queries. Database-backed adapters run through a state provider you implement for your database client (Kysely, Drizzle, Prisma, raw pg, etc.), providing transaction handling and SQL execution. See [State Adapters](/queuert/integrations/state-adapters/) for the available backends, and the state provider for [PostgreSQL](/queuert/integrations/state-adapters/postgres/#state-provider) or [SQLite](/queuert/integrations/state-adapters/sqlite/#state-provider).
+Abstracts database operations for job persistence. The adapter handles job creation, status transitions, attempt tracking, and queries. Database-backed adapters run through a state provider you implement for your database client (Kysely, Drizzle, Prisma, raw pg, etc.), providing transaction handling, commit and rollback callbacks, and SQL execution. See [State Adapters](/queuert/integrations/state-adapters/) for the available backends, and the state provider for [PostgreSQL](/queuert/integrations/state-adapters/postgres/#state-provider) or [SQLite](/queuert/integrations/state-adapters/sqlite/#state-provider).
 
 ### Notify Adapter
 
@@ -37,7 +37,7 @@ By default, Queuert operates silently. Enable logging with `createConsoleLog()` 
 
 Now that you understand the building blocks, follow the guides in order:
 
-1. **[Tx Hooks](/queuert/guides/tx-hooks/)** — How jobs are created inside database transactions (required for all usage)
+1. **[Tx Hooks](/queuert/guides/tx-hooks/)** — How Queuert holds side effects until your transaction commits, and what your transaction context carries
 2. **[Job Processing](/queuert/how-it-works/job-processing/)** — How an attempt runs and how `complete` commits its outcome in your transaction
 3. **[Chain Patterns](/queuert/guides/chain-patterns/)** — Linear chains, branching, loops, and go-to patterns
 

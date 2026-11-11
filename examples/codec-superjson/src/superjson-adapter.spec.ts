@@ -8,7 +8,6 @@ import {
   defineJobTypes,
   createWorkerRunner,
   createProcessors,
-  withTxHooks,
 } from "queuert";
 import { expect, expectTypeOf, test } from "vitest";
 
@@ -39,15 +38,12 @@ test("stores superjson's envelope and hands the runtime form to readers", async 
   await using stateAdapter = await createStateAdapter();
   const client = createClient({ stateAdapter, jobTypes: buildJobTypes() });
 
-  const chain = await withTxHooks(async (txHooks) =>
-    stateAdapter.withTransaction(async (ctx) =>
-      client.createChain({
-        ...ctx,
-        txHooks,
-        typeName: "remind",
-        input: { sendAt: new Date("2024-06-01T09:00:00.000Z"), tags: new Set(["billing"]) },
-      }),
-    ),
+  const chain = await stateAdapter.withTransaction(async (ctx) =>
+    client.createChain({
+      ...ctx,
+      typeName: "remind",
+      input: { sendAt: new Date("2024-06-01T09:00:00.000Z"), tags: new Set(["billing"]) },
+    }),
   );
 
   const [stored] = await stateAdapter.getJobs({ jobIds: [chain.id] });
@@ -77,10 +73,8 @@ test("round-trips a Date and a bigint through the worker and back out of a clien
         remind: {
           attemptHandler: async ({ job, complete }) => {
             expect(job.input.sendAt).toBeInstanceOf(Date);
-            return withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (ctx) =>
-                complete({ ...ctx, txHooks, output: { sentAt, attempts: 3n } }),
-              ),
+            return stateAdapter.withTransaction(async (ctx) =>
+              complete({ ...ctx, output: { sentAt, attempts: 3n } }),
             );
           },
         },
@@ -88,15 +82,12 @@ test("round-trips a Date and a bigint through the worker and back out of a clien
     }),
   });
 
-  const chain = await withTxHooks(async (txHooks) =>
-    stateAdapter.withTransaction(async (ctx) =>
-      client.createChain({
-        ...ctx,
-        txHooks,
-        typeName: "remind",
-        input: { sendAt: new Date("2024-06-01T09:00:00.000Z"), tags: new Set() },
-      }),
-    ),
+  const chain = await stateAdapter.withTransaction(async (ctx) =>
+    client.createChain({
+      ...ctx,
+      typeName: "remind",
+      input: { sendAt: new Date("2024-06-01T09:00:00.000Z"), tags: new Set() },
+    }),
   );
 
   await workerRunner.start();
@@ -115,15 +106,12 @@ test("rejects a stored value that is not a superjson envelope", async () => {
   });
   const reader = createClient({ stateAdapter, jobTypes: buildJobTypes() });
 
-  const chain = await withTxHooks(async (txHooks) =>
-    stateAdapter.withTransaction(async (ctx) =>
-      writer.createChain({
-        ...ctx,
-        txHooks,
-        typeName: "remind",
-        input: { sendAt: "2024-06-01T09:00:00.000Z" },
-      }),
-    ),
+  const chain = await stateAdapter.withTransaction(async (ctx) =>
+    writer.createChain({
+      ...ctx,
+      typeName: "remind",
+      input: { sendAt: "2024-06-01T09:00:00.000Z" },
+    }),
   );
 
   await expect(reader.getJob({ id: chain.id })).rejects.toThrow(JobTypeValidationError);

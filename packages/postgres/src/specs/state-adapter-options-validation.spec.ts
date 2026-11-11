@@ -5,6 +5,8 @@ import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.ts";
 const dummyProvider = {
   withTransaction: async <T>(fn: (ctx: any) => Promise<T>) => fn({}),
   isTransaction: () => true,
+  onTransactionCommit: () => {},
+  onTransactionRollback: () => {},
   executeSql: async () => [],
   classifyError: () => undefined,
 };

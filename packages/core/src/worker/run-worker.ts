@@ -14,13 +14,13 @@ import {
   WorkerAlreadyLiveError,
   WorkerLeaseLostError,
 } from "../errors.ts";
+import { notifyOnCommit } from "../implementation.ts";
 import {
   type Processor,
   processorAttemptMiddlewareSymbol,
 } from "../job-type-processors/job-type-processors.ts";
 import type { Helpers } from "../setup-helpers.ts";
-import type { StateJob, StateWorkerInfo } from "../state-adapter/state-adapter.ts";
-import { type TxHooks, createTxHooks, withTxHooks } from "../tx-hooks/tx-hooks.ts";
+import type { BaseTxContext, StateJob, StateWorkerInfo } from "../state-adapter/state-adapter.ts";
 import { type WorkerLeaseConfig, holdLease } from "./worker-lease.ts";
 
 /** Per-processor runtime stamp carrying the middleware tuple of the originating slice. @internal */
@@ -137,29 +137,39 @@ const reclaimWorkerJobs = async (
   });
 };
 
+const observeReclaimed = (
+  helpers: Helpers,
+  { reclaimed, rescheduled }: ReclaimedJob,
+  workerId: string,
+): void => {
+  helpers.observabilityHelper.jobAttemptReclaimed(reclaimed, {
+    workerId,
+    reclaimedFrom: reclaimed.attemptBy!,
+  });
+  helpers.observabilityHelper.jobRescheduled(rescheduled);
+};
+
 const announceReclaimed = (
   helpers: Helpers,
-  txHooks: TxHooks,
+  txCtx: BaseTxContext,
   { jobs, workerId }: { jobs: ReclaimedJob[]; workerId: string },
 ): void => {
-  const { notifyHelper, observabilityHelper } = helpers;
-  for (const { reclaimed, rescheduled } of jobs) {
-    txHooks.onCommit(() => {
-      observabilityHelper.jobAttemptReclaimed(reclaimed, {
-        workerId,
-        reclaimedFrom: reclaimed.attemptBy!,
-      });
-    });
-    txHooks.onCommit(() => {
-      observabilityHelper.jobRescheduled(rescheduled);
+  const { notifyHelper } = helpers;
+  for (const job of jobs) {
+    helpers.stateAdapter.onTransactionCommit(txCtx, () => {
+      observeReclaimed(helpers, job, workerId);
     });
   }
-  notifyHelper.notifyJobAttemptsLost(
-    txHooks,
+  notifyOnCommit(
+    helpers,
+    txCtx,
+    notifyHelper.notifyJobAttemptsLost,
     jobs.map(({ reclaimed }) => reclaimed.id),
   );
-  notifyHelper.notifyJobsScheduled(
-    txHooks,
+  notifyOnCommit(
+    helpers,
+    txCtx,
+    notifyHelper.notifyJobsScheduled,
     jobs.map(({ reclaimed }) => reclaimed.typeName),
   );
 };
@@ -176,9 +186,22 @@ const lockWorker = async (
   return worker;
 };
 
+const announceReclaimedNow = async (
+  helpers: Helpers,
+  { jobs, workerId }: { jobs: ReclaimedJob[]; workerId: string },
+): Promise<void> => {
+  const notified = Promise.all([
+    helpers.notifyHelper.notifyJobAttemptsLost(jobs.map(({ reclaimed }) => reclaimed.id)),
+    helpers.notifyHelper.notifyJobsScheduled(jobs.map(({ reclaimed }) => reclaimed.typeName)),
+  ]);
+  for (const job of jobs) {
+    observeReclaimed(helpers, job, workerId);
+  }
+  await notified;
+};
+
 const registerWorker = async (
   helpers: Helpers,
-  txHooks: TxHooks,
   {
     workerId,
     typeNames,
@@ -190,36 +213,33 @@ const registerWorker = async (
     concurrency: number;
     leaseConfig: WorkerLeaseConfig;
   },
-): Promise<string> => {
+): Promise<{ workerToken: string; reclaimedJobs: ReclaimedJob[] }> => {
   const { stateAdapter } = helpers;
-  return stateAdapter.withTransaction(
-    txHooks.retryBoundary(async (txCtx) => {
-      const existing = await lockWorker(helpers, { txCtx, workerId });
-      if (existing !== undefined && !existing.expired) {
-        throw new WorkerAlreadyLiveError(`Worker "${workerId}" is held by a live worker`, {
-          workerId,
-        });
-      }
-      if (existing !== undefined) {
-        await stateAdapter.stopWorker({ txCtx, workerId, workerToken: existing.token });
-      }
-      const jobs = await reclaimWorkerJobs(helpers, {
-        txCtx,
+  return stateAdapter.withTransaction(async (txCtx) => {
+    const existing = await lockWorker(helpers, { txCtx, workerId });
+    if (existing !== undefined && !existing.expired) {
+      throw new WorkerAlreadyLiveError(`Worker "${workerId}" is held by a live worker`, {
         workerId,
-        reclaimedBy: workerId,
-        message: "Worker holding the attempt lost its lease",
       });
-      const worker = await stateAdapter.startWorker({
-        txCtx,
-        workerId,
-        typeNames,
-        concurrency,
-        leaseMs: leaseConfig.durationMs,
-      });
-      announceReclaimed(helpers, txHooks, { jobs, workerId });
-      return worker.token;
-    }),
-  );
+    }
+    if (existing !== undefined) {
+      await stateAdapter.stopWorker({ txCtx, workerId, workerToken: existing.token });
+    }
+    const jobs = await reclaimWorkerJobs(helpers, {
+      txCtx,
+      workerId,
+      reclaimedBy: workerId,
+      message: "Worker holding the attempt lost its lease",
+    });
+    const worker = await stateAdapter.startWorker({
+      txCtx,
+      workerId,
+      typeNames,
+      concurrency,
+      leaseMs: leaseConfig.durationMs,
+    });
+    return { workerToken: worker.token, reclaimedJobs: jobs };
+  });
 };
 
 const reclaimExpiredWorker = async (
@@ -234,23 +254,19 @@ const reclaimExpiredWorker = async (
   });
   if (candidates.length === 0) return false;
   const candidate = candidates[Math.floor(Math.random() * candidates.length)];
-  return withTxHooks(async (txHooks) =>
-    stateAdapter.withTransaction(
-      txHooks.retryBoundary(async (txCtx) => {
-        const worker = await lockWorker(helpers, { txCtx, workerId: candidate.id });
-        if (worker === undefined || !worker.expired) return false;
-        await stateAdapter.stopWorker({ txCtx, workerId: worker.id, workerToken: worker.token });
-        const jobs = await reclaimWorkerJobs(helpers, {
-          txCtx,
-          workerId: worker.id,
-          reclaimedBy: workerId,
-          message: "Worker holding the attempt lost its lease",
-        });
-        announceReclaimed(helpers, txHooks, { jobs, workerId });
-        return true;
-      }),
-    ),
-  );
+  return stateAdapter.withTransaction(async (txCtx) => {
+    const worker = await lockWorker(helpers, { txCtx, workerId: candidate.id });
+    if (worker === undefined || !worker.expired) return false;
+    await stateAdapter.stopWorker({ txCtx, workerId: worker.id, workerToken: worker.token });
+    const jobs = await reclaimWorkerJobs(helpers, {
+      txCtx,
+      workerId: worker.id,
+      reclaimedBy: workerId,
+      message: "Worker holding the attempt lost its lease",
+    });
+    announceReclaimed(helpers, txCtx, { jobs, workerId });
+    return true;
+  });
 };
 
 const stopOwnWorker = async (
@@ -258,22 +274,18 @@ const stopOwnWorker = async (
   { workerId, workerToken }: { workerId: string; workerToken: string },
 ): Promise<boolean> => {
   const { stateAdapter } = helpers;
-  return withTxHooks(async (txHooks) =>
-    stateAdapter.withTransaction(
-      txHooks.retryBoundary(async (txCtx) => {
-        if ((await stateAdapter.stopWorker({ txCtx, workerId, workerToken })) === undefined)
-          return false;
-        const jobs = await reclaimWorkerJobs(helpers, {
-          txCtx,
-          workerId,
-          reclaimedBy: workerId,
-          message: "Worker holding the attempt stopped",
-        });
-        announceReclaimed(helpers, txHooks, { jobs, workerId });
-        return true;
-      }),
-    ),
-  );
+  return stateAdapter.withTransaction(async (txCtx) => {
+    if ((await stateAdapter.stopWorker({ txCtx, workerId, workerToken })) === undefined)
+      return false;
+    const jobs = await reclaimWorkerJobs(helpers, {
+      txCtx,
+      workerId,
+      reclaimedBy: workerId,
+      message: "Worker holding the attempt stopped",
+    });
+    announceReclaimed(helpers, txCtx, { jobs, workerId });
+    return true;
+  });
 };
 
 export const runWorker = async ({
@@ -301,15 +313,11 @@ export const runWorker = async ({
 }): Promise<boolean> => {
   const { stateAdapter, observabilityHelper } = helpers;
   const registrationSentAt = performance.now();
-  const registration = createTxHooks();
-  const workerToken = await registerWorker(helpers, registration.txHooks, {
+  const { workerToken, reclaimedJobs } = await registerWorker(helpers, {
     workerId,
     typeNames,
     concurrency,
     leaseConfig,
-  }).catch((error: unknown) => {
-    registration.discard();
-    throw error;
   });
   observabilityHelper.workerStarted({ workerId, jobTypeNames: typeNames });
   observabilityHelper.jobTypeIdleChange(concurrency, workerId, typeNames);
@@ -334,7 +342,7 @@ export const runWorker = async ({
   }).then((held) => {
     if (!held) loseLease();
   });
-  await registration.flush();
+  await announceReclaimedNow(helpers, { jobs: reclaimedJobs, workerId });
   const signal = AbortSignal.any([stopSignal, leaseLost.signal]);
 
   const executor = createParallelExecutor(concurrency);
@@ -373,22 +381,18 @@ export const runWorker = async ({
   };
 
   const reclaimFinishedJobs = async () => {
-    const ownsWorker = await withTxHooks(async (txHooks) =>
-      stateAdapter.withTransaction(
-        txHooks.retryBoundary(async (txCtx) => {
-          if ((await lockWorker(helpers, { txCtx, workerId }))?.token !== workerToken) return false;
-          const jobs = await reclaimWorkerJobs(helpers, {
-            txCtx,
-            workerId,
-            reclaimedBy: workerId,
-            keepAttemptTokens: runningAttemptTokens,
-            message: "Worker holding the attempt no longer runs it",
-          });
-          announceReclaimed(helpers, txHooks, { jobs, workerId });
-          return true;
-        }),
-      ),
-    );
+    const ownsWorker = await stateAdapter.withTransaction(async (txCtx) => {
+      if ((await lockWorker(helpers, { txCtx, workerId }))?.token !== workerToken) return false;
+      const jobs = await reclaimWorkerJobs(helpers, {
+        txCtx,
+        workerId,
+        reclaimedBy: workerId,
+        keepAttemptTokens: runningAttemptTokens,
+        message: "Worker holding the attempt no longer runs it",
+      });
+      announceReclaimed(helpers, txCtx, { jobs, workerId });
+      return true;
+    });
     if (!ownsWorker) {
       loseLease();
     }

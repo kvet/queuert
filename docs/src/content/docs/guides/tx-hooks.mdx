@@ -1,6 +1,6 @@
 ---
 title: Tx Hooks
-description: Buffer side effects during database transactions.
+description: Run side effects only after your database transaction commits.
 sidebar:
   order: 1
 ---
@@ -8,7 +8,39 @@ sidebar:
 import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/diagram";
 
-`withTxHooks` buffers side effects (like notify events) during a transaction and flushes them only after the callback returns successfully. On error, all buffered side effects are discarded.
+Queuert writes chains and jobs in your transaction, and the side effects of those writes (notify events that wake workers, observability events) must not leak out of a transaction that rolls back. The state provider owns this: it implements `onTransactionCommit(txCtx, callback)`, which runs `callback` after the transaction commits and before the call that opened it settles, and `onTransactionRollback(txCtx, callback)`, which runs `callback` synchronously when the transaction, or the savepoint `txCtx` belongs to, rolls back. The client and the worker register every side effect through these two members, so what you pass to a mutating call or to `complete` is your transaction context and nothing else.
+
+## Two kinds of providers
+
+How a provider implements `onTransactionCommit` and `onTransactionRollback` depends on its database client.
+
+**A client with transaction events** (MikroORM's `afterTransactionCommit` and `beforeTransactionRollback`) lets the provider implement them natively: it looks the transaction up from the context and runs the callbacks from those events. The context is the client's own transaction handle, and you pass it alone:
+
+```ts
+await orm.em.transactional(async (em) =>
+  client.createChain({ em, typeName: "send-email", input }),
+);
+```
+
+**A client without them** (pg, postgres.js, Bun SQL, Drizzle, Prisma, Knex, the SQLite drivers) gets a `TxHooks` instance, which buffers callbacks for one transaction. The provider's transaction context carries it as a `txHooks` field next to the transaction handle, its `withTransaction` creates it with `withTxHooks`, and its `onTransactionCommit` and `onTransactionRollback` register callbacks on it:
+
+```ts title="provider.ts"
+export type PostgresJsContext = { txSql: postgres.TransactionSql; txHooks: TxHooks };
+
+const stateProvider: PgStateProvider<PostgresJsContext> = {
+  withTransaction: async (fn) =>
+    withTxHooks(async (txHooks) => sql.begin(async (txSql) => fn({ txSql, txHooks }))),
+  onTransactionCommit: (txCtx, callback) => {
+    txCtx.txHooks.onCommit(callback);
+  },
+  onTransactionRollback: (txCtx, callback) => {
+    txCtx.txHooks.onRollback(callback);
+  },
+  // isTransaction, executeSql, classifyError
+};
+```
+
+`txHooks` is then part of that provider's transaction context, so a transaction you open yourself creates the hooks the same way and passes them with the rest of the context. Every snippet in these docs that opens a transaction with `sql.begin`, `db.transaction` or `knex.transaction` does this:
 
 <Tabs>
   <TabItem label="Callback (recommended)">
@@ -19,7 +51,6 @@ import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/dia
     await withTxHooks(async (txHooks) =>
       sql.begin(async (txSql) => {
         await client.createChain({ txSql, txHooks, typeName: "send-email", input });
-        // If the transaction rolls back, no notifications are sent
       }),
     );
     ```
@@ -35,29 +66,31 @@ import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/dia
 
     ```ts
     const { txHooks, flush, discard } = createTxHooks();
-    const connection = await db.connect();
+    const poolClient = await pool.connect();
     try {
-      await connection.query("BEGIN");
+      await poolClient.query("BEGIN");
       const result = await client.createChain({
-        connection,
+        poolClient,
         txHooks,
         typeName: "send-email",
         input,
       });
-      await connection.query("COMMIT");
-      await flush(); // Side effects fire only after commit
+      await poolClient.query("COMMIT");
+      await flush();
       return result;
     } catch (error) {
-      await connection.query("ROLLBACK").catch(() => {});
-      discard(); // Side effects discarded on error
+      await poolClient.query("ROLLBACK").catch(() => {});
+      discard();
       throw error;
     } finally {
-      connection.release();
+      poolClient.release();
     }
     ```
 
   </TabItem>
 </Tabs>
+
+A transaction opened through `stateProvider.withTransaction` already carries its hooks, so you spread its context as it is: `stateProvider.withTransaction(async (txCtx) => client.createChain({ ...txCtx, typeName, input }))`.
 
 ## How It Works
 
@@ -83,7 +116,7 @@ import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/dia
   </Flow>
 </Diagram>
 
-`TxHooks` knows nothing about Queuert itself. Queuert registers its own notifications and observability events on it, and your code can register side effects the same way:
+`TxHooks` knows nothing about Queuert itself. Queuert registers its notifications and observability events through the provider's `onTransactionCommit` and `onTransactionRollback`, and your code can register side effects the same way, through `stateProvider.onTransactionCommit(txCtx, callback)` with any provider, or on the `txHooks` in your context:
 
 ```ts
 await withTxHooks(async (txHooks) =>
@@ -99,9 +132,11 @@ await withTxHooks(async (txHooks) =>
 
 One `TxHooks` instance serves one transaction: once it is flushed or discarded, registering another callback throws, so a call that reuses it fails instead of buffering side effects that never run.
 
+The rest of this page is the `TxHooks` toolkit for a provider that carries the hooks in its context, and for code that opens transactions for such a provider. Whatever the provider, it must run commit callbacks only after COMMIT, follow savepoints, and drop the callbacks of a try its driver reruns; [Errors and Commit Detection](../../how-it-works/job-processing/#errors-and-commit-detection) explains why.
+
 ## Drivers that rerun the callback
 
-Some drivers rerun the transaction callback after a transient error, such as MongoDB's `session.withTransaction` and Mongoose's `connection.transaction`, and so does a retry loop placed inside `withTxHooks`. Every try then shares one `txHooks`, so side effects buffered by a rolled-back try flush after the successful one. Wrap the callback in `txHooks.retryBoundary`:
+Some drivers rerun the transaction callback after a transient error, such as MongoDB's `session.withTransaction` and Mongoose's `connection.transaction`, and so does a retry loop placed inside `withTxHooks`. Every try then shares one `txHooks`, so side effects buffered by a rolled-back try flush after the successful one. Wrap the callback in `txHooks.retryBoundary`, in the provider's `withTransaction` and wherever you open such a transaction yourself:
 
 ```ts
 await withTxHooks(async (txHooks) =>
@@ -118,7 +153,7 @@ Each call after the first rolls back what the previous try registered, then runs
 
 ## A resolved transaction counts as committed
 
-`withTxHooks` and `retryBoundary` treat a callback that resolves as committed. A driver whose transaction resolves after a rollback makes the hooks flush for writes that never committed. Knex does this by default: a bare `trx.rollback()` inside `knex.transaction(cb)` resolves with `undefined`. Pass `{ doNotRejectOnRollback: false }` to every `knex.transaction` that uses `txHooks`, including nested `trx.transaction(cb)` savepoints, so a bare `trx.rollback()` rejects:
+`withTxHooks` and `retryBoundary` treat a callback that resolves as committed. A driver whose transaction resolves after a rollback makes the hooks flush for writes that never committed. Knex does this by default: a bare `trx.rollback()` inside `knex.transaction(cb)` resolves with `undefined`. Pass `{ doNotRejectOnRollback: false }` to every `knex.transaction` that uses `txHooks`, the provider's `withTransaction` and your own transactions, including nested `trx.transaction(cb)` savepoints, so a bare `trx.rollback()` rejects:
 
 ```ts
 await withTxHooks(async (txHooks) =>
@@ -135,17 +170,18 @@ Rolling back by throwing, or with `trx.rollback(error)` and an `Error`, rejects 
 
 ## Savepoints
 
-`TxHooks` supports savepoints for partial rollback of buffered side effects. This is useful when a sub-operation within a transaction may fail without invalidating the entire transaction.
+`TxHooks` supports savepoints for partial rollback of buffered side effects. This is useful when a sub-operation within a transaction may fail without invalidating the entire transaction. Pair each database savepoint with a `TxHooks` savepoint and pass the savepoint's `txHooks` in the context of the calls made inside it, so rolling back the database savepoint also drops what those calls buffered. A provider with transaction events does this pairing itself: the MikroORM example opens a `TxHooks` savepoint for every nested `em.transactional`.
 
 <Tabs>
   <TabItem label="Callback (recommended)">
     `withSavepoint` runs a function and automatically rolls back its callbacks on error:
 
     ```ts
-    await txHooks.withSavepoint(async (txHooks) => {
-      // buffer side effects here
-      // if this throws, only side effects buffered inside this callback are rolled back
-    });
+    await txHooks.withSavepoint(async (txHooks) =>
+      txSql.savepoint(async (txSql) =>
+        client.createChain({ txSql, txHooks, typeName: "send-email", input }),
+      ),
+    );
     ```
 
   </TabItem>
@@ -154,11 +190,14 @@ Rolling back by throwing, or with `trx.rollback(error)` and an `Error`, rejects 
 
     ```ts
     const sp = txHooks.createSavepoint();
+    await txSql`savepoint send_email`;
     try {
-      // buffer side effects
-      sp.release(); // keep changes
+      await client.createChain({ txSql, txHooks: sp.txHooks, typeName: "send-email", input });
+      await txSql`release savepoint send_email`;
+      sp.release();
     } catch {
-      sp.rollback(); // discard changes since the savepoint
+      await txSql`rollback to savepoint send_email`;
+      sp.rollback();
     }
     ```
 

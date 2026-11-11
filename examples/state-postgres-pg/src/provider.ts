@@ -1,7 +1,8 @@
 import type { PgStateProvider } from "@queuert/postgres";
 import type { Pool, PoolClient } from "pg";
+import { type TxHooks, withTxHooks } from "queuert";
 
-export type PgPoolContext = { poolClient: PoolClient };
+export type PgPoolContext = { poolClient: PoolClient; txHooks: TxHooks };
 
 export const createPgPoolStateProvider = ({
   pool,
@@ -32,23 +33,30 @@ export const createPgPoolStateProvider = ({
   };
 
   return {
-    withTransaction: async (cb) => {
-      const poolClient = await pool.connect();
-      try {
-        await poolClient.query("BEGIN");
-        const result = await cb({ poolClient });
-        await poolClient.query("COMMIT");
-        return result;
-      } catch (error) {
-        await poolClient.query("ROLLBACK").catch(() => {});
-        throw error;
-      } finally {
-        poolClient.release();
-      }
-    },
+    withTransaction: async (cb) =>
+      withTxHooks(async (txHooks) => {
+        const poolClient = await pool.connect();
+        try {
+          await poolClient.query("BEGIN");
+          const result = await cb({ poolClient, txHooks });
+          await poolClient.query("COMMIT");
+          return result;
+        } catch (error) {
+          await poolClient.query("ROLLBACK").catch(() => {});
+          throw error;
+        } finally {
+          poolClient.release();
+        }
+      }),
     isTransaction: (txCtx) => {
       const status = txCtx.poolClient.getTransactionStatus();
       return status === "T" || status === "E";
+    },
+    onTransactionCommit: (txCtx, callback) => {
+      txCtx.txHooks.onCommit(callback);
+    },
+    onTransactionRollback: (txCtx, callback) => {
+      txCtx.txHooks.onRollback(callback);
     },
     classifyError: ({ error }) => {
       const driverError = error as { code?: unknown; message?: unknown } | undefined;

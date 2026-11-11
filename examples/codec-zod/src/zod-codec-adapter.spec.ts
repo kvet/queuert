@@ -1,7 +1,7 @@
 import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
-import { createClient, createWorkerRunner, createProcessors, withTxHooks } from "queuert";
+import { createClient, createWorkerRunner, createProcessors } from "queuert";
 import {
   type ValidationAdapterConformanceContext,
   validationAdapterConformanceCases,
@@ -42,10 +42,8 @@ test("stores the encoded form and hands the runtime form to readers", async () =
   const client = createClient({ stateAdapter, jobTypes });
 
   const sendAt = new Date("2024-06-01T09:00:00.000Z");
-  const chain = await withTxHooks(async (txHooks) =>
-    stateAdapter.withTransaction(async (ctx) =>
-      client.createChain({ ...ctx, txHooks, typeName: "remind", input: { sendAt } }),
-    ),
+  const chain = await stateAdapter.withTransaction(async (ctx) =>
+    client.createChain({ ...ctx, typeName: "remind", input: { sendAt } }),
   );
 
   const [stored] = await stateAdapter.getJobs({ jobIds: [chain.id] });
@@ -71,10 +69,8 @@ test("round-trips a Date through the worker and back out of a client read", asyn
         remind: {
           attemptHandler: async ({ job, complete }) => {
             expect(job.input.sendAt).toBeInstanceOf(Date);
-            return withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (ctx) =>
-                complete({ ...ctx, txHooks, output: { sentAt } }),
-              ),
+            return stateAdapter.withTransaction(async (ctx) =>
+              complete({ ...ctx, output: { sentAt } }),
             );
           },
         },
@@ -82,15 +78,12 @@ test("round-trips a Date through the worker and back out of a client read", asyn
     }),
   });
 
-  const chain = await withTxHooks(async (txHooks) =>
-    stateAdapter.withTransaction(async (ctx) =>
-      client.createChain({
-        ...ctx,
-        txHooks,
-        typeName: "remind",
-        input: { sendAt: new Date("2024-06-01T09:00:00.000Z") },
-      }),
-    ),
+  const chain = await stateAdapter.withTransaction(async (ctx) =>
+    client.createChain({
+      ...ctx,
+      typeName: "remind",
+      input: { sendAt: new Date("2024-06-01T09:00:00.000Z") },
+    }),
   );
 
   await workerRunner.start();
@@ -132,23 +125,19 @@ test("validates structural blockers against the runtime form", async () => {
   await using stateAdapter = await createStateAdapter();
   const client = createClient({ stateAdapter, jobTypes });
 
-  const digest = await withTxHooks(async (txHooks) =>
-    stateAdapter.withTransaction(async (ctx) => {
-      const remind = await client.createChain({
-        ...ctx,
-        txHooks,
-        typeName: "remind",
-        input: { sendAt: new Date("2024-06-01T09:00:00.000Z") },
-      });
-      return client.createChain({
-        ...ctx,
-        txHooks,
-        typeName: "digest",
-        input: null,
-        blockers: [{ id: remind.id }],
-      });
-    }),
-  );
+  const digest = await stateAdapter.withTransaction(async (ctx) => {
+    const remind = await client.createChain({
+      ...ctx,
+      typeName: "remind",
+      input: { sendAt: new Date("2024-06-01T09:00:00.000Z") },
+    });
+    return client.createChain({
+      ...ctx,
+      typeName: "digest",
+      input: null,
+      blockers: [{ id: remind.id }],
+    });
+  });
 
   expect(digest.status).toBe("running");
 });

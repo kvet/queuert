@@ -16,7 +16,10 @@ const adapters: OptionCard[] = [
     pick: "Recommended for production. Supports horizontal scaling and all Queuert features.",
     facts: [
       { label: "Package", value: "@queuert/postgres" },
-      { label: "Clients", value: "pg · postgres.js · Bun SQL · Drizzle · Kysely · Prisma · Knex" },
+      {
+        label: "Clients",
+        value: "pg · postgres.js · Bun SQL · Drizzle · Kysely · Prisma · Knex · MikroORM",
+      },
       { label: "Locking", value: "FOR UPDATE SKIP LOCKED" },
     ],
     action: { label: "PostgreSQL state adapter", href: "/integrations/state-adapters/postgres/" },
@@ -30,7 +33,7 @@ const adapters: OptionCard[] = [
       {
         label: "Clients",
         value:
-          "better-sqlite3 · node:sqlite · bun:sqlite · Bun SQL · Drizzle · Kysely · Prisma · Knex",
+          "better-sqlite3 · node:sqlite · bun:sqlite · Bun SQL · Drizzle · Kysely · Prisma · Knex · MikroORM",
       },
       { label: "Locking", value: "single writer, writes serialized" },
     ],
@@ -53,11 +56,14 @@ const members = (): FieldItem[] => [
     name: "Transactions",
     description: (
       <>
-        Run a callback in a transaction that commits on success and rolls back on error, and tell
-        whether a context is in an open transaction without a query.
+        Run a callback in a transaction that commits on success and rolls back on error, tell
+        whether a context is in an open transaction without a query, and run callbacks after the
+        context's transaction commits or when it (or the savepoint the context belongs to) rolls
+        back. The client and the worker register every side effect through these callbacks; see{" "}
+        <A href="/guides/tx-hooks/">Tx Hooks</A>.
       </>
     ),
-    extra: ["withTransaction", "isTransaction"],
+    extra: ["withTransaction", "isTransaction", "onTransactionCommit", "onTransactionRollback"],
   },
   {
     name: "Creating and finishing jobs",
@@ -195,9 +201,11 @@ const Page = () => (
     <p>
       The transaction context (<code>TTxContext</code>) represents an active transaction: the one
       your own database client opened and passed to <code>client.createChain</code> or a handler's{" "}
-      <code>complete</code>, or one opened by <code>withTransaction</code>. Queuert itself opens
-      transactions only for migrations, for the worker's registration, reclaims and stop, and in
-      test helpers, never around job processing.
+      <code>complete</code>, or one opened by <code>withTransaction</code>. Besides the transaction
+      handle, it may carry the <code>txHooks</code> a provider registers commit and rollback
+      callbacks on; mutating calls and <code>complete</code> require every field of the context, and
+      reads take any part of it. Queuert itself opens transactions only for migrations, for the
+      worker's registration, reclaims and stop, and in test helpers, never around job processing.
     </p>
   </>
 );

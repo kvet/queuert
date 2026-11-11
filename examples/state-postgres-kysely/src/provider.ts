@@ -1,7 +1,8 @@
 import type { PgStateProvider } from "@queuert/postgres";
 import { CompiledQuery, type Kysely } from "kysely";
+import { type TxHooks, withTxHooks } from "queuert";
 
-export type KyselyPgContext<TDatabase> = { db: Kysely<TDatabase> };
+export type KyselyPgContext<TDatabase> = { db: Kysely<TDatabase>; txHooks: TxHooks };
 
 export const createKyselyPgStateProvider = <TDatabase>({
   db,
@@ -9,8 +10,17 @@ export const createKyselyPgStateProvider = <TDatabase>({
   db: Kysely<TDatabase>;
 }): PgStateProvider<KyselyPgContext<TDatabase>> => {
   return {
-    withTransaction: async (cb) => db.transaction().execute(async (txDb) => cb({ db: txDb })),
+    withTransaction: async (cb) =>
+      withTxHooks(async (txHooks) =>
+        db.transaction().execute(async (txDb) => cb({ db: txDb, txHooks })),
+      ),
     isTransaction: (txCtx) => txCtx.db.isTransaction,
+    onTransactionCommit: (txCtx, callback) => {
+      txCtx.txHooks.onCommit(callback);
+    },
+    onTransactionRollback: (txCtx, callback) => {
+      txCtx.txHooks.onRollback(callback);
+    },
     classifyError: ({ error }) => {
       const driverError = error as { code?: unknown; message?: unknown } | undefined;
       if (driverError?.code !== "42P01") return undefined;

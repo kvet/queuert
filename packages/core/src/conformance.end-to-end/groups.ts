@@ -89,7 +89,7 @@ export const endToEndFlakyDbGroups: ConformanceGroup<EndToEndFlakyDbContext>[] =
 export const endToEndFlakyDbConcurrentTransactionGroups: ConformanceGroup<EndToEndFlakyDbContext>[] =
   [stateResilienceFlakyDbConcurrentTransactionsGroup];
 
-const nonTransactionContext: InProcessContext = { inTransaction: false };
+const nonTransactionContext: Omit<InProcessContext, "txHooks"> = { inTransaction: false };
 
 export const notifyAdapterEndToEndGroups: ConformanceGroup<NotifyAdapterConformanceContext>[] =
   endToEndNotifyGroups.map((group) => ({

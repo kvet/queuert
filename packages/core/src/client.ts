@@ -27,7 +27,13 @@ import {
   JobsNotReschedulableError,
   WaitChainTimeoutError,
 } from "./errors.ts";
-import { completeChain, continueChain, createChains, rescheduleJobs } from "./implementation.ts";
+import {
+  completeChain,
+  continueChain,
+  createChains,
+  notifyOnCommit,
+  rescheduleJobs,
+} from "./implementation.ts";
 import type { BaseJobTypeDefinitions } from "./job-types/job-type.ts";
 import type {
   BlockerChains,
@@ -63,8 +69,7 @@ import type {
   StateJob,
   StateJobInfo,
 } from "./state-adapter/state-adapter.ts";
-import { normalizeTxCtx, requireTxCtx, requireTxHooks } from "./state-adapter/tx-context.ts";
-import type { TxHooks } from "./tx-hooks/tx-hooks.ts";
+import { normalizeTxCtx, requireTxCtx } from "./state-adapter/tx-context.ts";
 
 /**
  * @internal Used by `createWorkerRunner` and `createDashboard` to access
@@ -91,7 +96,6 @@ type ChainCompleteOptions<
       TOutcome
     >
   >;
-  txHooks: TxHooks;
 } & GetStateAdapterTxContext<TStateAdapter>;
 
 type ChainCompleteJobResult<TResult> = TResult extends { continuedTo: undefined }
@@ -178,7 +182,7 @@ type CreateChainsResult<
  * The public API for managing chains. Created via {@link createClient}.
  *
  * Methods are split into three categories:
- * - **Mutating** — `createChain`, `createChains`, `completeChain`, `deleteChain`, `deleteChains`, `rescheduleJob`, `rescheduleJobs`. Require `txHooks` and a transaction context; they throw `Error` if called without a transaction context, or with one the state adapter's `isTransaction` reports as outside an open transaction. With an adapter that fences writes (PostgreSQL, SQLite), all but the deletions throw {@link SchemaFencedError} once a breaking migration fenced this code version, and change nothing.
+ * - **Mutating** — `createChain`, `createChains`, `completeChain`, `deleteChain`, `deleteChains`, `rescheduleJob`, `rescheduleJobs`. Require a transaction context; they throw `Error` if called without a transaction context, or with one the state adapter's `isTransaction` reports as outside an open transaction. With an adapter that fences writes (PostgreSQL, SQLite), all but the deletions throw {@link SchemaFencedError} once a breaking migration fenced this code version, and change nothing.
  * - **Read-only** — `getChain`, `getChains`, `getJob`, `getJobs`, `getChainTypeNames`, `getJobTypeNames`, `countChainsByTypeName`, `countJobsByTypeName`, `listChains`, `listJobs`, `listChainJobs`, `getJobBlockers`, `listBlockedJobs`, `getWorker`, `getWorkers`, `countWorkers`, `countWorkersByTypeName`, `countRunningJobsByWorkerId`, `listWorkers`, `listWorkerJobs`. Accept an optional transaction context.
  * - **Waiting** — `awaitChain`. Takes no transaction context: it polls outside any transaction and listens for notify adapter events.
  */
@@ -236,9 +240,8 @@ export type Client<
    * @throws The state adapter's own error (e.g. a unique-constraint violation) if a caller-supplied `id` is already taken.
    */
   createChain: <TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>>(
-    options: NewChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
-      txHooks: TxHooks;
-    } & GetStateAdapterTxContext<TStateAdapter>,
+    options: NewChain<TJobId, TJobTypeDefinitions, TChainTypeName> &
+      GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<
     ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
       deduplicated: boolean;
@@ -261,7 +264,6 @@ export type Client<
   createChains: <const TChains extends readonly NewChain<TJobId, TJobTypeDefinitions>[]>(
     options: {
       items: TChains;
-      txHooks: TxHooks;
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<CreateChainsResult<TJobId, TJobTypeDefinitions, TChains>>;
 
@@ -278,7 +280,6 @@ export type Client<
   >(
     options: {
       id: TJobId;
-      txHooks: TxHooks;
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName> | undefined>;
 
@@ -295,7 +296,6 @@ export type Client<
   >(
     options: {
       ids: TJobId[];
-      txHooks: TxHooks;
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName>[]>;
 
@@ -313,7 +313,6 @@ export type Client<
     options: {
       id: TJobId;
       schedule?: ScheduleOptions;
-      txHooks: TxHooks;
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<ResolvedJob<TJobId, TWorkerId, TJobTypeDefinitions, TJobTypeName>>;
 
@@ -332,7 +331,6 @@ export type Client<
     options: {
       ids: TJobId[];
       schedule?: ScheduleOptions;
-      txHooks: TxHooks;
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<ResolvedJob<TJobId, TWorkerId, TJobTypeDefinitions, TJobTypeName>[]>;
 
@@ -373,7 +371,6 @@ export type Client<
     options: {
       typeName: TChainTypeName;
       id: TJobId;
-      txHooks: TxHooks;
       handler: THandler;
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => Promise<TResult>;
@@ -733,21 +730,18 @@ export const createClient = <
     [helpersSymbol]: helpers,
 
     createChain: async <TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>>(
-      options: NewChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
-        txHooks: TxHooks;
-      } & GetStateAdapterTxContext<TStateAdapter>,
+      options: NewChain<TJobId, TJobTypeDefinitions, TChainTypeName> &
+        GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<
       ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
         deduplicated: boolean;
       }
     > => {
-      const { input, id, typeName, deduplication, schedule, blockers, txHooks, ...rest } = options;
+      const { input, id, typeName, deduplication, schedule, blockers, ...rest } = options;
       const txCtx = requireTxCtx(helpers.stateAdapter, rest, "createChain");
-      requireTxHooks(txHooks, "createChain");
       const [result] = await createChains(helpers, {
         chains: [{ typeName, id, input, deduplication, schedule, blockers }],
         txCtx,
-        txHooks,
       });
       return result as ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
         deduplicated: boolean;
@@ -757,16 +751,13 @@ export const createClient = <
     createChains: async <const TChains extends readonly NewChain<TJobId, TJobTypeDefinitions>[]>(
       options: {
         items: TChains;
-        txHooks: TxHooks;
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<CreateChainsResult<TJobId, TJobTypeDefinitions, TChains>> => {
-      const { items, txHooks, ...rest } = options;
+      const { items, ...rest } = options;
       const txCtx = requireTxCtx(helpers.stateAdapter, rest, "createChains");
-      requireTxHooks(txHooks, "createChains");
       return (await createChains(helpers, {
         chains: items,
         txCtx,
-        txHooks,
       })) as CreateChainsResult<TJobId, TJobTypeDefinitions, TChains>;
     },
 
@@ -776,13 +767,11 @@ export const createClient = <
     >(
       options: {
         id: TJobId;
-        txHooks: TxHooks;
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName> | undefined> => {
-      const { id, txHooks, ...rest } = options;
+      const { id, ...rest } = options;
       const deleted = await client.deleteChains<TEntryName>({
         ids: [id],
-        txHooks,
         ...(rest as GetStateAdapterTxContext<TStateAdapter>),
       });
 
@@ -795,12 +784,10 @@ export const createClient = <
     >(
       options: {
         ids: TJobId[];
-        txHooks: TxHooks;
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName>[]> => {
-      const { ids, txHooks, ...rest } = options;
+      const { ids, ...rest } = options;
       const txCtx = requireTxCtx(helpers.stateAdapter, rest, "deleteChains");
-      requireTxHooks(txHooks, "deleteChains");
 
       const verdicts = await helpers.stateAdapter.deleteChains({
         txCtx,
@@ -837,13 +824,15 @@ export const createClient = <
 
       for (const stateChain of verdicts) {
         if (stateChain !== undefined && !Array.isArray(stateChain)) {
-          txHooks.onCommit(() => {
+          helpers.stateAdapter.onTransactionCommit(txCtx, () => {
             helpers.observabilityHelper.chainDeleted(stateChain);
           });
         }
       }
-      helpers.notifyHelper.notifyJobAttemptsLost(
-        txHooks,
+      notifyOnCommit(
+        helpers,
+        txCtx,
+        helpers.notifyHelper.notifyJobAttemptsLost,
         verdicts
           .flatMap((verdict) =>
             verdict !== undefined && !Array.isArray(verdict) ? [verdict.head, verdict.tail] : [],
@@ -860,15 +849,13 @@ export const createClient = <
       options: {
         id: TJobId;
         schedule?: ScheduleOptions;
-        txHooks: TxHooks;
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<ResolvedJob<TJobId, TWorkerId, TJobTypeDefinitions, TJobTypeName>> => {
-      const { id, schedule, txHooks, ...rest } = options;
+      const { id, schedule, ...rest } = options;
       try {
         const [job] = await client.rescheduleJobs<TJobTypeName>({
           ids: [id],
           schedule,
-          txHooks,
           ...(rest as GetStateAdapterTxContext<TStateAdapter>),
         });
         return job;
@@ -895,12 +882,10 @@ export const createClient = <
       options: {
         ids: TJobId[];
         schedule?: ScheduleOptions;
-        txHooks: TxHooks;
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<ResolvedJob<TJobId, TWorkerId, TJobTypeDefinitions, TJobTypeName>[]> => {
-      const { ids, schedule, txHooks, ...rest } = options;
+      const { ids, schedule, ...rest } = options;
       const txCtx = requireTxCtx(helpers.stateAdapter, rest, "rescheduleJobs");
-      requireTxHooks(txHooks, "rescheduleJobs");
 
       if (ids.length === 0) return [];
       const existingJobs = await helpers.stateAdapter.getJobs({
@@ -937,7 +922,6 @@ export const createClient = <
 
       const rescheduledOrMissing = await rescheduleJobs(helpers, {
         txCtx,
-        txHooks,
         jobs: ids.map((id: TJobId) => ({ jobId: id, schedule })),
       });
       const rescheduled = rescheduledOrMissing.map((stateJob, index) => {
@@ -978,13 +962,11 @@ export const createClient = <
       options: {
         typeName: TChainTypeName;
         id: TJobId;
-        txHooks: TxHooks;
         handler: THandler;
       } & GetStateAdapterTxContext<TStateAdapter>,
     ): Promise<TResult> => {
-      const { id, typeName, handler, txHooks, ...rest } = options;
+      const { id, typeName, handler, ...rest } = options;
       const txCtx = requireTxCtx(helpers.stateAdapter, rest, "completeChain");
-      requireTxHooks(txHooks, "completeChain");
       const stateChains = await helpers.stateAdapter.getChains({
         txCtx,
         chainIds: [id],
@@ -1014,7 +996,6 @@ export const createClient = <
         completeCallback: (
           options: {
             complete: (outcome: AnyWorkerlessOutcome) => Promise<AnyJob & { continuedTo?: AnyJob }>;
-            txHooks: TxHooks;
           } & BaseTxContext,
         ) => Promise<AnyJob & { continuedTo?: AnyJob }>,
       ): Promise<AnyJob & { continuedTo?: AnyJob }> => {
@@ -1052,7 +1033,6 @@ export const createClient = <
                     job: stateJob,
                     output: outcome.output,
                     txCtx,
-                    txHooks,
                     attemptToken: null,
                     workerId: null,
                   })
@@ -1060,7 +1040,6 @@ export const createClient = <
                     job: stateJob,
                     continueWith: outcome.continueWith,
                     txCtx,
-                    txHooks,
                     attemptToken: null,
                     workerId: null,
                   });
@@ -1074,7 +1053,6 @@ export const createClient = <
         );
 
         const callbackResult = await completeCallback({
-          txHooks,
           complete: async (outcome) =>
             mapStateJobToJob(await completeOnce.call(outcome), helpers.jobTypes),
           ...txCtx,
@@ -1083,14 +1061,14 @@ export const createClient = <
         const { continuation, ...finishedJob } = completeOnce.requireResult(
           "complete must be called before the completeJob callback returns",
         );
-        txHooks.onCommit(() => {
+        helpers.stateAdapter.onTransactionCommit(txCtx, () => {
           helpers.observabilityHelper.completeJobSpan(finishedJob, {
             continuedWith: continuation,
             chainCompleted: continuation === undefined,
           });
         });
         if (wasRunning) {
-          helpers.notifyHelper.notifyJobAttemptsLost(txHooks, [job.id]);
+          notifyOnCommit(helpers, txCtx, helpers.notifyHelper.notifyJobAttemptsLost, [job.id]);
         }
 
         return callbackResult.continuedTo ?? callbackResult;

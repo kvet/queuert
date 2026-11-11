@@ -19,7 +19,7 @@ import { TabItem, Tabs } from "../../../../components/mdx/Tabs.tsx";
 export const meta = {
   title: "PostgreSQL State Adapter",
   description:
-    "Store chains, jobs and workers in PostgreSQL with pg, postgres.js, Bun SQL, Drizzle, Kysely, Prisma or Knex.",
+    "Store chains, jobs and workers in PostgreSQL with pg, postgres.js, Bun SQL, Drizzle, Kysely, Prisma, Knex or MikroORM.",
 };
 
 const options = (): FieldItem[] => [
@@ -85,6 +85,7 @@ const Page = () => (
             { name: "Kysely", tab: "Kysely", packages: "kysely · pg" },
             { name: "Prisma", tab: "Prisma", packages: "@prisma/client · @prisma/adapter-pg · pg" },
             { name: "Knex", tab: "Knex", packages: "knex · pg" },
+            { name: "MikroORM", tab: "MikroORM", packages: "@mikro-orm/postgresql · kysely" },
           ],
         },
       ]}
@@ -167,6 +168,25 @@ const Page = () => (
           title="src/index.ts"
         />
       </TabItem>
+      <TabItem label="MikroORM">
+        <ExampleCode example="state-postgres-mikro-orm" file="src/provider.ts" />
+        <p>
+          <code>skipTables</code> keeps MikroORM's schema diff from dropping Queuert's tables, which{" "}
+          <code>migrateToLatest()</code> manages:
+        </p>
+        <ExampleCode
+          example="state-postgres-mikro-orm"
+          file="src/index.ts"
+          region="orm"
+          title="src/index.ts"
+        />
+        <ExampleCode
+          example="state-postgres-mikro-orm"
+          file="src/index.ts"
+          region="adapter"
+          title="src/index.ts"
+        />
+      </TabItem>
     </Tabs>
 
     <h2>Configuration</h2>
@@ -200,10 +220,14 @@ const Page = () => (
       that <code>classifyError</code> names a missing table.{" "}
       <code>createPgStateProviderConformanceContext</code> prepares the context they run against: it
       takes a <code>createStateProvider</code> factory and a <code>withNonTransactionContext</code>{" "}
-      that runs a callback with a context outside any transaction, and migrates the schema once.
-      Each case then builds its own adapter over a new provider from your factory, with the tables
-      cleared, and closes both when it ends. The suite drives no test runner: your test file owns
-      the database in its own hooks and registers one test per case, as each example does:
+      that runs a callback with a context outside any transaction, and migrates the schema once. An
+      optional <code>withSavepoint</code> runs a callback in a savepoint of a transaction, opened
+      the way your application opens one, and passes it the savepoint's context; when you give it,
+      the cases check that <code>onTransactionCommit</code> and <code>onTransactionRollback</code>{" "}
+      follow savepoints. Each case then builds its own adapter over a new provider from your
+      factory, with the tables cleared, and closes both when it ends. The suite drives no test
+      runner: your test file owns the database in its own hooks and registers one test per case, as
+      each example does:
     </p>
     <Tabs syncKey="postgres-driver">
       <TabItem label="pg">
@@ -257,6 +281,14 @@ const Page = () => (
       <TabItem label="Knex">
         <ExampleCode
           example="state-postgres-knex"
+          file="src/provider.spec.ts"
+          region="conformance"
+          title="src/provider.spec.ts"
+        />
+      </TabItem>
+      <TabItem label="MikroORM">
+        <ExampleCode
+          example="state-postgres-mikro-orm"
           file="src/provider.spec.ts"
           region="conformance"
           title="src/provider.spec.ts"
@@ -356,6 +388,7 @@ const Page = () => (
         "state-postgres-kysely",
         "state-postgres-prisma",
         "state-postgres-knex",
+        "state-postgres-mikro-orm",
         "state-postgres-multi-worker",
       ]}
     />

@@ -1,17 +1,19 @@
-import type {
-  OrderDirection,
-  Page,
-  ScheduleOptions,
-  StateAdapterConfig,
-  StateBlockedJob,
-  StateChain,
-  StateChainInfo,
-  StateCount,
-  StateJob,
-  StateJobBlockerInfo,
-  StateJobInfo,
-  StateAdapter,
-  StateWorkerInfo,
+import {
+  type OrderDirection,
+  type Page,
+  type ScheduleOptions,
+  type StateAdapterConfig,
+  type StateBlockedJob,
+  type StateChain,
+  type StateChainInfo,
+  type StateCount,
+  type StateJob,
+  type StateJobBlockerInfo,
+  type StateJobInfo,
+  type StateAdapter,
+  type StateWorkerInfo,
+  type TxHooks,
+  withTxHooks,
 } from "queuert";
 
 type MemoryWorker = Omit<StateWorkerInfo, "expired">;
@@ -23,7 +25,10 @@ type MemoryState = {
   workers: Map<string, MemoryWorker>;
 };
 
-export type MemoryTxContext = { transaction: { state: MemoryState | undefined } | undefined };
+export type MemoryTxContext = {
+  transaction: { state: MemoryState | undefined } | undefined;
+  txHooks: TxHooks;
+};
 
 export type MemoryStateAdapter = StateAdapter<MemoryTxContext, string, string>;
 
@@ -184,16 +189,18 @@ export const createMemoryStateAdapter = (
   };
 
   const withTransaction = async <T>(fn: (txCtx: MemoryTxContext) => Promise<T>): Promise<T> =>
-    serialized(async () => {
-      const transaction: { state: MemoryState | undefined } = { state: committed };
-      try {
-        const result = await fn({ transaction });
-        committed = transaction.state!;
-        return result;
-      } finally {
-        transaction.state = undefined;
-      }
-    });
+    withTxHooks(async (txHooks) =>
+      serialized(async () => {
+        const transaction: { state: MemoryState | undefined } = { state: committed };
+        try {
+          const result = await fn({ transaction, txHooks });
+          committed = transaction.state!;
+          return result;
+        } finally {
+          transaction.state = undefined;
+        }
+      }),
+    );
 
   const read = async <T>(
     txCtx: MemoryTxContext | undefined,
@@ -222,6 +229,12 @@ export const createMemoryStateAdapter = (
     withTransaction,
 
     isTransaction: (txCtx) => txCtx.transaction?.state !== undefined,
+    onTransactionCommit: (txCtx, callback) => {
+      txCtx.txHooks.onCommit(callback);
+    },
+    onTransactionRollback: (txCtx, callback) => {
+      txCtx.txHooks.onRollback(callback);
+    },
 
     getChains: async ({ txCtx, chainIds }) =>
       read(txCtx, (state) =>

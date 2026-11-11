@@ -35,6 +35,7 @@ const Page = () => (
         "state-postgres-kysely",
         "state-postgres-prisma",
         "state-postgres-knex",
+        "state-postgres-mikro-orm",
         "state-postgres-bun-sql",
       ]}
     />
@@ -42,8 +43,8 @@ const Page = () => (
     <p>
       SQLite allows one writer at a time. Most examples create one <code>createAsyncRwLock()</code>,
       pass it to the provider, and hold its write lock around the transaction a handler passes to{" "}
-      <code>complete</code>. The Kysely and Knex examples need no lock, because their size-1
-      better-sqlite3 pool already serializes writers.
+      <code>complete</code>. The Kysely, Knex and MikroORM examples need no lock, because their
+      size-1 better-sqlite3 pool already serializes writers.
     </p>
     <ExampleRows
       title="@queuert/sqlite"
@@ -54,6 +55,7 @@ const Page = () => (
         "state-sqlite-kysely",
         "state-sqlite-prisma",
         "state-sqlite-knex",
+        "state-sqlite-mikro-orm",
         "state-sqlite-bun-sqlite",
         "state-sqlite-bun-sql",
       ]}
