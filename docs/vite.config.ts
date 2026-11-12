@@ -6,9 +6,11 @@ import { defineConfig } from "vite";
 import { content, contentDirectory, readPages } from "./plugins/content.ts";
 import { dashboardDemoWorker, writeDashboardDemoWorker } from "./plugins/dashboard-demo-worker.ts";
 import { writeSearchIndex } from "./plugins/search-index.ts";
+import { writeSiteFiles } from "./plugins/site-files.ts";
 import { flattenStaticOutput } from "./plugins/static-output.ts";
+import { siteUrl } from "./src/docs/site.ts";
 
-const base = "/queuert/";
+const base = new URL(siteUrl).pathname;
 
 export default defineConfig({
   base,
@@ -30,6 +32,7 @@ export default defineConfig({
           await flattenStaticOutput(publicDirectory, base);
           await writeDashboardDemoWorker(publicDirectory);
           await writeSearchIndex(publicDirectory, { base, contentDirectory, readPages });
+          await writeSiteFiles(publicDirectory, { base, readPages });
         },
       },
     }),

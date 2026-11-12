@@ -1,4 +1,4 @@
-import { Title } from "@solidjs/meta";
+import { Meta, Title } from "@solidjs/meta";
 import { A } from "@solidjs/router";
 
 import { openSearch } from "./Search.tsx";
@@ -6,6 +6,7 @@ import { openSearch } from "./Search.tsx";
 export const NotFound = () => (
   <main class="mx-auto max-w-xl px-6 py-24 text-center">
     <Title>Not found · Queuert</Title>
+    <Meta name="robots" content="noindex" />
     <p class="text-xs font-mono tracking-wider text-fg-subtle uppercase">404</p>
     <h1 class="mt-2 text-xl font-semibold">This page doesn't exist</h1>
     <p class="mt-3 text-fg-muted">

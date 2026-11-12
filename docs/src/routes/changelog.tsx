@@ -1,10 +1,10 @@
 import { Box } from "@queuert/ui/components";
-import { Meta, Title } from "@solidjs/meta";
 import { For, Show } from "solid-js";
 import changelog from "virtual:changelog";
 
 import { ExternalLinkIcon, TagIcon } from "../components/icons.tsx";
 import { Badge } from "../components/mdx/Badge.tsx";
+import { PageMeta } from "../components/PageMeta.tsx";
 import { Toc } from "../components/Toc.tsx";
 
 const anchor = (tag: string) =>
@@ -25,8 +25,11 @@ const ChangelogRoute = () => {
   const releases = changelog.releases;
   return (
     <div class="mx-auto flex max-w-300 gap-12 px-4 pt-8 pb-24 sm:px-6">
-      <Title>Changelog · Queuert</Title>
-      <Meta name="description" content="Release notes for every Queuert version." />
+      <PageMeta
+        title="Changelog · Queuert"
+        description="Release notes for every Queuert version."
+        path="/changelog/"
+      />
       <main class="min-w-0 flex-1">
         <p class="text-xs text-fg-subtle">Changelog</p>
         <h1 class="mt-3 text-xl font-semibold tracking-tight sm:text-2xl">Release notes</h1>

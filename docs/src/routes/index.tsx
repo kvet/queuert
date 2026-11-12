@@ -1,5 +1,4 @@
 import { Box, type IconProps } from "@queuert/ui/components";
-import { Meta, Title } from "@solidjs/meta";
 import { A } from "@solidjs/router";
 import { For, type JSX, Show } from "solid-js";
 
@@ -27,7 +26,9 @@ import {
 import { CodeTour } from "../components/landing/CodeTour.tsx";
 import { LiveChain } from "../components/landing/LiveChain.tsx";
 import { LinkCard } from "../components/mdx/Cards.tsx";
+import { PageMeta } from "../components/PageMeta.tsx";
 import { compareNeighbors } from "../data/comparison.ts";
+import { siteDescription } from "../docs/site.ts";
 
 const github = "https://github.com/kvet/queuert";
 
@@ -168,10 +169,10 @@ const FeatureCard = (props: (typeof features)[number]) => (
 
 const Home = () => (
   <main>
-    <Title>Queuert · Durable, typed job chains in your database</Title>
-    <Meta
-      name="description"
-      content="Durable, typed job chains that commit with your database transactions."
+    <PageMeta
+      title="Queuert · Durable, typed job chains in your database"
+      description={siteDescription}
+      path="/"
     />
 
     <div class="border-b border-border">

@@ -25,7 +25,7 @@ type SearchOptions = {
 
 const maxSectionText = 700;
 
-const inlineTags = new Set([
+export const inlineTags = new Set([
   "a",
   "abbr",
   "b",
@@ -44,7 +44,7 @@ const inlineTags = new Set([
 
 const skippedTags = new Set(["button", "script", "style", "svg", "template"]);
 
-const pageHref = (page: SourcePage) => (page.slug === "" ? "/" : `/${page.slug}/`);
+export const pageHref = (page: SourcePage) => (page.slug === "" ? "/" : `/${page.slug}/`);
 
 const sectionLabel = (page: SourcePage): string => {
   if (page.api) {
@@ -59,7 +59,7 @@ const sectionLabel = (page: SourcePage): string => {
   return "Docs";
 };
 
-const findContent = (node: Root | Element): Element | undefined => {
+export const findContent = (node: Root | Element): Element | undefined => {
   for (const child of node.children) {
     if (child.type !== "element") continue;
     if (child.properties.dataPageContent !== undefined) return child;
@@ -69,7 +69,7 @@ const findContent = (node: Root | Element): Element | undefined => {
   return undefined;
 };
 
-const isSkipped = (element: Element) =>
+export const isSkipped = (element: Element) =>
   skippedTags.has(element.tagName) ||
   element.properties.dataBoxHeader !== undefined ||
   element.properties.dataCodeLang !== undefined ||

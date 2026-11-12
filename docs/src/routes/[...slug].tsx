@@ -1,5 +1,4 @@
 import { ChevronRightIcon } from "@queuert/ui/components";
-import { Meta, Title } from "@solidjs/meta";
 import { A, type RouteDefinition, useParams } from "@solidjs/router";
 import { HttpStatusCode } from "@solidjs/start";
 import { type Component, For, Show, Suspense, lazy } from "solid-js";
@@ -11,6 +10,7 @@ import { ArrowRightIcon } from "../components/icons.tsx";
 import { Badge } from "../components/mdx/Badge.tsx";
 import { mdxComponents } from "../components/mdx/components.ts";
 import { NotFound } from "../components/NotFound.tsx";
+import { PageMeta } from "../components/PageMeta.tsx";
 import { Toc } from "../components/Toc.tsx";
 import {
   type DocModule,
@@ -87,10 +87,11 @@ const Article = (props: { page: DocPage; module: DocModule }) => {
 
   return (
     <article>
-      <Title>{`${isPackageIndex() ? pkg()!.label : props.page.title} · Queuert`}</Title>
-      <Show when={props.page.description}>
-        {(description) => <Meta name="description" content={description()} />}
-      </Show>
+      <PageMeta
+        title={`${isPackageIndex() ? pkg()!.label : props.page.title} · Queuert`}
+        description={isPackageIndex() ? pkg()!.summary : props.page.description}
+        path={pageHref(props.page)}
+      />
       <nav class="mb-4 flex items-center gap-1.5 text-xs text-fg-subtle" aria-label="Breadcrumb">
         <For each={trail(props.page)}>
           {(crumb, index) => (

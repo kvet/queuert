@@ -1,19 +1,19 @@
-import { Meta, Title } from "@solidjs/meta";
 import { A } from "@solidjs/router";
 import { For, Show } from "solid-js";
 
 import { packageName } from "../../components/api/ApiPackageIndex.tsx";
 import { ArticleLayout, DocsShell } from "../../components/DocsShell.tsx";
 import { ArrowRightIcon, PackageIcon } from "../../components/icons.tsx";
+import { PageMeta } from "../../components/PageMeta.tsx";
 import { apiTree, kindLabels, pageHref } from "../../docs/pages.ts";
 
 const ApiOverview = () => (
   <DocsShell section="api">
     <ArticleLayout wide>
-      <Title>API Reference · Queuert</Title>
-      <Meta
-        name="description"
-        content="Generated reference for every exported symbol of the Queuert packages."
+      <PageMeta
+        title="API Reference · Queuert"
+        description="Generated reference for every exported symbol of the Queuert packages."
+        path="/api/"
       />
       <p class="text-xs text-fg-subtle">API</p>
       <h1 class="mt-3 text-xl font-semibold tracking-tight sm:text-2xl">API Reference</h1>
