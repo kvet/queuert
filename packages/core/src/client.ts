@@ -1,4 +1,6 @@
-import { raceWithSleep, setLongTimeout, createCallOnce, type IsUnion } from "@queuert/helpers";
+import { createCallOnce } from "@queuert/helpers/call-once";
+import { raceWithSleep, setLongTimeout } from "@queuert/helpers/sleep";
+import type { IsUnion } from "@queuert/helpers/typescript";
 
 import type { AttemptCompleteResult, AttemptOutcome } from "./attempt/attempt-handler.types.ts";
 import {

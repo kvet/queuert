@@ -1,4 +1,4 @@
-import { sleep } from "@queuert/helpers";
+import { sleep } from "@queuert/helpers/sleep";
 import { describe, expect, test } from "vitest";
 
 import { createClient } from "./client.ts";

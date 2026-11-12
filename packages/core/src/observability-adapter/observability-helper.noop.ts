@@ -1,4 +1,4 @@
-import { noop } from "@queuert/helpers";
+import { noop } from "@queuert/helpers/noop";
 
 import type { ObservabilityHelper } from "./observability-helper.ts";
 

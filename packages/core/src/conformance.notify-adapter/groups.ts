@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { raceWithSleep, sleep } from "@queuert/helpers";
+import { raceWithSleep, sleep } from "@queuert/helpers/sleep";
 
 import { retryUntilPasses } from "../conformance/retry-until-passes.ts";
 import type { ConformanceGroup } from "../conformance/runner.ts";

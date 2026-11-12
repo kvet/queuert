@@ -1,4 +1,4 @@
-import { createLatch } from "@queuert/helpers";
+import { createLatch } from "@queuert/helpers/latch";
 import type { Pool, PoolClient } from "pg";
 
 import type { PgNotifyProvider } from "./notify-provider.pg.ts";

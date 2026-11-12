@@ -1,4 +1,6 @@
-import { createResettableLatch, isThenable, noop } from "@queuert/helpers";
+import { createResettableLatch } from "@queuert/helpers/latch";
+import { noop } from "@queuert/helpers/noop";
+import { isThenable } from "@queuert/helpers/promise";
 
 import { HookRegistry } from "./hook-registry.ts";
 

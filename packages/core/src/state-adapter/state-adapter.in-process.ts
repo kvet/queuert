@@ -1,4 +1,5 @@
-import { createAsyncRwLock, createLatch } from "@queuert/helpers";
+import { createAsyncRwLock } from "@queuert/helpers/async-rw-lock";
+import { createLatch } from "@queuert/helpers/latch";
 
 import type { DeduplicationOptions } from "../entities/deduplication.ts";
 import type { OrderDirection, Page, PageParams } from "../entities/pagination.ts";

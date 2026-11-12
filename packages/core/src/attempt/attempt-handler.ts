@@ -1,4 +1,5 @@
-import { serializeError, createLatch, createResettableLatch } from "@queuert/helpers";
+import { createLatch, createResettableLatch } from "@queuert/helpers/latch";
+import { serializeError } from "@queuert/helpers/serialize-error";
 
 import {
   type AnyAttemptMiddleware,

@@ -3,10 +3,7 @@ import { dirname, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const helpersEntry = resolve(
-  import.meta.dirname,
-  "../../../packages-internal/helpers/src/index.ts",
-);
+const helpersSrc = resolve(import.meta.dirname, "../../../packages-internal/helpers/src");
 
 const importSpecifiers = (source: string): string[] =>
   [...source.matchAll(/(?:from|import)\s*\(?\s*"([^"]+)"/g)].map((match) => match[1]);
@@ -19,8 +16,9 @@ const collectImports = (entry: string): { files: Set<string>; external: Set<stri
     files.add(file);
     for (const specifier of importSpecifiers(readFileSync(file, "utf8"))) {
       if (specifier.startsWith(".")) visit(resolve(dirname(file), specifier));
-      else if (specifier === "@queuert/helpers") visit(helpersEntry);
-      else external.add(specifier);
+      else if (specifier.startsWith("@queuert/helpers/")) {
+        visit(resolve(helpersSrc, `${specifier.slice("@queuert/helpers/".length)}.ts`));
+      } else external.add(specifier);
     }
   };
   visit(entry);

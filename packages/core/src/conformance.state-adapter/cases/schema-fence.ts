@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { sleep } from "@queuert/helpers";
+import { sleep } from "@queuert/helpers/sleep";
 
 import type { ConformanceGroup } from "../../conformance/runner.ts";
 import { SchemaFencedError } from "../../errors.ts";

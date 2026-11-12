@@ -1,4 +1,5 @@
-import { createSharedListener, createLatch } from "@queuert/helpers";
+import { createLatch } from "@queuert/helpers/latch";
+import { createSharedListener } from "@queuert/helpers/shared-listener";
 import type { NotifyAdapter } from "queuert";
 
 import type { RedisNotifyProvider } from "../notify-provider/notify-provider.redis.ts";

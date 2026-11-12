@@ -1,4 +1,4 @@
-import { createLatch } from "@queuert/helpers";
+import { createLatch } from "@queuert/helpers/latch";
 
 import type { NotifyAdapter } from "./notify-adapter.ts";
 

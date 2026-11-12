@@ -12,7 +12,7 @@ import {
   SimpleSpanProcessor,
   TracerProvider,
 } from "@opentelemetry/sdk-trace";
-import { sleep } from "@queuert/helpers";
+import { sleep } from "@queuert/helpers/sleep";
 import {
   JobAlreadyCompletedError,
   type Log,

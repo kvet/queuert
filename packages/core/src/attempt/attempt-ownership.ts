@@ -1,4 +1,4 @@
-import { createLatch } from "@queuert/helpers";
+import { createLatch } from "@queuert/helpers/latch";
 
 import type { Helpers } from "../setup-helpers.ts";
 import type { StateJob } from "../state-adapter/state-adapter.ts";

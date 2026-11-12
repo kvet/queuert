@@ -1,4 +1,5 @@
-import { isPositiveFinite, raceWithSleep, sleep } from "@queuert/helpers";
+import { isPositiveFinite } from "@queuert/helpers/number";
+import { raceWithSleep, sleep } from "@queuert/helpers/sleep";
 
 /** The lease the worker runner registers its worker with. */
 export type WorkerLeaseConfig = {

@@ -1,4 +1,4 @@
-import { sleep } from "@queuert/helpers";
+import { sleep } from "@queuert/helpers/sleep";
 import type { Pool } from "pg";
 import type { NotifyAdapter, StateAdapter } from "queuert";
 import {

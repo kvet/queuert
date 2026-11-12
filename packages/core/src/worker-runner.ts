@@ -1,4 +1,6 @@
-import { isPositiveFinite, sleep, createLatch, createResettableLatch } from "@queuert/helpers";
+import { createLatch, createResettableLatch } from "@queuert/helpers/latch";
+import { isPositiveFinite } from "@queuert/helpers/number";
+import { sleep } from "@queuert/helpers/sleep";
 
 import type {
   AnyAttemptMiddleware,

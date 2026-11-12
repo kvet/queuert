@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { sleep } from "@queuert/helpers";
+import { sleep } from "@queuert/helpers/sleep";
 
 import type { AttemptMiddleware } from "../../attempt-middleware/attempt-middleware.ts";
 import { createClient } from "../../client.ts";

@@ -1,5 +1,6 @@
 import type { NatsConnection } from "@nats-io/nats-core";
-import { createSharedListener, type SharedListenerOpen, createLatch } from "@queuert/helpers";
+import { createLatch } from "@queuert/helpers/latch";
+import { createSharedListener, type SharedListenerOpen } from "@queuert/helpers/shared-listener";
 import type { NotifyAdapter } from "queuert";
 
 const decoder = new TextDecoder();

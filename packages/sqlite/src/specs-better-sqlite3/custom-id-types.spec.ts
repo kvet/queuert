@@ -1,6 +1,6 @@
 import type { UUID } from "node:crypto";
 
-import { createAsyncRwLock } from "@queuert/helpers";
+import { createAsyncRwLock } from "@queuert/helpers/async-rw-lock";
 import Database from "better-sqlite3";
 import {
   createClient,

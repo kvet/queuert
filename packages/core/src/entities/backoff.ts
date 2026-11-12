@@ -1,4 +1,4 @@
-import { isNonNegative, isNonNegativeFinite, isPositiveFinite } from "@queuert/helpers";
+import { isNonNegative, isNonNegativeFinite, isPositiveFinite } from "@queuert/helpers/number";
 
 /** Exponential backoff configuration for retry delays. */
 export type BackoffConfig = {

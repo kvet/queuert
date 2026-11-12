@@ -1,4 +1,4 @@
-import { type AsyncRwLock, createAsyncRwLock } from "@queuert/helpers";
+import { type AsyncRwLock, createAsyncRwLock } from "@queuert/helpers/async-rw-lock";
 import type Database from "better-sqlite3";
 import { type TxHooks, withTxHooks } from "queuert";
 

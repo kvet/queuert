@@ -1,4 +1,4 @@
-import { sleep } from "@queuert/helpers";
+import { sleep } from "@queuert/helpers/sleep";
 import type Database from "better-sqlite3";
 import type { NotifyAdapter, StateAdapter } from "queuert";
 import {

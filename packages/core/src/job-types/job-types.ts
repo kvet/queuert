@@ -1,4 +1,4 @@
-import { isThenable } from "@queuert/helpers";
+import { isThenable } from "@queuert/helpers/promise";
 
 import { JobTypeValidationError } from "../errors.ts";
 import type { BaseJobTypeDefinitions, ResolvedJobTypeReference } from "./job-type.ts";

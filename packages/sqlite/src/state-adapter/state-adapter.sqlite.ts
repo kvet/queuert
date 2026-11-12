@@ -1,6 +1,6 @@
 import type { UUID } from "node:crypto";
 
-import { createLatch } from "@queuert/helpers";
+import { createLatch } from "@queuert/helpers/latch";
 import {
   type DataType,
   type InferColumns,

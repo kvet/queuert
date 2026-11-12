@@ -1,4 +1,4 @@
-import { sleep } from "@queuert/helpers";
+import { sleep } from "@queuert/helpers/sleep";
 
 export const retryUntilPasses = async (
   check: () => void | Promise<void>,

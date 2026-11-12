@@ -1,4 +1,4 @@
-import { isThenable, silence } from "@queuert/helpers";
+import { isThenable, silence } from "@queuert/helpers/promise";
 
 const settledMessage =
   "txHooks were already flushed or discarded; open new tx hooks for a new transaction";

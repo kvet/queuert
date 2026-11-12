@@ -1,4 +1,5 @@
-import { isPositiveFinite, sleep } from "@queuert/helpers";
+import { isPositiveFinite } from "@queuert/helpers/number";
+import { sleep } from "@queuert/helpers/sleep";
 
 /**
  * A free-form migration script: the `up` and `down` of a `non-transactional` migration, and the

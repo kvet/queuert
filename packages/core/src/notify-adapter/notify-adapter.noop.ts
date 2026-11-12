@@ -1,4 +1,4 @@
-import { noopAsync } from "@queuert/helpers";
+import { noopAsync } from "@queuert/helpers/noop";
 
 import type { NotifyAdapter } from "./notify-adapter.ts";
 

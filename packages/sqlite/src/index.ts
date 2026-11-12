@@ -1,4 +1,8 @@
-export { createAsyncRwLock, type AsyncRwLock, type LockHandle } from "@queuert/helpers";
+export {
+  createAsyncRwLock,
+  type AsyncRwLock,
+  type LockHandle,
+} from "@queuert/helpers/async-rw-lock";
 export {
   createSqliteStateAdapter,
   type SqliteStateAdapter,

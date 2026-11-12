@@ -1,4 +1,4 @@
-import { isPositiveSafeInteger } from "@queuert/helpers";
+import { isPositiveSafeInteger } from "@queuert/helpers/number";
 
 import { InvalidJobIdError, InvalidWorkerIdError } from "../errors.ts";
 import type { StateAdapterConfig } from "./state-adapter.ts";

@@ -1,4 +1,5 @@
-import { isThenable, silence, createResettableLatch } from "@queuert/helpers";
+import { createResettableLatch } from "@queuert/helpers/latch";
+import { isThenable, silence } from "@queuert/helpers/promise";
 
 import { HookRegistry } from "./hook-registry.ts";
 import type { TxHooks } from "./tx-hooks.ts";

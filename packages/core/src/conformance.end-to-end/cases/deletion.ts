@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { sleep } from "@queuert/helpers";
+import { sleep } from "@queuert/helpers/sleep";
 
 import { createClient } from "../../client.ts";
 import type { StateAdapterConformanceContext } from "../../conformance.state-adapter/types.ts";
