@@ -1,44 +1,54 @@
-import { noop, noopAsync } from "@queuert/helpers/noop";
-
 import type { NotifyAdapter } from "./notify-adapter.ts";
+import { batchNotify } from "./notify-helper.async-only.ts";
 
+// unasync: rename SyncNotifyHelper
 export type NotifyHelper = {
   notifyJobsScheduled: (typeNames: string[]) => Promise<void>;
   notifyChainsCompleted: (chainIds: string[]) => Promise<void>;
   notifyJobAttemptsLost: (jobIds: string[]) => Promise<void>;
-  listenJobScheduled: NotifyAdapter["listenJobScheduled"];
-  listenChainCompleted: NotifyAdapter["listenChainCompleted"];
-  listenJobAttemptLost: NotifyAdapter["listenJobAttemptLost"];
+  listenJobScheduled: (
+    typeNames: string[],
+    onNotification: (typeName: string) => void,
+  ) => Promise<() => Promise<void>>;
+  listenChainCompleted: (
+    chainId: string,
+    onNotification: () => void,
+  ) => Promise<() => Promise<void>>;
+  listenJobAttemptLost: (jobId: string, onNotification: () => void) => Promise<() => Promise<void>>;
 };
 
-const batchNotify = (notify: (values: string[]) => Promise<void>) => {
-  let pending: Set<string> | undefined;
-  let sending: Promise<void> = Promise.resolve();
-  const sendPending = async (): Promise<void> => {
-    const batch = pending!;
-    pending = undefined;
-    return notify(Array.from(batch)).catch(noop);
-  };
-  return async (values: string[]): Promise<void> => {
-    if (values.length === 0) return;
-    if (pending === undefined) {
-      pending = new Set(values);
-      sending = Promise.resolve().then(sendPending);
-    } else {
-      for (const value of values) pending.add(value);
+// unasync: rename createSyncNotifyHelper
+export const createNotifyHelper = ({ adapter }: { adapter: NotifyAdapter }): NotifyHelper => {
+  const listen = async (
+    subscribe: () => Promise<() => Promise<void>>,
+  ): Promise<() => Promise<void>> => {
+    try {
+      const dispose = await subscribe();
+      return async () => {
+        try {
+          await dispose();
+        } catch {}
+      };
+    } catch {
+      return async () => {};
     }
-    return sending;
+  };
+
+  return {
+    notifyJobsScheduled: batchNotify(async (typeNames) => {
+      await adapter.notifyJobsScheduled(typeNames);
+    }),
+    notifyChainsCompleted: batchNotify(async (chainIds) => {
+      await adapter.notifyChainsCompleted(chainIds);
+    }),
+    notifyJobAttemptsLost: batchNotify(async (jobIds) => {
+      await adapter.notifyJobAttemptsLost(jobIds);
+    }),
+    listenJobScheduled: async (typeNames, onNotification) =>
+      listen(async () => adapter.listenJobScheduled(typeNames, onNotification)),
+    listenChainCompleted: async (chainId, onNotification) =>
+      listen(async () => adapter.listenChainCompleted(chainId, onNotification)),
+    listenJobAttemptLost: async (jobId, onNotification) =>
+      listen(async () => adapter.listenJobAttemptLost(jobId, onNotification)),
   };
 };
-
-export const createNotifyHelper = ({ adapter }: { adapter: NotifyAdapter }): NotifyHelper => ({
-  notifyJobsScheduled: batchNotify(async (typeNames) => adapter.notifyJobsScheduled(typeNames)),
-  notifyChainsCompleted: batchNotify(async (chainIds) => adapter.notifyChainsCompleted(chainIds)),
-  notifyJobAttemptsLost: batchNotify(async (jobIds) => adapter.notifyJobAttemptsLost(jobIds)),
-  listenJobScheduled: async (typeNames, onNotification) =>
-    adapter.listenJobScheduled(typeNames, onNotification).catch(() => noopAsync),
-  listenChainCompleted: async (chainId, onNotification) =>
-    adapter.listenChainCompleted(chainId, onNotification).catch(() => noopAsync),
-  listenJobAttemptLost: async (jobId, onNotification) =>
-    adapter.listenJobAttemptLost(jobId, onNotification).catch(() => noopAsync),
-});

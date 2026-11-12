@@ -56,4 +56,25 @@ describe("wrapNotifyAdapterWithLogging", () => {
       }),
     ]);
   });
+
+  test("reports a failed unsubscribe once and rejects with its error", async () => {
+    const error = new Error("unsubscribe failed");
+    const { wrapped, log } = wrapWithLog({
+      ...noopNotifyAdapter,
+      listenChainCompleted: async () => async () => {
+        throw error;
+      },
+    });
+
+    const dispose = await wrapped.listenChainCompleted("chain-a", () => {});
+    expect(log).not.toHaveBeenCalled();
+    await expect(dispose()).rejects.toBe(error);
+    expect(log.mock.calls.map(([entry]) => entry)).toEqual([
+      expect.objectContaining({
+        type: "notify_adapter_error",
+        data: { operation: "listenChainCompleted" },
+        error,
+      }),
+    ]);
+  });
 });

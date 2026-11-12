@@ -1,6 +1,9 @@
+import { reportErrors } from "@queuert/helpers/report-errors.async-only";
+
 import type { ObservabilityHelper } from "../observability-adapter/observability-helper.ts";
 import type { NotifyAdapter } from "./notify-adapter.ts";
 
+// unasync: rename wrapSyncNotifyAdapterWithLogging
 export const wrapNotifyAdapterWithLogging = ({
   notifyAdapter,
   observabilityHelper,
@@ -9,31 +12,26 @@ export const wrapNotifyAdapterWithLogging = ({
   observabilityHelper: ObservabilityHelper;
 }): NotifyAdapter => {
   const wrap = <T extends (...args: never[]) => Promise<unknown>>(
-    operationName: keyof NotifyAdapter,
+    operationName: Extract<keyof NotifyAdapter, string>,
     fn: T,
-  ): T => {
-    const onError = (error: unknown): never => {
+  ): T =>
+    reportErrors(fn, (error) => {
       observabilityHelper.notifyAdapterError(operationName, error);
-      throw error;
-    };
-    // oxlint-disable-next-line typescript/promise-function-async -- an async wrapper would add a promise per adapter call
-    return ((...args) => {
-      try {
-        return fn(...args).catch(onError);
-      } catch (error) {
-        // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- re-rejecting a caught error
-        return Promise.reject(error).catch(onError);
-      }
-    }) as T;
-  };
+    });
+  const wrapListen = <T extends (...args: never[]) => Promise<() => Promise<void>>>(
+    operationName: Extract<keyof NotifyAdapter, string>,
+    listen: T,
+  ): T =>
+    wrap(operationName, (async (...args: Parameters<T>) =>
+      wrap(operationName, await listen(...args))) as T);
 
   return {
     notifyJobsScheduled: wrap("notifyJobsScheduled", notifyAdapter.notifyJobsScheduled),
-    listenJobScheduled: wrap("listenJobScheduled", notifyAdapter.listenJobScheduled),
+    listenJobScheduled: wrapListen("listenJobScheduled", notifyAdapter.listenJobScheduled),
     notifyChainsCompleted: wrap("notifyChainsCompleted", notifyAdapter.notifyChainsCompleted),
-    listenChainCompleted: wrap("listenChainCompleted", notifyAdapter.listenChainCompleted),
+    listenChainCompleted: wrapListen("listenChainCompleted", notifyAdapter.listenChainCompleted),
     notifyJobAttemptsLost: wrap("notifyJobAttemptsLost", notifyAdapter.notifyJobAttemptsLost),
-    listenJobAttemptLost: wrap("listenJobAttemptLost", notifyAdapter.listenJobAttemptLost),
+    listenJobAttemptLost: wrapListen("listenJobAttemptLost", notifyAdapter.listenJobAttemptLost),
     close: notifyAdapter.close,
     [Symbol.asyncDispose]: notifyAdapter.close,
   };
