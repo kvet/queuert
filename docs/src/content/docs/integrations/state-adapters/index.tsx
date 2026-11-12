@@ -26,7 +26,6 @@ const adapters: OptionCard[] = [
   },
   {
     name: "SQLite",
-    status: { label: "experimental", tone: "caution" },
     pick: "Suitable for local development, CLI tools, and embedded applications.",
     facts: [
       { label: "Package", value: "@queuert/sqlite" },

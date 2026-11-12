@@ -6,8 +6,6 @@ import type { BaseTxContext } from "queuert";
  * {@link SqliteStateProvider.classifyError}.
  *
  * - `undefined_table` — a `no such table: <table>` error, with the missing table's name.
- *
- * @experimental
  */
 export type SqliteStateProviderError = { kind: "undefined_table"; tableName: string };
 
@@ -24,7 +22,6 @@ export type SqliteStateProviderError = { kind: "undefined_table"; tableName: str
  * the same connection.
  *
  * @typeParam TTxContext - The transaction context type containing database client/connection info
- * @experimental
  */
 export type SqliteStateProvider<TTxContext extends BaseTxContext> = {
   /**

@@ -110,8 +110,8 @@ const Page = () => (
         adapter ship as open-source packages.
       </li>
       <li>
-        <strong>More storage and wakeup options.</strong> Postgres or SQLite (experimental), and
-        workers that wake on <code>LISTEN/NOTIFY</code>, Redis, or NATS.
+        <strong>More storage and wakeup options.</strong> Postgres or SQLite, and workers that wake
+        on <code>LISTEN/NOTIFY</code>, Redis, or NATS.
       </li>
     </ul>
     <h2>Differences worth knowing about</h2>

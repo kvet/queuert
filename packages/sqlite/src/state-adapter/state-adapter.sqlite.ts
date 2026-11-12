@@ -471,7 +471,6 @@ const mapDbChainRowToStateChain = (row: DbChainRow): StateChain => {
  *
  * @param options - SQLite state adapter configuration.
  * @throws Error if `tablePrefix`, `jobIdType` or `workerIdType` is not a valid SQL identifier.
- * @experimental
  */
 export const createSqliteStateAdapter = <
   TTxContext extends BaseTxContext,
@@ -2551,7 +2550,6 @@ ORDER BY w.key
 
 /**
  * SQLite state adapter type. Includes `migrateToLatest` for schema migrations.
- * @experimental
  */
 export type SqliteStateAdapter<
   TTxContext extends BaseTxContext,

@@ -4,7 +4,6 @@ import { ExampleCode } from "../../../../components/ExampleCode.tsx";
 import { ExampleRows } from "../../../../components/ExampleList.tsx";
 import { FieldList, type FieldItem } from "../../../../components/FieldList.tsx";
 import { ClientTiles } from "../../../../components/integrations/ClientTiles.tsx";
-import { ExperimentalAside } from "../../../../components/integrations/ExperimentalAside.tsx";
 import {
   SchemaIndexes,
   SchemaTables,
@@ -59,8 +58,6 @@ const Page = () => (
       applications. SQLite allows a single writer at a time, so all writes are serialized, so batch
       operations use sequential queries within a single transaction rather than writeable CTEs.
     </p>
-    <ExperimentalAside package="@queuert/sqlite" />
-
     <h2>Clients</h2>
     <ClientTiles
       syncKey="sqlite-driver"

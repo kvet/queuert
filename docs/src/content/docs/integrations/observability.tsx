@@ -33,7 +33,6 @@ const options: OptionCard[] = [
   },
   {
     name: "Dashboard",
-    status: { label: "experimental", tone: "caution" },
     pick: "An embeddable web UI for observing chains, jobs and workers, mounted on your existing server.",
     facts: [
       { label: "Package", value: "@queuert/dashboard" },

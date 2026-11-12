@@ -120,8 +120,7 @@ const Page = () => (
       </li>
       <li>
         <strong>Storage backends.</strong> pg-boss runs on Postgres and Postgres-compatible
-        databases (CockroachDB, Citus, PGlite). Queuert works against Postgres or SQLite
-        (experimental).
+        databases (CockroachDB, Citus, PGlite). Queuert works against Postgres or SQLite.
       </li>
     </ul>
     <h2>Transactional consistency, both ends</h2>

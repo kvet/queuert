@@ -4,7 +4,6 @@ import { ExampleCode } from "../../../components/ExampleCode.tsx";
 import { ExampleRows } from "../../../components/ExampleList.tsx";
 import { FieldList } from "../../../components/FieldList.tsx";
 import { DashboardDemo } from "../../../components/integrations/dashboard/DashboardDemo.tsx";
-import { ExperimentalAside } from "../../../components/integrations/ExperimentalAside.tsx";
 import { Code } from "../../../components/mdx/Code.tsx";
 import { Steps } from "../../../components/mdx/Steps.tsx";
 
@@ -20,8 +19,6 @@ const Page = () => (
       workers. It mounts as a single <code>fetch</code> handler on your existing server — no
       external build steps or runtime dependencies beyond <code>queuert</code>.
     </p>
-
-    <ExperimentalAside package="@queuert/dashboard" />
 
     <h2>Quick start</h2>
     <Steps>

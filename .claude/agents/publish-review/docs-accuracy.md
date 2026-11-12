@@ -15,7 +15,7 @@ You verify that the Queuert documentation tells the truth about the code and agr
 
 - For each page in `docs/src/content/docs/how-it-works/` and each `docs/src/content/docs/integrations/` page (setup, configuration, schema, the OpenTelemetry catalogue), take its concrete behavioral claims (ordering, retries, transaction boundaries, locking, what a status means) and check them against the implementation. Contradictions are CRITICAL.
 - Code examples in docs and `README.md` use current export names, option shapes, and import paths — would they compile?
-- TSDoc present on every public export, and accurate: documented defaults match the code, `@throws` lists match what is thrown, `@experimental` present on SQLite, NATS, and Dashboard exports.
+- TSDoc present on every public export, and accurate: documented defaults match the code, `@throws` lists match what is thrown, `@experimental` present on NATS exports.
 
 ### 2. Docs vs docs
 

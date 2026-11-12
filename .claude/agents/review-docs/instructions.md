@@ -100,7 +100,7 @@ Look in `docs/src/content/docs/how-it-works/` and `docs/src/content/docs/integra
 - Are new public APIs documented?
 - Are new configuration options described?
 - Are new features mentioned?
-- Does every new or changed public export have TSDoc, with `@defaultValue` and `@throws` matching the code, and `@experimental` on SQLite, NATS, and Dashboard exports?
+- Does every new or changed public export have TSDoc, with `@defaultValue` and `@throws` matching the code, and `@experimental` on NATS exports?
 
 **Cross-references in touched docs**:
 
