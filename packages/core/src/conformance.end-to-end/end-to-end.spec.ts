@@ -99,7 +99,7 @@ describe("stateAdapterEndToEndConformanceCases", () => {
         created.push("notify");
         return trackClose<NotifyAdapter>(createInProcessNotifyAdapter(), closed, "notify");
       },
-      withNonTransactionContext: async (fn) => fn({ inTransaction: false }),
+      withNonTransactionContext: async (fn) => fn({ outsideTransaction: true }),
     };
 
     await findCase(stateAdapterEndToEndConformanceCases, "chains > handles chained jobs").run(
@@ -117,7 +117,7 @@ describe("stateAdapterEndToEndConformanceCases", () => {
   it("runs a notify case over an in-process notify adapter when the context creates none", async () => {
     const context: StateAdapterConformanceContext = {
       createStateAdapter: async () => createInProcessStateAdapter(),
-      withNonTransactionContext: async (fn) => fn({ inTransaction: false }),
+      withNonTransactionContext: async (fn) => fn({ outsideTransaction: true }),
     };
 
     for (const conformanceCase of stateAdapterEndToEndConformanceCases.filter(

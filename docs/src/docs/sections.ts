@@ -50,7 +50,12 @@ export const apiPackages = [
     entry: "src/conformance.ts",
     summary: "Conformance cases for SQLite providers.",
   },
-  { label: "@queuert/redis", dir: "redis", slug: "redis", summary: "Redis notify adapter." },
+  {
+    label: "@queuert/redis",
+    dir: "redis",
+    slug: "redis",
+    summary: "Redis notify adapter and experimental state adapter.",
+  },
   {
     label: "@queuert/redis/conformance",
     dir: "redis",
@@ -134,6 +139,7 @@ export const siteSections: SiteSection[] = [
           "integrations/state-adapters",
           "integrations/state-adapters/postgres",
           "integrations/state-adapters/sqlite",
+          "integrations/state-adapters/redis",
           "integrations/state-adapters/custom",
         ],
       },

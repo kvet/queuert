@@ -3,7 +3,7 @@
  */
 
 import { createDashboard } from "@queuert/dashboard";
-import { createClient, createWorkerRunner, createProcessors, withTxHooks } from "queuert";
+import { createClient, createWorkerRunner, createProcessors } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
 
 import { createCompletionCounter, jobTypes, printHeader, runDoubleRunBenchmark } from "./utils.ts";
@@ -40,10 +40,8 @@ await runDoubleRunBenchmark<Record<string, never>>({
           processors: {
             "test-job": {
               attemptHandler: async ({ complete }) => {
-                const result = await withTxHooks(async (txHooks) =>
-                  stateAdapter.withTransaction(async (ctx) =>
-                    complete({ ...ctx, txHooks, output: { processed: true } }),
-                  ),
+                const result = await stateAdapter.withTransaction(async (ctx) =>
+                  complete({ ...ctx, output: { processed: true } }),
                 );
                 completions.record();
                 return result;
@@ -58,15 +56,12 @@ await runDoubleRunBenchmark<Record<string, never>>({
 
     await processStep(`After processing ${jobCount} jobs`, async () => {
       for (let i = 0; i < jobCount; i++) {
-        await withTxHooks(async (txHooks) =>
-          stateAdapter.withTransaction(async (ctx) =>
-            client.createChain({
-              ...ctx,
-              txHooks,
-              typeName: "test-job",
-              input: { message: `Test message ${i}` },
-            }),
-          ),
+        await stateAdapter.withTransaction(async (ctx) =>
+          client.createChain({
+            ...ctx,
+            typeName: "test-job",
+            input: { message: `Test message ${i}` },
+          }),
         );
       }
       await completions.done;

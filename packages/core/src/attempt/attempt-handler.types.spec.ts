@@ -85,6 +85,7 @@ type ClientStateAdapter = StateAdapter<ClientContext, string, string>;
 declare const txCtx: ClientContext;
 declare const txHooks: TxHooks;
 declare const tx: ClientContext & { txHooks: TxHooks };
+declare const inProcessTx: GetStateAdapterTxContext<InProcessStateAdapter>;
 type Tx = typeof tx;
 
 declare const linearCommit: AttemptComplete<ClientStateAdapter, LinearDefs, "entry", "entry">;
@@ -352,7 +353,7 @@ describe("AttemptHandler", () => {
 
   it("accepts a handler that returns what complete returned", () => {
     const handler: Handler = async ({ complete }) =>
-      complete({ ...tx, continueWith: { typeName: "step", input: { stepValue: true } } });
+      complete({ ...inProcessTx, continueWith: { typeName: "step", input: { stepValue: true } } });
     expectTypeOf(handler).toBeFunction();
     expectTypeOf<Awaited<ReturnType<typeof commitContinue>>>().toExtend<
       Awaited<ReturnType<Handler>>
@@ -368,7 +369,7 @@ describe("AttemptHandler", () => {
   it("rejects a handler that does not return the `complete` result", () => {
     // @ts-expect-error the handler must return what complete returned
     const missing: Handler = async ({ complete }) => {
-      await complete({ ...tx, output: { result: "x" } });
+      await complete({ ...inProcessTx, output: { result: "x" } });
     };
     expectTypeOf(missing).toBeFunction();
   });

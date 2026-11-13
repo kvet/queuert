@@ -121,6 +121,7 @@ npm install queuert
 # State adapter (pick one)
 npm install @queuert/postgres   # PostgreSQL — recommended for production
 npm install @queuert/sqlite     # SQLite
+npm install @queuert/redis      # Redis (experimental)
 
 # Notify adapter (optional, for sub-second wakeup)
 npm install @queuert/redis      # Redis pub/sub

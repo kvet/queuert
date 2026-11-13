@@ -14,7 +14,6 @@ import type { JobTypeProperty } from "./job-types/job-types.resolvers.ts";
 import type { JobTypeDefinitions } from "./job-types/job-types.ts";
 import { mergeJobTypes } from "./job-types/merge-job-types.ts";
 import { createInProcessStateAdapter } from "./state-adapter/state-adapter.in-process.ts";
-import { withTxHooks } from "./tx-hooks/tx-hooks.ts";
 import { createWorkerRunner } from "./worker-runner.ts";
 
 type OrderDefs = {
@@ -46,18 +45,14 @@ const orderProcessors = createProcessors({
   processors: {
     "orders.create": {
       attemptHandler: async ({ complete }) =>
-        withTxHooks(async (txHooks) =>
-          stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, txHooks, output: { orderId: "1" } }),
-          ),
+        stateAdapter.withTransaction(async (txCtx) =>
+          complete({ ...txCtx, output: { orderId: "1" } }),
         ),
     },
     "orders.fulfill": {
       attemptHandler: async ({ complete }) =>
-        withTxHooks(async (txHooks) =>
-          stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, txHooks, output: { fulfilled: true } }),
-          ),
+        stateAdapter.withTransaction(async (txCtx) =>
+          complete({ ...txCtx, output: { fulfilled: true } }),
         ),
     },
   },
@@ -69,10 +64,8 @@ const notificationProcessors = createProcessors({
   processors: {
     "notifications.send": {
       attemptHandler: async ({ complete }) =>
-        withTxHooks(async (txHooks) =>
-          stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, txHooks, output: { sent: true } }),
-          ),
+        stateAdapter.withTransaction(async (txCtx) =>
+          complete({ ...txCtx, output: { sent: true } }),
         ),
     },
   },
@@ -86,10 +79,8 @@ describe("createProcessors", () => {
       processors: {
         "orders.create": {
           attemptHandler: async ({ complete }) =>
-            withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { orderId: "1" } }),
-              ),
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { orderId: "1" } }),
             ),
         },
       },
@@ -107,10 +98,8 @@ describe("createProcessors", () => {
       processors: {
         "billing.charge": {
           attemptHandler: async ({ complete }) =>
-            withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { charged: true } }),
-              ),
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { charged: true } }),
             ),
         },
       },
@@ -144,10 +133,8 @@ describe("createProcessors", () => {
       processors: {
         "orders.create": {
           attemptHandler: async ({ complete }) =>
-            withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { orderId: "1" } }),
-              ),
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { orderId: "1" } }),
             ),
         },
         // @ts-expect-error — "orders.unknown" is not a key of the client's defs
@@ -163,10 +150,8 @@ describe("createProcessors", () => {
       processors: {
         "orders.create": {
           attemptHandler: async ({ complete }) =>
-            withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { orderId: "1" } }),
-              ),
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { orderId: "1" } }),
             ),
         },
       },
@@ -227,10 +212,8 @@ describe("mergeProcessors", () => {
       processors: {
         "billing.charge": {
           attemptHandler: async ({ complete }) =>
-            withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { charged: true } }),
-              ),
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { charged: true } }),
             ),
         },
       },
@@ -270,10 +253,8 @@ describe("mergeProcessors", () => {
       processors: {
         "orders.create": {
           attemptHandler: async ({ complete }) =>
-            withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { orderId: "alt" } }),
-              ),
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { orderId: "alt" } }),
             ),
         },
       },
@@ -292,10 +273,8 @@ describe("mergeProcessors", () => {
       processors: {
         "orders.create": {
           attemptHandler: async ({ complete }) =>
-            withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { orderId: "1" } }),
-              ),
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { orderId: "1" } }),
             ),
         },
       },
@@ -317,10 +296,8 @@ describe("mergeProcessors", () => {
       processors: {
         "orders.create": {
           attemptHandler: async ({ complete }) =>
-            withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { orderId: "alt" } }),
-              ),
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { orderId: "alt" } }),
             ),
         },
       },
@@ -372,10 +349,8 @@ describe("cross-slice blocker type resolution", () => {
       processors: {
         "notif.send": {
           attemptHandler: async ({ complete }) =>
-            withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { sentAt: "now" } }),
-              ),
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { sentAt: "now" } }),
             ),
         },
       },
@@ -387,27 +362,22 @@ describe("cross-slice blocker type resolution", () => {
       processors: {
         "orders.place": {
           attemptHandler: async ({ complete }) =>
-            withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({
-                  ...txCtx,
-                  txHooks,
-                  continueWith: {
-                    typeName: "orders.confirm",
-                    input: { orderId: 1 },
-                    blockers: [] as never,
-                  },
-                }),
-              ),
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({
+                ...txCtx,
+                continueWith: {
+                  typeName: "orders.confirm",
+                  input: { orderId: 1 },
+                  blockers: [] as never,
+                },
+              }),
             ),
         },
         "orders.confirm": {
           attemptHandler: async ({ job, complete }) => {
             expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ sentAt: string }>();
-            return withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { confirmedAt: "now" } }),
-              ),
+            return stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { confirmedAt: "now" } }),
             );
           },
         },
@@ -455,27 +425,22 @@ describe("cross-slice blocker type resolution", () => {
       processors: {
         "orders.place": {
           attemptHandler: async ({ complete }) =>
-            withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({
-                  ...txCtx,
-                  txHooks,
-                  continueWith: {
-                    typeName: "orders.confirm",
-                    input: { orderId: 1 },
-                    blockers: [] as never,
-                  },
-                }),
-              ),
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({
+                ...txCtx,
+                continueWith: {
+                  typeName: "orders.confirm",
+                  input: { orderId: 1 },
+                  blockers: [] as never,
+                },
+              }),
             ),
         },
         "orders.confirm": {
           attemptHandler: async ({ job, complete }) => {
             expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ sentAt: string }>();
-            return withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { confirmedAt: "now" } }),
-              ),
+            return stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { confirmedAt: "now" } }),
             );
           },
         },
@@ -527,10 +492,8 @@ describe("cross-slice blocker type resolution", () => {
         "local.finish": {
           attemptHandler: async ({ job, complete }) => {
             expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ aResult: string }>();
-            return withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { done: true } }),
-              ),
+            return stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { done: true } }),
             );
           },
         },
@@ -582,10 +545,8 @@ describe("cross-slice blocker type resolution", () => {
         "local.finish": {
           attemptHandler: async ({ job, complete }) => {
             expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ aResult: string }>();
-            return withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { done: true } }),
-              ),
+            return stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { done: true } }),
             );
           },
         },
@@ -647,20 +608,16 @@ describe("cross-slice blocker type resolution", () => {
         "local.finish-a": {
           attemptHandler: async ({ job, complete }) => {
             expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ aResult: string }>();
-            return withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { resultA: "pass" } }),
-              ),
+            return stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { resultA: "pass" } }),
             );
           },
         },
         "local.finish-b": {
           attemptHandler: async ({ job, complete }) => {
             expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ bResult: number }>();
-            return withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { resultB: "pass" } }),
-              ),
+            return stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { resultB: "pass" } }),
             );
           },
         },
@@ -707,49 +664,40 @@ describe("cross-slice blocker type resolution in workerless completion", () => {
     const stateAdapter = createInProcessStateAdapter();
     const client = createClient({ stateAdapter, jobTypes: mergedJobTypes });
 
-    const blockerChain = await withTxHooks(async (txHooks) =>
-      stateAdapter.withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          txHooks,
-          typeName: "ext-a.task",
-          input: { aId: "a-1" },
-        }),
-      ),
+    const blockerChain = await stateAdapter.withTransaction(async (txCtx) =>
+      client.createChain({
+        ...txCtx,
+        typeName: "ext-a.task",
+        input: { aId: "a-1" },
+      }),
     );
 
-    const chain = await withTxHooks(async (txHooks) =>
-      stateAdapter.withTransaction(async (txCtx) =>
-        client.createChain({
-          ...txCtx,
-          txHooks,
-          typeName: "local.start",
-          input: { id: "1" },
-        }),
-      ),
+    const chain = await stateAdapter.withTransaction(async (txCtx) =>
+      client.createChain({
+        ...txCtx,
+        typeName: "local.start",
+        input: { id: "1" },
+      }),
     );
 
-    await withTxHooks(async (txHooks) =>
-      stateAdapter.withTransaction(async (txCtx) =>
-        client.completeChain({
-          ...txCtx,
-          txHooks,
-          ...chain,
-          handler: async ({ job, completeJob }) => {
-            if (job.typeName === "local.start") {
-              return completeJob(job, async ({ complete }) =>
-                complete({
-                  continueWith: {
-                    typeName: "local.finish",
-                    input: { id: "1" },
-                    blockers: [blockerChain],
-                  },
-                }),
-              );
-            }
-          },
-        }),
-      ),
+    await stateAdapter.withTransaction(async (txCtx) =>
+      client.completeChain({
+        ...txCtx,
+        ...chain,
+        handler: async ({ job, completeJob }) => {
+          if (job.typeName === "local.start") {
+            return completeJob(job, async ({ complete }) =>
+              complete({
+                continueWith: {
+                  typeName: "local.finish",
+                  input: { id: "1" },
+                  blockers: [blockerChain],
+                },
+              }),
+            );
+          }
+        },
+      }),
     );
   });
 });
@@ -762,10 +710,8 @@ describe("2-level merge (merge of merges)", () => {
       processors: {
         "billing.charge": {
           attemptHandler: async ({ complete }) =>
-            withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { charged: true } }),
-              ),
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { charged: true } }),
             ),
         },
       },
@@ -826,11 +772,7 @@ describe("createWorkerRunner with partial processor registries", () => {
       processors: {
         "unrelated.task": {
           attemptHandler: async ({ complete }) =>
-            withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { y: 1 } }),
-              ),
-            ),
+            stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: { y: 1 } })),
         },
       },
     });

@@ -1,7 +1,7 @@
 {
   "name": "@queuert/redis",
   "version": "0.17.0",
-  "description": "Redis notify adapter for Queuert",
+  "description": "Redis state and notify adapters for Queuert",
   "keywords": [
     "background-jobs",
     "job-queue",
@@ -32,12 +32,14 @@
   "exports": {
     ".": "./src/index.ts",
     "./conformance": "./src/conformance.ts",
+    "./conformance-internal": "./src/conformance-internal.ts",
     "./package.json": "./package.json"
   },
   "publishConfig": {
     "exports": {
       ".": "./dist/index.mjs",
       "./conformance": "./dist/conformance.mjs",
+      "./conformance-internal": "./dist/conformance-internal.mjs",
       "./package.json": "./package.json"
     }
   },
@@ -51,6 +53,7 @@
     "@queuert/helpers": "workspace:*",
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
+    "@queuert/typed-sql": "workspace:*",
     "ioredis": "6.0.0",
     "queuert": "workspace:*",
     "redis": "6.3.1"

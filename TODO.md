@@ -24,6 +24,7 @@
 - [EPIC,COMPLEX] Batched processors. See `design/batched-processors.md`
 - [TASK] Unify workerless and worker tracing — workerless completion (`completeChain`) should create an attempt span like the worker path, eliminating the asymmetric `completeJobSpan` adapter method
 - [EPIC] Align `@queuert/otel` with OpenTelemetry messaging semantic conventions
+- [EPIC] Redis state adapter performance and open problems — claim cache, fewer index updates, lock-wait divergences, notify latency. See `design/redis-state-adapter-performance.md`.
 - [EPIC] MongoDB adapter. See `design/mongodb-adapter.md`.
 - [EPIC] MySQL/MariaDB adapter. See `design/mysql-adapter.md`.
 - [TASK] Support numeric job and worker IDs — `TJobId` and `TWorkerId` extend `string`, so an `INTEGER`/`bigint` `jobIdType` or `workerIdType` is accepted by the adapters but its IDs still have to round-trip as strings. Allow `number`/`bigint` ID types end to end, including making the `State*` entity types (`StateJobInfo`, `StateChainInfo`, `StateJobBlockerInfo`, `StateWorkerInfo`, …) generic over `TJobId`/`TWorkerId` instead of using `string`.

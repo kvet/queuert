@@ -10,6 +10,8 @@ export const creationGroups = [
       { label: "SQLite (node:sqlite)", values: [24464, 74792] },
       { label: "PostgreSQL (postgres-js)", values: [983, 31323] },
       { label: "PostgreSQL (pg)", values: [970, 27032] },
+      { label: "Redis (redis)", values: [3193, 26070] },
+      { label: "Redis (ioredis)", values: [3381, 24766] },
     ],
   },
   {
@@ -34,6 +36,8 @@ export const completionGroups = [
       { label: "SQLite (node:sqlite)", values: [4555, 5711, 8986] },
       { label: "PostgreSQL (postgres-js)", values: [367, 1256, 2090] },
       { label: "PostgreSQL (pg)", values: [383, 1350, 2416] },
+      { label: "Redis (redis)", values: [903, 2684, 5144] },
+      { label: "Redis (ioredis)", values: [1076, 2644, 6310] },
     ],
   },
   {
@@ -71,6 +75,7 @@ export const cpuGroups = [
       { label: "notify-nats", values: [188, 4, 39, 226] },
       { label: "state-sqlite", values: [97, 56, 23, 361] },
       { label: "state-postgres", values: [419, 214, 752, 1375] },
+      { label: "state-redis", values: [99, 259, 80, 260] },
       { label: "dashboard", values: [96, 0, 0, 64] },
       { label: "otel", values: [115, 1, 15, 72] },
     ],
@@ -85,6 +90,7 @@ export const allocationGroups = [
       { label: "notify-nats", values: [110.0] },
       { label: "state-sqlite", values: [134.8] },
       { label: "state-postgres", values: [183.8] },
+      { label: "state-redis", values: [208.0] },
       { label: "dashboard", values: [87.0] },
       { label: "otel", values: [99.2] },
     ],

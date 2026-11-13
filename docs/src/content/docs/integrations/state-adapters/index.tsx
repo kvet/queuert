@@ -39,6 +39,17 @@ const adapters: OptionCard[] = [
     action: { label: "SQLite state adapter", href: "/integrations/state-adapters/sqlite/" },
   },
   {
+    name: "Redis",
+    status: { label: "experimental", tone: "caution" },
+    pick: "Queuert's state on Redis or Redis Cluster, kept apart from your application data, which lives in another database.",
+    facts: [
+      { label: "Package", value: "@queuert/redis" },
+      { label: "Clients", value: "ioredis · node-redis" },
+      { label: "Locking", value: "optimistic, callbacks rerun on conflict" },
+    ],
+    action: { label: "Redis state adapter", href: "/integrations/state-adapters/redis/" },
+  },
+  {
     name: "Custom",
     pick: "A StateAdapter of your own, for another database engine.",
     facts: [

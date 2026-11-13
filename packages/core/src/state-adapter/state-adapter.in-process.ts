@@ -615,20 +615,25 @@ class JobIndex {
 
 // ── Adapter ─────────────────────────────────────────────────────────
 
-/** Transaction context for the in-process state adapter. */
-export type InProcessContext = {
-  inTransaction?: boolean;
-  journal?: JournalEntry[];
-  txHooks: TxHooks;
+const transactionSymbol: unique symbol = Symbol("queuert.inProcess.transaction");
+
+type InProcessContext = {
+  readonly [transactionSymbol]: { journal: JournalEntry[]; open: boolean; txHooks: TxHooks };
+};
+
+const openTransactionOf = (txCtx: Partial<InProcessContext> | undefined) => {
+  const transaction = txCtx?.[transactionSymbol];
+  return transaction?.open === true ? transaction : undefined;
 };
 
 const requireTxHooks = (txCtx: Partial<InProcessContext>): TxHooks => {
-  if (txCtx.txHooks === undefined) {
+  const transaction = txCtx[transactionSymbol];
+  if (transaction === undefined) {
     throw new Error(
-      "The transaction context has no txHooks: open the transaction with the provider's withTransaction, or create txHooks with withTxHooks and pass them in the context",
+      "The context has no in-process transaction: open it with the state adapter's withTransaction",
     );
   }
-  return txCtx.txHooks;
+  return transaction.txHooks;
 };
 
 export type InProcessStateAdapter = StateAdapter<InProcessContext, string, string>;
@@ -696,14 +701,14 @@ export const createInProcessStateAdapter = ({
   const closed = createLatch("StateAdapter is closed");
 
   const withWriteLock = async <T>(txCtx: InProcessContext | undefined, fn: () => T): Promise<T> => {
-    if (txCtx?.inTransaction) return fn();
+    if (openTransactionOf(txCtx)) return fn();
     using _h = await lock.acquireWrite();
     closed.throwIfTripped();
     return fn();
   };
 
   const withReadLock = async <T>(txCtx: InProcessContext | undefined, fn: () => T): Promise<T> => {
-    if (txCtx?.inTransaction) return fn();
+    if (openTransactionOf(txCtx)) return fn();
     using _h = await lock.acquireRead();
     closed.throwIfTripped();
     return fn();
@@ -723,7 +728,7 @@ export const createInProcessStateAdapter = ({
       idx.rollback(batchJournal);
       throw error;
     }
-    const journal = txCtx?.journal;
+    const journal = openTransactionOf(txCtx)?.journal;
     if (journal) {
       for (const entry of batchJournal) journal.push(entry);
     }
@@ -774,16 +779,18 @@ export const createInProcessStateAdapter = ({
       withTxHooks(async (txHooks) => {
         using _h = await lock.acquireWrite();
         closed.throwIfTripped();
-        const journal: JournalEntry[] = [];
+        const transaction = { journal: [] as JournalEntry[], open: true, txHooks };
         try {
-          return await fn({ inTransaction: true, journal, txHooks });
+          return await fn({ [transactionSymbol]: transaction });
         } catch (error) {
-          idx.rollback(journal);
+          idx.rollback(transaction.journal);
           throw error;
+        } finally {
+          transaction.open = false;
         }
       }),
 
-    isTransaction: (txCtx) => txCtx.inTransaction === true,
+    isTransaction: (txCtx) => openTransactionOf(txCtx) !== undefined,
 
     onTransactionCommit: (txCtx, callback) => {
       requireTxHooks(txCtx).onCommit(callback);
@@ -972,7 +979,7 @@ export const createInProcessStateAdapter = ({
     rescheduleJobs: async ({ txCtx, jobs }) =>
       withWriteLock(txCtx, () => {
         if (jobs.length === 0) return [];
-        const journal = txCtx?.journal;
+        const journal = openTransactionOf(txCtx)?.journal;
         const now = new Date();
         const results: (StateJob | undefined)[] = [];
         const resultById = new Map<string, StateJob | undefined>();
@@ -1010,7 +1017,7 @@ export const createInProcessStateAdapter = ({
 
     deleteChains: async ({ txCtx, chainIds }) =>
       withWriteLock(txCtx, () => {
-        const journal = txCtx?.journal;
+        const journal = openTransactionOf(txCtx)?.journal;
         const uniqueChainIds = new Set<string>(chainIds);
 
         const externalBlockers = idx.findExternalBlockerRefs(uniqueChainIds);
@@ -1045,7 +1052,7 @@ export const createInProcessStateAdapter = ({
 
     startJobAttempts: async ({ txCtx, typeNames, workerId, workerToken, limit }) =>
       withWriteLock(txCtx, () => {
-        const journal = txCtx?.journal;
+        const journal = openTransactionOf(txCtx)?.journal;
         const now = new Date();
         const nowMs = now.getTime();
         const acquired: (StateJob & { hasBlockers: boolean })[] = [];
@@ -1102,7 +1109,7 @@ export const createInProcessStateAdapter = ({
 
     addJobsBlockers: async ({ txCtx, jobBlockers: jobBlockerInputs }) =>
       withWriteLock(txCtx, () => {
-        const journal = txCtx?.journal;
+        const journal = openTransactionOf(txCtx)?.journal;
         const results: (StateJob & { blockers: (StateChainInfo | undefined)[] })[] = [];
 
         const missingJobIds = jobBlockerInputs
@@ -1162,7 +1169,7 @@ export const createInProcessStateAdapter = ({
 
     unblockJobs: async ({ txCtx, blockedByChainId }) =>
       withWriteLock(txCtx, () => {
-        const journal = txCtx?.journal;
+        const journal = openTransactionOf(txCtx)?.journal;
         const result: StateDependentJob[] = [];
         const now = new Date();
 
@@ -1232,7 +1239,7 @@ export const createInProcessStateAdapter = ({
           leaseUntil: new Date(now + leaseMs),
           token: crypto.randomUUID(),
         };
-        idx.writeWorker(txCtx?.journal, undefined, worker);
+        idx.writeWorker(openTransactionOf(txCtx)?.journal, undefined, worker);
         return workerInfoView(worker);
       }),
 
@@ -1245,7 +1252,7 @@ export const createInProcessStateAdapter = ({
           ...worker,
           leaseUntil: new Date(now + leaseMs),
         };
-        idx.writeWorker(txCtx?.journal, worker, renewedWorker);
+        idx.writeWorker(openTransactionOf(txCtx)?.journal, worker, renewedWorker);
         return workerInfoView(renewedWorker);
       }),
 
@@ -1253,7 +1260,7 @@ export const createInProcessStateAdapter = ({
       withWriteLock(txCtx, () => {
         const worker = idx.workers.get(workerId);
         if (!worker || worker.token !== workerToken) return undefined;
-        idx.writeWorker(txCtx?.journal, worker, undefined);
+        idx.writeWorker(openTransactionOf(txCtx)?.journal, worker, undefined);
         return workerInfoView(worker);
       }),
 

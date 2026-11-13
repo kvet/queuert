@@ -1,10 +1,7 @@
 import type { NotifyAdapterConformanceContext } from "../conformance.notify-adapter/types.ts";
 import type { StateAdapterConformanceContext } from "../conformance.state-adapter/types.ts";
 import type { ConformanceGroup } from "../conformance/runner.ts";
-import {
-  type InProcessContext,
-  createInProcessStateAdapter,
-} from "../state-adapter/state-adapter.in-process.ts";
+import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.ts";
 import { awaitChainGroup } from "./cases/await-chain.ts";
 import {
   blockerChainsConcurrentTransactionsGroup,
@@ -89,8 +86,6 @@ export const endToEndFlakyDbGroups: ConformanceGroup<EndToEndFlakyDbContext>[] =
 export const endToEndFlakyDbConcurrentTransactionGroups: ConformanceGroup<EndToEndFlakyDbContext>[] =
   [stateResilienceFlakyDbConcurrentTransactionsGroup];
 
-const nonTransactionContext: Omit<InProcessContext, "txHooks"> = { inTransaction: false };
-
 export const notifyAdapterEndToEndGroups: ConformanceGroup<NotifyAdapterConformanceContext>[] =
   endToEndNotifyGroups.map((group) => ({
     name: group.name,
@@ -99,7 +94,7 @@ export const notifyAdapterEndToEndGroups: ConformanceGroup<NotifyAdapterConforma
       run: async ({ createNotifyAdapter }) =>
         testCase.run({
           createStateAdapter: async () => createInProcessStateAdapter(),
-          withNonTransactionContext: async (fn) => fn(nonTransactionContext),
+          withNonTransactionContext: async (fn) => fn({ outsideTransaction: true }),
           createNotifyAdapter,
         }),
     })),

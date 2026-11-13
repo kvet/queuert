@@ -7,13 +7,7 @@
  * every input and output through a schema library.
  */
 
-import {
-  type JobTypes,
-  createClient,
-  createProcessors,
-  createWorkerRunner,
-  withTxHooks,
-} from "queuert";
+import { type JobTypes, createClient, createProcessors, createWorkerRunner } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
 
 import { createCompletionCounter, printHeader, runDoubleRunBenchmark } from "./utils.ts";
@@ -76,10 +70,8 @@ export const runValidationBenchmark = async ({
                     (sum, item) => sum + item.quantity * item.price,
                     0,
                   );
-                  const result = await withTxHooks(async (txHooks) =>
-                    stateAdapter.withTransaction(async (ctx) =>
-                      complete({ ...ctx, txHooks, output: { processed: true, total } }),
-                    ),
+                  const result = await stateAdapter.withTransaction(async (ctx) =>
+                    complete({ ...ctx, output: { processed: true, total } }),
                   );
                   completions.record();
                   return result;
@@ -94,15 +86,12 @@ export const runValidationBenchmark = async ({
 
       await processStep(`After processing ${jobCount} jobs`, async () => {
         for (let i = 0; i < jobCount; i++) {
-          await withTxHooks(async (txHooks) =>
-            stateAdapter.withTransaction(async (ctx) =>
-              setup.client.createChain({
-                ...ctx,
-                txHooks,
-                typeName: "process-order",
-                input: orderInput(i),
-              }),
-            ),
+          await stateAdapter.withTransaction(async (ctx) =>
+            setup.client.createChain({
+              ...ctx,
+              typeName: "process-order",
+              input: orderInput(i),
+            }),
           );
         }
         await completions.done;

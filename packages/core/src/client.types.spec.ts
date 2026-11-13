@@ -5,14 +5,12 @@ import { defineJobTypes } from "./job-types/define-job-types.ts";
 import type { JobTypes } from "./job-types/job-types.ts";
 import type { InProcessStateAdapter } from "./state-adapter/state-adapter.in-process.ts";
 import type { GetStateAdapterTxContext } from "./state-adapter/state-adapter.ts";
-import type { TxHooks } from "./tx-hooks/tx-hooks.ts";
 
 type InProcessClient<TJobTypes extends JobTypes<any>> = ReturnType<
   typeof createClient<TJobTypes, InProcessStateAdapter>
 >;
 
 declare const txCtx: GetStateAdapterTxContext<InProcessStateAdapter>;
-declare const txHooks: TxHooks;
 
 describe("createChain", () => {
   const jobTypes = defineJobTypes<{
@@ -32,7 +30,6 @@ describe("createChain", () => {
     expectTypeOf(async (client: InProcessClient<typeof jobTypes>) =>
       client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "test",
         // @ts-expect-error wrong input type
         input: { wrong: "field" },
@@ -44,7 +41,6 @@ describe("createChain", () => {
     expectTypeOf(async (client: InProcessClient<typeof jobTypes>) =>
       client.createChain({
         ...txCtx,
-        txHooks,
         // @ts-expect-error non-existent type
         typeName: "nonexistent",
         input: { value: 0 },
@@ -57,7 +53,6 @@ describe("createChain", () => {
       // @ts-expect-error missing required blockers
       client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "withBlocker",
         input: { value: 1 },
       }),
@@ -110,13 +105,11 @@ describe("createChain", () => {
     expectTypeOf(async (client: InProcessClient<typeof slotJobTypes>) => {
       const blockerChain = await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "blocker",
         input: { value: 1 },
       });
       const otherChain = await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "other",
         input: { value: 10 },
       });
@@ -147,7 +140,6 @@ describe("createChains", () => {
     expectTypeOf(async (client: InProcessClient<typeof jobTypes>) =>
       client.createChains({
         ...txCtx,
-        txHooks,
         items: [
           // @ts-expect-error non-existent type
           { typeName: "nonexistent", input: { value: 0 } },
@@ -160,7 +152,6 @@ describe("createChains", () => {
     expectTypeOf(async (client: InProcessClient<typeof jobTypes>) =>
       client.createChains({
         ...txCtx,
-        txHooks,
         items: [
           // @ts-expect-error wrong input for test
           { typeName: "test", input: { wrong: "field" } },
@@ -173,7 +164,6 @@ describe("createChains", () => {
     expectTypeOf(async (client: InProcessClient<typeof blockedJobTypes>) =>
       client.createChains({
         ...txCtx,
-        txHooks,
         items: [
           // @ts-expect-error missing required blockers for withBlocker
           { typeName: "withBlocker", input: { value: 1 } },
@@ -269,13 +259,11 @@ describe("completeChain", () => {
     expectTypeOf(async (client: InProcessClient<typeof jobTypes>) => {
       const chain = await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "test",
         input: { value: 42 },
       });
       const completedChain = await client.completeChain({
         ...txCtx,
-        txHooks,
         ...chain,
         handler: async ({ job, completeJob }) =>
           completeJob(job, async ({ complete }) => complete({ output: { result: 84 } })),
@@ -299,13 +287,11 @@ describe("completeChain", () => {
     expectTypeOf(async (client: InProcessClient<typeof jobTypes>) => {
       const chain = await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "awaiting-approval",
         input: { requestId: "req-123" },
       });
       const completedChain = await client.completeChain({
         ...txCtx,
-        txHooks,
         ...chain,
         handler: async ({ job, completeJob }) => {
           if (job.typeName === "awaiting-approval") {
@@ -335,13 +321,11 @@ describe("completeChain", () => {
     expectTypeOf(async (client: InProcessClient<typeof jobTypes>) => {
       const chain = await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "start",
         input: { requestId: "req-1" },
       });
       await client.completeChain({
         ...txCtx,
-        txHooks,
         ...chain,
         handler: async ({ job, completeJob }) => {
           // @ts-expect-error complete({ output: ... }) rejects un-narrowed union job types
@@ -378,13 +362,11 @@ describe("completeChain", () => {
     expectTypeOf(async (client: InProcessClient<typeof jobTypes>) => {
       const chain = await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "first",
         input: { blockerId: "blocker-id", otherId: "other-id" },
       });
       await client.completeChain({
         ...txCtx,
-        txHooks,
         ...chain,
         handler: async ({ job, completeJob }) => {
           if (job.typeName !== "first") return;
@@ -424,13 +406,11 @@ describe("completeChain", () => {
     expectTypeOf(async (client: InProcessClient<typeof jobTypes>) => {
       const chain = await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "awaiting-approval",
         input: { requestId: "req-123" },
       });
       const partiallyCompletedChain = await client.completeChain({
         ...txCtx,
-        txHooks,
         ...chain,
         handler: async ({ job, completeJob }) => {
           if (job.typeName === "awaiting-approval") {
@@ -459,13 +439,11 @@ describe("completeChain", () => {
     expectTypeOf(async (client: InProcessClient<typeof jobTypes>) => {
       const chain = await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "entryA",
         input: null,
       });
       await client.completeChain({
         ...txCtx,
-        txHooks,
         ...chain,
         handler: async ({ job, completeJob }) => {
           expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA">();
@@ -498,13 +476,11 @@ describe("completeChain", () => {
     expectTypeOf(async (client: InProcessClient<typeof jobTypes>) => {
       const chain = await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "review",
         input: { requestId: "req-1" },
       });
       const completedChain = await client.completeChain({
         ...txCtx,
-        txHooks,
         ...chain,
         handler: async ({ job, completeJob }) => {
           if (job.typeName !== "review") throw new Error("unexpected job type");

@@ -16,6 +16,7 @@ const args = process.argv.slice(2);
 const measurementModules: Record<string, string> = {
   "state-postgres": "state-postgres.ts",
   "state-sqlite": "state-sqlite.ts",
+  "state-redis": "state-redis.ts",
   "notify-redis": "notify-redis.ts",
   "notify-postgres": "notify-postgres.ts",
   "notify-nats": "notify-nats.ts",

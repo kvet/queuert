@@ -8,7 +8,6 @@ import {
   createInProcessStateAdapter,
   type InProcessStateAdapter,
 } from "../state-adapter/state-adapter.in-process.ts";
-import { withTxHooks } from "../tx-hooks/tx-hooks.ts";
 import { createWorkerRunner } from "../worker-runner.ts";
 import { createProcessors } from "./create-job-type-processors.ts";
 import {
@@ -49,27 +48,19 @@ const imageProcessors = createProcessors({
   processors: {
     "images.resize": {
       attemptHandler: async ({ job, complete }) =>
-        withTxHooks(async (txHooks) =>
-          stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, txHooks, output: { url: job.input.url } }),
-          ),
+        stateAdapter.withTransaction(async (txCtx) =>
+          complete({ ...txCtx, output: { url: job.input.url } }),
         ),
     },
     "images.transcode": {
       attemptHandler: async ({ job, complete }) =>
-        withTxHooks(async (txHooks) =>
-          stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, txHooks, output: { url: job.input.url } }),
-          ),
+        stateAdapter.withTransaction(async (txCtx) =>
+          complete({ ...txCtx, output: { url: job.input.url } }),
         ),
     },
     "images.notify": {
       attemptHandler: async ({ complete }) =>
-        withTxHooks(async (txHooks) =>
-          stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, txHooks, output: null }),
-          ),
-        ),
+        stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
     },
   },
 });
@@ -80,11 +71,7 @@ const billingProcessors = createProcessors({
   processors: {
     "billing.charge": {
       attemptHandler: async ({ complete }) =>
-        withTxHooks(async (txHooks) =>
-          stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, txHooks, output: null }),
-          ),
-        ),
+        stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
     },
   },
 });

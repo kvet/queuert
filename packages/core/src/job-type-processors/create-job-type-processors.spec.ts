@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { createClient } from "../client.ts";
 import { defineJobTypes } from "../job-types/define-job-types.ts";
 import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.ts";
-import { withTxHooks } from "../tx-hooks/tx-hooks.ts";
 import { createProcessors } from "./create-job-type-processors.ts";
 
 type Defs = {
@@ -23,10 +22,8 @@ describe("registry-level backoffConfig cascade", () => {
       processors: {
         foo: {
           attemptHandler: async ({ complete }) =>
-            withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { ok: true as const } }),
-              ),
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { ok: true as const } }),
             ),
         },
       },
@@ -48,10 +45,8 @@ describe("registry-level backoffConfig cascade", () => {
       processors: {
         foo: {
           attemptHandler: async ({ complete }) =>
-            withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { ok: true as const } }),
-              ),
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { ok: true as const } }),
             ),
           backoffConfig: { initialDelayMs: 999, multiplier: 3, maxDelayMs: 9999 },
         },
@@ -73,10 +68,8 @@ describe("registry-level backoffConfig cascade", () => {
       processors: {
         foo: {
           attemptHandler: async ({ complete }) =>
-            withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { ok: true as const } }),
-              ),
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { ok: true as const } }),
             ),
         },
       },

@@ -13,7 +13,7 @@ await stateProvider.withTransaction(async (txCtx) =>
 );
 ```
 
-When a deleted chain has a running job, its attempt is notified as lost: when the notification reaches the worker runner (it was built from the deleting client, or both share a notify adapter), the handler's `signal` aborts, and its `complete` throws `JobNotFoundError`. If the attempt is inside a [fenced](/queuert/how-it-works/job-processing/#fence) transaction, the delete waits for it to end.
+When a deleted chain has a running job, its attempt is notified as lost: when the notification reaches the worker runner (it was built from the deleting client, or both share a notify adapter), the handler's `signal` aborts, and its `complete` throws `JobNotFoundError`. If the attempt is inside a [fenced](/queuert/how-it-works/job-processing/#fence) transaction, the delete waits for it to end, except on Redis, where the transaction that commits second runs again instead of waiting.
 
 Use `deleteChain` to target a single chain — it returns the deleted chain or `undefined` if no chain with that ID exists. `deleteChains` silently skips missing IDs and returns the chains that were actually deleted. Both calls are idempotent:
 

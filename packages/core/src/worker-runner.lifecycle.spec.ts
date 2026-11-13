@@ -5,7 +5,6 @@ import { createClient } from "./client.ts";
 import { createProcessors } from "./job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "./job-types/define-job-types.ts";
 import { createInProcessStateAdapter } from "./state-adapter/state-adapter.in-process.ts";
-import { withTxHooks } from "./tx-hooks/tx-hooks.ts";
 import { createWorkerRunner } from "./worker-runner.ts";
 
 const jobTypes = defineJobTypes<{
@@ -25,20 +24,14 @@ describe("createWorkerRunner lifecycle", () => {
         processors: {
           foo: {
             attemptHandler: async ({ complete }) =>
-              withTxHooks(async (txHooks) =>
-                stateAdapter.withTransaction(async (txCtx) =>
-                  complete({ ...txCtx, txHooks, output: null }),
-                ),
-              ),
+              stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
           },
         },
       }),
     });
     const runChain = async () => {
-      const chain = await withTxHooks(async (txHooks) =>
-        stateAdapter.withTransaction(async (txCtx) =>
-          client.createChain({ ...txCtx, txHooks, typeName: "foo", input: null }),
-        ),
+      const chain = await stateAdapter.withTransaction(async (txCtx) =>
+        client.createChain({ ...txCtx, typeName: "foo", input: null }),
       );
       await client.awaitChain(chain, { timeoutMs: 5000 });
     };
@@ -75,10 +68,8 @@ describe("createWorkerRunner lifecycle", () => {
             attemptHandler: async ({ complete }) => {
               attemptStarted.resolve();
               await attemptReleased.promise;
-              return withTxHooks(async (txHooks) =>
-                stateAdapter.withTransaction(async (txCtx) =>
-                  complete({ ...txCtx, txHooks, output: null }),
-                ),
+              return stateAdapter.withTransaction(async (txCtx) =>
+                complete({ ...txCtx, output: null }),
               );
             },
           },
@@ -87,10 +78,8 @@ describe("createWorkerRunner lifecycle", () => {
     });
 
     await workerRunner.start();
-    await withTxHooks(async (txHooks) =>
-      stateAdapter.withTransaction(async (txCtx) =>
-        client.createChain({ ...txCtx, txHooks, typeName: "foo", input: null }),
-      ),
+    await stateAdapter.withTransaction(async (txCtx) =>
+      client.createChain({ ...txCtx, typeName: "foo", input: null }),
     );
     await attemptStarted.promise;
 
@@ -128,10 +117,8 @@ describe("createWorkerRunner lifecycle", () => {
             attemptHandler: async ({ complete }) => {
               attemptStarted.resolve();
               await attemptReleased.promise;
-              return withTxHooks(async (txHooks) =>
-                stateAdapter.withTransaction(async (txCtx) =>
-                  complete({ ...txCtx, txHooks, output: null }),
-                ),
+              return stateAdapter.withTransaction(async (txCtx) =>
+                complete({ ...txCtx, output: null }),
               );
             },
           },
@@ -140,10 +127,8 @@ describe("createWorkerRunner lifecycle", () => {
     });
 
     await workerRunner.start();
-    await withTxHooks(async (txHooks) =>
-      stateAdapter.withTransaction(async (txCtx) =>
-        client.createChain({ ...txCtx, txHooks, typeName: "foo", input: null }),
-      ),
+    await stateAdapter.withTransaction(async (txCtx) =>
+      client.createChain({ ...txCtx, typeName: "foo", input: null }),
     );
     await attemptStarted.promise;
 

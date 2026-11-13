@@ -5,7 +5,7 @@
 import { metrics } from "@opentelemetry/api";
 import { MeterProvider, PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
 import { createOtelObservabilityAdapter } from "@queuert/otel";
-import { createClient, createWorkerRunner, createProcessors, withTxHooks } from "queuert";
+import { createClient, createWorkerRunner, createProcessors } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
 
 import {
@@ -81,10 +81,8 @@ await runDoubleRunBenchmark<Infra>({
           processors: {
             "test-job": {
               attemptHandler: async ({ complete }) => {
-                const result = await withTxHooks(async (txHooks) =>
-                  stateAdapter.withTransaction(async (ctx) =>
-                    complete({ ...ctx, txHooks, output: { processed: true } }),
-                  ),
+                const result = await stateAdapter.withTransaction(async (ctx) =>
+                  complete({ ...ctx, output: { processed: true } }),
                 );
                 completions.record();
                 return result;
@@ -99,15 +97,12 @@ await runDoubleRunBenchmark<Infra>({
 
     await processStep(`After processing ${jobCount} jobs`, async () => {
       for (let i = 0; i < jobCount; i++) {
-        await withTxHooks(async (txHooks) =>
-          stateAdapter.withTransaction(async (ctx) =>
-            setup.client.createChain({
-              ...ctx,
-              txHooks,
-              typeName: "test-job",
-              input: { message: `Test message ${i}` },
-            }),
-          ),
+        await stateAdapter.withTransaction(async (ctx) =>
+          setup.client.createChain({
+            ...ctx,
+            typeName: "test-job",
+            input: { message: `Test message ${i}` },
+          }),
         );
       }
       await completions.done;

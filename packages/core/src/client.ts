@@ -184,7 +184,7 @@ type CreateChainsResult<
  * The public API for managing chains. Created via {@link createClient}.
  *
  * Methods are split into three categories:
- * - **Mutating** — `createChain`, `createChains`, `completeChain`, `deleteChain`, `deleteChains`, `rescheduleJob`, `rescheduleJobs`. Require a transaction context; they throw `Error` if called without a transaction context, or with one the state adapter's `isTransaction` reports as outside an open transaction. With an adapter that fences writes (PostgreSQL, SQLite), all but the deletions throw {@link SchemaFencedError} once a breaking migration fenced this code version, and change nothing.
+ * - **Mutating** — `createChain`, `createChains`, `completeChain`, `deleteChain`, `deleteChains`, `rescheduleJob`, `rescheduleJobs`. Require a transaction context; they throw `Error` if called without a transaction context, or with one the state adapter's `isTransaction` reports as outside an open transaction. With an adapter that fences writes (PostgreSQL, SQLite, Redis), all but the deletions throw {@link SchemaFencedError} once a breaking migration fenced this code version, and change nothing.
  * - **Read-only** — `getChain`, `getChains`, `getJob`, `getJobs`, `getChainTypeNames`, `getJobTypeNames`, `countChainsByTypeName`, `countJobsByTypeName`, `listChains`, `listJobs`, `listChainJobs`, `getJobBlockers`, `listBlockedJobs`, `getWorker`, `getWorkers`, `countWorkers`, `countWorkersByTypeName`, `countRunningJobsByWorkerId`, `listWorkers`, `listWorkerJobs`. Accept an optional transaction context.
  * - **Waiting** — `awaitChain`. Takes no transaction context: it polls outside any transaction and listens for notify adapter events.
  */

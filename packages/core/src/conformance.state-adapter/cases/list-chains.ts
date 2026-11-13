@@ -637,6 +637,89 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
       },
     },
     {
+      name: "listChains paginates non-independent chains and sees blockers added in the transaction",
+      run: async ({ createStateAdapter }) => {
+        await using stateAdapter = await createStateAdapter();
+
+        const createChain = async (typeName: string) => {
+          const [chain] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [{ id: stateAdapter.config.generateJobId(), typeName, input: null }],
+            }),
+          );
+          return chain;
+        };
+
+        const mainChain = await createChain("task");
+        const blockerChains: Awaited<ReturnType<typeof createChain>>[] = [];
+        for (let index = 0; index < 4; index++) blockerChains.push(await createChain("task"));
+        const otherTypeBlocker = await createChain("other");
+
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.addJobsBlockers({
+            txCtx,
+            jobBlockers: [
+              {
+                jobId: mainChain.head.id,
+                blockedByChainIds: [...blockerChains, otherTypeBlocker].map((chain) => chain.id),
+              },
+            ],
+          }),
+        );
+
+        const pagedIds: string[] = [];
+        const pageSizes: number[] = [];
+        let cursor: string | undefined;
+        do {
+          const page = await stateAdapter.listChains({
+            typeName: "task",
+            orderBy: "createdAt",
+            independent: false,
+            orderDirection: "desc",
+            page: { limit: 2, cursor },
+          });
+          pagedIds.push(...page.items.map((item) => item.head.id));
+          pageSizes.push(page.items.length);
+          cursor = page.nextCursor ?? undefined;
+        } while (cursor !== undefined && pageSizes.length < 5);
+        assert.deepEqual(pageSizes, [2, 2]);
+        assert.deepEqual(pagedIds.toSorted(), blockerChains.map((chain) => chain.id).toSorted());
+
+        const future = await stateAdapter.listChains({
+          typeName: "task",
+          orderBy: "createdAt",
+          independent: false,
+          from: new Date(Date.now() + 3_600_000),
+          orderDirection: "desc",
+          page: { limit: 10 },
+        });
+        assert.equal(future.items.length, 0);
+
+        const inTransaction = await stateAdapter.withTransaction(async (txCtx) => {
+          const [lateBlocker] = await stateAdapter.createJobs({
+            txCtx,
+            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "task", input: null }],
+          });
+          await stateAdapter.addJobsBlockers({
+            txCtx,
+            jobBlockers: [{ jobId: mainChain.head.id, blockedByChainIds: [lateBlocker.id] }],
+          });
+          const listed = await stateAdapter.listChains({
+            txCtx,
+            typeName: "task",
+            orderBy: "createdAt",
+            independent: false,
+            orderDirection: "desc",
+            page: { limit: 10 },
+          });
+          return { lateBlockerId: lateBlocker.id, ids: listed.items.map((item) => item.head.id) };
+        });
+        assert.equal(inTransaction.ids.length, 5);
+        assert.ok(inTransaction.ids.includes(inTransaction.lateBlockerId));
+      },
+    },
+    {
       name: "listChains filters running by independent",
       run: async ({ createStateAdapter }) => {
         await using stateAdapter = await createStateAdapter();

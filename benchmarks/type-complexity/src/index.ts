@@ -50,11 +50,9 @@ const voidStmts = (prefix: string, count: number, indent: string): string => {
 };
 
 const completeInTransaction = (body: string): string =>
-  `withTxHooks(async (txHooks) =>
-          stateAdapter.withTransaction(async (txCtx) => {
+  `stateAdapter.withTransaction(async (txCtx) => {
 ${body}
-          }),
-        )`;
+          })`;
 
 const generateProcessors = (defs: JobTypeDef[], clientVar: string, middlewareCount = 0): string => {
   const hKeys = handlerCtxKeys(middlewareCount);
@@ -67,7 +65,7 @@ ${hVoid}        return ${completeInTransaction(body)};
   const processors = defs.map((def) => {
     if (def.output && !def.continueWith) {
       return `    "${def.name}": {
-${handler(`            return complete({ ...txCtx, txHooks, output: (${typeToValue(def.output)}) });`)}
+${handler(`            return complete({ ...txCtx, output: (${typeToValue(def.output)}) });`)}
     }`;
     }
 
@@ -82,7 +80,7 @@ ${handler(`            return complete({ ...txCtx, txHooks, output: (${typeToVal
           const blockerName = blockerNameMatch?.[1] ?? "unknown";
           const blockerDef = defs.find((d) => d.name === blockerName);
           const blockerInput = blockerDef ? typeToValue(blockerDef.input) : `{ id: "" }`;
-          return `${clientVar}.createChain({ ...txCtx, txHooks, typeName: "${blockerName}", input: ${blockerInput} })`;
+          return `${clientVar}.createChain({ ...txCtx, typeName: "${blockerName}", input: ${blockerInput} })`;
         });
         const blockerAwaits = blockerStartCalls
           .map((call, i) => `            const blocker${i} = await ${call};`)
@@ -91,17 +89,17 @@ ${handler(`            return complete({ ...txCtx, txHooks, output: (${typeToVal
 
         return `    "${def.name}": {
 ${handler(`${blockerAwaits}
-            return complete({ ...txCtx, txHooks, continueWith: { typeName: "${firstTarget}", input: ${typeToValue(targetDef.input)}, blockers: [${blockerArray}] } });`)}
+            return complete({ ...txCtx, continueWith: { typeName: "${firstTarget}", input: ${typeToValue(targetDef.input)}, blockers: [${blockerArray}] } });`)}
     }`;
       }
 
       return `    "${def.name}": {
-${handler(`            return complete({ ...txCtx, txHooks, continueWith: { typeName: "${firstTarget}", input: ${typeToValue(targetDef?.input ?? "{ id: string }")} } });`)}
+${handler(`            return complete({ ...txCtx, continueWith: { typeName: "${firstTarget}", input: ${typeToValue(targetDef?.input ?? "{ id: string }")} } });`)}
     }`;
     }
 
     return `    "${def.name}": {
-${handler(`            return complete({ ...txCtx, txHooks, output: null });`)}
+${handler(`            return complete({ ...txCtx, output: null });`)}
     }`;
   });
 
@@ -116,7 +114,6 @@ const generateCompleteChainCall = (defs: JobTypeDef[], entryDef: JobTypeDef): st
   ...txCtx,
   typeName: "${typeName}",
   id: chain.id,
-  txHooks,
   handler: async ({ job, completeJob }) => {
     if (job.typeName !== "${typeName}") throw new Error("unexpected");
     return completeJob(job, async ({ complete }) => complete({ output: ${typeToValue(entryDef.output ?? "{ result: string }")} }));
@@ -135,7 +132,7 @@ const generateCompleteChainCall = (defs: JobTypeDef[], entryDef: JobTypeDef): st
       const bName = bMatch?.[1] ?? "unknown";
       const bDef = defs.find((d) => d.name === bName);
       const bInput = bDef ? typeToValue(bDef.input) : `{ id: "" }`;
-      return `const b${i} = await client.createChain({ ...txCtx, typeName: "${bName}", input: ${bInput}, txHooks });`;
+      return `const b${i} = await client.createChain({ ...txCtx, typeName: "${bName}", input: ${bInput} });`;
     });
     const blockerArray = targetDef.blockers.map((_, i) => `b${i}`).join(", ");
 
@@ -143,7 +140,6 @@ const generateCompleteChainCall = (defs: JobTypeDef[], entryDef: JobTypeDef): st
   ...txCtx,
   typeName: "${typeName}",
   id: chain.id,
-  txHooks,
   handler: async ({ job, completeJob }) => {
     if (job.typeName !== "${typeName}") throw new Error("unexpected");
     await completeJob(job, async ({ complete, ...txCtx }) => {
@@ -158,7 +154,6 @@ ${blockerStarts.map((s) => `      ${s}`).join("\n")}
   ...txCtx,
   typeName: "${typeName}",
   id: chain.id,
-  txHooks,
   handler: async ({ job, completeJob }) => {
     if (job.typeName !== "${typeName}") throw new Error("unexpected");
     await completeJob(job, async ({ complete }) =>
@@ -175,9 +170,8 @@ const generateClientCalls = (defs: JobTypeDef[]): string => {
   const input = typeToValue(entryDef.input);
 
   return `
-await withTxHooks(async (txHooks) =>
-  stateAdapter.withTransaction(async (txCtx) => {
-    const chain = await client.createChain({ ...txCtx, typeName: "${typeName}", input: ${input}, txHooks });
+await stateAdapter.withTransaction(async (txCtx) => {
+    const chain = await client.createChain({ ...txCtx, typeName: "${typeName}", input: ${input} });
     const fetchedChain = await client.getChain({ typeName: "${typeName}", id: chain.id });
     const job = await client.getJob({ typeName: "${typeName}", id: chain.id });
     const chains = await client.listChains({ typeName: "${typeName}" });
@@ -188,8 +182,7 @@ await withTxHooks(async (txHooks) =>
     void chains;
     void jobs;
     void completed;
-  }),
-);
+});
 `;
 };
 
@@ -223,7 +216,7 @@ const wrapInScenario = (defs: JobTypeDef[], middlewareCount = 1): string => {
   const mwList = middlewareList(middlewareCount);
   const mwPart = mwList ? `attemptMiddleware: [${mwList}], ` : "";
 
-  return `import { defineJobTypes, createProcessors, createWorkerRunner, createClient, withTxHooks, type AttemptMiddleware } from "queuert";
+  return `import { defineJobTypes, createProcessors, createWorkerRunner, createClient, type AttemptMiddleware } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
 
 type Defs = {
@@ -276,7 +269,7 @@ const ${slice.name}Registry = defineJobTypes<${slice.name}Defs>();`;
   const clientCalls = generateClientCalls(allDefs);
   const middleware = generateMiddleware(middlewareCount);
 
-  return `import { defineJobTypes, createProcessors, createWorkerRunner, createClient, withTxHooks, type AttemptMiddleware } from "queuert";
+  return `import { defineJobTypes, createProcessors, createWorkerRunner, createClient, type AttemptMiddleware } from "queuert";
 import { createInProcessStateAdapter } from "queuert/internal";
 ${sliceTypeDecls.join("\n")}
 

@@ -5,7 +5,7 @@ import { ExampleRows } from "../../../components/ExampleList.tsx";
 export const meta = {
   title: "State Adapters",
   description:
-    "One runnable example per PostgreSQL and SQLite driver or ORM, and a custom adapter.",
+    "One runnable example per PostgreSQL, SQLite and Redis driver or ORM, and a custom adapter.",
 };
 
 const Page = () => (
@@ -60,6 +60,14 @@ const Page = () => (
         "state-sqlite-bun-sql",
       ]}
     />
+    <h2 id="redis">Redis</h2>
+    <p>
+      The Redis state adapter is experimental. Its transactions are optimistic and may run their
+      callback more than once, so each example logs from <code>onTransactionCommit</code>. Each
+      example starts Redis in Docker; see{" "}
+      <A href="/integrations/state-adapters/redis/">Redis State Adapter</A>.
+    </p>
+    <ExampleRows title="@queuert/redis" names={["state-redis-ioredis", "state-redis-redis"]} />
     <h2 id="custom">Custom</h2>
     <p>
       The example implements the <code>StateAdapter</code> interface from scratch over plain

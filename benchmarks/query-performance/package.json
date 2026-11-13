@@ -4,22 +4,26 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node src/postgres.ts && node src/sqlite.ts",
+    "start": "node src/postgres.ts && node src/sqlite.ts && node src/redis.ts",
     "start:postgres": "node src/postgres.ts",
-    "start:sqlite": "node src/sqlite.ts"
+    "start:sqlite": "node src/sqlite.ts",
+    "start:redis": "node src/redis.ts"
   },
   "dependencies": {
     "@queuert/postgres": "workspace:*",
+    "@queuert/redis": "workspace:*",
     "@queuert/sqlite": "workspace:*",
     "better-sqlite3": "13.0.3",
     "example-state-postgres-pg": "workspace:*",
     "example-state-sqlite-better-sqlite3": "workspace:*",
+    "ioredis": "6.0.0",
     "pg": "8.23.1",
     "queuert": "workspace:*"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
     "@testcontainers/postgresql": "12.2.1",
+    "@testcontainers/redis": "12.2.1",
     "@types/better-sqlite3": "9.6.0",
     "@types/pg": "8.23.1"
   }

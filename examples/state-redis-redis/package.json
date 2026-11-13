@@ -1,0 +1,28 @@
+{
+  "name": "example-state-redis-redis",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating the experimental Redis state adapter with node-redis.",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "exports": {
+    "./provider": "./src/provider.ts"
+  },
+  "scripts": {
+    "start": "node src/index.ts",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/redis": "workspace:*",
+    "@queuert/testcontainers": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
+    "queuert": "workspace:*",
+    "redis": "6.3.1"
+  }
+}

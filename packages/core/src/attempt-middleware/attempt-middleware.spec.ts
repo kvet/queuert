@@ -5,7 +5,6 @@ import { createProcessors } from "../job-type-processors/create-job-type-process
 import { defineJobTypes } from "../job-types/define-job-types.ts";
 import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.ts";
 import type { StateAdapter } from "../state-adapter/state-adapter.ts";
-import { withTxHooks } from "../tx-hooks/tx-hooks.ts";
 import type { AttemptMiddleware, MergedAttemptHandlerCtx } from "./attempt-middleware.ts";
 
 type Defs = {
@@ -79,10 +78,8 @@ describe("AttemptMiddleware ctx type inference", () => {
           attemptHandler: async ({ traceId, log, complete }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
             expectTypeOf(log).toEqualTypeOf<(msg: string) => void>();
-            return withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { ok: true as const } }),
-              ),
+            return stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { ok: true as const } }),
             );
           },
         },
@@ -109,10 +106,8 @@ describe("tuple narrowing without `as const`", () => {
           attemptHandler: async ({ traceId, log, complete }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
             expectTypeOf(log).toEqualTypeOf<(msg: string) => void>();
-            return withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { ok: true as const } }),
-              ),
+            return stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { ok: true as const } }),
             );
           },
         },
@@ -155,12 +150,10 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
           attemptHandler: async ({ traceId, tenant, complete }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
             expectTypeOf(tenant).toEqualTypeOf<string>();
-            return withTxHooks(async (txHooks) =>
-              dbStateAdapter.withTransaction(async (txCtx) => {
-                expectTypeOf(txCtx.db).toEqualTypeOf<Tx["db"]>();
-                return complete({ ...txCtx, txHooks, output: { ok: true as const } });
-              }),
-            );
+            return dbStateAdapter.withTransaction(async (txCtx) => {
+              expectTypeOf(txCtx.db).toEqualTypeOf<Tx["db"]>();
+              return complete({ ...txCtx, output: { ok: true as const } });
+            });
           },
         },
       },
@@ -190,10 +183,8 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
           attemptHandler: async ({ traceId, log, complete }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
             expectTypeOf(log).toEqualTypeOf<(msg: string) => void>();
-            return withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { ok: true as const } }),
-              ),
+            return stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { ok: true as const } }),
             );
           },
         },
@@ -222,10 +213,8 @@ describe("middleware must match the client's state adapter", () => {
       processors: {
         foo: {
           attemptHandler: async ({ complete }) =>
-            withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { ok: true as const } }),
-              ),
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { ok: true as const } }),
             ),
         },
       },
@@ -245,10 +234,8 @@ describe("middleware must match the client's state adapter", () => {
         foo: {
           attemptHandler: async ({ traceId, complete }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
-            return withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { ok: true as const } }),
-              ),
+            return stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { ok: true as const } }),
             );
           },
         },
@@ -291,10 +278,8 @@ describe("handler ctx compile-time negatives", () => {
           attemptHandler: async ({ traceId, otherKey, complete }) => {
             void traceId;
             void otherKey;
-            return withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { ok: true as const } }),
-              ),
+            return stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { ok: true as const } }),
             );
           },
         },

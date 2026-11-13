@@ -70,6 +70,7 @@ The schema library's own time lands in `dependencies` and the example adapter's 
 pnpm start                 # all measurements (requires Docker)
 pnpm start:state-postgres  # PostgreSQL state adapter
 pnpm start:state-sqlite    # SQLite state adapter
+pnpm start:state-redis     # Redis state adapter (experimental)
 pnpm start:notify-redis    # Redis notify adapter
 pnpm start:notify-postgres # PostgreSQL notify adapter
 pnpm start:notify-nats     # NATS notify adapter

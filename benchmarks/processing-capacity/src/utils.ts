@@ -41,13 +41,20 @@ const jobTypes = defineJobTypes<{
 type BenchmarkContext = {
   client: Client<any, any>;
   withTransaction: StateAdapter<any, any, any>["withTransaction"];
+  onWindowStart: () => Promise<void>;
 };
 
 type Measurement = { count: number; durationMs: number; drained: boolean };
 
+export type ServerStats = {
+  reset: () => Promise<void>;
+  usec: () => Promise<number>;
+};
+
 const createChainsForWindow =
   (batchSize: number) =>
-  async ({ client, withTransaction }: BenchmarkContext): Promise<Measurement> => {
+  async ({ client, withTransaction, onWindowStart }: BenchmarkContext): Promise<Measurement> => {
+    await onWindowStart();
     const begin = performance.now();
     let count = 0;
     while (performance.now() - begin < WINDOW_MS) {
@@ -91,8 +98,9 @@ const seedChains = async ({ client, withTransaction }: BenchmarkContext): Promis
 const completeChainsForWindow =
   (concurrency: number) =>
   async (context: BenchmarkContext): Promise<Measurement> => {
-    const { client, withTransaction } = context;
+    const { client, withTransaction, onWindowStart } = context;
     await seedChains(context);
+    await onWindowStart();
 
     let completed = 0;
     let begin = 0;
@@ -143,23 +151,30 @@ const completeChainsForWindow =
     return measurement!;
   };
 
-type Scenario = {
-  unit: "chains" | "jobs";
-  run: (context: BenchmarkContext) => Promise<Measurement>;
-};
+type ScenarioSpec =
+  | { kind: "create"; unit: "chains"; batchSize: number }
+  | { kind: "complete"; unit: "jobs"; concurrency: number };
 
 const NOOP_CONCURRENCY_LEVELS = [1, 4, 16];
 
-const scenarios: Record<string, Scenario> = {
-  "create-single": { unit: "chains", run: createChainsForWindow(1) },
-  "create-batched": { unit: "chains", run: createChainsForWindow(CREATE_BATCH_SIZE) },
+const scenarios: Record<string, ScenarioSpec> = {
+  "create-single": { kind: "create", unit: "chains", batchSize: 1 },
+  "create-batched": { kind: "create", unit: "chains", batchSize: CREATE_BATCH_SIZE },
   ...Object.fromEntries(
-    NOOP_CONCURRENCY_LEVELS.map((concurrency): [string, Scenario] => [
+    NOOP_CONCURRENCY_LEVELS.map((concurrency): [string, ScenarioSpec] => [
       `complete-noop-${concurrency}`,
-      { unit: "jobs", run: completeChainsForWindow(concurrency) },
+      { kind: "complete", unit: "jobs", concurrency },
     ]),
   ),
 };
+
+const runQueuertScenario = async (
+  spec: ScenarioSpec,
+  context: BenchmarkContext,
+): Promise<Measurement> =>
+  spec.kind === "create"
+    ? createChainsForWindow(spec.batchSize)(context)
+    : completeChainsForWindow(spec.concurrency)(context);
 
 export const scenarioNames = Object.keys(scenarios);
 
@@ -194,6 +209,11 @@ const formatDuration = (ms: number): string =>
 
 export const formatRate = (count: number, ms: number): string => formatNumber(count / (ms / 1_000));
 
+const parseScenario = (): { name: string; spec: ScenarioSpec } => {
+  const name = parseScenarioName();
+  return { name, spec: scenarios[name] };
+};
+
 const parseScenarioName = (): string => {
   const name = process.argv.find((arg) => arg.startsWith("--scenario="))?.split("=")[1];
   if (name === undefined || !(name in scenarios)) {
@@ -213,35 +233,59 @@ export const requireEnv = (name: string): string => {
 export const benchmarkNamespace = (): string =>
   `bench_${process.env.BENCHMARK_ISOLATION_ID ?? "local"}`;
 
-export const runBenchmark = async ({
+const runScenario = async ({
   title,
-  stateAdapter,
-  notifyAdapter,
+  serverStats,
+  run,
 }: {
   title: string;
-  stateAdapter: StateAdapter<any, any, any>;
-  notifyAdapter?: NotifyAdapter;
+  serverStats?: ServerStats;
+  run: (spec: ScenarioSpec, onWindowStart: () => Promise<void>) => Promise<Measurement>;
 }): Promise<void> => {
-  const name = parseScenarioName();
-  const scenario = scenarios[name];
-  const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
-  const context: BenchmarkContext = { client, withTransaction: stateAdapter.withTransaction };
-
+  const { name, spec } = parseScenario();
   console.log(`\n${title} — ${name}`);
-  const { count, durationMs, drained } = await scenario.run(context);
+  const { count, durationMs, drained } = await run(spec, async () => serverStats?.reset());
+  const serverUsec = serverStats ? await serverStats.usec() : undefined;
   const drainedSuffix = drained
     ? ` — queue of ${formatNumber(SEED_COUNT)} drained before the ${formatDuration(WINDOW_MS)} window ended`
     : "";
   console.log(
-    `  Result: ${formatNumber(count)} ${scenario.unit} in ${formatDuration(durationMs)} — ${formatRate(count, durationMs)} ${scenario.unit}/s${drainedSuffix}`,
+    `  Result: ${formatNumber(count)} ${spec.unit} in ${formatDuration(durationMs)} — ${formatRate(count, durationMs)} ${spec.unit}/s${drainedSuffix}`,
   );
+  if (serverUsec !== undefined) {
+    const unit = spec.unit === "chains" ? "chain" : "job";
+    console.log(`  Server time: ${(serverUsec / Math.max(1, count)).toFixed(1)} µs/${unit}`);
+  }
 
   const resultFile = process.argv.find((arg) => arg.startsWith("--result-file="))?.split("=")[1];
   if (resultFile) {
     const result: ScenarioResult = { scenario: name, count, durationMs, drained };
     await appendFile(resultFile, `${JSON.stringify(result)}\n`);
   }
+};
 
+export const runBenchmark = async ({
+  title,
+  stateAdapter,
+  notifyAdapter,
+  serverStats,
+}: {
+  title: string;
+  stateAdapter: StateAdapter<any, any, any>;
+  notifyAdapter?: NotifyAdapter;
+  serverStats?: ServerStats;
+}): Promise<void> => {
+  const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+  await runScenario({
+    title,
+    serverStats,
+    run: async (spec, onWindowStart) =>
+      runQueuertScenario(spec, {
+        client,
+        withTransaction: stateAdapter.withTransaction,
+        onWindowStart,
+      }),
+  });
   await notifyAdapter?.close();
   await stateAdapter.close();
 };

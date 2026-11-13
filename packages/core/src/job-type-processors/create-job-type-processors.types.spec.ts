@@ -5,12 +5,8 @@ import type { createClient } from "../client.ts";
 import type { CompletedChain } from "../entities/chain.ts";
 import { defineJobTypes } from "../job-types/define-job-types.ts";
 import type { JobTypes } from "../job-types/job-types.ts";
-import type {
-  InProcessContext,
-  InProcessStateAdapter,
-} from "../state-adapter/state-adapter.in-process.ts";
+import type { InProcessStateAdapter } from "../state-adapter/state-adapter.in-process.ts";
 import type { GetStateAdapterTxContext } from "../state-adapter/state-adapter.ts";
-import type { TxHooks } from "../tx-hooks/tx-hooks.ts";
 import { createProcessors } from "./create-job-type-processors.ts";
 
 type InProcessClient<TJobTypes extends JobTypes<any>> = ReturnType<
@@ -18,7 +14,6 @@ type InProcessClient<TJobTypes extends JobTypes<any>> = ReturnType<
 >;
 
 declare const txCtx: GetStateAdapterTxContext<InProcessStateAdapter>;
-declare const txHooks: TxHooks;
 
 describe("attempt handler job", () => {
   it("provides typed attempt information to the attempt handler", () => {
@@ -37,7 +32,7 @@ describe("attempt handler job", () => {
               expectTypeOf(job.lastAttemptAt).toEqualTypeOf<Date | null>();
               expectTypeOf(job.lastAttemptError).toEqualTypeOf<string | null>();
 
-              return complete({ ...txCtx, txHooks, output: null });
+              return complete({ ...txCtx, output: null });
             },
           },
         },
@@ -60,9 +55,8 @@ describe("attempt handler job", () => {
               expectTypeOf(job.typeName).toEqualTypeOf<"test">();
               expectTypeOf(job.input).toEqualTypeOf<{ test: boolean }>();
               expectTypeOf(job.status).toEqualTypeOf<"running">();
-              expectTypeOf(txCtx).toEqualTypeOf<InProcessContext>();
 
-              const completedJob = await complete({ ...txCtx, txHooks, output: { result: true } });
+              const completedJob = await complete({ ...txCtx, output: { result: true } });
               expectTypeOf(completedJob.typeName).toEqualTypeOf<"test">();
               expectTypeOf(completedJob.status).toEqualTypeOf<"completed">();
               if (completedJob.status === "completed") {
@@ -76,7 +70,6 @@ describe("attempt handler job", () => {
 
       const chain = await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "test",
         input: { test: true },
       });
@@ -106,7 +99,6 @@ describe("attempt handler job", () => {
               expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA">();
               return complete({
                 ...txCtx,
-                txHooks,
                 continueWith: { typeName: "shared", input: { data: 1 } },
               });
             },
@@ -116,7 +108,6 @@ describe("attempt handler job", () => {
               expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryB">();
               return complete({
                 ...txCtx,
-                txHooks,
                 continueWith: { typeName: "shared", input: { data: 2 } },
               });
             },
@@ -124,7 +115,7 @@ describe("attempt handler job", () => {
           shared: {
             attemptHandler: async ({ job, complete }) => {
               expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA" | "entryB">();
-              return complete({ ...txCtx, txHooks, output: { done: true } });
+              return complete({ ...txCtx, output: { done: true } });
             },
           },
         },
@@ -154,8 +145,7 @@ describe("attempt handler job", () => {
         jobTypes,
         processors: {
           blocker: {
-            attemptHandler: async ({ complete }) =>
-              complete({ ...txCtx, txHooks, output: { done: true } }),
+            attemptHandler: async ({ complete }) => complete({ ...txCtx, output: { done: true } }),
           },
           main: {
             attemptHandler: async ({
@@ -171,7 +161,6 @@ describe("attempt handler job", () => {
 
               return complete({
                 ...txCtx,
-                txHooks,
                 output: {
                   finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
                 },
@@ -207,7 +196,7 @@ describe("attempt middleware", () => {
             attemptHandler: async ({ trace, audit, complete }) => {
               expectTypeOf(trace).toEqualTypeOf<string>();
               expectTypeOf(audit).toEqualTypeOf<string>();
-              return complete({ ...txCtx, txHooks, output: null });
+              return complete({ ...txCtx, output: null });
             },
           },
         },
@@ -250,7 +239,6 @@ describe("continueWith", () => {
 
               const completedJob = await complete({
                 ...txCtx,
-                txHooks,
                 continueWith: {
                   typeName: "linear_next",
                   input: { valueNext: job.input.value + 1 },
@@ -272,7 +260,6 @@ describe("continueWith", () => {
 
               const completedJob = await complete({
                 ...txCtx,
-                txHooks,
                 continueWith: {
                   typeName: "linear_next_next",
                   input: { valueNextNext: job.input.valueNext + 1 },
@@ -287,7 +274,6 @@ describe("continueWith", () => {
             attemptHandler: async ({ job, complete }) => {
               const result = await complete({
                 ...txCtx,
-                txHooks,
                 output: { result: job.input.valueNextNext },
               });
               expectTypeOf(result.typeName).toEqualTypeOf<"linear_next_next">();
@@ -300,7 +286,6 @@ describe("continueWith", () => {
 
       const chain = await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "linear",
         input: { value: 1 },
       });
@@ -355,7 +340,6 @@ describe("continueWith", () => {
 
               return complete({
                 ...txCtx,
-                txHooks,
                 continueWith: {
                   typeName: job.input.value % 2 === 0 ? "branch1" : "branch2",
                   input: { valueBranched: job.input.value },
@@ -368,13 +352,11 @@ describe("continueWith", () => {
 
       const evenChain = await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "main",
         input: { value: 2 },
       });
       const oddChain = await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "main",
         input: { value: 3 },
       });
@@ -432,14 +414,12 @@ describe("continueWith", () => {
               const badInput = { valueBranched2: job.input.value };
               void complete({
                 ...txCtx,
-                txHooks,
                 // @ts-expect-error typeName/input mismatch must be rejected
                 continueWith: { typeName: "branch1", input: badInput },
               });
 
               return complete({
                 ...txCtx,
-                txHooks,
                 continueWith: {
                   typeName: "branch1",
                   input: { valueBranched1: job.input.value },
@@ -452,13 +432,11 @@ describe("continueWith", () => {
 
       const evenChain = await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "main",
         input: { value: 2 },
       });
       const oddChain = await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "main",
         input: { value: 3 },
       });
@@ -505,10 +483,9 @@ describe("continueWith", () => {
               return job.input.counter < 3
                 ? complete({
                     ...txCtx,
-                    txHooks,
                     continueWith: { typeName: "loop", input: { counter: job.input.counter + 1 } },
                   })
-                : complete({ ...txCtx, txHooks, output: { done: true } });
+                : complete({ ...txCtx, output: { done: true } });
             },
           },
         },
@@ -516,7 +493,6 @@ describe("continueWith", () => {
 
       const chain = await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "loop",
         input: { counter: 0 },
       });
@@ -556,7 +532,6 @@ describe("continueWith", () => {
 
               return complete({
                 ...txCtx,
-                txHooks,
                 continueWith: { typeName: "end", input: { result: job.input.value + 1 } },
               });
             },
@@ -570,7 +545,7 @@ describe("continueWith", () => {
                 >["continueWith"]["typeName"]
               >().toEqualTypeOf<"start">();
 
-              return complete({ ...txCtx, txHooks, output: { finalResult: job.input.result } });
+              return complete({ ...txCtx, output: { finalResult: job.input.result } });
             },
           },
         },
@@ -578,7 +553,6 @@ describe("continueWith", () => {
 
       const chain = await client.createChain({
         ...txCtx,
-        txHooks,
         typeName: "start",
         input: { value: 0 },
       });

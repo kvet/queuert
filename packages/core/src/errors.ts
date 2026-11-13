@@ -136,7 +136,8 @@ export class WorkerLeaseLostError extends Error {
 /**
  * Thrown when a write is fenced: a breaking migration dropped the write fence of this code
  * version, so older code can no longer change jobs, blockers or workers. The write changes nothing.
- * Worker runners report it through `workerError` and keep retrying.
+ * Worker runners report it through `workerError` and keep retrying. On Redis it is also thrown
+ * until `migrateToLatest()` has run.
  */
 export class SchemaFencedError extends Error {
   /** The schema version of the code whose write was fenced. */

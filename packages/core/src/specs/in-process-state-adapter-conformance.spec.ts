@@ -15,7 +15,7 @@ const it = baseIt.extend(
   { scope: "file" },
   async (): Promise<StateAdapterConformanceContext> => ({
     createStateAdapter: async () => createInProcessStateAdapter(),
-    withNonTransactionContext: async (fn) => fn({ inTransaction: false }),
+    withNonTransactionContext: async (fn) => fn({ outsideTransaction: true }),
   }),
 );
 
@@ -24,7 +24,7 @@ const cappedIt = baseIt.extend(
   { scope: "file" },
   async (): Promise<StateAdapterConformanceContext> => ({
     createStateAdapter: async () => createInProcessStateAdapter({ countCap: 3 }),
-    withNonTransactionContext: async (fn) => fn({ inTransaction: false }),
+    withNonTransactionContext: async (fn) => fn({ outsideTransaction: true }),
   }),
 );
 

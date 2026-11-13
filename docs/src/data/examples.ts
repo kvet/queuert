@@ -38,7 +38,7 @@ export const examplePages: { slug: ExamplePageSlug; title: string; summary: stri
   {
     slug: "state-adapters",
     title: "State Adapters",
-    summary: "One example per PostgreSQL and SQLite driver or ORM, and a custom adapter.",
+    summary: "One example per PostgreSQL, SQLite and Redis driver or ORM, and a custom adapter.",
   },
   {
     slug: "notify-adapters",
@@ -87,6 +87,7 @@ const statePostgres = {
   href: "/integrations/state-adapters/postgres/",
 };
 const stateSqlite = { title: "SQLite State Adapter", href: "/integrations/state-adapters/sqlite/" };
+const stateRedis = { title: "Redis State Adapter", href: "/integrations/state-adapters/redis/" };
 const notifyPostgres = {
   title: "PostgreSQL Notify Adapter",
   href: "/integrations/notify-adapters/postgres/",
@@ -326,6 +327,30 @@ export const examples: Example[] = [
     services: [],
     files: stateProviderFiles,
     guide: stateSqlite,
+  },
+  {
+    name: "state-redis-ioredis",
+    category: "state",
+    page: "state-adapters",
+    label: "ioredis",
+    description:
+      "Experimental Redis state storage via @queuert/redis with the ioredis client — a chain created in an optimistic transaction, with its side effect in onTransactionCommit because the callback may run more than once.",
+    runtime: "Node.js",
+    services: ["Redis"],
+    files: providerFiles,
+    guide: stateRedis,
+  },
+  {
+    name: "state-redis-redis",
+    category: "state",
+    page: "state-adapters",
+    label: "node-redis",
+    description:
+      "Experimental Redis state storage via @queuert/redis with the node-redis client — a chain created in an optimistic transaction, with its side effect in onTransactionCommit because the callback may run more than once.",
+    runtime: "Node.js",
+    services: ["Redis"],
+    files: providerFiles,
+    guide: stateRedis,
   },
   {
     name: "state-custom-memory",

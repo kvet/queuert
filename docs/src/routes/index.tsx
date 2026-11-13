@@ -95,6 +95,7 @@ const integrations: {
     items: [
       { label: "PostgreSQL", href: "/integrations/state-adapters/postgres/" },
       { label: "SQLite", href: "/integrations/state-adapters/sqlite/" },
+      { label: "Redis", href: "/integrations/state-adapters/redis/" },
     ],
     href: "/integrations/state-adapters/",
     customAdapter: true,

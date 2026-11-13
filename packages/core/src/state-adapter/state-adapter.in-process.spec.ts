@@ -1,15 +1,26 @@
 import { expect, it } from "vitest";
 
-import { type InProcessContext, createInProcessStateAdapter } from "./state-adapter.in-process.ts";
+import { createInProcessStateAdapter } from "./state-adapter.in-process.ts";
 
-it("rejects callbacks on a context without txHooks", async () => {
+it("passes a transaction context with no string keys that survives a spread", async () => {
   await using stateAdapter = createInProcessStateAdapter();
-  const txCtx = { inTransaction: true } as InProcessContext;
+  const spread = await stateAdapter.withTransaction(async (txCtx) => {
+    expect(Object.keys(txCtx)).toEqual([]);
+    expect(JSON.stringify(txCtx)).toBe("{}");
+    expect(stateAdapter.isTransaction({ ...txCtx })).toBe(true);
+    return { ...txCtx };
+  });
+  expect(stateAdapter.isTransaction(spread)).toBe(false);
+});
 
+it("treats a context without the adapter's transaction as outside a transaction", async () => {
+  await using stateAdapter = createInProcessStateAdapter();
+  const forged = { inTransaction: true, journal: [], txHooks: {} };
+  expect(stateAdapter.isTransaction(forged as never)).toBe(false);
   expect(() => {
-    stateAdapter.onTransactionCommit(txCtx, () => {});
-  }).toThrow("The transaction context has no txHooks");
+    stateAdapter.onTransactionCommit(forged as never, () => {});
+  }).toThrow("The context has no in-process transaction");
   expect(() => {
-    stateAdapter.onTransactionRollback(txCtx, () => {});
-  }).toThrow("The transaction context has no txHooks");
+    stateAdapter.onTransactionRollback(forged as never, () => {});
+  }).toThrow("The context has no in-process transaction");
 });

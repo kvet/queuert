@@ -8,7 +8,6 @@ import {
   type InProcessStateAdapter,
   createInProcessStateAdapter,
 } from "./state-adapter/state-adapter.in-process.ts";
-import { withTxHooks } from "./tx-hooks/tx-hooks.ts";
 import { createWorkerRunner } from "./worker-runner.ts";
 
 type Defs = {
@@ -53,11 +52,7 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
         processors: {
           foo: {
             attemptHandler: async ({ complete }) =>
-              withTxHooks(async (txHooks) =>
-                stateAdapter.withTransaction(async (txCtx) =>
-                  complete({ ...txCtx, txHooks, output: null }),
-                ),
-              ),
+              stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
           },
         },
       }),
@@ -81,11 +76,7 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
         processors: {
           foo: {
             attemptHandler: async ({ complete }) =>
-              withTxHooks(async (txHooks) =>
-                stateAdapter.withTransaction(async (txCtx) =>
-                  complete({ ...txCtx, txHooks, output: null }),
-                ),
-              ),
+              stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
           },
         },
       }),
@@ -112,11 +103,7 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
           processors: {
             foo: {
               attemptHandler: async ({ complete }) =>
-                withTxHooks(async (txHooks) =>
-                  stateAdapter.withTransaction(async (txCtx) =>
-                    complete({ ...txCtx, txHooks, output: null }),
-                  ),
-                ),
+                stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
             },
           },
         }),
@@ -142,11 +129,7 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
           processors: {
             foo: {
               attemptHandler: async ({ complete }) =>
-                withTxHooks(async (txHooks) =>
-                  stateAdapter.withTransaction(async (txCtx) =>
-                    complete({ ...txCtx, txHooks, output: null }),
-                  ),
-                ),
+                stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
             },
           },
         }),
@@ -180,11 +163,7 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
           processors: {
             foo: {
               attemptHandler: async ({ complete }) =>
-                withTxHooks(async (txHooks) =>
-                  stateAdapter.withTransaction(async (txCtx) =>
-                    complete({ ...txCtx, txHooks, output: null }),
-                  ),
-                ),
+                stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
             },
           },
         }),
@@ -208,11 +187,7 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
       processors: {
         foo: {
           attemptHandler: async ({ complete }) =>
-            withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: null }),
-              ),
-            ),
+            stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
         },
       },
     });
@@ -223,11 +198,7 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
       processors: {
         bar: {
           attemptHandler: async ({ complete }) =>
-            withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: null }),
-              ),
-            ),
+            stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
         },
       },
     });
@@ -261,11 +232,7 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
         processors: {
           foo: {
             attemptHandler: async ({ complete }) =>
-              withTxHooks(async (txHooks) =>
-                stateAdapter.withTransaction(async (txCtx) =>
-                  complete({ ...txCtx, txHooks, output: null }),
-                ),
-              ),
+              stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
           },
         },
       }),
@@ -300,11 +267,7 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
           processors: {
             foo: {
               attemptHandler: async ({ complete }) =>
-                withTxHooks(async (txHooks) =>
-                  stateAdapter.withTransaction(async (txCtx) =>
-                    complete({ ...txCtx, txHooks, output: null }),
-                  ),
-                ),
+                stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
             },
           },
         }),
@@ -325,11 +288,7 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
         processors: {
           foo: {
             attemptHandler: async ({ complete }) =>
-              withTxHooks(async (txHooks) =>
-                stateAdapter.withTransaction(async (txCtx) =>
-                  complete({ ...txCtx, txHooks, output: null }),
-                ),
-              ),
+              stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
           },
         },
       }),

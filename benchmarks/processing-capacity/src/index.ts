@@ -25,7 +25,11 @@ const benchmarkModules: Record<
     service?: ServiceKind;
   }
 > = {
-  "state-in-process": { modulePath: "state-in-process.ts", label: "In-process", axis: "state" },
+  "state-in-process": {
+    modulePath: "state-in-process.ts",
+    label: "In-process",
+    axis: "state",
+  },
   "state-sqlite-better-sqlite3": {
     modulePath: "state-sqlite-better-sqlite3.ts",
     label: "SQLite (better-sqlite3)",
@@ -48,7 +52,23 @@ const benchmarkModules: Record<
     axis: "state",
     service: "postgres",
   },
-  "notify-in-process": { modulePath: "notify-in-process.ts", label: "In-process", axis: "notify" },
+  "state-redis-redis": {
+    modulePath: "state-redis-redis.ts",
+    label: "Redis (redis)",
+    axis: "state",
+    service: "redis",
+  },
+  "state-redis-ioredis": {
+    modulePath: "state-redis-ioredis.ts",
+    label: "Redis (ioredis)",
+    axis: "state",
+    service: "redis",
+  },
+  "notify-in-process": {
+    modulePath: "notify-in-process.ts",
+    label: "In-process",
+    axis: "notify",
+  },
   "notify-redis-redis": {
     modulePath: "notify-redis-redis.ts",
     label: "Redis (redis)",

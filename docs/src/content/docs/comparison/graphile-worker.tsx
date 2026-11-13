@@ -105,7 +105,7 @@ const Page = () => (
       </li>
       <li>
         <strong>Storage backends.</strong> Graphile Worker is Postgres-only. Queuert works against
-        Postgres or SQLite.
+        Postgres, SQLite, or Redis (experimental).
       </li>
     </ul>
     <h2>Transactional consistency</h2>

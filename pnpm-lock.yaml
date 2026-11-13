@@ -238,6 +238,12 @@ importers:
       example-state-postgres-postgres-js:
         specifier: workspace:*
         version: link:../../examples/state-postgres-postgres-js
+      example-state-redis-ioredis:
+        specifier: workspace:*
+        version: link:../../examples/state-redis-ioredis
+      example-state-redis-redis:
+        specifier: workspace:*
+        version: link:../../examples/state-redis-redis
       example-state-sqlite-better-sqlite3:
         specifier: workspace:*
         version: link:../../examples/state-sqlite-better-sqlite3
@@ -284,6 +290,9 @@ importers:
       '@queuert/postgres':
         specifier: workspace:*
         version: link:../../packages/postgres
+      '@queuert/redis':
+        specifier: workspace:*
+        version: link:../../packages/redis
       '@queuert/sqlite':
         specifier: workspace:*
         version: link:../../packages/sqlite
@@ -296,6 +305,9 @@ importers:
       example-state-sqlite-better-sqlite3:
         specifier: workspace:*
         version: link:../../examples/state-sqlite-better-sqlite3
+      ioredis:
+        specifier: 6.0.0
+        version: 6.0.0
       pg:
         specifier: 8.23.1
         version: 8.23.1
@@ -307,6 +319,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
       '@testcontainers/postgresql':
+        specifier: 12.2.1
+        version: 12.2.1
+      '@testcontainers/redis':
         specifier: 12.2.1
         version: 12.2.1
       '@types/better-sqlite3':
@@ -369,6 +384,9 @@ importers:
       example-state-postgres-postgres-js:
         specifier: workspace:*
         version: link:../../examples/state-postgres-postgres-js
+      example-state-redis-redis:
+        specifier: workspace:*
+        version: link:../../examples/state-redis-redis
       example-state-sqlite-better-sqlite3:
         specifier: workspace:*
         version: link:../../examples/state-sqlite-better-sqlite3
@@ -1697,6 +1715,42 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
+  examples/state-redis-ioredis:
+    devDependencies:
+      '@queuert/redis':
+        specifier: workspace:*
+        version: link:../../packages/redis
+      '@queuert/testcontainers':
+        specifier: workspace:*
+        version: link:../../packages-internal/testcontainers
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages-internal/tsconfig
+      ioredis:
+        specifier: 6.0.0
+        version: 6.0.0
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+
+  examples/state-redis-redis:
+    devDependencies:
+      '@queuert/redis':
+        specifier: workspace:*
+        version: link:../../packages/redis
+      '@queuert/testcontainers':
+        specifier: workspace:*
+        version: link:../../packages-internal/testcontainers
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages-internal/tsconfig
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+      redis:
+        specifier: 6.3.1
+        version: 6.3.1(@opentelemetry/api@1.10.0)
+
   examples/state-sqlite-better-sqlite3:
     devDependencies:
       '@queuert/sqlite':
@@ -2172,6 +2226,9 @@ importers:
       '@queuert/tsconfig':
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
+      '@queuert/typed-sql':
+        specifier: workspace:*
+        version: link:../../packages-internal/typed-sql
       ioredis:
         specifier: 6.0.0
         version: 6.0.0

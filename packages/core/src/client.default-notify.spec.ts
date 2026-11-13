@@ -6,7 +6,6 @@ import { createProcessors } from "./job-type-processors/create-job-type-processo
 import { defineJobTypes } from "./job-types/define-job-types.ts";
 import { noopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.ts";
 import { createInProcessStateAdapter } from "./state-adapter/state-adapter.in-process.ts";
-import { withTxHooks } from "./tx-hooks/tx-hooks.ts";
 import { createWorkerRunner } from "./worker-runner.ts";
 
 const jobTypes = defineJobTypes<{
@@ -27,10 +26,8 @@ const runChain = async (
       processors: {
         "send-welcome-email": {
           attemptHandler: async ({ complete }) =>
-            withTxHooks(async (txHooks) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, txHooks, output: { sent: true } }),
-              ),
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { sent: true } }),
             ),
         },
       },
@@ -39,10 +36,8 @@ const runChain = async (
 
   await workerRunner.start();
   await sleep(100);
-  const chain = await withTxHooks(async (txHooks) =>
-    stateAdapter.withTransaction(async (txCtx) =>
-      client.createChain({ ...txCtx, txHooks, typeName: "send-welcome-email", input: null }),
-    ),
+  const chain = await stateAdapter.withTransaction(async (txCtx) =>
+    client.createChain({ ...txCtx, typeName: "send-welcome-email", input: null }),
   );
   return await client
     .awaitChain(chain, { timeoutMs: 1000, pollIntervalMs: 60_000 })

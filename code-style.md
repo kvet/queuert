@@ -152,6 +152,12 @@ Adapter packages use their domain-specific prefixes (not "Queuert"):
 | `@queuert/sqlite`    | `createSqliteMigrator`           | `Migrator`                 |
 | `@queuert/sqlite`    | -                                | `Migration`                |
 | `@queuert/sqlite`    | -                                | `MigrationScript`          |
+| `@queuert/redis`     | `createRedisStateAdapter`        | `RedisStateAdapter`        |
+| `@queuert/redis`     | -                                | `RedisStateProvider`       |
+| `@queuert/redis`     | -                                | `RedisContext`             |
+| `@queuert/redis`     | -                                | `RedisTransaction`         |
+| `@queuert/redis`     | `RedisTransactionConflictError`  | -                          |
+| `@queuert/redis`     | -                                | `MigrationResult`          |
 | `@queuert/redis`     | `createRedisNotifyAdapter`       | `RedisNotifyProvider`      |
 | `@queuert/nats`      | `createNatsNotifyAdapter`        | -                          |
 | `@queuert/otel`      | `createOtelObservabilityAdapter` | -                          |
@@ -226,7 +232,7 @@ Every test file uses `.spec.ts` — both unit tests colocated next to the module
 - `packages/core/src/specs/` - Running with in-process adapters
 - `packages/postgres/src/specs/` - Running with PostgreSQL adapter; `specs-pg/` holds the conformance and end-to-end specs over the `pg` driver
 - `packages/sqlite/src/specs/` - Running with SQLite adapter; `specs-better-sqlite3/` holds the conformance and end-to-end specs over `better-sqlite3`
-- `packages/redis/src/specs/` - Running with Redis notify adapter; `specs-ioredis/`, `specs-node-redis/` and `specs-node-redis-cluster/` hold the conformance specs per client
+- `packages/redis/src/specs/` - Running with Redis notify adapter; `specs-ioredis/`, `specs-node-redis/` and `specs-node-redis-cluster/` hold the notify and state adapter conformance specs per client, and `specs-ioredis/` also holds the state adapter's end-to-end, cluster, migration, job-lock and reliability specs
 - `packages/nats/src/specs/` - Running with NATS notify adapter
 
 ## Commands
@@ -265,7 +271,7 @@ This ensures users can copy-paste relevant code without untangling unrelated int
 
 ### State Examples
 
-State examples showcase the database client integrations for PostgreSQL and SQLite, and a custom state adapter written from scratch:
+State examples showcase the database client integrations for PostgreSQL, SQLite and Redis, and a custom state adapter written from scratch:
 
 ```
 state-postgres-pg           # node-postgres (pg)
@@ -285,10 +291,13 @@ state-sqlite-knex           # Knex
 state-sqlite-bun-sqlite     # bun:sqlite
 state-sqlite-bun-sql        # Bun.SQL
 
+state-redis-ioredis         # ioredis (experimental Redis state adapter)
+state-redis-redis           # node-redis (experimental Redis state adapter)
+
 state-custom-memory         # custom StateAdapter over in-memory maps
 ```
 
-Each driver example implements a state provider (`PgStateProvider` or `SqliteStateProvider`) with `withTransaction`, `isTransaction` and `executeSql` methods specific to that client library. It also runs a few application migrations (`src/migrations.ts`) with `createPgMigrator` or `createSqliteMigrator`, and `src/provider.spec.ts` runs the migrator conformance cases alongside the provider cases. The custom example implements `StateAdapter` itself and validates it in `src/state-adapter.spec.ts` by registering one test per case of `stateAdapterConformanceCases` from `queuert/conformance`.
+Each driver example implements a state provider (`PgStateProvider` or `SqliteStateProvider`) with `withTransaction`, `isTransaction` and `executeSql` methods specific to that client library. It also runs a few application migrations (`src/migrations.ts`) with `createPgMigrator` or `createSqliteMigrator`, and `src/provider.spec.ts` runs the migrator conformance cases alongside the provider cases. The Redis examples implement a `RedisStateProvider`, a single `eval` with SHA caching, run only the adapter's own `migrateToLatest()`, and run `redisStateProviderConformanceCases`. The custom example implements `StateAdapter` itself and validates it in `src/state-adapter.spec.ts` by registering one test per case of `stateAdapterConformanceCases` from `queuert/conformance`.
 
 ### Notify Examples
 
@@ -321,11 +330,11 @@ This follows the principle of using each technology's native terminology rather 
 
 State adapters have configuration differences that reflect database capabilities:
 
-| Option           | PostgreSQL              | SQLite                  | Rationale                                                    |
-| ---------------- | ----------------------- | ----------------------- | ------------------------------------------------------------ |
-| Namespace        | `schema`                | `tablePrefix`           | PostgreSQL uses schemas; SQLite prefixes table names         |
-| Job ID generator | `generateJobId` (JS fn) | `generateJobId` (JS fn) | Both adapters generate IDs in JS for symmetry                |
-| Job ID validator | `validateJobId`         | `validateJobId`         | Optional predicate runs on generated and caller-supplied IDs |
+| Option           | PostgreSQL              | SQLite                  | Redis                   | Rationale                                                                      |
+| ---------------- | ----------------------- | ----------------------- | ----------------------- | ------------------------------------------------------------------------------ |
+| Namespace        | `schema`                | `tablePrefix`           | `keyPrefix`             | PostgreSQL uses schemas; SQLite prefixes table names; Redis prefixes every key |
+| Job ID generator | `generateJobId` (JS fn) | `generateJobId` (JS fn) | `generateJobId` (JS fn) | Every adapter generates IDs in JS for symmetry                                 |
+| Job ID validator | `validateJobId`         | `validateJobId`         | `validateJobId`         | Optional predicate runs on generated and caller-supplied IDs                   |
 
 ### In-Process Adapters
 

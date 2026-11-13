@@ -5,7 +5,9 @@
 [![stars](https://img.shields.io/github/stars/kvet/queuert.svg)](https://github.com/kvet/queuert)
 [![last commit](https://img.shields.io/github/last-commit/kvet/queuert.svg)](https://github.com/kvet/queuert/commits)
 
-Redis notify adapter for [Queuert](https://github.com/kvet/queuert) — a job-chain library: durable, typed background work in your database.
+Redis state and notify adapters for [Queuert](https://github.com/kvet/queuert) — a job-chain library: durable, typed background work in your database.
+
+> The state adapter is **experimental** — its API may change between minor versions. The notify adapter is stable.
 
 ## Installation
 
@@ -21,6 +23,7 @@ yarn add @queuert/redis
 
 ## Documentation
 
+- [State Adapters Guide](https://kvet.github.io/queuert/integrations/state-adapters/redis/)
 - [Notify Adapters Guide](https://kvet.github.io/queuert/integrations/notify-adapters/redis/)
 - [API Reference](https://kvet.github.io/queuert/api/redis/readme/)
 - [Full Documentation](https://kvet.github.io/queuert/)

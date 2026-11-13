@@ -2,7 +2,7 @@ import type { StateAdapter } from "./state-adapter.ts";
 
 /** The transaction context fields spread into an options object, or `undefined` when none were. */
 export const normalizeTxCtx = <T extends Record<string, unknown>>(rest: T): T | undefined =>
-  Object.keys(rest).length > 0 ? rest : undefined;
+  Reflect.ownKeys(rest).length > 0 ? rest : undefined;
 
 /**
  * Returns the transaction context fields spread into an options object, and throws when there
@@ -14,7 +14,7 @@ export const requireTxCtx = <T extends Record<string, unknown>>(
   rest: T,
   caller: string,
 ): T => {
-  if (Object.keys(rest).length === 0) {
+  if (Reflect.ownKeys(rest).length === 0) {
     throw new Error(`${caller} requires a transaction context from the caller's transaction`);
   }
   if (!stateAdapter.isTransaction(rest)) {

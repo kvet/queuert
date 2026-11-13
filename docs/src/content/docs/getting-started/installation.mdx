@@ -83,6 +83,32 @@ import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
          </TabItem>
        </Tabs>
      </TabItem>
+     <TabItem label="Redis">
+       <Aside type="caution" title="Experimental">
+         The Redis state adapter in `@queuert/redis` is experimental: its API may change in a minor release.
+       </Aside>
+
+       Queuert's state on Redis or Redis Cluster, kept apart from your application database.
+       See [Redis State Adapter](/queuert/integrations/state-adapters/redis/).
+
+       <Tabs syncKey="pkg">
+         <TabItem label="npm">
+           ```bash
+           npm install @queuert/redis
+           ```
+         </TabItem>
+         <TabItem label="pnpm">
+           ```bash
+           pnpm add @queuert/redis
+           ```
+         </TabItem>
+         <TabItem label="yarn">
+           ```bash
+           yarn add @queuert/redis
+           ```
+         </TabItem>
+       </Tabs>
+     </TabItem>
    </Tabs>
 
 3. (Optional) Install a notify adapter for reduced latency:

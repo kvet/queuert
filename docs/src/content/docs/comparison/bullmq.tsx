@@ -96,8 +96,8 @@ const Page = () => (
       <li>
         <strong>Storage tier.</strong> On Redis, BullMQ's durability depends on your Redis
         configuration (RDB / AOF / fsync settings); its Postgres backend keeps jobs in a{" "}
-        <code>bullmq</code> schema in your database. Queuert uses Postgres or SQLite; durability is
-        whatever your DB gives you.
+        <code>bullmq</code> schema in your database. Queuert uses Postgres or SQLite, or Redis
+        through its experimental state adapter; durability is whatever that database gives you.
       </li>
       <li>
         <strong>Wakeup mechanism.</strong> On Redis, BullMQ's <code>BZPOPMIN</code> blocking pop
