@@ -4,7 +4,18 @@ description: The other half of the dual-write problem — why a handler's writes
 date: "2026-05-19"
 ---
 
-import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/diagram";
+import {
+  Arrow,
+  Diagram,
+  Flow,
+  Group,
+  Mark,
+  Node,
+  Rows,
+  Step,
+  Timeline,
+  Transition,
+} from "../../../components/diagram";
 
 [The dual-write problem](../dual-write-problem/) is usually told from the producer's side: the business write and the enqueue land in two systems, so one can happen without the other. Putting the queue in the same database fixes that side. But the same hazard shows up again at the other end of the pipe, when a worker runs the job.
 
@@ -107,6 +118,17 @@ WHERE id = $1 AND status = 'running' AND attempt_token = $2;
 ```
 
 If the update matches no row, a newer attempt owns the job, and the handler throws. Because the completion runs in the same transaction as the domain writes, throwing rolls those back too: the stale attempt's whole transaction disappears, not just its completion. Folding completion into the handler's transaction is what lets one conditional write guard all of them.
+
+<Diagram label="A stale attempt loses: attempt 1 claims with token a1 and stalls; its lease runs out and attempt 2 claims with token a2; attempt 1's conditional completion matches no row, so it throws and its transaction rolls back; attempt 2 completes the job">
+  <Timeline lanes={["attempt 1", "attempt 2"]}>
+    <Step lane="attempt 1" sub={<>token a1<Transition from="pending" to="running" /></>}>claims</Step>
+    <Step lane="attempt 1" variant="ghost" sub="GC pause · partition">stalls</Step>
+    <Mark>lease runs out</Mark>
+    <Step lane="attempt 2" sub="token a2">claims again</Step>
+    <Step lane="attempt 1" failure sub={"token = a1 → 0 rows\nthrows, rolls back"}>completes</Step>
+    <Step lane="attempt 2" sub={<>token = a2 → 1 row<Transition from="running" to="completed" /></>}>completes</Step>
+  </Timeline>
+</Diagram>
 
 A handler that commits other transactions before the final one can protect them the same way: lock the job row at the start of the transaction (`SELECT … FOR UPDATE`) and check the token before writing. Any reclaim of the job then waits until that transaction finishes, so every write that commits after a successful check committed while the attempt owned the job.
 

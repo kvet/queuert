@@ -132,7 +132,13 @@ const Article = (props: { page: DocPage; module: DocModule }) => {
         <Show
           when={isPackageIndex()}
           fallback={
-            <div class="prose" classList={{ "api-reference": props.page.api !== null }}>
+            <div
+              class="prose"
+              classList={{
+                "api-reference": props.page.api !== null,
+                essay: props.page.date !== null,
+              }}
+            >
               <Content components={mdxComponents} />
             </div>
           }

@@ -1,6 +1,15 @@
 import { StatusPill } from "@queuert/ui/components";
 import type { AnyStatus } from "@queuert/ui/lib";
-import { type JSX, Show, children, onCleanup, onMount } from "solid-js";
+import {
+  type JSX,
+  For,
+  Show,
+  children,
+  createContext,
+  onCleanup,
+  onMount,
+  useContext,
+} from "solid-js";
 
 import "./diagram.css";
 
@@ -126,8 +135,13 @@ export const Arrow = (props: {
   </div>
 );
 
-export const Group = (props: { title: string; dashed?: boolean; children: JSX.Element }) => (
-  <div class="q-d-group" data-dashed={flag(props.dashed)}>
+export const Group = (props: {
+  title: string;
+  dashed?: boolean;
+  align?: "center" | "start";
+  children: JSX.Element;
+}) => (
+  <div class="q-d-group" data-dashed={flag(props.dashed)} data-align={props.align ?? "center"}>
     <span class="q-d-group__title">{props.title}</span>
     {props.children}
   </div>
@@ -156,5 +170,50 @@ export const Rows = (props: {
     style={{ "--r-cols": props.columns ?? "minmax(3.5rem, auto) auto" }}
   >
     {props.children}
+  </div>
+);
+
+const TimelineLanes = createContext<string[]>([]);
+
+export const Timeline = (props: { lanes: string[]; children: JSX.Element }) => (
+  <TimelineLanes.Provider value={props.lanes}>
+    <div class="q-d-timeline" style={{ "--tl-lanes": props.lanes.length }}>
+      <For each={props.lanes}>{(lane) => <span class="q-d-timeline__lane">{lane}</span>}</For>
+      {props.children}
+    </div>
+  </TimelineLanes.Provider>
+);
+
+export const Step = (props: {
+  lane: string;
+  variant?: "outline" | "ghost";
+  status?: AnyStatus;
+  failure?: boolean;
+  sub?: JSX.Element;
+  children: JSX.Element;
+}) => {
+  const lanes = useContext(TimelineLanes);
+  return (
+    <div class="q-d-timeline__row">
+      <For each={lanes}>
+        {(lane) => (
+          <div class="q-d-timeline__cell">
+            <Show when={lane === props.lane}>
+              <div class="q-d-timeline__step" data-failure={flag(props.failure)}>
+                <Node variant={props.variant} status={props.status} sub={props.sub}>
+                  {props.children}
+                </Node>
+              </div>
+            </Show>
+          </div>
+        )}
+      </For>
+    </div>
+  );
+};
+
+export const Mark = (props: { failure?: boolean; children: JSX.Element }) => (
+  <div class="q-d-timeline__mark" data-failure={flag(props.failure)}>
+    <span>{props.children}</span>
   </div>
 );

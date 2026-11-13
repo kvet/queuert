@@ -82,7 +82,40 @@ VALUES ('send-welcome-email', '{"userId": "…"}', 'pending');
 COMMIT;
 ```
 
-That closes every window. If the transaction rolls back, the job never existed; if it commits, the job exists exactly once. Workers claim jobs straight from the table. On PostgreSQL, `FOR UPDATE SKIP LOCKED` lets many workers pull from the same table without blocking on each other or claiming the same row:
+<Diagram label="With an outbox, the business row and the outbox row commit together, and a relay copies outbox rows into a separate queue that workers read. With the queue as a table, the job row commits with the business row and workers claim it directly">
+  <Rows columns="auto">
+    <Group title="with an outbox" align="start">
+      <Flow>
+        <Group title="database">
+          <Flow>
+            <Node>users</Node>
+            <Node>outbox</Node>
+          </Flow>
+        </Group>
+        <Arrow />
+        <Node>relay</Node>
+        <Arrow />
+        <Node>queue</Node>
+        <Arrow />
+        <Node>worker</Node>
+      </Flow>
+    </Group>
+    <Group title="queue as a table" align="start">
+      <Flow>
+        <Group title="database">
+          <Flow>
+            <Node>users</Node>
+            <Node status="pending">job</Node>
+          </Flow>
+        </Group>
+        <Arrow label="claim" />
+        <Node>worker</Node>
+      </Flow>
+    </Group>
+  </Rows>
+</Diagram>
+
+One transaction closes every window. If the transaction rolls back, the job never existed; if it commits, the job exists exactly once. Workers claim jobs straight from the table. On PostgreSQL, `FOR UPDATE SKIP LOCKED` lets many workers pull from the same table without blocking on each other or claiming the same row:
 
 ```sql
 UPDATE job

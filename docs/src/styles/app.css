@@ -173,6 +173,15 @@
     }
   }
 
+  .prose.essay {
+    font-size: 1rem;
+    line-height: 1.8;
+
+    & > :is(p, ul, ol, h2, h3, h4, blockquote) {
+      max-width: 65ch;
+    }
+  }
+
   .prose.api-reference {
     & h3 {
       margin-top: 3rem;
