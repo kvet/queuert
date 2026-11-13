@@ -56,7 +56,11 @@ const ApiOverview = () => (
                 <For each={pkg.kinds}>
                   {(kind) => (
                     <span>
-                      {kind.pages.length} {(kindLabels[kind.kind] ?? kind.kind).toLowerCase()}
+                      {kind.pages.length}{" "}
+                      {(kind.pages.length === 1
+                        ? kind.kind
+                        : (kindLabels[kind.kind] ?? kind.kind)
+                      ).toLowerCase()}
                     </span>
                   )}
                 </For>

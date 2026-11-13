@@ -165,7 +165,7 @@ const footerLinks: { label: string; href: string; external?: boolean }[] = [
 ];
 
 const Section = (props: { id: string; eyebrow: string; title: string; children: JSX.Element }) => (
-  <section id={props.id} class="mx-auto max-w-300 px-4 py-20 sm:px-6 lg:py-28">
+  <section id={props.id} class="mx-auto max-w-300 px-4 py-16 sm:px-6 lg:py-20">
     <p class="text-xs font-semibold font-mono tracking-wider text-brand uppercase">
       {props.eyebrow}
     </p>

@@ -5,7 +5,7 @@ sidebar:
   order: 12
 ---
 
-Jobs can be completed without a worker using `completeChain`. This enables approval workflows, webhook-triggered completions, and patterns where jobs wait for external events. Deferred start pairs well with this -- schedule a job to auto-reject after a timeout, but allow early completion based on user action.
+Jobs can be completed without a worker using `completeChain`. This enables approval workflows, webhook-triggered completions, and patterns where jobs wait for external events. Deferred start pairs well with this — schedule a job to auto-reject after a timeout, but allow early completion based on user action.
 
 ```ts
 const jobTypes = defineJobTypes<{
@@ -86,7 +86,7 @@ await stateProvider.withTransaction(async (txCtx) =>
 );
 ```
 
-This pattern lets you interweave external actions with your chains -- waiting for user input, third-party callbacks, or manual approval steps.
+This pattern lets you interweave external actions with your chains — waiting for user input, third-party callbacks, or manual approval steps.
 
 See [examples/showcase-workerless](https://github.com/kvet/queuert/tree/main/examples/showcase-workerless) for a complete working example demonstrating approval workflows and deferred start with early completion. See also [Tx Hooks](../tx-hooks/) and [Scheduling](../scheduling/) (deferred start).
 

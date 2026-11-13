@@ -281,7 +281,9 @@ export const ExamplePageCards = (props: { slugs: ExamplePageSlug[] }) => (
               >
                 {page.title}
               </A>
-              <span class="shrink-0 text-xs text-fg-subtle">{items.length} examples</span>
+              <span class="shrink-0 text-xs text-fg-subtle">
+                {items.length} {items.length === 1 ? "example" : "examples"}
+              </span>
             </div>
             <p class="m-0 mt-1 text-sm leading-6 text-fg-muted">{page.summary}</p>
             <div class="mt-3 flex flex-wrap gap-1.5">

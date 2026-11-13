@@ -5,7 +5,18 @@ sidebar:
   order: 4
 ---
 
-import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/diagram";
+import {
+  Arrow,
+  Diagram,
+  Flow,
+  Group,
+  Mark,
+  Node,
+  Rows,
+  Step,
+  Timeline,
+  Transition,
+} from "../../../components/diagram";
 
 ## Overview
 
@@ -114,6 +125,18 @@ One heartbeat per worker renews the lease every `heartbeatMs`, however many atte
 **Claims are gated on the lease.** `startJobAttempts` claims nothing unless the row this registration created exists with a live lease in database time, so a worker whose lease expired cannot start new attempts even before it notices.
 
 **Local deadline.** The worker runner counts its worker's lease as lost `durationMs − heartbeatMs` after the last successful renewal was sent, or after the registration was sent, measured on a monotonic local clock. The stored lease runs `durationMs` from a database time taken after a renewal was sent, so the local deadline comes at least `heartbeatMs` before the lease can expire, and the worker runner aborts its attempts before another worker runner can reclaim their jobs. No local timestamp is compared with the stored lease. With the defaults the deadline falls 45s after the last successful renewal was sent, so the renewals 15s and 30s after it can both fail, and the worker loses its lease at 45s. A renewal still pending at the deadline is cut off, so a renewal that hangs cannot keep a worker past its deadline looking live.
+
+<Diagram label="With the default lease: worker runner A renews at 0s while running capture-payment; its renewals at 15s and 30s fail; at its 45s local deadline it counts the lease as lost and aborts its attempts; at 60s the lease expires in the database; worker runner B reclaims capture-payment, which returns to pending; A registers again under the same workerId">
+  <Timeline lanes={["worker runner A", "worker runner B"]}>
+    <Step lane="worker runner A" sub={"0s · runs capture-payment"}>renews lease</Step>
+    <Step lane="worker runner A" variant="ghost" sub="15s · 30s">renewals fail</Step>
+    <Mark>45s · local deadline</Mark>
+    <Step lane="worker runner A" failure sub={"aborts its attempts\nstops claiming"}>loses lease</Step>
+    <Mark>60s · lease expires in the database</Mark>
+    <Step lane="worker runner B" sub={<>capture-payment<Transition from="running" to="pending" /></>}>reclaims</Step>
+    <Step lane="worker runner A" sub="same workerId">registers again</Step>
+  </Timeline>
+</Diagram>
 
 On the in-process and SQLite adapters a user transaction holds the global write lock, so a renewal waits for it; with the defaults a user transaction can run for 45s before the worker runner counts its worker's lease as lost.
 

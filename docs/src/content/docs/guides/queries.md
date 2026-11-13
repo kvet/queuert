@@ -54,7 +54,7 @@ const blockers = await client.getJobBlockers({ jobId });
 const blockedJobs = await client.listBlockedJobs({ chainId });
 ```
 
-`getChain`, `getChains`, `getJob`, `getJobs`, `getJobBlockers`, and `listBlockedJobs` accept an optional `typeName` for type narrowing (`listChainJobs` takes `chainTypeName`) -- the return type narrows to the specified type. If the entity exists but has a different type, `ChainTypeMismatchError` or `JobTypeMismatchError` is thrown. `listChains` and `listJobs` require `typeName` and filter by it.
+`getChain`, `getChains`, `getJob`, `getJobs`, `getJobBlockers`, and `listBlockedJobs` accept an optional `typeName` for type narrowing (`listChainJobs` takes `chainTypeName`) — the return type narrows to the specified type. If the entity exists but has a different type, `ChainTypeMismatchError` or `JobTypeMismatchError` is thrown. `listChains` and `listJobs` require `typeName` and filter by it.
 
 ## Workers
 

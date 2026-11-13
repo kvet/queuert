@@ -58,8 +58,8 @@ chain2.id === chain1.id; // true
 
 The required `scope` option (a missing or unknown value throws a `TypeError`) controls what chains to check for duplicates:
 
-- **`running`** -- Only dedup against running chains (allows new chain after previous completes)
-- **`any`** -- Dedup against any existing chain with this key
+- **`running`** — Only dedup against running chains (allows new chain after previous completes)
+- **`any`** — Dedup against any existing chain with this key
 
 ```ts
 // Only one active health check at a time, but can start new after completion
