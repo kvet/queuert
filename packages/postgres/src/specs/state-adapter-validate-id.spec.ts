@@ -36,8 +36,5 @@ describe("PostgreSQL State Adapter Variance - With validateJobId", () => {
     expect(tableNames).toContain("queuert_worker");
   });
 
-  conformanceTestSuite({
-    it,
-    groups: pgStateAdapterConformanceGroups,
-  });
+  conformanceTestSuite({ mode: "async", it, groups: pgStateAdapterConformanceGroups });
 });

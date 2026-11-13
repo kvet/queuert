@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 
+import { caseBody, resource } from "@queuert/helpers/case-body";
+import { step } from "@queuert/helpers/steps";
+
 import type { ConformanceGroup } from "../../conformance/runner.ts";
 import type { StateAdapterConformanceContext } from "../types.ts";
 
@@ -8,150 +11,170 @@ export const getStartAttemptDelayMsGroup: ConformanceGroup<StateAdapterConforman
   cases: [
     {
       name: "returns 0 for an immediately available pending job",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "avail-test", input: null },
-            ],
-          }),
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "avail-test", input: null },
+              ],
+            }),
+          ),
         );
 
-        const ms = await stateAdapter.getStartAttemptDelayMs({ typeNames: ["avail-test"] });
+        const ms = yield* step(stateAdapter.getStartAttemptDelayMs({ typeNames: ["avail-test"] }));
         assert.equal(ms!, 0);
-      },
+      }),
     },
     {
       name: "returns milliseconds until next scheduled job",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              {
-                id: stateAdapter.config.generateJobId(),
-                typeName: "future-test",
-                input: null,
-                schedule: { afterMs: 5000 },
-              },
-            ],
-          }),
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "future-test",
+                  input: null,
+                  schedule: { afterMs: 5000 },
+                },
+              ],
+            }),
+          ),
         );
 
-        const ms = await stateAdapter.getStartAttemptDelayMs({ typeNames: ["future-test"] });
+        const ms = yield* step(stateAdapter.getStartAttemptDelayMs({ typeNames: ["future-test"] }));
         assert.notEqual(ms, null);
         assert.ok(ms! > 3000);
         assert.ok(ms! <= 5100);
-      },
+      }),
     },
     {
       name: "returns the full delay for a job scheduled 30 days ahead",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
         const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              {
-                id: stateAdapter.config.generateJobId(),
-                typeName: "far-future-test",
-                input: null,
-                schedule: { at: new Date(Date.now() + thirtyDaysMs) },
-              },
-            ],
-          }),
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "far-future-test",
+                  input: null,
+                  schedule: { at: new Date(Date.now() + thirtyDaysMs) },
+                },
+              ],
+            }),
+          ),
         );
 
-        const ms = await stateAdapter.getStartAttemptDelayMs({ typeNames: ["far-future-test"] });
+        const ms = yield* step(
+          stateAdapter.getStartAttemptDelayMs({ typeNames: ["far-future-test"] }),
+        );
         assert.equal(typeof ms, "number");
         assert.ok(ms! > thirtyDaysMs - 5000);
         assert.ok(ms! < thirtyDaysMs + 1000);
-      },
+      }),
     },
     {
       name: "returns 0 when a ready-now job exists alongside a future-scheduled one",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "mixed-test", input: null },
-              {
-                id: stateAdapter.config.generateJobId(),
-                typeName: "mixed-test",
-                input: null,
-                schedule: { afterMs: 5000 },
-              },
-            ],
-          }),
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "mixed-test", input: null },
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "mixed-test",
+                  input: null,
+                  schedule: { afterMs: 5000 },
+                },
+              ],
+            }),
+          ),
         );
 
-        const ms = await stateAdapter.getStartAttemptDelayMs({ typeNames: ["mixed-test"] });
+        const ms = yield* step(stateAdapter.getStartAttemptDelayMs({ typeNames: ["mixed-test"] }));
         assert.equal(ms!, 0);
-      },
+      }),
     },
     {
       name: "returns null when no pending jobs of given type exist",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        const ms = await stateAdapter.getStartAttemptDelayMs({
-          typeNames: ["nonexistent-type"],
-        });
+        const ms = yield* step(
+          stateAdapter.getStartAttemptDelayMs({
+            typeNames: ["nonexistent-type"],
+          }),
+        );
         assert.equal(ms!, null);
-      },
+      }),
     },
     {
       name: "returns null when the only job is blocked",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "delay-blocker", input: null },
-            ],
-          }),
+        const [blockerChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "delay-blocker", input: null },
+              ],
+            }),
+          ),
         );
 
-        const [blockedChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              {
-                id: stateAdapter.config.generateJobId(),
-                typeName: "delay-blocked",
-                input: null,
-                schedule: { afterMs: 5000 },
-              },
-            ],
-          }),
+        const [blockedChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "delay-blocked",
+                  input: null,
+                  schedule: { afterMs: 5000 },
+                },
+              ],
+            }),
+          ),
         );
 
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.addJobsBlockers({
-            txCtx,
-            jobBlockers: [
-              { jobId: blockedChain.head.id, blockedByChainIds: [blockerChain.head.chainId] },
-            ],
-          }),
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [
+                { jobId: blockedChain.head.id, blockedByChainIds: [blockerChain.head.chainId] },
+              ],
+            }),
+          ),
         );
 
-        const ms = await stateAdapter.getStartAttemptDelayMs({
-          typeNames: ["delay-blocked"],
-        });
+        const ms = yield* step(
+          stateAdapter.getStartAttemptDelayMs({
+            typeNames: ["delay-blocked"],
+          }),
+        );
         assert.equal(ms!, null);
-      },
+      }),
     },
   ],
 };

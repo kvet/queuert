@@ -1,131 +1,34 @@
+import { expectToThrow } from "@queuert/helpers/expect.spec-helper";
+import { type Mode, andThen } from "@queuert/helpers/maybe-promise";
 import { describe, expect, it } from "vitest";
 
+import { assertMigrationLockOptions } from "./migration-lock.ts";
 import {
-  type Migration as GenericMigration,
+  A,
+  B,
+  BOOM,
+  C,
+  type TxCtx,
+  createLockedMigratorHarness,
+  createMigratorHarness,
+  createMigratorInMode,
+  modes,
+} from "./migrator.spec-helper.ts";
+import {
+  type Migration,
   type MigrationStore,
-  assertMigrationLockOptions,
   createMigrator,
+  createSyncMigrator,
 } from "./migrator.ts";
 
-type TxCtx = { tx: true };
-type Migration = GenericMigration<TxCtx>;
-type Store = MigrationStore<TxCtx>;
+describe.each(modes)("createMigrator in %s mode", (mode) => {
+  const migratorFor = (options: Parameters<typeof createMigratorInMode>[1]) =>
+    createMigratorInMode(mode, options);
 
-type RunEvent =
-  | { kind: "begin" }
-  | { kind: "commit" }
-  | { kind: "rollback" }
-  | { kind: "statement"; sql: string; inTx: boolean }
-  | { kind: "record"; name: string; inTx: boolean }
-  | { kind: "unrecord"; name: string; inTx: boolean }
-  | { kind: "script"; name: string }
-  | { kind: "acquire"; acquired: boolean }
-  | { kind: "extend"; extended: boolean | "reject" }
-  | { kind: "release" };
-
-const harness = (
-  options: {
-    initiallyApplied?: string[];
-    failStatementsFor?: string;
-    lock?: {
-      acquireResults?: boolean[];
-      extendResults?: (boolean | "reject")[];
-    };
-  } = {},
-) => {
-  const events: RunEvent[] = [];
-  const applied = new Set<string>(options.initiallyApplied ?? []);
-  let acquireCursor = 0;
-  let extendCursor = 0;
-  const hooks: {
-    beforeStatement: (statement: string) => Promise<void>;
-    afterStatement: (statement: string) => Promise<void>;
-  } = {
-    beforeStatement: async () => {},
-    afterStatement: async () => {},
-  };
-
-  const runStatement = async (statement: string, txCtx?: TxCtx): Promise<void> => {
-    await hooks.beforeStatement(statement);
-    events.push({ kind: "statement", sql: statement, inTx: txCtx !== undefined });
-    if (options.failStatementsFor === statement) {
-      throw new Error(`statement failed for ${statement}`);
-    }
-    await hooks.afterStatement(statement);
-  };
-
-  const tx = (name: string): Migration => ({
-    name,
-    up: async (txCtx) => runStatement(name, txCtx),
-    down: async (txCtx) => runStatement(`undo ${name}`, txCtx),
-  });
-  const nonTx = (name: string): Migration => ({
-    name,
-    type: "non-transactional",
-    up: async () => runStatement(name),
-    down: async () => runStatement(`undo ${name}`),
-  });
-
-  const base: Store = {
-    runInTransaction: async (fn) => {
-      events.push({ kind: "begin" });
-      try {
-        const result = await fn({ tx: true });
-        events.push({ kind: "commit" });
-        return result;
-      } catch (err) {
-        events.push({ kind: "rollback" });
-        throw err;
-      }
-    },
-    getAppliedMigrationNames: async () => [...applied],
-    recordMigration: async (txCtx, name) => {
-      events.push({ kind: "record", name, inTx: txCtx !== undefined });
-      applied.add(name);
-    },
-    unrecordMigration: async (txCtx, name) => {
-      events.push({ kind: "unrecord", name, inTx: txCtx !== undefined });
-      applied.delete(name);
-    },
-  };
-
-  const store: Store = options.lock
-    ? {
-        ...base,
-        acquireMigrationLock: async () => {
-          const results = options.lock?.acquireResults ?? [true];
-          const acquired = results[Math.min(acquireCursor, results.length - 1)];
-          acquireCursor += 1;
-          events.push({ kind: "acquire", acquired });
-          return acquired;
-        },
-        extendMigrationLock: async () => {
-          const results = options.lock?.extendResults ?? [true];
-          const extended = results[Math.min(extendCursor, results.length - 1)];
-          extendCursor += 1;
-          events.push({ kind: "extend", extended });
-          if (extended === "reject") throw new Error("heartbeat connection failed");
-          return extended;
-        },
-        releaseMigrationLock: async () => {
-          events.push({ kind: "release" });
-        },
-      }
-    : base;
-
-  return { events, applied, store, hooks, tx, nonTx };
-};
-
-const A = "001_alpha";
-const B = "002_bravo";
-const C = "003_charlie";
-const BOOM = "004_boom";
-
-describe("createMigrator", () => {
   describe("migrateToLatest", () => {
     it("runs a transactional migration's `up` and record inside one transaction", async () => {
-      const { events, store, tx } = harness();
-      const result = await createMigrator({ migrations: [tx(A)], store }).migrateToLatest();
+      const { events, store, tx } = createMigratorHarness(mode);
+      const result = await migratorFor({ migrations: [tx(A)], store }).migrateToLatest();
 
       expect(result).toEqual({ skipped: [], applied: [A], reverted: [], unrecognized: [] });
       expect(events).toEqual([
@@ -139,8 +42,8 @@ describe("createMigrator", () => {
     });
 
     it("runs the `up` of a non-transactional migration outside a transaction and records it after", async () => {
-      const { events, store, nonTx } = harness();
-      const result = await createMigrator({ migrations: [nonTx(A)], store }).migrateToLatest();
+      const { events, store, nonTx } = createMigratorHarness(mode);
+      const result = await migratorFor({ migrations: [nonTx(A)], store }).migrateToLatest();
 
       expect(result).toEqual({ skipped: [], applied: [A], reverted: [], unrecognized: [] });
       expect(events).toEqual([
@@ -152,44 +55,47 @@ describe("createMigrator", () => {
     });
 
     it("rolls back a failing transactional migration without recording it", async () => {
-      const { events, applied, store, tx } = harness({ failStatementsFor: BOOM });
-      await expect(
-        createMigrator({ migrations: [tx(BOOM)], store }).migrateToLatest(),
-      ).rejects.toThrow(/statement failed for/);
+      const { events, applied, store, tx } = createMigratorHarness(mode, {
+        failStatementsFor: BOOM,
+      });
+      await expectToThrow(
+        () => migratorFor({ migrations: [tx(BOOM)], store }).migrateToLatest(),
+        /statement failed for/,
+      );
+
       expect(applied.has(BOOM)).toBe(false);
       expect(events).toContainEqual({ kind: "rollback" });
       expect(events.filter((e) => e.kind === "record")).toEqual([]);
     });
 
     it("does not record a non-transactional migration whose `up` throws", async () => {
-      const { applied, store, nonTx } = harness({ failStatementsFor: A });
-      await expect(
-        createMigrator({ migrations: [nonTx(A)], store }).migrateToLatest(),
-      ).rejects.toThrow(/statement failed for/);
+      const { applied, store, nonTx } = createMigratorHarness(mode, { failStatementsFor: A });
+      await expectToThrow(
+        () => migratorFor({ migrations: [nonTx(A)], store }).migrateToLatest(),
+        /statement failed for/,
+      );
 
       expect([...applied]).toEqual([]);
     });
 
     it("skips a transactional migration that another run recorded after the applied-set read", async () => {
-      const { events, applied, store, tx } = harness();
+      const { events, applied, store, tx } = createMigratorHarness(mode);
       const getAppliedMigrationNames = store.getAppliedMigrationNames;
-      store.getAppliedMigrationNames = async (txCtx) => {
-        const names = await getAppliedMigrationNames(txCtx);
-        applied.add(A);
-        return names;
-      };
-      const result = await createMigrator({ migrations: [tx(A), tx(B)], store }).migrateToLatest();
+      store.getAppliedMigrationNames = (txCtx) =>
+        andThen(getAppliedMigrationNames(txCtx), (names) => {
+          applied.add(A);
+          return names;
+        });
+      const result = await migratorFor({ migrations: [tx(A), tx(B)], store }).migrateToLatest();
 
       expect(result).toEqual({ skipped: [A], applied: [B], reverted: [], unrecognized: [] });
       expect(events.filter((e) => e.kind === "statement").map((e) => e.sql)).toEqual([B]);
     });
 
     it("skips already-recorded migrations and reports unrecognized DB names", async () => {
-      const { store, tx } = harness({ initiallyApplied: [A, "legacy"] });
-      const result = await createMigrator({
-        migrations: [tx(A), tx(B)],
-        store,
-      }).migrateToLatest();
+      const { store, tx } = createMigratorHarness(mode, { initiallyApplied: [A, "legacy"] });
+      const result = await migratorFor({ migrations: [tx(A), tx(B)], store }).migrateToLatest();
+
       expect(result).toEqual({
         skipped: [A],
         applied: [B],
@@ -199,10 +105,13 @@ describe("createMigrator", () => {
     });
 
     it("names the failing migration, keeping the original error as the cause", async () => {
-      const { store, tx } = harness({ failStatementsFor: B });
-      const failure = await createMigrator({ migrations: [tx(A), tx(B)], store })
-        .migrateToLatest()
-        .catch((error: unknown) => error);
+      const { store, tx } = createMigratorHarness(mode, { failStatementsFor: B });
+      let failure: unknown;
+      try {
+        await migratorFor({ migrations: [tx(A), tx(B)], store }).migrateToLatest();
+      } catch (error) {
+        failure = error;
+      }
 
       expect(failure).toBeInstanceOf(Error);
       expect((failure as Error).message).toBe(
@@ -212,22 +121,30 @@ describe("createMigrator", () => {
     });
 
     it("stops at the first failing migration and preserves earlier applied ones", async () => {
-      const { applied, store, tx } = harness({ failStatementsFor: B });
-      await expect(
-        createMigrator({ migrations: [tx(A), tx(B), tx(C)], store }).migrateToLatest(),
-      ).rejects.toThrow(/statement failed for/);
+      const { applied, store, tx } = createMigratorHarness(mode, { failStatementsFor: B });
+      await expectToThrow(
+        () => migratorFor({ migrations: [tx(A), tx(B), tx(C)], store }).migrateToLatest(),
+        /statement failed for/,
+      );
+
       expect([...applied]).toEqual([A]);
     });
   });
 
   describe("before/after scripts", () => {
     it("runs `before` ahead of the applied-set read and `after` behind the last migration", async () => {
-      const { events, applied, store, tx } = harness();
-      const result = await createMigrator({
+      const { events, applied, store, tx, settle } = createMigratorHarness(mode);
+      const result = await migratorFor({
         migrations: [tx(A)],
         store,
-        before: async () => void events.push({ kind: "script", name: "before" }),
-        after: async () => void events.push({ kind: "script", name: "after" }),
+        before: () =>
+          settle(() => {
+            events.push({ kind: "script", name: "before" });
+          }),
+        after: () =>
+          settle(() => {
+            events.push({ kind: "script", name: "after" });
+          }),
       }).migrateToLatest();
 
       expect(result).toEqual({ skipped: [], applied: [A], reverted: [], unrecognized: [] });
@@ -244,64 +161,267 @@ describe("createMigrator", () => {
       expect([...applied]).toEqual([A]);
     });
 
+    it("does not run the migrations when `before` throws", async () => {
+      const { events, applied, store, tx, settle } = createMigratorHarness(mode);
+      await expectToThrow(
+        () =>
+          migratorFor({
+            migrations: [tx(A)],
+            store,
+            before: () =>
+              settle(() => {
+                throw new Error("cannot upgrade");
+              }),
+          }).migrateToLatest(),
+        /cannot upgrade/,
+      );
+
+      expect([...applied]).toEqual([]);
+      expect(events.some((e) => e.kind === "record")).toBe(false);
+    });
+
     it("records nothing for a script itself", async () => {
-      const { events, applied, store } = harness();
-      await createMigrator({
+      const { events, applied, store, settle } = createMigratorHarness(mode);
+      await migratorFor({
         migrations: [],
         store,
-        before: async () => void events.push({ kind: "script", name: "before" }),
-        after: async () => void events.push({ kind: "script", name: "after" }),
+        before: () => settle(() => void events.push({ kind: "script", name: "before" })),
+        after: () => settle(() => void events.push({ kind: "script", name: "after" })),
       }).migrateToLatest();
 
       expect([...applied]).toEqual([]);
       expect(events.some((e) => e.kind === "record")).toBe(false);
     });
+  });
 
-    it("does not run the migrations when `before` throws", async () => {
-      const { events, applied, store, tx } = harness();
-      await expect(
-        createMigrator({
-          migrations: [tx(A)],
-          store,
-          before: async () => {
-            throw new Error("cannot upgrade");
-          },
-        }).migrateToLatest(),
-      ).rejects.toThrow(/cannot upgrade/);
+  describe("migrateTo", () => {
+    it("applies only migrations up to and including the target", async () => {
+      const { applied, store, tx } = createMigratorHarness(mode);
+      const result = await migratorFor({ migrations: [tx(A), tx(B), tx(C)], store }).migrateTo(B);
 
-      expect([...applied]).toEqual([]);
-      expect(events.some((e) => e.kind === "record")).toBe(false);
+      expect(result.applied).toEqual([A, B]);
+      expect([...applied]).toEqual([A, B]);
     });
 
-    it("aborts a long-running script once the lease is lost", async () => {
-      const { applied, store } = harness({
-        lock: { extendResults: [false] },
-      });
-      await expect(
-        createMigrator({
-          migrations: [],
-          store,
-          lock: { heartbeatIntervalMs: 5 },
-          after: async ({ assertLockHeld }) => {
-            for (let batch = 0; batch < 10; batch++) {
-              assertLockHeld();
-              await new Promise((resolve) => setTimeout(resolve, 20));
-            }
-          },
-        }).migrateToLatest(),
-      ).rejects.toThrow(/no longer held by this run/);
+    it("resumes from the last applied migration on a later target", async () => {
+      const { store, tx } = createMigratorHarness(mode, { initiallyApplied: [A] });
+      const migrator = migratorFor({ migrations: [tx(A), tx(B), tx(C)], store });
 
+      const result = await migrator.migrateTo(C);
+      expect(result.skipped).toEqual([A]);
+      expect(result.applied).toEqual([B, C]);
+    });
+
+    it("computes unrecognized against the full migration set, not the target prefix", async () => {
+      const { store, tx } = createMigratorHarness(mode, { initiallyApplied: ["legacy"] });
+      const migrator = migratorFor({ migrations: [tx(A), tx(B)], store });
+
+      const result = await migrator.migrateTo(A);
+      expect(result).toEqual({
+        skipped: [],
+        applied: [A],
+        reverted: [],
+        unrecognized: ["legacy"],
+      });
+    });
+
+    it("rejects a target that is not in the list", async () => {
+      const { events, store, tx } = createMigratorHarness(mode);
+      await expectToThrow(
+        () => migratorFor({ migrations: [tx(A)], store }).migrateTo(B),
+        /Unknown migration "002_bravo"/,
+      );
+
+      expect(events).toEqual([]);
+    });
+
+    it("reverts the applied migrations after the target, last first, each with its record in one transaction", async () => {
+      const { events, applied, store, tx } = createMigratorHarness(mode, {
+        initiallyApplied: [A, B, C],
+      });
+      const result = await migratorFor({ migrations: [tx(A), tx(B), tx(C)], store }).migrateTo(A);
+
+      expect(result).toEqual({ skipped: [A], applied: [], reverted: [C, B], unrecognized: [] });
+      expect([...applied]).toEqual([A]);
+      expect(events.slice(2)).toEqual([
+        { kind: "begin" },
+        { kind: "statement", sql: `undo ${C}`, inTx: true },
+        { kind: "unrecord", name: C, inTx: true },
+        { kind: "commit" },
+        { kind: "begin" },
+        { kind: "statement", sql: `undo ${B}`, inTx: true },
+        { kind: "unrecord", name: B, inTx: true },
+        { kind: "commit" },
+      ]);
+    });
+
+    it("reverts every applied migration with a `null` target", async () => {
+      const { applied, store, tx } = createMigratorHarness(mode, { initiallyApplied: [A, B] });
+      const result = await migratorFor({ migrations: [tx(A), tx(B), tx(C)], store }).migrateTo(
+        null,
+      );
+
+      expect(result).toEqual({ skipped: [], applied: [], reverted: [B, A], unrecognized: [] });
       expect([...applied]).toEqual([]);
+    });
+
+    it("refuses to revert, changing nothing, when the database has migrations the code doesn't know", async () => {
+      const { events, applied, store, tx } = createMigratorHarness(mode, {
+        initiallyApplied: [A, B, "legacy"],
+      });
+      await expectToThrow(
+        () => migratorFor({ migrations: [tx(A), tx(B)], store }).migrateTo(A),
+        /applied migrations the code doesn't know: "legacy"/,
+      );
+
+      expect([...applied]).toEqual([A, B, "legacy"]);
+      expect(events.some((e) => e.kind === "statement" || e.kind === "unrecord")).toBe(false);
+    });
+
+    it("refuses a `null` target, changing nothing, when the database has migrations the code doesn't know", async () => {
+      const { events, applied, store, tx } = createMigratorHarness(mode, {
+        initiallyApplied: [A, "legacy"],
+      });
+      await expectToThrow(
+        () => migratorFor({ migrations: [tx(A)], store }).migrateTo(null),
+        /applied migrations the code doesn't know: "legacy"/,
+      );
+
+      expect([...applied]).toEqual([A, "legacy"]);
+      expect(events.some((e) => e.kind === "statement" || e.kind === "unrecord")).toBe(false);
+    });
+
+    it("runs `before` and `after` around a revert", async () => {
+      const { events, store, tx, settle } = createMigratorHarness(mode, {
+        initiallyApplied: [A, B],
+      });
+      await migratorFor({
+        migrations: [tx(A), tx(B)],
+        store,
+        before: () => settle(() => void events.push({ kind: "script", name: "before" })),
+        after: () => settle(() => void events.push({ kind: "script", name: "after" })),
+      }).migrateTo(A);
+
+      expect(events[0]).toEqual({ kind: "script", name: "before" });
+      expect(events.at(-1)).toEqual({ kind: "script", name: "after" });
+    });
+
+    it("reverts a non-transactional migration outside a transaction, unrecording it last", async () => {
+      const { events, store, tx, nonTx } = createMigratorHarness(mode, {
+        initiallyApplied: [A, B],
+      });
+      await migratorFor({ migrations: [tx(A), nonTx(B)], store }).migrateTo(A);
+
+      expect(events.slice(2)).toEqual([
+        { kind: "statement", sql: `undo ${B}`, inTx: false },
+        { kind: "unrecord", name: B, inTx: false },
+      ]);
+    });
+
+    it("keeps the record when a transactional `down` fails", async () => {
+      const { applied, store, tx } = createMigratorHarness(mode, {
+        initiallyApplied: [A, B],
+        failStatementsFor: `undo ${B}`,
+      });
+      await expectToThrow(
+        () => migratorFor({ migrations: [tx(A), tx(B)], store }).migrateTo(A),
+        'Reverting migration "002_bravo" failed: statement failed for undo 002_bravo',
+      );
+
+      expect([...applied]).toEqual([A, B]);
+    });
+
+    it("skips a transactional revert that another run made after the applied-set read", async () => {
+      const { events, applied, store, tx } = createMigratorHarness(mode, {
+        initiallyApplied: [A, B],
+      });
+      const getAppliedMigrationNames = store.getAppliedMigrationNames;
+      store.getAppliedMigrationNames = (txCtx) =>
+        andThen(getAppliedMigrationNames(txCtx), (names) => {
+          applied.delete(B);
+          return names;
+        });
+      const result = await migratorFor({ migrations: [tx(A), tx(B)], store }).migrateTo(A);
+
+      expect(result.reverted).toEqual([]);
+      expect(events.some((e) => e.kind === "statement")).toBe(false);
+    });
+
+    it("stops reverting at a `down` that throws, keeping it and the migrations before it recorded", async () => {
+      const { events, applied, store, tx, settle } = createMigratorHarness(mode, {
+        initiallyApplied: [A, B, C],
+      });
+      const irreversible: Migration<TxCtx, Mode> = {
+        ...tx(B),
+        down: () =>
+          settle(() => {
+            throw new Error("cannot revert 002_bravo");
+          }),
+      };
+      await expectToThrow(
+        () => migratorFor({ migrations: [tx(A), irreversible, tx(C)], store }).migrateTo(A),
+        'Reverting migration "002_bravo" failed: cannot revert 002_bravo',
+      );
+
+      expect([...applied]).toEqual([A, B]);
+      expect(events.filter((e) => e.kind === "unrecord")).toEqual([
+        { kind: "unrecord", name: C, inTx: true },
+      ]);
     });
   });
 
+  describe("validation", () => {
+    it("rejects an empty migration name", () => {
+      const { store, tx } = createMigratorHarness(mode);
+      expect(() => migratorFor({ migrations: [tx("")], store })).toThrow(/Invalid migration name/);
+    });
+
+    it("rejects duplicate migration names", () => {
+      const { store, tx } = createMigratorHarness(mode);
+      expect(() => migratorFor({ migrations: [tx(A), tx(A)], store })).toThrow(
+        /Duplicate migration name "001_alpha"/,
+      );
+    });
+
+    it("refuses to run when a pending migration is listed before an applied one", async () => {
+      const { events, applied, store, tx } = createMigratorHarness(mode, {
+        initiallyApplied: [A, C],
+      });
+      await expectToThrow(
+        () => migratorFor({ migrations: [tx(A), tx(B), tx(C)], store }).migrateToLatest(),
+        /Pending migrations are listed before the applied migration "003_charlie": "002_bravo"/,
+      );
+
+      expect([...applied]).toEqual([A, C]);
+      expect(events.some((e) => e.kind === "statement" || e.kind === "record")).toBe(false);
+    });
+
+    it("accepts any unique names and runs them in list order", async () => {
+      const { events, store, tx } = createMigratorHarness(mode);
+      const result = await migratorFor({
+        migrations: [tx("create_invoices"), tx("add_invoice_due_date")],
+        store,
+      }).migrateToLatest();
+
+      expect(result.applied).toEqual(["create_invoices", "add_invoice_due_date"]);
+      expect(events.filter((e) => e.kind === "statement").map((e) => e.sql)).toEqual([
+        "create_invoices",
+        "add_invoice_due_date",
+      ]);
+    });
+  });
+});
+
+describe("createMigrator in async mode", () => {
   describe("migration lock", () => {
-    const stretchStatementsPastHeartbeat = (hooks: ReturnType<typeof harness>["hooks"]): void => {
+    const stretchStatementsPastHeartbeat = (
+      hooks: ReturnType<typeof createLockedMigratorHarness>["hooks"],
+    ): void => {
       hooks.afterStatement = async () => new Promise((resolve) => setTimeout(resolve, 50));
     };
 
     it("acquires the lease before reading the applied set and releases it afterwards", async () => {
-      const { events, store, tx } = harness({ lock: {} });
+      const { events, store, tx } = createLockedMigratorHarness();
       const result = await createMigrator({ migrations: [tx(A)], store }).migrateToLatest();
 
       expect(result.applied).toEqual([A]);
@@ -311,8 +431,8 @@ describe("createMigrator", () => {
     });
 
     it("polls until the lease is free, then sees the winner's work in the re-read applied set", async () => {
-      const { events, applied, store, tx } = harness({
-        lock: { acquireResults: [false, false, true] },
+      const { events, applied, store, tx } = createLockedMigratorHarness({
+        acquireResults: [false, false, true],
       });
       applied.add(A);
       const result = await createMigrator({
@@ -330,7 +450,7 @@ describe("createMigrator", () => {
     });
 
     it("heartbeats the lease while migrating", async () => {
-      const { events, store, hooks, tx } = harness({ lock: {} });
+      const { events, store, hooks, tx } = createLockedMigratorHarness();
       stretchStatementsPastHeartbeat(hooks);
       await createMigrator({
         migrations: [tx(A)],
@@ -342,8 +462,8 @@ describe("createMigrator", () => {
     });
 
     it("aborts before the next migration when the lease is lost", async () => {
-      const { events, applied, store, hooks, tx } = harness({
-        lock: { extendResults: [false] },
+      const { events, applied, store, hooks, tx } = createLockedMigratorHarness({
+        extendResults: [false],
       });
       stretchStatementsPastHeartbeat(hooks);
       await expect(
@@ -365,7 +485,7 @@ describe("createMigrator", () => {
     });
 
     it("passes the `up` of a non-transactional migration an assertLockHeld that throws once the lease is lost", async () => {
-      const { applied, store } = harness({ lock: { extendResults: [false] } });
+      const { applied, store } = createLockedMigratorHarness({ extendResults: [false] });
       await expect(
         createMigrator({
           migrations: [
@@ -390,7 +510,7 @@ describe("createMigrator", () => {
     });
 
     it("does not record a non-transactional migration whose `up` outlasted the lease without checking it", async () => {
-      const { applied, store } = harness({ lock: { extendResults: [false] } });
+      const { applied, store } = createLockedMigratorHarness({ extendResults: [false] });
       await expect(
         createMigrator({
           migrations: [
@@ -410,12 +530,12 @@ describe("createMigrator", () => {
     });
 
     it("waits for an in-flight heartbeat before releasing the lease", async () => {
-      const { events, store, hooks, tx } = harness({ lock: {} });
+      const { events, store, hooks, tx } = createLockedMigratorHarness();
       let signalExtendStarted!: () => void;
       const extendStarted = new Promise<void>((resolve) => {
         signalExtendStarted = resolve;
       });
-      const extendMigrationLock = store.extendMigrationLock!;
+      const extendMigrationLock = store.extendMigrationLock;
       store.extendMigrationLock = async (ownerId, ttlMs) => {
         signalExtendStarted();
         await new Promise((resolve) => setTimeout(resolve, 40));
@@ -435,12 +555,12 @@ describe("createMigrator", () => {
     });
 
     it("renews a lease that went stale while a non-transactional migration ran, before recording it", async () => {
-      const { applied, store, hooks, nonTx } = harness({ lock: {} });
+      const { applied, store, hooks, nonTx } = createLockedMigratorHarness();
       let openGate!: () => void;
       const gate = new Promise<void>((resolve) => {
         openGate = resolve;
       });
-      const extendMigrationLock = store.extendMigrationLock!;
+      const extendMigrationLock = store.extendMigrationLock;
       store.extendMigrationLock = async (ownerId, ttlMs) => {
         await gate;
         return extendMigrationLock(ownerId, ttlMs);
@@ -460,12 +580,12 @@ describe("createMigrator", () => {
     });
 
     it("renews a lease that went stale while its heartbeat waited on a long statement, before the next migration", async () => {
-      const { events, store, hooks, tx } = harness({ lock: {} });
+      const { events, store, hooks, tx } = createLockedMigratorHarness();
       let openGate!: () => void;
       const gate = new Promise<void>((resolve) => {
         openGate = resolve;
       });
-      const extendMigrationLock = store.extendMigrationLock!;
+      const extendMigrationLock = store.extendMigrationLock;
       store.extendMigrationLock = async (ownerId, ttlMs) => {
         await gate;
         return extendMigrationLock(ownerId, ttlMs);
@@ -487,10 +607,10 @@ describe("createMigrator", () => {
     });
 
     it("runs one heartbeat at a time when extending outlasts the interval", async () => {
-      const { store, hooks, tx } = harness({ lock: {} });
+      const { store, hooks, tx } = createLockedMigratorHarness();
       let inFlight = 0;
       let maxInFlight = 0;
-      const extendMigrationLock = store.extendMigrationLock!;
+      const extendMigrationLock = store.extendMigrationLock;
       store.extendMigrationLock = async (ownerId, ttlMs) => {
         inFlight += 1;
         maxInFlight = Math.max(maxInFlight, inFlight);
@@ -509,8 +629,8 @@ describe("createMigrator", () => {
     });
 
     it("aborts when heartbeats keep failing past the lease TTL", async () => {
-      const { applied, store, hooks, tx } = harness({
-        lock: { extendResults: ["reject"] },
+      const { applied, store, hooks, tx } = createLockedMigratorHarness({
+        extendResults: ["reject"],
       });
       stretchStatementsPastHeartbeat(hooks);
       await expect(
@@ -525,215 +645,48 @@ describe("createMigrator", () => {
     });
 
     it("runs unlocked when the store provides no lock methods", async () => {
-      const { events, store, tx } = harness();
-      const result = await createMigrator({ migrations: [tx(A)], store }).migrateToLatest();
+      const { events, store, tx } = createMigratorHarness("async");
+      const result = await createMigratorInMode("async", {
+        migrations: [tx(A)],
+        store,
+      }).migrateToLatest();
       expect(result.applied).toEqual([A]);
       expect(events.some((e) => e.kind === "acquire" || e.kind === "release")).toBe(false);
     });
   });
 
+  describe("before/after scripts", () => {
+    it("aborts a long-running script once the lease is lost", async () => {
+      const { applied, store } = createLockedMigratorHarness({ extendResults: [false] });
+      await expect(
+        createMigrator({
+          migrations: [],
+          store,
+          lock: { heartbeatIntervalMs: 5 },
+          after: async ({ assertLockHeld }) => {
+            for (let batch = 0; batch < 10; batch++) {
+              assertLockHeld();
+              await new Promise((resolve) => setTimeout(resolve, 20));
+            }
+          },
+        }).migrateToLatest(),
+      ).rejects.toThrow(/no longer held by this run/);
+
+      expect([...applied]).toEqual([]);
+    });
+  });
+
   describe("migrateTo", () => {
-    it("applies only migrations up to and including the target", async () => {
-      const { applied, store, tx } = harness();
-      const migrator = createMigrator({ migrations: [tx(A), tx(B), tx(C)], store });
-
-      const result = await migrator.migrateTo(B);
-      expect(result.applied).toEqual([A, B]);
-      expect([...applied]).toEqual([A, B]);
-    });
-
-    it("resumes from the last applied migration on a later target", async () => {
-      const { store, tx } = harness({ initiallyApplied: [A] });
-      const migrator = createMigrator({ migrations: [tx(A), tx(B), tx(C)], store });
-
-      const result = await migrator.migrateTo(C);
-      expect(result.skipped).toEqual([A]);
-      expect(result.applied).toEqual([B, C]);
-    });
-
-    it("computes unrecognized against the full migration set, not the target prefix", async () => {
-      const { store, tx } = harness({ initiallyApplied: ["legacy"] });
-      const migrator = createMigrator({ migrations: [tx(A), tx(B)], store });
-
-      const result = await migrator.migrateTo(A);
-      expect(result).toEqual({
-        skipped: [],
-        applied: [A],
-        reverted: [],
-        unrecognized: ["legacy"],
-      });
-    });
-
     it("rejects a target that is not in the list before taking the lease", async () => {
-      const { events, store, tx } = harness({ lock: {} });
+      const { events, store, tx } = createLockedMigratorHarness();
       await expect(createMigrator({ migrations: [tx(A)], store }).migrateTo(B)).rejects.toThrow(
         /Unknown migration "002_bravo"/,
       );
       expect(events).toEqual([]);
     });
-
-    it("reverts the applied migrations after the target, last first, each with its record in one transaction", async () => {
-      const { events, applied, store, tx } = harness({ initiallyApplied: [A, B, C] });
-      const result = await createMigrator({
-        migrations: [tx(A), tx(B), tx(C)],
-        store,
-      }).migrateTo(A);
-
-      expect(result).toEqual({ skipped: [A], applied: [], reverted: [C, B], unrecognized: [] });
-      expect([...applied]).toEqual([A]);
-      expect(events.slice(2)).toEqual([
-        { kind: "begin" },
-        { kind: "statement", sql: `undo ${C}`, inTx: true },
-        { kind: "unrecord", name: C, inTx: true },
-        { kind: "commit" },
-        { kind: "begin" },
-        { kind: "statement", sql: `undo ${B}`, inTx: true },
-        { kind: "unrecord", name: B, inTx: true },
-        { kind: "commit" },
-      ]);
-    });
-
-    it("refuses a `null` target, changing nothing, when the database has migrations the code doesn't know", async () => {
-      const { events, applied, store, tx } = harness({ initiallyApplied: [A, "legacy"] });
-      await expect(createMigrator({ migrations: [tx(A)], store }).migrateTo(null)).rejects.toThrow(
-        /applied migrations the code doesn't know: "legacy"/,
-      );
-
-      expect([...applied]).toEqual([A, "legacy"]);
-      expect(events.some((e) => e.kind === "statement" || e.kind === "unrecord")).toBe(false);
-    });
-
-    it("reverts every applied migration with a `null` target", async () => {
-      const { applied, store, tx } = harness({ initiallyApplied: [A, B] });
-      const result = await createMigrator({ migrations: [tx(A), tx(B), tx(C)], store }).migrateTo(
-        null,
-      );
-
-      expect(result).toEqual({ skipped: [], applied: [], reverted: [B, A], unrecognized: [] });
-      expect([...applied]).toEqual([]);
-    });
-
-    it("runs `before` and `after` around a revert", async () => {
-      const { events, store, tx } = harness({ initiallyApplied: [A, B] });
-      await createMigrator({
-        migrations: [tx(A), tx(B)],
-        store,
-        before: async () => void events.push({ kind: "script", name: "before" }),
-        after: async () => void events.push({ kind: "script", name: "after" }),
-      }).migrateTo(A);
-
-      expect(events[0]).toEqual({ kind: "script", name: "before" });
-      expect(events.at(-1)).toEqual({ kind: "script", name: "after" });
-    });
-
-    it("reverts a non-transactional migration outside a transaction, unrecording it last", async () => {
-      const { events, store, tx, nonTx } = harness({ initiallyApplied: [A, B] });
-      await createMigrator({ migrations: [tx(A), nonTx(B)], store }).migrateTo(A);
-
-      expect(events.slice(2)).toEqual([
-        { kind: "statement", sql: `undo ${B}`, inTx: false },
-        { kind: "unrecord", name: B, inTx: false },
-      ]);
-    });
-
-    it("keeps the record when a transactional `down` fails", async () => {
-      const { applied, store, tx } = harness({
-        initiallyApplied: [A, B],
-        failStatementsFor: `undo ${B}`,
-      });
-      await expect(
-        createMigrator({ migrations: [tx(A), tx(B)], store }).migrateTo(A),
-      ).rejects.toThrow(
-        'Reverting migration "002_bravo" failed: statement failed for undo 002_bravo',
-      );
-
-      expect([...applied]).toEqual([A, B]);
-    });
-
-    it("skips a transactional revert that another run made after the applied-set read", async () => {
-      const { events, applied, store, tx } = harness({ initiallyApplied: [A, B] });
-      const getAppliedMigrationNames = store.getAppliedMigrationNames;
-      store.getAppliedMigrationNames = async (txCtx) => {
-        const names = await getAppliedMigrationNames(txCtx);
-        applied.delete(B);
-        return names;
-      };
-      const result = await createMigrator({ migrations: [tx(A), tx(B)], store }).migrateTo(A);
-
-      expect(result.reverted).toEqual([]);
-      expect(events.some((e) => e.kind === "statement")).toBe(false);
-    });
-
-    it("stops reverting at a `down` that throws, keeping it and the migrations before it recorded", async () => {
-      const { events, applied, store, tx } = harness({ initiallyApplied: [A, B, C] });
-      const irreversible: Migration = {
-        ...tx(B),
-        down: async () => {
-          throw new Error("cannot revert 002_bravo");
-        },
-      };
-      await expect(
-        createMigrator({ migrations: [tx(A), irreversible, tx(C)], store }).migrateTo(A),
-      ).rejects.toThrow('Reverting migration "002_bravo" failed: cannot revert 002_bravo');
-
-      expect([...applied]).toEqual([A, B]);
-      expect(events.filter((e) => e.kind === "unrecord")).toEqual([
-        { kind: "unrecord", name: C, inTx: true },
-      ]);
-    });
-
-    it("refuses to revert, changing nothing, when the database has migrations the code doesn't know", async () => {
-      const { events, applied, store, tx } = harness({ initiallyApplied: [A, B, "legacy"] });
-      await expect(
-        createMigrator({ migrations: [tx(A), tx(B)], store }).migrateTo(A),
-      ).rejects.toThrow(/applied migrations the code doesn't know: "legacy"/);
-
-      expect([...applied]).toEqual([A, B, "legacy"]);
-      expect(events.some((e) => e.kind === "statement" || e.kind === "unrecord")).toBe(false);
-    });
   });
 
   describe("validation", () => {
-    it("accepts any unique names and runs them in list order", async () => {
-      const { events, store, tx } = harness();
-      const result = await createMigrator({
-        migrations: [tx("create_invoices"), tx("add_invoice_due_date")],
-        store,
-      }).migrateToLatest();
-
-      expect(result.applied).toEqual(["create_invoices", "add_invoice_due_date"]);
-      expect(events.filter((e) => e.kind === "statement").map((e) => e.sql)).toEqual([
-        "create_invoices",
-        "add_invoice_due_date",
-      ]);
-    });
-
-    it("rejects an empty migration name", () => {
-      const { store, tx } = harness();
-      expect(() => createMigrator({ migrations: [tx("")], store })).toThrow(
-        /Invalid migration name/,
-      );
-    });
-
-    it("rejects duplicate migration names", () => {
-      const { store, tx } = harness();
-      expect(() => createMigrator({ migrations: [tx(A), tx(A)], store })).toThrow(
-        /Duplicate migration name "001_alpha"/,
-      );
-    });
-
-    it("refuses to run when a pending migration is listed before an applied one", async () => {
-      const { events, applied, store, tx } = harness({ initiallyApplied: [A, C] });
-      await expect(
-        createMigrator({ migrations: [tx(A), tx(B), tx(C)], store }).migrateToLatest(),
-      ).rejects.toThrow(
-        /Pending migrations are listed before the applied migration "003_charlie": "002_bravo"/,
-      );
-
-      expect([...applied]).toEqual([A, C]);
-      expect(events.some((e) => e.kind === "statement" || e.kind === "record")).toBe(false);
-    });
-
     it("accepts the default lease timing", () => {
       expect(() => {
         assertMigrationLockOptions("createMigrator", undefined);
@@ -785,13 +738,69 @@ describe("createMigrator", () => {
     });
 
     it("rejects a store that provides only some of the lock methods at compile time", () => {
-      const { store } = harness();
+      const { store } = createMigratorHarness("async");
       // @ts-expect-error -- the lock methods are all-or-none; a partial set matches neither union branch.
-      const partial: Store = {
-        ...store,
+      const partial: MigrationStore<TxCtx> = {
+        ...(store as MigrationStore<TxCtx>),
         acquireMigrationLock: async () => true,
       };
       expect(partial.acquireMigrationLock).toBeDefined();
     });
+  });
+});
+
+describe("createSyncMigrator", () => {
+  const asyncMigration = (name: string): Migration<TxCtx, "sync"> => ({
+    name,
+    // oxlint-disable-next-line typescript/no-misused-promises -- the case checks that the sync migrator throws on a promise
+    up: async () => {},
+    // oxlint-disable-next-line typescript/no-misused-promises -- the case checks that the sync migrator throws on a promise
+    down: async () => {},
+  });
+
+  it("throws on a transactional migration whose `up` returns a promise, rolling it back unrecorded", () => {
+    const { events, applied, store } = createMigratorHarness("sync");
+
+    expect(() =>
+      createSyncMigrator({
+        migrations: [asyncMigration(A)],
+        store: store as MigrationStore<TxCtx, "sync">,
+      }).migrateToLatest(),
+    ).toThrow(/Expected a synchronous callback/);
+    expect([...applied]).toEqual([]);
+    expect(events).toContainEqual({ kind: "rollback" });
+  });
+
+  it("throws on a non-transactional migration whose `up` returns a promise, recording nothing", () => {
+    const { applied, store } = createMigratorHarness("sync");
+
+    expect(() =>
+      createSyncMigrator({
+        migrations: [
+          {
+            name: B,
+            type: "non-transactional",
+            // oxlint-disable-next-line typescript/no-misused-promises -- the case checks that the sync migrator throws on a promise
+            up: async () => {},
+            down: () => {},
+          },
+        ],
+        store: store as MigrationStore<TxCtx, "sync">,
+      }).migrateToLatest(),
+    ).toThrow(/Expected a synchronous callback/);
+    expect([...applied]).toEqual([]);
+  });
+
+  it("throws on a `before` script that returns a promise", () => {
+    const { store } = createMigratorHarness("sync");
+
+    expect(() =>
+      createSyncMigrator({
+        migrations: [],
+        store: store as MigrationStore<TxCtx, "sync">,
+        // oxlint-disable-next-line typescript/no-misused-promises -- the case checks that the sync migrator throws on a promise
+        before: async () => {},
+      }).migrateToLatest(),
+    ).toThrow(/Expected a synchronous callback/);
   });
 });

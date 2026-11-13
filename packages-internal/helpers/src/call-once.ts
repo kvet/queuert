@@ -1,8 +1,10 @@
+import { type MaybePromise, andThen, tryCatch } from "./maybe-promise.ts";
+
 export const createCallOnce = <TArgs extends unknown[], TResult>(
   name: string,
-  fn: (...args: TArgs) => Promise<TResult>,
+  fn: (...args: TArgs) => MaybePromise<TResult>,
 ): {
-  call: (...args: TArgs) => Promise<TResult>;
+  call: (...args: TArgs) => MaybePromise<TResult>;
   requireResult: (missingMessage: string) => TResult;
 } => {
   let started = false;
@@ -17,20 +19,24 @@ export const createCallOnce = <TArgs extends unknown[], TResult>(
   };
 
   return {
-    call: async (...args) => {
+    call: (...args) => {
       throwLatchedFailure();
       if (started) {
         throw new Error(`${name} can only be called once`);
       }
       started = true;
-      try {
-        const value = await fn(...args);
-        result = { value };
-        return value;
-      } catch (error) {
-        failure = { error };
-        throw error;
-      }
+      return tryCatch(
+        () =>
+          andThen(fn(...args), (value) => {
+            result = { value };
+            return value;
+          }),
+        (error) => {
+          failure = { error };
+          // oxlint-disable-next-line typescript/only-throw-error -- re-throwing caught error
+          throw error;
+        },
+      );
     },
     requireResult: (missingMessage) => {
       throwLatchedFailure();

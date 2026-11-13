@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 
-import { createAsyncRwLock, createSqliteMigrator, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createSqliteMigrator, createSqliteStateAdapter } from "@queuert/sqlite";
 import {
   createClient,
   createWorkerRunner,
@@ -36,27 +36,23 @@ const jobTypes = defineJobTypes<{
 
 // Create state provider for node:sqlite
 // #region adapter
-const lock = createAsyncRwLock();
-const stateProvider = createNodeSqliteStateProvider({ db, lock });
-await using stateAdapter = createSqliteStateAdapter({ stateProvider });
-await stateAdapter.migrateToLatest();
+const stateProvider = createNodeSqliteStateProvider({ db });
+using stateAdapter = createSqliteStateAdapter({ stateProvider });
+stateAdapter.migrateToLatest();
 // #endregion
 
 // Run the application's own migrations through the same provider
 const migrator = createSqliteMigrator({
   stateProvider,
-  migrations: createMigrations({ db, lock }),
+  migrations: createMigrations({ db }),
 });
-const { applied } = await migrator.migrateToLatest();
+const { applied } = migrator.migrateToLatest();
 console.log(`Applied application migrations: ${applied.join(", ")}`);
-{
-  using _h = await lock.acquireRead();
-  const invoices = db.prepare("SELECT id, customer, status FROM invoices ORDER BY id").all();
-  assert.deepEqual(
-    invoices.map((invoice) => ({ ...invoice })),
-    [1, 2, 3, 4, 5].map((id) => ({ id, customer: `CUSTOMER-${id}`, status: "open" })),
-  );
-}
+const invoices = db.prepare("SELECT id, customer, status FROM invoices ORDER BY id").all();
+assert.deepEqual(
+  invoices.map((invoice) => ({ ...invoice })),
+  [1, 2, 3, 4, 5].map((id) => ({ id, customer: `CUSTOMER-${id}`, status: "open" })),
+);
 
 const client = createClient({ stateAdapter, jobTypes });
 
@@ -69,25 +65,18 @@ await using workerRunner = createWorkerRunner({
     processors: {
       send_welcome_email: {
         attemptHandler: async ({ job, complete }) => {
-          let user: { id: number; name: string; email: string } | undefined;
-          {
-            using _h = await lock.acquireRead();
-            user = db
-              .prepare("SELECT id, name, email FROM users WHERE id = ?")
-              .get(job.input.userId) as { id: number; name: string; email: string } | undefined;
-          }
+          const user = db
+            .prepare("SELECT id, name, email FROM users WHERE id = ?")
+            .get(job.input.userId) as { id: number; name: string; email: string } | undefined;
           if (!user) throw new Error(`User ${job.input.userId} not found`);
 
           // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          return withTxHooks(async (txHooks) => {
-            // The handler's transaction holds the provider's write lock, so the worker's
-            // autocommit statements on this connection cannot run inside it.
-            using _h = await lock.acquireWrite();
+          return withTxHooks((txHooks) => {
             db.exec("BEGIN");
             try {
-              const result = await complete({
+              const result = complete({
                 db,
                 txHooks,
                 output: { sentAt: new Date().toISOString() },
@@ -95,13 +84,7 @@ await using workerRunner = createWorkerRunner({
               db.exec("COMMIT");
               return result;
             } catch (error) {
-              if (db.isTransaction) {
-                try {
-                  db.exec("ROLLBACK");
-                } catch {
-                  // ignore rollback errors
-                }
-              }
+              if (db.isTransaction) db.exec("ROLLBACK");
               throw error;
             }
           });
@@ -115,15 +98,14 @@ await workerRunner.start();
 
 // Register a new user and queue welcome email atomically
 // #region create-chain
-const chain = await withTxHooks(async (txHooks) => {
-  using _h = await lock.acquireWrite();
+const chain = withTxHooks((txHooks) => {
   db.exec("BEGIN");
   try {
     const insertStmt = db.prepare("INSERT INTO users (name, email) VALUES (?, ?) RETURNING id");
     const user = insertStmt.get("Alice", "alice@example.com") as { id: number };
 
     // Queue welcome email - if user creation fails, no email job is created
-    const result = await client.createChain({
+    const result = client.createChain({
       db,
       txHooks,
       typeName: "send_welcome_email",
@@ -133,13 +115,7 @@ const chain = await withTxHooks(async (txHooks) => {
     db.exec("COMMIT");
     return result;
   } catch (error) {
-    if (db.isTransaction) {
-      try {
-        db.exec("ROLLBACK");
-      } catch {
-        // ignore rollback errors
-      }
-    }
+    if (db.isTransaction) db.exec("ROLLBACK");
     throw error;
   }
 });

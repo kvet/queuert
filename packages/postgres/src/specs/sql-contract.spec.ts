@@ -2,7 +2,7 @@
 import { conformanceTestSuite } from "@queuert/helpers/conformance";
 import { detectResourceLeaks } from "@queuert/helpers/testing";
 import { TESTCONTAINERS_RESOURCE_TYPES, acquirePostgres } from "@queuert/testcontainers";
-import type { RuntimeType } from "@queuert/typed-sql";
+import type { RuntimeType } from "@queuert/typed-sql/sql";
 import { Client, Pool } from "pg";
 import type { StateAdapterConformanceContext } from "queuert/conformance";
 import {
@@ -335,6 +335,7 @@ baseIt("index");
 
 describe("PostgreSQL SQL contract", () => {
   conformanceTestSuite({
+    mode: "async",
     it,
     groups: [...stateAdapterBaseGroups, ...stateAdapterConcurrentTransactionGroups],
   });

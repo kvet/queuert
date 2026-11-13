@@ -1,4 +1,6 @@
+import { tryFinally } from "@queuert/helpers/maybe-promise";
 import Database from "better-sqlite3";
+import type { AdapterMode } from "queuert";
 import type { SchemaFenceConformanceContext } from "queuert/conformance-internal";
 
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";
@@ -29,30 +31,31 @@ export const varianceDb = async (
 };
 
 export const varianceConformance =
-  (options: VarianceOptions) =>
+  (options: VarianceOptions, mode: AdapterMode) =>
   async ({ db }: { db: Database.Database }): Promise<SchemaFenceConformanceContext> => {
     const createStateAdapter = () =>
-      createSqliteStateAdapter({ stateProvider: createBetterSqlite3Provider({ db }), ...options });
+      createSqliteStateAdapter({
+        stateProvider: createBetterSqlite3Provider({ db, mode }),
+        ...options,
+      });
     {
       await using stateAdapter = createStateAdapter();
       await stateAdapter.migrateToLatest();
     }
     const fenceTable = `${options.tablePrefix}schema_fence_v1`;
     return {
-      createStateAdapter: async () => {
+      createStateAdapter: () => {
         db.exec(
           `DELETE FROM ${options.tablePrefix}job_blocker; DELETE FROM ${options.tablePrefix}job; DELETE FROM ${options.tablePrefix}worker;`,
         );
         return createStateAdapter();
       },
-      withNonTransactionContext: async (fn) => fn({ db }),
-      withWritesFenced: async (fn) => {
+      withNonTransactionContext: (fn) => fn({ db }),
+      withWritesFenced: (fn) => {
         db.exec(`DROP TABLE ${fenceTable}`);
-        try {
-          return await fn();
-        } finally {
+        return tryFinally(fn, () => {
           db.exec(`CREATE TABLE ${fenceTable} (id INTEGER PRIMARY KEY)`);
-        }
+        });
       },
     };
   };

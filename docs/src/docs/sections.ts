@@ -20,7 +20,7 @@ export const apiPackages = [
     label: "queuert",
     dir: "core",
     slug: "core",
-    summary: "Client, worker runner and job types.",
+    summary: "Client, worker, job types and the in-process adapters.",
   },
   {
     label: "queuert/conformance",
@@ -77,6 +77,7 @@ export const apiPackages = [
     summary: "Conformance cases for Redis providers.",
   },
   { label: "@queuert/nats", dir: "nats", slug: "nats", summary: "NATS notify adapter." },
+  { label: "@queuert/ipc", dir: "ipc", slug: "ipc", summary: "IPC notify adapter." },
   {
     label: "@queuert/otel",
     dir: "otel",
@@ -156,6 +157,7 @@ export const siteSections: SiteSection[] = [
           "integrations/state-adapters/sqlite",
           "integrations/state-adapters/mysql",
           "integrations/state-adapters/redis",
+          "integrations/state-adapters/in-process",
           "integrations/state-adapters/custom",
         ],
       },
@@ -166,6 +168,7 @@ export const siteSections: SiteSection[] = [
           "integrations/notify-adapters/postgres",
           "integrations/notify-adapters/redis",
           "integrations/notify-adapters/nats",
+          "integrations/notify-adapters/ipc",
           "integrations/notify-adapters/custom",
         ],
       },

@@ -1,82 +1,85 @@
-import type { BaseTxContext, StateAdapter } from "../../state-adapter/state-adapter.ts";
+import type { MaybePromise } from "@queuert/helpers/maybe-promise";
+
+import { isSyncAdapter } from "../../adapter-mode.ts";
+import type { ConformanceStateAdapter } from "../../conformance/adapters.ts";
 import { createFlakyBatchGenerator } from "./flaky-batch-generator.ts";
 import type { FlakyCallCounts } from "./flaky-notify-adapter.ts";
 
-export const createFlakyStateAdapter = <
-  TTxContext extends BaseTxContext,
-  TJobId extends string,
-  TWorkerId extends string,
->(
-  stateAdapter: StateAdapter<TTxContext, TJobId, TWorkerId>,
-): { stateAdapter: StateAdapter<TTxContext, TJobId, TWorkerId>; counts: FlakyCallCounts } => {
+const flakyMethods = [
+  "getChains",
+  "getJobs",
+  "getWorkers",
+  "createJobs",
+  "continueJobs",
+  "completeJobs",
+  "rescheduleJobs",
+  "deleteChains",
+  "startJobAttempts",
+  "getStartAttemptDelayMs",
+  "addJobsBlockers",
+  "getJobBlockers",
+  "unblockJobs",
+  "startWorker",
+  "extendWorkerLease",
+  "stopWorker",
+  "getChainTypeNames",
+  "getJobTypeNames",
+  "countChainsByTypeName",
+  "countJobsByTypeName",
+  "countWorkers",
+  "countWorkersByTypeName",
+  "countRunningJobsByWorkerId",
+  "listChains",
+  "listJobs",
+  "listChainJobs",
+  "listBlockedJobs",
+  "listWorkers",
+  "listWorkerJobs",
+] as const;
+
+export const createFlakyStateAdapter = <TStateAdapter extends ConformanceStateAdapter>(
+  stateAdapter: TStateAdapter,
+): { stateAdapter: TStateAdapter; counts: FlakyCallCounts } => {
   const counts: FlakyCallCounts = { calls: 0, errors: 0 };
   const shouldError = createFlakyBatchGenerator();
+  const sync = isSyncAdapter(stateAdapter);
 
-  const maybeThrow = (): void => {
+  const flakyError = (): Error | undefined => {
     counts.calls++;
-    if (shouldError()) {
-      counts.errors++;
-      const error = new Error("connection reset") as Error & { code: string };
-      error.code = "ECONNRESET";
-      throw error;
-    }
+    if (!shouldError()) return undefined;
+    counts.errors++;
+    const error = new Error("connection reset") as Error & { code: string };
+    error.code = "ECONNRESET";
+    return error;
   };
 
-  const wrap = <T extends (...args: never[]) => Promise<unknown>>(fn: T): T =>
-    (async (...args: Parameters<T>) => {
-      const params = args[0] as { txCtx?: TTxContext } | undefined;
-      if (params?.txCtx === undefined) {
-        maybeThrow();
-      }
-      return fn(...args);
-    }) as unknown as T;
+  const fail = (error: Error): never | Promise<never> => {
+    if (sync) throw error;
+    return Promise.reject(error);
+  };
+
+  const wrap =
+    (fn: (...args: unknown[]) => MaybePromise<unknown>) =>
+    (...args: unknown[]) => {
+      const params = args[0] as { txCtx?: unknown } | undefined;
+      const error = params?.txCtx === undefined ? flakyError() : undefined;
+      return error === undefined ? fn(...args) : fail(error);
+    };
+
+  const flaky: Record<string, unknown> = {};
+  for (const name of flakyMethods) {
+    flaky[name] = wrap(stateAdapter[name] as (...args: unknown[]) => MaybePromise<unknown>);
+  }
 
   return {
     counts,
     stateAdapter: {
-      config: stateAdapter.config,
-      withTransaction: async (fn) => {
-        maybeThrow();
-        return stateAdapter.withTransaction(fn);
+      ...stateAdapter,
+      ...flaky,
+      withTransaction: <T>(fn: (txCtx: any) => MaybePromise<T>): MaybePromise<T> => {
+        const error = flakyError();
+        return error === undefined ? stateAdapter.withTransaction(fn) : fail(error);
       },
-      isTransaction: (txCtx) => stateAdapter.isTransaction(txCtx),
-      onTransactionCommit: (txCtx, callback) => {
-        stateAdapter.onTransactionCommit(txCtx, callback);
-      },
-      onTransactionRollback: (txCtx, callback) => {
-        stateAdapter.onTransactionRollback(txCtx, callback);
-      },
-      getChains: wrap(stateAdapter.getChains),
-      getJobs: wrap(stateAdapter.getJobs),
-      getWorkers: wrap(stateAdapter.getWorkers),
-      createJobs: wrap(stateAdapter.createJobs),
-      continueJobs: wrap(stateAdapter.continueJobs),
-      completeJobs: wrap(stateAdapter.completeJobs),
-      rescheduleJobs: wrap(stateAdapter.rescheduleJobs),
-      deleteChains: wrap(stateAdapter.deleteChains),
-      startJobAttempts: wrap(stateAdapter.startJobAttempts),
-      getStartAttemptDelayMs: wrap(stateAdapter.getStartAttemptDelayMs),
-      addJobsBlockers: wrap(stateAdapter.addJobsBlockers),
-      getJobBlockers: wrap(stateAdapter.getJobBlockers),
-      unblockJobs: wrap(stateAdapter.unblockJobs),
-      startWorker: wrap(stateAdapter.startWorker),
-      extendWorkerLease: wrap(stateAdapter.extendWorkerLease),
-      stopWorker: wrap(stateAdapter.stopWorker),
-      getChainTypeNames: wrap(stateAdapter.getChainTypeNames),
-      getJobTypeNames: wrap(stateAdapter.getJobTypeNames),
-      countChainsByTypeName: wrap(stateAdapter.countChainsByTypeName),
-      countJobsByTypeName: wrap(stateAdapter.countJobsByTypeName),
-      countWorkers: wrap(stateAdapter.countWorkers),
-      countWorkersByTypeName: wrap(stateAdapter.countWorkersByTypeName),
-      countRunningJobsByWorkerId: wrap(stateAdapter.countRunningJobsByWorkerId),
-      listChains: wrap(stateAdapter.listChains),
-      listJobs: wrap(stateAdapter.listJobs),
-      listChainJobs: wrap(stateAdapter.listChainJobs),
-      listBlockedJobs: wrap(stateAdapter.listBlockedJobs),
-      listWorkers: wrap(stateAdapter.listWorkers),
-      listWorkerJobs: wrap(stateAdapter.listWorkerJobs),
-      close: stateAdapter.close,
-      [Symbol.asyncDispose]: stateAdapter.close,
     },
   };
 };

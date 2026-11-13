@@ -1,5 +1,4 @@
-import { createClient, defineJobTypes } from "queuert";
-import { createInProcessStateAdapter } from "queuert/conformance-internal";
+import { createClient, defineJobTypes, createInProcessStateAdapter } from "queuert";
 import { describe, expect, it } from "vitest";
 
 import { createDashboard } from "../api/dashboard.ts";

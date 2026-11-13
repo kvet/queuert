@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.ts";
+import { createInProcessNotifyAdapter } from "../notify-adapter.in-process/notify-adapter.in-process.ts";
 
 describe("In-Process Notify Adapter — indexed routing", () => {
   it("dispatch cost is independent of unrelated listener count (indexed by id)", async () => {

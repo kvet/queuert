@@ -4,8 +4,11 @@ import { it as baseIt, describe } from "vitest";
 
 import { endToEndBaseGroups, endToEndNotifyGroups } from "../conformance.end-to-end/groups.ts";
 import type { StateAdapterConformanceContext } from "../conformance.state-adapter/types.ts";
-import { noopNotifyAdapter } from "../notify-adapter/notify-adapter.noop.ts";
-import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.ts";
+import { noopNotifyAdapter, syncNoopNotifyAdapter } from "../notify-adapter/notify-adapter.noop.ts";
+import {
+  createInProcessStateAdapter,
+  createSyncInProcessStateAdapter,
+} from "../state-adapter.in-process/state-adapter.in-process.ts";
 
 const it = baseIt.extend("resourceLeakCheck", { auto: true }, detectResourceLeaks());
 
@@ -28,6 +31,25 @@ const noopNotifyIt = it.extend(
   }),
 );
 
+const syncInProcessNotifyIt = it.extend(
+  "conformance",
+  { scope: "file" },
+  async (): Promise<StateAdapterConformanceContext> => ({
+    createStateAdapter: () => createSyncInProcessStateAdapter(),
+    withNonTransactionContext: (fn) => fn({ outsideTransaction: true }),
+  }),
+);
+
+const syncNoopNotifyIt = it.extend(
+  "conformance",
+  { scope: "file" },
+  async (): Promise<StateAdapterConformanceContext> => ({
+    createStateAdapter: () => createSyncInProcessStateAdapter(),
+    withNonTransactionContext: (fn) => fn({ outsideTransaction: true }),
+    createNotifyAdapter: () => syncNoopNotifyAdapter,
+  }),
+);
+
 // NOTE: hack for vitest plugin
 baseIt("index");
 
@@ -35,9 +57,22 @@ describe("In-Process End-to-End Conformance, in-process notify", () => {
   conformanceTestSuite({
     it: inProcessNotifyIt,
     groups: [...endToEndBaseGroups, ...endToEndNotifyGroups],
+    mode: "async",
   });
 });
 
 describe("In-Process End-to-End Conformance, noop notify", () => {
-  conformanceTestSuite({ it: noopNotifyIt, groups: endToEndBaseGroups });
+  conformanceTestSuite({ it: noopNotifyIt, groups: endToEndBaseGroups, mode: "async" });
+});
+
+describe("Sync In-Process End-to-End Conformance, in-process notify", () => {
+  conformanceTestSuite({
+    it: syncInProcessNotifyIt,
+    groups: [...endToEndBaseGroups, ...endToEndNotifyGroups],
+    mode: "sync",
+  });
+});
+
+describe("Sync In-Process End-to-End Conformance, noop notify", () => {
+  conformanceTestSuite({ it: syncNoopNotifyIt, groups: endToEndBaseGroups, mode: "sync" });
 });

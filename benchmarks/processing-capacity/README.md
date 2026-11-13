@@ -1,12 +1,12 @@
 # Processing Capacity Benchmark
 
-Job throughput along two independent axes: state adapter (with a noop notify adapter, so only the state adapter is measured) and notify adapter (with the in-process state default). Each adapter runs five scenarios, each in a separate child process for isolation. Every scenario measures a fixed 2 s window, so a slow adapter costs the same wall time as a fast one:
+Job throughput along two independent axes: state adapter (with a noop notify adapter, so only the state adapter is measured) and notify adapter (with the in-process state default). The in-process baselines run synchronously (`In-process (sync)`), and synchronous notify adapters such as IPC run over the synchronous in-process state adapter, so compare them with that row. Each adapter runs five scenarios, each in a separate child process for isolation. Every scenario measures a fixed 2 s window, so a slow adapter costs the same wall time as a fast one:
 
 - **Single creation** (`create-single`) — chains created via `createChain`, one per transaction (chains/s).
 - **Batched creation** (`create-batched`) — chains created via `createChains` in batches of 100 (chains/s).
 - **No-op completion at concurrency 1, 4 and 16** (`complete-noop-1`, `-4`, `-16`) — 40,000 chains are seeded (not measured), then a worker with that many slots completes them; each handler opens its own transaction and calls `complete` in it (jobs/s).
 
-Every completion scenario starts from the same 40,000-job queue, so only concurrency varies between them. A result prefixed with `>` drained the queue before the window ended and is a lower bound. Redis state runs also print the Redis main-thread CPU time spent per chain or job during the window.
+Every completion scenario starts from the same 40,000-job queue, so only concurrency varies between them. The window starts when the worker takes its first job; a fast adapter that drains the queue before the window ends is timed up to its last job, so its rate is still exact. Redis state runs also print the Redis main-thread CPU time spent per chain or job during the window.
 
 Containers (PostgreSQL, MySQL, MariaDB, Redis, NATS) start once per run and are shared: each scenario child gets its own PostgreSQL schema, MySQL database, channel prefix or subject prefix. After all runs finish, the tool prints one markdown table per scenario family (creation, no-op completion), with adapters as rows grouped by axis; the docs take these numbers in `docs/src/data/benchmarks.ts`.
 
@@ -18,7 +18,7 @@ Each adapter has one script per provider example, so you can compare driver impl
 pnpm start                                # all benchmarks, all five scenarios
 
 # State axis (noop notify)
-pnpm start:state-in-process               # in-process state
+pnpm start:state-in-process-sync          # synchronous in-process state
 pnpm start:state-sqlite-better-sqlite3    # SQLite state via better-sqlite3
 pnpm start:state-sqlite-node-sqlite       # SQLite state via node:sqlite
 pnpm start:state-postgres-postgres-js     # PostgreSQL state via postgres-js
@@ -29,12 +29,13 @@ pnpm start:state-redis-redis              # Redis state via node-redis
 pnpm start:state-redis-ioredis            # Redis state via ioredis
 
 # Notify axis (in-process state)
-pnpm start:notify-in-process              # in-process notify
+pnpm start:notify-in-process-sync         # synchronous in-process notify and state
 pnpm start:notify-redis-redis             # Redis notify via node-redis
 pnpm start:notify-redis-ioredis           # Redis notify via ioredis
 pnpm start:notify-postgres-pg             # PostgreSQL notify via pg
 pnpm start:notify-postgres-postgres-js    # PostgreSQL notify via postgres-js
 pnpm start:notify-nats-transport-node     # NATS notify via @nats-io/transport-node
+pnpm start:notify-ipc                     # IPC notify between two adapters over a Unix socket
 
 pnpm start --state-sqlite-better-sqlite3 --scenario=create-single    # one scenario
 ```

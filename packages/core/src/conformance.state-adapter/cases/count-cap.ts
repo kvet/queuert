@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 
+import { caseBody, resource } from "@queuert/helpers/case-body";
+import { step } from "@queuert/helpers/steps";
+
 import type { ConformanceGroup } from "../../conformance/runner.ts";
 import type { StateAdapterConformanceContext } from "../types.ts";
 
@@ -15,8 +18,8 @@ export const countCapGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   cases: [
     {
       name: "countChainsByTypeName and countJobsByTypeName stop counting at config.countCap",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
         const { countCap } = stateAdapter.config;
         if (countCap > MAX_EXERCISED_COUNT_CAP) {
@@ -24,26 +27,28 @@ export const countCapGroup: ConformanceGroup<StateAdapterConformanceContext> = {
             `countCap is ${countCap}: run the countCap cases against an adapter created with countCap <= ${MAX_EXERCISED_COUNT_CAP}`,
           );
         }
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              ...Array.from({ length: countCap + 1 }, () => ({
-                id: stateAdapter.config.generateJobId(),
-                typeName: "over-cap",
-                input: null,
-              })),
-              ...Array.from({ length: countCap }, () => ({
-                id: stateAdapter.config.generateJobId(),
-                typeName: "at-cap",
-                input: null,
-              })),
-            ],
-          }),
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                ...Array.from({ length: countCap + 1 }, () => ({
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "over-cap",
+                  input: null,
+                })),
+                ...Array.from({ length: countCap }, () => ({
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "at-cap",
+                  input: null,
+                })),
+              ],
+            }),
+          ),
         );
 
         assert.deepEqual(
-          await stateAdapter.countChainsByTypeName({ typeNames: ["over-cap", "at-cap"] }),
+          yield* step(stateAdapter.countChainsByTypeName({ typeNames: ["over-cap", "at-cap"] })),
           [
             {
               running: { count: countCap, hasMore: true },
@@ -56,12 +61,14 @@ export const countCapGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           ],
         );
 
-        const [over, at] = await stateAdapter.countJobsByTypeName({
-          typeNames: ["over-cap", "at-cap"],
-        });
+        const [over, at] = yield* step(
+          stateAdapter.countJobsByTypeName({
+            typeNames: ["over-cap", "at-cap"],
+          }),
+        );
         assert.deepEqual(over.pending, { count: countCap, hasMore: true });
         assert.deepEqual(at.pending, { count: countCap, hasMore: false });
-      },
+      }),
     },
   ],
 };

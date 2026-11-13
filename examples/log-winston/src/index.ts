@@ -1,4 +1,4 @@
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 import {
@@ -58,14 +58,14 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create adapters and queuert client
-await using drivers = new AsyncDisposableStack();
+using drivers = new DisposableStack();
 const db = drivers.adopt(new Database(":memory:"), (db) => {
   db.close();
 });
-await using stateAdapter = createSqliteStateAdapter({
-  stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
+using stateAdapter = createSqliteStateAdapter({
+  stateProvider: createBetterSqlite3StateProvider({ db }),
 });
-await stateAdapter.migrateToLatest();
+stateAdapter.migrateToLatest();
 // #region client
 const log = createWinstonLog(logger);
 
@@ -107,7 +107,7 @@ await using workerRunner = createWorkerRunner({
           log.info("Starting to process greeting");
           log.info("Generating greeting", { name: job.input.name });
 
-          return stateAdapter.withTransaction(async (ctx) =>
+          return stateAdapter.withTransaction((ctx) =>
             complete({
               ...ctx,
               output: { greeting: `Hello, ${job.input.name}!` },
@@ -126,7 +126,7 @@ await using workerRunner = createWorkerRunner({
 
           log.info("Job succeeded");
 
-          return stateAdapter.withTransaction(async (ctx) =>
+          return stateAdapter.withTransaction((ctx) =>
             complete({ ...ctx, output: { success: true as const } }),
           );
         },
@@ -141,7 +141,7 @@ await workerRunner.start();
 
 // Run successful job
 logger.info("--- Running successful job ---");
-const successChain = await stateAdapter.withTransaction(async (ctx) =>
+const successChain = stateAdapter.withTransaction((ctx) =>
   client.createChain({
     ...ctx,
     typeName: "greet",
@@ -152,7 +152,7 @@ await client.awaitChain(successChain, { timeoutMs: 5000 });
 
 // Run job that fails then succeeds (demonstrates error logging with stack trace)
 logger.info("--- Running job that fails first attempt ---");
-const failThenSucceedChain = await stateAdapter.withTransaction(async (ctx) =>
+const failThenSucceedChain = stateAdapter.withTransaction((ctx) =>
   client.createChain({
     ...ctx,
     typeName: "might-fail",

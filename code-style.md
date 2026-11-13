@@ -12,6 +12,7 @@ This document describes code style conventions, testing patterns, and project or
 - **Multiline doc comments for long or multi-clause descriptions**: Keep single-line `/** ... */` doc comments only for short descriptions that comfortably fit the line width (~100 chars). Once a doc comment runs longer than one line, or enumerates multiple clauses (several `@throws`, `@param`, or a trailing `@defaultValue`/`@internal`), expand it to a multiline block and put each tag on its own line — a crammed one-liner listing every error a method throws is unreadable in both source and editor tooltips. Prefer prose `@throws {@link SomeError} if …` lines over a comma-separated "Throws X, Y, Z" sentence.
 - **Merge similar functionality**: Look for patterns and consolidate before adding new code
 - **Search before implementing**: Check for similar existing implementations before adding new features
+- **Reuse `@queuert/helpers`**: Small runtime utilities shared across packages live in `packages-internal/helpers` (`sleep`, `raceWithSleep`, `createLatch`, `createCallOnce`, `createSharedListener`, `isThenable`, `serializeError`, …), with test utilities in `@queuert/helpers/testing`. Import each one from its own file (`@queuert/helpers/sleep`), since the package has no barrel, instead of re-declaring a local copy, in source and in specs alike. When a utility is needed by a second package, move it into `@queuert/helpers` rather than duplicating it.
 - **Typed error classes**: Use specific error types for all thrown errors (`JobNotFoundError`, `JobAlreadyCompletedError`, etc.) to enable proper error handling by consumers. Generic `Error` should only be used for truly unreachable code paths (assertion-style guards). If a caller could reasonably need to catch and handle an error, it must have a specific type. Throws that are not recoverable — programmer-error invariants, corrupted internal input (e.g., malformed cursors), and configuration mistakes that surface at setup time and require a code change to fix — stay as bare `Error`; a typed class adds API surface without enabling any new caller behavior. The same goes for caller misuse the type system already rejects: the runtime throw is a backstop for JavaScript callers and for `any` erasing the signature, so it needs a clear message, not a class nobody can meaningfully catch. `requireTxCtx` in `packages/core/src/state-adapter/tx-context.ts` is the reference case — the transaction context is required by the method's type, and the throw only fires when the types were bypassed.
 - **Factory functions over classes**: Expose `createClient()` instead of `new Client()`. Classes can be used internally, but the public API should always be factory functions. This keeps constructors private and makes the API consistent.
 - **Nullable conventions**: Use `undefined` for "not found/not present" and `null` for "explicitly set to no value". For example, `getJobById` returns `undefined` when job doesn't exist, while `job.completedAt` is `null` before completion.
@@ -27,8 +28,9 @@ This document describes code style conventions, testing patterns, and project or
 - **No type re-exports from non-owning modules**: A module should only export types it defines. Do not import a type from its source module just to re-export it — consumers should import directly from the module that owns the type. The only exception is each package's top-level `index.ts` entry point.
 - **Justify every lint suppression**: An `oxlint-disable*` comment always carries the rule name and a `--` reason explaining why the rule is wrong here, e.g. `// oxlint-disable-next-line typescript/only-throw-error -- re-throwing caught error`. A bare disable is not acceptable; if the reason is long, point at the file or spec that demonstrates it.
 - **TypeScript runs on Node's type stripping**: Examples, benchmarks, and spawned scripts run as `node file.ts` with no loader, so source must be erasable TypeScript (no enums, namespaces, or constructor parameter properties; `erasableSyntaxOnly` enforces this). Relative imports name the real file with its `.ts` extension (`./client.ts`, not `./client.js`). Import types with `import type { A, B }` when every specifier is a type and with inline `type` when mixed with values (`import { createClient, type Client }`); `verbatimModuleSyntax` and `typescript/no-import-type-side-effects` enforce this. Child processes are spawned with `process.execPath`, not `"node"`, so they inherit the running Node.
-- **Minimum server versions**: Each state adapter supports a minimum server version (PostgreSQL 14, SQLite 3.42, MySQL 8.4, MariaDB 11.4, Redis 6), names it in the TSDoc of its create function, and checks it in `migrateToLatest()` with `Unsupported <server> version <version>: Queuert needs <minimum> or later`. Package specs run on that minimum (`postgres:14`, `redis:6`, `mysql:8.4`, `mariadb:11.4`, `nats:2.2`), so every supported version is tested. Examples and benchmarks run on the latest major tag (`postgres:18`, `redis:8`, `mysql:26`, `mariadb:13`, `nats:2`). `benchmarkServers` in `docs/src/data/benchmarks.ts` names the versions the published numbers come from, so it changes with the benchmark images. Raising a minimum updates the check, the TSDoc, the docs "Requires" lines, the installation tabs and the spec images together.
+- **Minimum server versions**: Each state adapter supports a minimum server version (PostgreSQL 14, SQLite 3.42, MySQL 8.4, MariaDB 11.4, Redis 6), names it in the TSDoc of its create function, and checks it in `migrateToLatest()` with `Unsupported <server> version <version>: Queuert needs <minimum> or later`. Package specs run on that minimum (`postgres:14`, `redis:6`, `mysql:8.4`, `mariadb:11.4`, `nats:2.2`), so every supported version is tested. Examples and benchmarks run on the latest major tag (`postgres:18`, `redis:8`, `mysql:26`, `mariadb:13`, `nats:2`). `benchmarkServers` in `docs/src/data/benchmarks.ts` names the versions the published numbers come from, so it changes with the benchmark images. Raising a minimum updates the check, the TSDoc, the docs "Requires" lines (including the installation picker in `docs/src/data/installation.tsx`) and the spec images together.
 - **Symbol descriptions prefixed with `queuert.`**: All internal `Symbol()` instances must use a `"queuert."` prefix in their description string, e.g. `Symbol("queuert.helpers")`. This makes symbols identifiable in debugging and avoids collisions.
+- **One body for both modes**: Code that runs over adapters of either mode is written once. Core's runtime uses the maybe-promise helpers (`@queuert/helpers/maybe-promise`: `andThen`, `tryCatch`, `tryFinally`, …) and no generators on its hot path. In `@queuert/sqlite` and `packages-internal/typed-sql`, a body that awaits is a `modal(function* …)` generator (`@queuert/helpers/modal`) run through `runSteps`, using only `yield* step(x)` where `await x` would stand and `yield* other.steps(...)` to call another modal function, so a plugin that compiles each body into a sync and an async copy can be switched on later without code changes. Conformance cases are generator bodies too (see "Conformance Cases"), and tests may use generators (`inMode`, `inTransaction`).
 - **Synchronous callbacks return `void`**: A callback whose result is ignored and that must not be async (`txHooks.onRollback` callbacks) is typed `() => void`, and its TSDoc says it runs synchronously and a returned promise is not awaited. `typescript/no-misused-promises` flags an async function passed there. Don't type it `() => undefined` to reject async functions: it also rejects callbacks that return a value by accident and standalone helpers inferred as `() => void`.
 
 ## Naming Conventions
@@ -87,6 +89,7 @@ The SQL state adapters (`state-adapter.pg.ts`, `state-adapter.sqlite.ts`, `state
 
 - **`New<Entity>` for something a caller asks to create**: `NewJob` (`typeName`, `id?`, `input`, `schedule?`, `blockers`) is the job passed to `continueWith`; `NewChain` adds `deduplication?` and is what `createChain` and the `createChains` items accept. Method option types build on these (`NewChain & tx context`) instead of restating their fields.
 - **`Any<Name>` only for the type-erased counterpart of a generic public type**, used by internal code that handles every job type and so cannot be generic over the definitions (`AnyJob`, `AnyChain`, `AnyNewJob`, `AnyAttemptMiddleware`). Define it next to the generic type it mirrors, never inside the implementation file that consumes it. A union over all type names is not erased — express it with the generic type and its default type parameter (`NewChain<TJobId, TJobTypeDefinitions>`), not a separate `Any…` name.
+- **`Sync` prefix only for adapters and providers**: an adapter or provider that also has an async variant names its synchronous one with a `Sync` prefix (`SyncStateAdapter`, `SyncNotifyAdapter`, `SyncSqliteStateProvider`), and so does the adapter type a provider of that mode produces (`SyncSqliteStateAdapter`); the unprefixed name is the async variant. Other types that differ only by mode take a `TMode` parameter defaulting to `"async"` (`Migrator<"sync">`, `Migration<TTxContext, "sync">`), built on `ModeResult`, and each adapter or provider is defined once as an `…Operations<…, TMode>` type that the async and sync names instantiate. The client, processors, worker runner and tx hooks are one API that follows the adapter's mode (`createClient`, `createProcessors`, `createWorkerRunner`, `withTxHooks`), and so are the factories that take a provider (`createSqliteStateAdapter`, `createSqliteMigrator`). A name with only a synchronous form, such as an example's `createBetterSqlite3StateProvider`, takes no prefix.
 - **Define a shape once.** When the same fields appear in a client method, a handler outcome and the implementation, extract the generic type plus its `Any…` counterpart rather than keeping parallel copies.
 
 Names on persisted state and the public API are the expensive ones: a column or a status value survives a migration, so pick the established word before it ships rather than renaming after.
@@ -131,12 +134,14 @@ Batch operations get a plural sibling that reports **every** offending input rat
 
 The core `queuert` package exports these primary factory functions and types:
 
-| Export               | Description                                           |
-| -------------------- | ----------------------------------------------------- |
-| `createClient`       | Creates a client for starting and managing job chains |
-| `Client`             | Type for the client instance                          |
-| `createWorkerRunner` | Creates a worker runner for processing jobs           |
-| `WorkerRunner`       | Type for the worker runner instance                   |
+| Export               | Description                                                                        |
+| -------------------- | ---------------------------------------------------------------------------------- |
+| `createClient`       | Creates a client for starting and managing job chains, in its state adapter's mode |
+| `Client`             | Type for the client instance                                                       |
+| `createWorkerRunner` | Creates a worker runner for processing jobs                                        |
+| `WorkerRunner`       | Type for the worker runner instance                                                |
+| `StateAdapter`       | Type for an async state adapter                                                    |
+| `SyncStateAdapter`   | Type for a synchronous state adapter, marked with `sync: true`                     |
 
 ### Adapter Package Exports
 
@@ -156,6 +161,8 @@ Adapter packages use their domain-specific prefixes (not "Queuert"):
 | `@queuert/sqlite`    | `createSqliteStateAdapter`       | `SqliteStateAdapter`       |
 | `@queuert/sqlite`    | -                                | `SqliteStateProvider`      |
 | `@queuert/sqlite`    | -                                | `SqliteStateProviderError` |
+| `@queuert/sqlite`    | `createSqliteStateAdapter`       | `SyncSqliteStateAdapter`   |
+| `@queuert/sqlite`    | -                                | `SyncSqliteStateProvider`  |
 | `@queuert/sqlite`    | `createAsyncRwLock`              | `AsyncRwLock`              |
 | `@queuert/sqlite`    | -                                | `LockHandle`               |
 | `@queuert/sqlite`    | -                                | `MigrationResult`          |
@@ -170,6 +177,7 @@ Adapter packages use their domain-specific prefixes (not "Queuert"):
 | `@queuert/redis`     | -                                | `MigrationResult`          |
 | `@queuert/redis`     | `createRedisNotifyAdapter`       | `RedisNotifyProvider`      |
 | `@queuert/nats`      | `createNatsNotifyAdapter`        | -                          |
+| `@queuert/ipc`       | `createIpcNotifyAdapter`         | -                          |
 | `@queuert/otel`      | `createOtelObservabilityAdapter` | -                          |
 | `@queuert/dashboard` | `createDashboard`                | -                          |
 
@@ -213,7 +221,6 @@ export const createClient = ({
 - Prefer descriptive test names that match what's being tested
 - To enable verbose logging when debugging tests, run with `DEBUG=1` environment variable
 - **No one-line helpers in tests or conformance cases**: assert fields where they are checked (`assert.equal(job.status, "running"); assert.equal(job.attemptBy, worker.id)`) and call utilities such as `raceWithSleep` at the assertion site. A curried predicate or a wrapper around a single assertion or utility call hides what the case checks.
-- **Sync and async variants have matching specs**: When a module ships a synchronous and an asynchronous variant of the same API (`tx-hooks.spec.ts` and `tx-hooks.sync.spec.ts`), their spec files mirror each other: the same `describe` blocks in the same order and a test with the same name for every behavior both variants share. Only behavior one variant alone has (awaiting async flushes, rejecting a callback that returns a promise) gets a test in just that file. A change that adds or edits a shared-behavior test updates both files.
 - **Fixtures**: Define vitest fixtures with the builder form, `it.extend("name", { scope }, async (context, { onCleanup }) => value)`, and let their types be inferred; inline a type that only one fixture uses. A spec builds its own chain from vitest's `it`; there are no `extendWith*` wrappers that take an `it` and return another. Fixtures several specs share are exported as fixture functions and passed to `.extend` (`detectResourceLeaks` from `@queuert/helpers/testing`, the variance fixtures). Vitest requires a fixture's first parameter to be a destructuring pattern, so one that needs only `onCleanup` takes `({}, { onCleanup })` under a `no-empty-pattern` lint directive. Fixtures have no timeout of their own and their setup counts against the first test's, so specs start containers at module level (`const pg = await acquirePostgres("postgres:14", import.meta.url)`), where collection is not bounded by a test timeout.
 - **Import `expect` from `vitest`**: Use the module-level `import { expect } from "vitest"` and don't destructure `expect` from the test context. Tests here run sequentially and use no snapshots, so the test-scoped `expect` adds nothing but a line in every parameter list. Reach for the context `expect` only in a test that runs with `.concurrent` or asserts snapshots, where Vitest needs it to attribute results to the right test. Conformance cases are not tests and use no `expect`: they assert with `node:assert/strict`, so they run under any runner.
 
@@ -221,9 +228,11 @@ export const createClient = ({
 
 Conformance cases live in `packages/core/src/` as data (`ConformanceGroup`s): `conformance/` holds the runner-agnostic core (the group and case types, `toConformanceTestCases` and `retryUntilPasses`; cases assert with `node:assert/strict`, which needs no dependency and works under every runner), and each kind of case has a sibling `conformance.<kind>/` folder (`conformance.state-adapter/`, `conformance.notify-adapter/`, `conformance.validation-adapter/`, `conformance.end-to-end/`) with its context types in `types.ts`, its group sets in `groups.ts` (with the cases themselves in `cases/` when they span several files) and its public case lists in `*-cases.ts`. The public surface (`queuert/conformance`, the `…/conformance` entries of the adapter packages) turns them into lists of `ConformanceTestCase`s with `toConformanceTestCases`: plain data that drives no test runner, so users create and release resources in their own hooks and register one test per case with any runner (vitest, `node:test`, `bun:test`). Contract and end-to-end cases are separate public lists, so a user can run the fast contract cases on every change and the slower end-to-end ones apart, such as only in CI. Case titles are unique within every public list, and a spec checks it. Our own specs feed the same groups to `conformanceTestSuite` from the private `@queuert/helpers/conformance` entry, which registers each case as its own test and reads one file-scoped `conformance` fixture that the spec defines with `it.extend`. A case that needs a capability not every adapter has goes in its own group set, and each list composes the sets that apply (`stateAdapterBaseGroups` plus `stateAdapterConcurrentTransactionGroups` for PostgreSQL); a case never checks a capability flag and skips itself. Adapter packages export the composed provider cases and a `create…ConformanceContext` helper that builds their adapter from a provider, and their specs use the same composed group list and helper, so the public cases and our tests cannot drift. Provider case lists hold contract cases only: the adapter over the provider is ours, and our own specs run the end-to-end cases against it. Cases share one context per file, so a case must not depend on what earlier cases left behind, such as a notification still in flight for a key it listens on.
 
+Every case runs in both modes from one body: `run: caseBody(function* (context) { … })` (`@queuert/helpers/case-body`), whose mode comes from the first `resource` it creates, the adapter under test (`sync: true` or its absence). Inside it, `yield* step(x)` stands for an adapter or client call the case makes directly, which must return a plain value over a sync adapter and a promise over an async one, so the sync suites check the sync contract; `yield* wait(x)` stands for work that is async in both modes (worker runner `start`/`stop`/`close`, `awaitChain`, `sleep`, `retryUntilPasses`, notification handoffs); context members such as `withNonTransactionContext` and `withWritesFenced` go through `step` with a non-`async` callback that returns the adapter's or client's result, which they pass through; and `const x = yield* resource(createX())` stands for `await using`. A step before the first `resource`, or one that breaks its mode, fails the case even inside a `try`, after the body's `finally` blocks run. Transaction bodies passed to `inTransaction` or `withCaseTransaction` use `step` only, and over an async adapter every step there must be a promise too. Attempt handlers and other callbacks a case hands to the library stay `async`. Groups that only run in async mode, because they overlap open transactions, may keep `async` bodies.
+
 ### End-to-End Cases
 
-End-to-end cases are conformance groups in `packages/core/src/conformance.end-to-end/cases/`, one file per area (`chains.ts`, `process.ts`, `worker.ts`, …), typed `ConformanceGroup<StateAdapterConformanceContext>`. They are public lists of their own, next to the contract cases, and must stay fast: a case waits only as long as the behaviour it checks needs (a scheduling delay, a lease expiring), never on a long poll or backoff interval, so every case passes within a test runner's default timeout. Like the other conformance cases, each case creates its adapters from the context's factories with `await using` (the notify adapter through `createCaseNotifyAdapter`, which falls back to an in-process one when the context has no `createNotifyAdapter`) and builds its own client, processors and worker runners over them, so the same case runs over every state and notify adapter:
+End-to-end cases are conformance groups in `packages/core/src/conformance.end-to-end/cases/`, one file per area (`chains.ts`, `process.ts`, `worker.ts`, …), typed `ConformanceGroup<StateAdapterConformanceContext>`. They are public lists of their own, next to the contract cases, and must stay fast: a case waits only as long as the behaviour it checks needs (a scheduling delay, a lease expiring), never on a long poll or backoff interval, so every case passes within a test runner's default timeout. Like the other conformance cases, each case creates its adapters from the context's factories with `resource` (the notify adapter through `createCaseNotifyAdapter`, which falls back to an in-process one when the context has no `createNotifyAdapter`) and builds its own client, processors and worker runners over them, so the same case runs over every state and notify adapter:
 
 - **Group sets**: `conformance.end-to-end/groups.ts` composes the base groups (every adapter), the notify groups (cases that need notifications delivered, which a noop notify adapter cannot run) and the concurrent-transaction groups (adapters that run transactions in parallel). `stateAdapterEndToEndConformanceCases` holds the base and notify groups, `concurrentStateAdapterEndToEndConformanceCases` the concurrent-transaction groups, and `notifyAdapterEndToEndConformanceCases` holds `notifyAdapterEndToEndGroups`, the notify groups run over an in-memory state adapter. The provider case lists of the adapter packages hold no end-to-end cases; the adapter packages' own specs run these sets.
 - **Capability groups**: a case that needs a capability not every adapter has (`withSavepoint`, `poisonTransaction`, `createFlakyDbStateAdapter`) goes in a group typed on the context that carries it (`EndToEndSavepointContext`, …). These sets and their context types are exported from `queuert/conformance-internal` only, and our PostgreSQL, SQLite and MySQL specs build a context with the capabilities their adapter supports and run those sets, so running a group without its capability fails to compile.
@@ -246,6 +255,7 @@ Every test file uses `.spec.ts` — both unit tests colocated next to the module
 - `packages/mysql/src/specs/` - Running with MySQL / MariaDB adapter; `specs-mysql2/` holds the conformance and end-to-end specs over `mysql2`
 - `packages/redis/src/specs/` - Running with Redis notify adapter; `specs-ioredis/`, `specs-node-redis/` and `specs-node-redis-cluster/` hold the notify and state adapter conformance specs per client, and `specs-ioredis/` also holds the state adapter's end-to-end, cluster, migration, job-lock and reliability specs
 - `packages/nats/src/specs/` - Running with NATS notify adapter
+- `packages/ipc/src/specs/` - Running with the IPC notify adapter
 
 ## Commands
 
@@ -277,7 +287,8 @@ Examples are organized by prefix to indicate their primary focus:
 Each example demonstrates **one integration concern**:
 
 - **State examples** pass no notify adapter, so the client's in-process default wakes their worker runner
-- **Every other example** keeps its state in an in-memory SQLite database through a state example's provider: `example-state-sqlite-better-sqlite3/provider` under Node and `example-state-sqlite-bun-sql/provider` under Bun
+- **Notify examples** keep their state in PostgreSQL through the state example for the same client: `example-state-postgres-pg/provider`, `example-state-postgres-postgres-js/provider` or, under Bun, `example-state-postgres-bun-sql/provider`. `notify-ipc` is the exception: its adapter is a `SyncNotifyAdapter` that connects processes on one host, so its processes share a SQLite file through `example-state-sqlite-better-sqlite3/provider`. `notify-custom-memory` is the other exception: its adapter is an async `NotifyAdapter`, so it keeps its state in an in-memory SQLite database through `example-state-sqlite-kysely/provider` with `createSqliteStateAdapter` and `createClient`
+- **Every other example** keeps its state in an in-memory SQLite database through `example-state-sqlite-better-sqlite3/provider` with `createSqliteStateAdapter` and `createClient`
 
 This ensures users can copy-paste relevant code without untangling unrelated integrations.
 
@@ -302,6 +313,7 @@ state-sqlite-prisma         # Prisma
 state-sqlite-knex           # Knex
 state-sqlite-bun-sqlite     # bun:sqlite
 state-sqlite-bun-sql        # Bun.SQL
+state-sqlite-multi-worker   # worker processes sharing one SQLite file, IPC notify
 
 state-mysql-mysql2          # mysql2 (experimental MySQL / MariaDB state adapter)
 
@@ -311,7 +323,7 @@ state-redis-redis           # node-redis (experimental Redis state adapter)
 state-custom-memory         # custom StateAdapter over in-memory maps
 ```
 
-Each driver example implements a state provider (`PgStateProvider` or `SqliteStateProvider`) with `withTransaction`, `isTransaction` and `executeSql` methods specific to that client library. It also runs a few application migrations (`src/migrations.ts`) with `createPgMigrator` or `createSqliteMigrator`, and `src/provider.spec.ts` runs the migrator conformance cases alongside the provider cases. The Redis examples implement a `RedisStateProvider`, a single `eval` with SHA caching, run only the adapter's own `migrateToLatest()`, and run `redisStateProviderConformanceCases`. The custom example implements `StateAdapter` itself and validates it in `src/state-adapter.spec.ts` by registering one test per case of `stateAdapterConformanceCases` from `queuert/conformance`.
+Each driver example implements a state provider (`PgStateProvider`, `SqliteStateProvider` or `SyncSqliteStateProvider`) with `withTransaction`, `isTransaction` and `executeSql` methods specific to that client library. It also runs a few application migrations (`src/migrations.ts`) with `createPgMigrator` or `createSqliteMigrator`, and `src/provider.spec.ts` runs the migrator conformance cases alongside the provider cases. The better-sqlite3, node:sqlite, Drizzle and bun:sqlite examples run statements synchronously, so they implement a `SyncSqliteStateProvider`, and `createSqliteStateAdapter`, `createClient` and `withTxHooks` run synchronously over it. The Redis examples implement a `RedisStateProvider`, a single `eval` with SHA caching, run only the adapter's own `migrateToLatest()`, and run `redisStateProviderConformanceCases`. The custom example implements `StateAdapter` itself and validates it in `src/state-adapter.spec.ts` by registering one test per case of `stateAdapterConformanceCases` from `queuert/conformance`.
 
 ### Notify Examples
 
@@ -324,6 +336,8 @@ notify-redis-bun             # Bun Redis
 notify-postgres-pg           # pg (node-postgres)
 notify-postgres-postgres-js  # postgres-js
 notify-postgres-bun-sql      # Bun.SQL
+notify-nats-transport-node   # NATS
+notify-ipc                   # IPC between processes on one host
 notify-custom-memory         # custom NotifyAdapter, in-process listeners
 ```
 
@@ -335,10 +349,11 @@ Redis examples implement a `RedisNotifyProvider` with `subscribe` and `eval` met
 
 - Postgres/Redis: `channelPrefix` (pub/sub channels)
 - NATS: `subjectPrefix` (NATS uses "subjects" as its messaging primitive)
+- IPC: `directory` (processes find each other through registry files in a shared directory)
 
 This follows the principle of using each technology's native terminology rather than forcing artificial consistency.
 
-**Provider types**: Postgres and Redis export provider types (`PgNotifyProvider`, `RedisNotifyProvider`) because users implement these interfaces with their chosen client library. NATS does not export a provider type because it accepts the `NatsConnection` from `@nats-io/nats-core` directly — no adapter layer is needed since every official `@nats-io` transport (Node, Deno, WebSocket) produces that same connection type.
+**Provider types**: Postgres and Redis export provider types (`PgNotifyProvider`, `RedisNotifyProvider`) because users implement these interfaces with their chosen client library. NATS does not export a provider type because it accepts the `NatsConnection` from `@nats-io/nats-core` directly — no adapter layer is needed since every official `@nats-io` transport (Node, Deno, WebSocket) produces that same connection type. IPC does not export a provider type either: it owns its sockets and registry files, so there is no client library to bridge.
 
 ### State Adapter Conventions
 
@@ -352,7 +367,7 @@ State adapters have configuration differences that reflect database capabilities
 
 ### In-Process Adapters
 
-The in-process adapters are not public API. Specs in other packages import `createInProcessStateAdapter` and `createInProcessNotifyAdapter` from `queuert/conformance-internal`; code outside a test runner (benchmarks, the browser dashboard demo) imports them from the browser-safe `queuert/internal`. Examples never use them. `createClient` without `notifyAdapter` uses an in-process notify adapter internally, scoped to that client.
+The in-process state and notify adapters (`createInProcessStateAdapter`, `createInProcessNotifyAdapter` and their `Sync` variants) are exported from `queuert`. They hold state only in memory and reach only the current process, like a Redis state adapter they do not commit with application data, and they suit tests, scripts and single-process apps that need no persistence. Their transaction context stays opaque: `InProcessContext` is not exported. Specs, benchmarks and the browser dashboard demo import them from `queuert`; `queuert/conformance-internal` holds only conformance groups and seeding helpers. Examples keep their state in SQLite instead. `createClient` without `notifyAdapter` uses an in-process notify adapter internally, scoped to that client.
 
 ### Code Style for Examples
 

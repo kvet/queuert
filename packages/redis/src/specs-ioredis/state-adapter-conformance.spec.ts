@@ -55,19 +55,17 @@ const cappedIt = baseIt.extend("conformance", { scope: "file" }, async ({}, { on
 baseIt("index");
 
 describe("Redis State Provider Conformance (ioredis)", () => {
-  conformanceTestSuite({
-    it,
-    groups: redisStateProviderConformanceGroups,
-  });
+  conformanceTestSuite({ mode: "async", it, groups: redisStateProviderConformanceGroups });
 });
 
 describe("Redis State Adapter Conformance (ioredis) - Concurrent Transactions", () => {
   conformanceTestSuite({
+    mode: "async",
     it,
     groups: withoutLockWaitCases(stateAdapterConcurrentTransactionGroups),
   });
 });
 
 describe("Redis State Adapter Conformance (ioredis) - Count Cap", () => {
-  conformanceTestSuite({ it: cappedIt, groups: stateAdapterCountCapGroups });
+  conformanceTestSuite({ mode: "async", it: cappedIt, groups: stateAdapterCountCapGroups });
 });

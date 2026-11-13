@@ -150,6 +150,7 @@ const defineMysqlEndToEndSuite = async ({
 
   describe(`${image} End-to-End Conformance, noop notify`, () => {
     conformanceTestSuite({
+      mode: "async",
       it: noopNotifyIt,
       groups: [...endToEndBaseGroups, ...capabilityGroups],
     });
@@ -157,6 +158,7 @@ const defineMysqlEndToEndSuite = async ({
 
   describe(`${image} End-to-End Conformance, in-process notify`, () => {
     conformanceTestSuite({
+      mode: "async",
       it: inProcessNotifyIt,
       groups: [...endToEndBaseGroups, ...capabilityGroups],
     });

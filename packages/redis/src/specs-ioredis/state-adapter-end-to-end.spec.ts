@@ -138,11 +138,16 @@ const capabilityGroups = [
 baseIt("index");
 
 describe("Redis End-to-End Conformance (ioredis), noop notify", () => {
-  conformanceTestSuite({ it: noopNotifyIt, groups: [...endToEndBaseGroups, ...capabilityGroups] });
+  conformanceTestSuite({
+    mode: "async",
+    it: noopNotifyIt,
+    groups: [...endToEndBaseGroups, ...capabilityGroups],
+  });
 });
 
 describe("Redis End-to-End Conformance (ioredis), Redis notify", () => {
   conformanceTestSuite({
+    mode: "async",
     it: redisNotifyIt,
     groups: [...endToEndBaseGroups, ...endToEndNotifyGroups],
   });

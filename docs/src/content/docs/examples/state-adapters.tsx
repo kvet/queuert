@@ -41,10 +41,18 @@ const Page = () => (
     />
     <h2 id="sqlite">SQLite</h2>
     <p>
-      SQLite allows one writer at a time. Most examples create one <code>createAsyncRwLock()</code>,
-      pass it to the provider, and hold its write lock around the transaction a handler passes to{" "}
+      SQLite allows one writer at a time. The better-sqlite3, node:sqlite, Drizzle and bun:sqlite
+      examples run statements synchronously, so they implement a{" "}
+      <code>SyncSqliteStateProvider</code>, get a synchronous adapter and client, and need no lock.
+      The Prisma and Bun.SQL examples create one <code>createAsyncRwLock()</code>, pass it to the
+      provider, and hold its write lock around the transaction a handler passes to{" "}
       <code>complete</code>. The Kysely, Knex and MikroORM examples need no lock, because their
-      size-1 better-sqlite3 pool already serializes writers.
+      size-1 better-sqlite3 pool already serializes writers. Several worker processes sharing one
+      SQLite file are shown in{" "}
+      <A href="/examples/operations/#state-sqlite-multi-worker">
+        <code>state-sqlite-multi-worker</code>
+      </A>
+      .
     </p>
     <ExampleRows
       title="@queuert/sqlite"

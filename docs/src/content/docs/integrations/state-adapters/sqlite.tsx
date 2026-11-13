@@ -98,8 +98,11 @@ const Page = () => (
 
     <h2>Setup</h2>
     <p>
-      Each tab shows the example's <code>SqliteStateProvider</code> and the lines that create the
-      lock and the adapter:
+      Each tab shows the example's provider and the lines that create the adapter. better-sqlite3,
+      node:sqlite, bun:sqlite and Drizzle run statements synchronously, so their examples use a{" "}
+      <a href="#synchronous-providers">synchronous provider</a>. Bun SQL and Prisma use an async{" "}
+      <code>SqliteStateProvider</code> with an <a href="#asyncrwlock">AsyncRwLock</a>, and Kysely,
+      Knex and MikroORM an async one whose single connection serializes writers:
     </p>
     <Tabs syncKey="sqlite-driver">
       <TabItem label="better-sqlite3">
@@ -198,19 +201,57 @@ const Page = () => (
     <h2>Configuration</h2>
     <FieldList title="createSqliteStateAdapter" idPrefix="option" items={options()} />
     <StateAdapterConfigNote />
+    <p>
+      <code>stateProvider</code> also takes a <code>SyncSqliteStateProvider</code>, with the same
+      options (see <a href="#synchronous-providers">Synchronous providers</a>).
+    </p>
 
     <h2>State provider</h2>
     <p>
       A <code>SqliteStateProvider</code> bridges your database client with the adapter: the adapter
       runs all its SQL and transactions through it. Each Setup tab is a complete provider for its
       driver or ORM; to use another client, implement the same members and serialize writes (see{" "}
-      <a href="#asyncrwlock">AsyncRwLock</a>):
+      <a href="#asyncrwlock">AsyncRwLock</a>), or implement the synchronous variant (see{" "}
+      <a href="#synchronous-providers">Synchronous providers</a>):
     </p>
     <FieldList
       title="SqliteStateProvider"
       idPrefix="provider"
       items={stateProviderMembers("sqlite")}
     />
+
+    <h2 id="synchronous-providers">Synchronous providers</h2>
+    <p>
+      better-sqlite3, node:sqlite and bun:sqlite execute every statement synchronously. A{" "}
+      <code>SyncSqliteStateProvider</code> exposes that: it sets <code>sync: true</code>,{" "}
+      <code>withTransaction</code> runs a synchronous callback and returns its value,{" "}
+      <code>executeSql</code> returns rows, and the optional <code>close</code> returns nothing.
+      Over it, <code>createSqliteStateAdapter</code> returns a <code>SyncSqliteStateAdapter</code>{" "}
+      whose methods and <code>migrateToLatest</code> return their results directly.{" "}
+      <code>createClient</code>, <code>createProcessors</code> and <code>createWorkerRunner</code>{" "}
+      follow the state adapter's mode, so the client built over it is synchronous.
+    </p>
+    <p>
+      That client's state-touching methods, workerless <code>completeChain</code>, and the attempt
+      handler's <code>complete</code> and <code>fence</code> return plain values and throw
+      synchronously, so they run inside the driver's own transaction, such as{" "}
+      <code>db.transaction(() =&gt; …)()</code>, and an error rolls it back. The provider's{" "}
+      <code>onTransactionCommit</code> and <code>onTransactionRollback</code> are synchronous too; a
+      provider without transaction events of its own carries{" "}
+      <A href="/guides/tx-hooks/#synchronous-transactions">
+        <code>TxHooks</code>
+      </A>{" "}
+      in its context. <code>awaitChain</code>, the attempt handler and the worker runner stay async.
+      When you pass no notify adapter, the client uses an in-process one.
+    </p>
+    <p>
+      A synchronous transaction cannot interleave with anything else on the thread, so a synchronous
+      provider takes no lock. It guards the one remaining hazard, a raw <code>BEGIN</code> held
+      across an <code>await</code>: <code>executeSql</code> without <code>txCtx</code> throws when
+      the connection is already inside a transaction, instead of running inside someone else's. This
+      also rejects a client read without a context inside your own transaction; pass that
+      transaction's context.
+    </p>
 
     <h2 id="testing-your-provider">Testing your provider</h2>
     <p>
@@ -228,7 +269,12 @@ const Page = () => (
       cleared, and closes both when it ends. The suite drives no test runner: your test file owns
       the database in its own hooks and registers one test per case. The node:sqlite example runs
       under <code>node:test</code>, the Bun examples under <code>bun:test</code> and the others
-      under vitest:
+      under vitest. For a synchronous provider, <code>syncSqliteStateProviderConformanceCases</code>{" "}
+      run these cases synchronously through the adapter over it and add cases for the synchronous
+      contract, including the autocommit guard.{" "}
+      <code>createSqliteStateProviderConformanceContext</code> returns their context directly when
+      given a <code>createStateProvider</code> that returns the provider directly, a synchronous{" "}
+      <code>withNonTransactionContext</code> and an optional synchronous <code>withSavepoint</code>:
     </p>
     <Tabs syncKey="sqlite-driver">
       <TabItem label="better-sqlite3">
@@ -310,13 +356,15 @@ const Page = () => (
 
     <h2>Your transactions</h2>
     <p>
-      Transactions you pass to <code>complete</code> or to client methods must be serialized with
-      the worker's own statements the way the provider's <code>withTransaction</code> is, for
-      example by holding its <a href="#asyncrwlock">AsyncRwLock</a> write lock. They also supply the{" "}
-      <code>txHooks</code> field the provider's context requires, created with{" "}
-      <code>withTxHooks</code> around the transaction. The MikroORM provider takes them from
-      MikroORM's transaction events and its single connection serializes writers, so a plain{" "}
-      <code>em.transactional</code> needs neither:
+      With a synchronous provider, call the client and <code>complete</code> inside the driver's own
+      transaction, wrapped in <code>withTxHooks</code>, and pass its <code>txHooks</code> in the
+      context. With an async provider, transactions you pass to <code>complete</code> or to client
+      methods must be serialized with the worker's own statements the way the provider's{" "}
+      <code>withTransaction</code> is, for example by holding its{" "}
+      <a href="#asyncrwlock">AsyncRwLock</a> write lock. They also supply the <code>txHooks</code>{" "}
+      field the provider's context requires, created with <code>withTxHooks</code> around the
+      transaction. The MikroORM provider takes them from MikroORM's transaction events and its
+      single connection serializes writers, so a plain <code>em.transactional</code> needs neither:
     </p>
     <Tabs syncKey="sqlite-driver">
       <TabItem label="better-sqlite3">
@@ -395,7 +443,7 @@ const Page = () => (
 
     <h2>AsyncRwLock</h2>
     <p>
-      The providers add an application-level <code>AsyncRwLock</code> to prevent concurrent write
+      Async providers add an application-level <code>AsyncRwLock</code> to prevent concurrent write
       access from async code within the same process while allowing reads to run in parallel. The
       lock is writer-preference and FIFO to prevent writer starvation: once a writer is queued, new
       readers wait.
@@ -466,6 +514,7 @@ const Page = () => (
         "state-sqlite-prisma",
         "state-sqlite-knex",
         "state-sqlite-mikro-orm",
+        "state-sqlite-multi-worker",
       ]}
     />
     <p>

@@ -3,20 +3,32 @@ import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { type MaybePromise, type Mode, andThen } from "@queuert/helpers/maybe-promise";
+import { step } from "@queuert/helpers/steps";
 import { createDeploymentSpawner, startPaused, startTogether } from "@queuert/helpers/testing";
-import type { MigrationResult } from "@queuert/typed-sql";
+import type {
+  Migration,
+  MigrationResult,
+  MigrationScript,
+  Migrator,
+} from "@queuert/typed-sql/migrator";
 import Database from "better-sqlite3";
-import { it as baseIt, describe, expect } from "vitest";
+import type { AdapterMode } from "queuert";
+import { inMode } from "queuert/conformance-internal";
+import { it as baseIt, describe, expect, expectTypeOf } from "vitest";
 
 import { createSqliteMigrator } from "../migration-store/migration-store.sqlite.ts";
 import {
   type BetterSqlite3Context,
   createBetterSqlite3Provider,
 } from "../state-provider/state-provider.better-sqlite3.ts";
-import type { SqliteStateProvider } from "../state-provider/state-provider.sqlite.ts";
+import type {
+  ModeSqliteStateProvider,
+  SqliteStateProvider,
+} from "../state-provider/state-provider.sqlite.ts";
 import { DEPLOYED_MIGRATIONS, DEPLOYMENT_NAMES, LEASE_TTL_MS, NEWER } from "./migrator.process.ts";
 
-type Provider = SqliteStateProvider<BetterSqlite3Context>;
+type Provider = ModeSqliteStateProvider<BetterSqlite3Context>;
 
 const spawnDeployment = createDeploymentSpawner<MigrationResult>(
   join(import.meta.dirname, "migrator.process.ts"),
@@ -34,24 +46,29 @@ const lockRows = async (provider: Provider): Promise<{ locked_by: string }[]> =>
 const deploymentRuns = async (provider: Provider): Promise<unknown[]> =>
   query(provider, "SELECT pid FROM deployment_runs");
 
-const query = async <T>(provider: Provider, text: string): Promise<T[]> =>
+const queryInMode = <T>(provider: Provider, text: string): MaybePromise<T[]> =>
   provider.executeSql({
     sql: text,
     params: [],
     paramTypes: {},
     columnTypes: { _: "string" },
     readOnly: true,
-  }) as Promise<T[]>;
+  }) as MaybePromise<T[]>;
 
-const execute = async (provider: Provider, text: string): Promise<void> => {
-  await provider.executeSql({
-    sql: text,
-    params: [],
-    paramTypes: {},
-    columnTypes: {},
-    readOnly: false,
-  });
-};
+const query = async <T>(provider: Provider, text: string): Promise<T[]> =>
+  queryInMode<T>(provider, text);
+
+const execute = (provider: Provider, text: string): MaybePromise<void> =>
+  andThen(
+    provider.executeSql({
+      sql: text,
+      params: [],
+      paramTypes: {},
+      columnTypes: {},
+      readOnly: false,
+    }),
+    () => undefined,
+  );
 
 const tableNames = async (provider: Provider): Promise<string[]> =>
   (
@@ -74,6 +91,14 @@ const result = (overrides: Partial<MigrationResult>): MigrationResult => ({
   ...overrides,
 });
 
+const createModeSqliteMigrator = createSqliteMigrator as (options: {
+  stateProvider: Provider;
+  migrations: Migration<BetterSqlite3Context, Mode>[];
+  before?: MigrationScript<Mode>;
+  migrationTableName?: string;
+  lockTableName?: string;
+}) => Migrator<Mode>;
+
 // oxlint-disable-next-line no-empty-pattern -- vitest fixtures must destructure their context
 const it = baseIt.extend("database", async ({}, { onCleanup }) => {
   const path = join(tmpdir(), `queuert-migration-store-${randomUUID()}.sqlite`);
@@ -83,141 +108,189 @@ const it = baseIt.extend("database", async ({}, { onCleanup }) => {
     db.close();
     for (const suffix of ["", "-wal", "-shm"]) rmSync(`${path}${suffix}`, { force: true });
   });
-  return { path, provider: createBetterSqlite3Provider({ db }) };
+  return {
+    path,
+    db,
+    provider: createBetterSqlite3Provider({ db }),
+  };
 });
 
-describe("createSqliteMigrator", () => {
-  it("applies every migration type and reverts them all, last first", async ({
-    database: { provider },
-  }) => {
-    const migrator = createSqliteMigrator({
-      stateProvider: provider,
-      migrations: [
-        ...DEPLOYED_MIGRATIONS,
-        {
-          name: "seed_invoices",
-          type: "non-transactional",
-          up: async ({ assertLockHeld }) => {
-            for (let id = 2; id <= 5; id++) {
-              assertLockHeld();
-              await execute(
-                provider,
-                `INSERT INTO invoices (id, customer) VALUES (${id}, 'customer-${id}')`,
-              );
-            }
-          },
-          down: async () => execute(provider, "DELETE FROM invoices WHERE id > 1"),
-        },
-        {
-          name: "invoices_status_idx",
-          type: "non-transactional",
-          up: async () =>
-            execute(provider, "CREATE INDEX invoices_status_idx ON invoices (status)"),
-          down: async () => execute(provider, "DROP INDEX invoices_status_idx"),
-        },
-        {
-          name: "backfill_invoice_status",
-          type: "non-transactional",
-          up: async ({ assertLockHeld }) => {
-            while (
-              (
-                await query(
-                  provider,
-                  "UPDATE invoices SET status = 'open' WHERE id IN (SELECT id FROM invoices WHERE status IS NULL LIMIT 2) RETURNING id",
-                )
-              ).length > 0
-            ) {
-              assertLockHeld();
-            }
-          },
-          down: async ({ assertLockHeld }) => {
-            while (
-              (
-                await query(
-                  provider,
-                  "UPDATE invoices SET status = NULL WHERE id IN (SELECT id FROM invoices WHERE status IS NOT NULL LIMIT 2) RETURNING id",
-                )
-              ).length > 0
-            ) {
-              assertLockHeld();
-            }
-          },
-        },
-      ],
-    });
-    const names = [...ALL, "seed_invoices", "invoices_status_idx", "backfill_invoice_status"];
+describe.each(["async", "sync"] as const)(
+  "createSqliteMigrator in %s mode",
+  (mode: AdapterMode) => {
+    const providerFor = (db: Database.Database): Provider =>
+      createBetterSqlite3Provider({ db, mode });
 
-    expect(await migrator.migrateToLatest()).toEqual(result({ applied: names }));
-    expect(await query(provider, "SELECT id, status FROM invoices ORDER BY id")).toEqual(
-      [1, 2, 3, 4, 5].map((id) => ({ id, status: "open" })),
-    );
+    it("applies every migration type and reverts them all, last first", async ({
+      database: { db },
+    }) => {
+      const provider = providerFor(db);
+      const migrator = createModeSqliteMigrator({
+        stateProvider: provider,
+        migrations: [
+          ...DEPLOYED_MIGRATIONS,
+          {
+            name: "seed_invoices",
+            type: "non-transactional",
+            up: ({ assertLockHeld }) =>
+              inMode(provider, function* () {
+                for (let id = 2; id <= 5; id++) {
+                  assertLockHeld();
+                  yield* step(
+                    execute(
+                      provider,
+                      `INSERT INTO invoices (id, customer) VALUES (${id}, 'customer-${id}')`,
+                    ),
+                  );
+                }
+              }),
+            down: () => execute(provider, "DELETE FROM invoices WHERE id > 1"),
+          },
+          {
+            name: "invoices_status_idx",
+            type: "non-transactional",
+            up: () => execute(provider, "CREATE INDEX invoices_status_idx ON invoices (status)"),
+            down: () => execute(provider, "DROP INDEX invoices_status_idx"),
+          },
+          {
+            name: "backfill_invoice_status",
+            type: "non-transactional",
+            up: ({ assertLockHeld }) =>
+              inMode(provider, function* () {
+                while (
+                  (yield* step(
+                    queryInMode(
+                      provider,
+                      "UPDATE invoices SET status = 'open' WHERE id IN (SELECT id FROM invoices WHERE status IS NULL LIMIT 2) RETURNING id",
+                    ),
+                  )).length > 0
+                ) {
+                  assertLockHeld();
+                }
+              }),
+            down: ({ assertLockHeld }) =>
+              inMode(provider, function* () {
+                while (
+                  (yield* step(
+                    queryInMode(
+                      provider,
+                      "UPDATE invoices SET status = NULL WHERE id IN (SELECT id FROM invoices WHERE status IS NOT NULL LIMIT 2) RETURNING id",
+                    ),
+                  )).length > 0
+                ) {
+                  assertLockHeld();
+                }
+              }),
+          },
+        ],
+      });
+      const names = [...ALL, "seed_invoices", "invoices_status_idx", "backfill_invoice_status"];
 
-    expect(await migrator.migrateTo(ALL[0])).toEqual(
-      result({ skipped: [ALL[0]], reverted: names.slice(1).reverse() }),
-    );
-    expect(await query(provider, "SELECT id, status FROM invoices ORDER BY id")).toEqual([
-      { id: 1, status: null },
-    ]);
-    expect(
-      await query(
-        provider,
-        "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'invoices'",
-      ),
-    ).toEqual([]);
-    expect(await appliedNames(provider)).toEqual([ALL[0]]);
-  });
+      expect(await migrator.migrateToLatest()).toEqual(result({ applied: names }));
+      expect(await query(provider, "SELECT id, status FROM invoices ORDER BY id")).toEqual(
+        [1, 2, 3, 4, 5].map((id) => ({ id, status: "open" })),
+      );
 
-  it("adopts the history of Kysely's migrator through a `before` script", async ({
-    database: { provider },
-  }) => {
-    for (const statement of [
-      "CREATE TABLE kysely_migration (name varchar(255) NOT NULL PRIMARY KEY, timestamp varchar(255) NOT NULL)",
-      "INSERT INTO kysely_migration VALUES ('create_invoices', '2026-01-01T00:00:00.000Z')",
-      "CREATE TABLE invoices (id INTEGER PRIMARY KEY, customer TEXT NOT NULL, status TEXT)",
-    ]) {
-      await execute(provider, statement);
-    }
-    const migrator = createSqliteMigrator({
-      stateProvider: provider,
-      migrations: DEPLOYED_MIGRATIONS,
-      before: async () =>
-        execute(
+      expect(await migrator.migrateTo(ALL[0])).toEqual(
+        result({ skipped: [ALL[0]], reverted: names.slice(1).reverse() }),
+      );
+      expect(await query(provider, "SELECT id, status FROM invoices ORDER BY id")).toEqual([
+        { id: 1, status: null },
+      ]);
+      expect(
+        await query(
           provider,
-          "INSERT OR IGNORE INTO migration (name) SELECT name FROM kysely_migration",
+          "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'invoices'",
         ),
+      ).toEqual([]);
+      expect(await appliedNames(provider)).toEqual([ALL[0]]);
     });
 
-    expect(await migrator.migrateToLatest()).toEqual(
-      result({ skipped: [ALL[0]], applied: ALL.slice(1) }),
-    );
-    expect(await migrator.migrateToLatest()).toEqual(result({ skipped: ALL }));
-    expect(await appliedNames(provider)).toEqual(ALL.toSorted());
-  });
+    it("adopts the history of Kysely's migrator through a `before` script", async ({
+      database: { db },
+    }) => {
+      const provider = providerFor(db);
+      for (const statement of [
+        "CREATE TABLE kysely_migration (name varchar(255) NOT NULL PRIMARY KEY, timestamp varchar(255) NOT NULL)",
+        "INSERT INTO kysely_migration VALUES ('create_invoices', '2026-01-01T00:00:00.000Z')",
+        "CREATE TABLE invoices (id INTEGER PRIMARY KEY, customer TEXT NOT NULL, status TEXT)",
+      ]) {
+        await execute(provider, statement);
+      }
+      const migrator = createModeSqliteMigrator({
+        stateProvider: provider,
+        migrations: DEPLOYED_MIGRATIONS,
+        before: () =>
+          execute(
+            provider,
+            "INSERT OR IGNORE INTO migration (name) SELECT name FROM kysely_migration",
+          ),
+      });
 
-  it("creates its tables under the configured names", async ({ database: { provider } }) => {
-    await createSqliteMigrator({
-      stateProvider: provider,
-      migrations: [
-        {
-          name: "create_invoices",
-          up: async (txCtx) => void txCtx.db.exec("SELECT 1"),
-          down: async () => {},
-        },
-      ],
-      migrationTableName: "schema_history",
-      lockTableName: "schema_lock",
-    }).migrateToLatest();
+      expect(await migrator.migrateToLatest()).toEqual(
+        result({ skipped: [ALL[0]], applied: ALL.slice(1) }),
+      );
+      expect(await migrator.migrateToLatest()).toEqual(result({ skipped: ALL }));
+      expect(await appliedNames(provider)).toEqual(ALL.toSorted());
+    });
 
-    expect(await tableNames(provider)).toEqual(["schema_history", "schema_lock"]);
-    expect(
-      await query(provider, "SELECT name, type FROM pragma_table_info('schema_history')"),
-    ).toEqual([
-      { name: "name", type: "TEXT" },
-      { name: "applied_at", type: "TEXT" },
-    ]);
-    expect(await query(provider, "SELECT name FROM schema_history")).toEqual([
-      { name: "create_invoices" },
-    ]);
+    it("creates its tables under the configured names", async ({ database: { db } }) => {
+      const provider = providerFor(db);
+      await createModeSqliteMigrator({
+        stateProvider: provider,
+        migrations: [
+          {
+            name: "create_invoices",
+            up: (txCtx) => void txCtx.db.exec("SELECT 1"),
+            down: () => {},
+          },
+        ],
+        migrationTableName: "schema_history",
+        lockTableName: "schema_lock",
+      }).migrateToLatest();
+
+      expect(await tableNames(provider)).toEqual(["schema_history", "schema_lock"]);
+      expect(
+        await query(provider, "SELECT name, type FROM pragma_table_info('schema_history')"),
+      ).toEqual([
+        { name: "name", type: "TEXT" },
+        { name: "applied_at", type: "TEXT" },
+      ]);
+      expect(await query(provider, "SELECT name FROM schema_history")).toEqual([
+        { name: "create_invoices" },
+      ]);
+    });
+
+    it("returns its results in the provider's mode", async ({ database: { db } }) => {
+      const migrator = createModeSqliteMigrator({
+        stateProvider: providerFor(db),
+        migrations: DEPLOYED_MIGRATIONS,
+      });
+
+      const latest = migrator.migrateToLatest();
+      expect(latest instanceof Promise).toBe(mode === "async");
+      expect(await latest).toEqual(result({ applied: ALL }));
+      const reverted = migrator.migrateTo(null);
+      expect(reverted instanceof Promise).toBe(mode === "async");
+      expect(await reverted).toEqual(result({ reverted: ALL.toReversed() }));
+    });
+  },
+);
+
+describe("createSqliteMigrator", () => {
+  it("types its migrator by the provider's mode", ({ database: { db } }) => {
+    expectTypeOf(
+      createSqliteMigrator({
+        stateProvider: createBetterSqlite3Provider({ db, mode: "sync" }),
+        migrations: [{ name: "create_invoices", up: () => {}, down: () => {} }],
+      }),
+    ).toEqualTypeOf<Migrator<"sync">>();
+    expectTypeOf(
+      createSqliteMigrator({
+        stateProvider: createBetterSqlite3Provider({ db }),
+        migrations: [{ name: "create_invoices", up: async () => {}, down: async () => {} }],
+      }),
+    ).toEqualTypeOf<Migrator>();
   });
 
   it("keeps its lease through a transactional migration that outlasts the lease TTL", async ({
@@ -249,7 +322,7 @@ describe("createSqliteMigrator", () => {
   });
 
   it("rejects a name that is not a plain SQL identifier", () => {
-    const stateProvider = undefined as unknown as Provider;
+    const stateProvider = undefined as unknown as SqliteStateProvider<BetterSqlite3Context>;
     for (const option of ["migrationTableName", "lockTableName"]) {
       expect(() =>
         createSqliteMigrator({
@@ -264,7 +337,7 @@ describe("createSqliteMigrator", () => {
   it("rejects a lease heartbeat that is not below a third of the lease TTL", () => {
     expect(() =>
       createSqliteMigrator({
-        stateProvider: undefined as unknown as Provider,
+        stateProvider: undefined as unknown as SqliteStateProvider<BetterSqlite3Context>,
         migrations: [],
         lock: { ttlMs: 10_000, heartbeatIntervalMs: 5_000 },
       }),

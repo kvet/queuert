@@ -1,4 +1,6 @@
-import type { BaseTxContext, StateAdapter } from "../../state-adapter/state-adapter.ts";
+import { andThen, tryCatch, type MaybePromise } from "@queuert/helpers/maybe-promise";
+
+import type { ConformanceStateAdapter } from "../../conformance/adapters.ts";
 
 export type SpyCall = {
   name: string;
@@ -7,28 +9,52 @@ export type SpyCall = {
   result?: unknown;
 };
 
-export type SpyStateAdapter<
-  TTxContext extends BaseTxContext,
-  TJobId extends string,
-  TWorkerId extends string,
-> = StateAdapter<TTxContext, TJobId, TWorkerId> & {
+export type SpyStateAdapter<TStateAdapter extends ConformanceStateAdapter> = TStateAdapter & {
   calls: SpyCall[];
-  record: (args: { name: string } & TTxContext) => Promise<SpyCall>;
+  record: (args: { name: string } & Record<string, unknown>) => SpyCall;
 };
 
-export const createSpyStateAdapter = <
-  TTxContext extends BaseTxContext,
-  TJobId extends string,
-  TWorkerId extends string,
->(
-  stateAdapter: StateAdapter<TTxContext, TJobId, TWorkerId>,
-): SpyStateAdapter<TTxContext, TJobId, TWorkerId> => {
+const spiedMethods = [
+  "getChains",
+  "getJobs",
+  "getWorkers",
+  "createJobs",
+  "continueJobs",
+  "completeJobs",
+  "rescheduleJobs",
+  "deleteChains",
+  "startJobAttempts",
+  "getStartAttemptDelayMs",
+  "addJobsBlockers",
+  "getJobBlockers",
+  "unblockJobs",
+  "startWorker",
+  "extendWorkerLease",
+  "stopWorker",
+  "getChainTypeNames",
+  "getJobTypeNames",
+  "countChainsByTypeName",
+  "countJobsByTypeName",
+  "countWorkers",
+  "countWorkersByTypeName",
+  "countRunningJobsByWorkerId",
+  "listChains",
+  "listJobs",
+  "listChainJobs",
+  "listBlockedJobs",
+  "listWorkers",
+  "listWorkerJobs",
+] as const;
+
+export const createSpyStateAdapter = <TStateAdapter extends ConformanceStateAdapter>(
+  stateAdapter: TStateAdapter,
+): SpyStateAdapter<TStateAdapter> => {
   const calls: SpyCall[] = [];
   const weakMap = new WeakMap<symbol, SpyCall>();
 
-  const record = ({ txCtx, name }: { txCtx?: TTxContext; name: string }): SpyCall => {
+  const record = ({ txCtx, name }: { txCtx?: unknown; name: string }): SpyCall => {
     const call: SpyCall = { name, children: [] };
-    const spyRef = (txCtx as TTxContext & { spyRef?: symbol })?.spyRef;
+    const spyRef = (txCtx as { spyRef?: symbol } | undefined)?.spyRef;
     if (spyRef && weakMap.has(spyRef)) {
       const parent = weakMap.get(spyRef)!;
       parent.children.push(call);
@@ -38,75 +64,49 @@ export const createSpyStateAdapter = <
     return call;
   };
 
-  const wrap = <T extends (...args: never[]) => Promise<unknown>>(name: string, fn: T): T =>
-    (async (...args: unknown[]) => {
-      const params = args[0] as { txCtx?: TTxContext };
+  const wrap =
+    (name: string, fn: (...args: unknown[]) => MaybePromise<unknown>) =>
+    (...args: unknown[]) => {
+      const params = args[0] as { txCtx?: unknown } | undefined;
       const call = record({ txCtx: params?.txCtx, name });
-      call.result = await fn(...(args as Parameters<T>));
-      return call.result;
-    }) as unknown as T;
+      return andThen(fn(...args), (result) => {
+        call.result = result;
+        return result;
+      });
+    };
+
+  const spied: Record<string, unknown> = {};
+  for (const name of spiedMethods) {
+    spied[name] = wrap(name, stateAdapter[name] as (...args: unknown[]) => MaybePromise<unknown>);
+  }
 
   return {
+    ...stateAdapter,
+    ...spied,
     calls,
-
-    config: stateAdapter.config,
-    onTransactionCommit: (txCtx, callback) => {
-      stateAdapter.onTransactionCommit(txCtx, callback);
-    },
-    onTransactionRollback: (txCtx, callback) => {
-      stateAdapter.onTransactionRollback(txCtx, callback);
-    },
-    withTransaction: async (fn) => {
+    withTransaction: <T>(fn: (txCtx: any) => MaybePromise<T>): MaybePromise<T> => {
       const call = record({ txCtx: undefined, name: "withTransaction" });
-      try {
-        const result = await stateAdapter.withTransaction(async (txCtx) => {
-          const spyRef = Symbol();
-          weakMap.set(spyRef, call);
-          return fn({ ...txCtx, spyRef });
-        });
-        call.status = "committed";
-        return result;
-      } catch (error) {
-        call.status = "rolled-back";
-        throw error;
-      }
+      return tryCatch(
+        () =>
+          andThen(
+            stateAdapter.withTransaction((txCtx: Record<string, unknown>) => {
+              const spyRef = Symbol();
+              weakMap.set(spyRef, call);
+              return fn({ ...txCtx, spyRef });
+            }),
+            (result) => {
+              call.status = "committed";
+              return result;
+            },
+          ),
+        (error) => {
+          call.status = "rolled-back";
+          // oxlint-disable-next-line typescript/only-throw-error -- re-throwing caught error
+          throw error;
+        },
+      );
     },
-    isTransaction: (txCtx) => stateAdapter.isTransaction(txCtx),
-    getChains: wrap("getChains", stateAdapter.getChains),
-    getJobs: wrap("getJobs", stateAdapter.getJobs),
-    getWorkers: wrap("getWorkers", stateAdapter.getWorkers),
-    createJobs: wrap("createJobs", stateAdapter.createJobs),
-    continueJobs: wrap("continueJobs", stateAdapter.continueJobs),
-    completeJobs: wrap("completeJobs", stateAdapter.completeJobs),
-    rescheduleJobs: wrap("rescheduleJobs", stateAdapter.rescheduleJobs),
-    deleteChains: wrap("deleteChains", stateAdapter.deleteChains),
-    startJobAttempts: wrap("startJobAttempts", stateAdapter.startJobAttempts),
-    getStartAttemptDelayMs: wrap("getStartAttemptDelayMs", stateAdapter.getStartAttemptDelayMs),
-    addJobsBlockers: wrap("addJobsBlockers", stateAdapter.addJobsBlockers),
-    getJobBlockers: wrap("getJobBlockers", stateAdapter.getJobBlockers),
-    unblockJobs: wrap("unblockJobs", stateAdapter.unblockJobs),
-    startWorker: wrap("startWorker", stateAdapter.startWorker),
-    extendWorkerLease: wrap("extendWorkerLease", stateAdapter.extendWorkerLease),
-    stopWorker: wrap("stopWorker", stateAdapter.stopWorker),
-    getChainTypeNames: wrap("getChainTypeNames", stateAdapter.getChainTypeNames),
-    getJobTypeNames: wrap("getJobTypeNames", stateAdapter.getJobTypeNames),
-    countChainsByTypeName: wrap("countChainsByTypeName", stateAdapter.countChainsByTypeName),
-    countJobsByTypeName: wrap("countJobsByTypeName", stateAdapter.countJobsByTypeName),
-    countWorkers: wrap("countWorkers", stateAdapter.countWorkers),
-    countWorkersByTypeName: wrap("countWorkersByTypeName", stateAdapter.countWorkersByTypeName),
-    countRunningJobsByWorkerId: wrap(
-      "countRunningJobsByWorkerId",
-      stateAdapter.countRunningJobsByWorkerId,
-    ),
-    listChains: wrap("listChains", stateAdapter.listChains),
-    listJobs: wrap("listJobs", stateAdapter.listJobs),
-    listChainJobs: wrap("listChainJobs", stateAdapter.listChainJobs),
-    listBlockedJobs: wrap("listBlockedJobs", stateAdapter.listBlockedJobs),
-    listWorkers: wrap("listWorkers", stateAdapter.listWorkers),
-    listWorkerJobs: wrap("listWorkerJobs", stateAdapter.listWorkerJobs),
-    close: stateAdapter.close,
-    [Symbol.asyncDispose]: stateAdapter.close,
-    record: async ({ name, ...txCtx }: { name: string } & TTxContext) =>
-      record({ name, txCtx: txCtx as unknown as TTxContext }),
-  };
+    record: ({ name, ...txCtx }: { name: string } & Record<string, unknown>) =>
+      record({ name, txCtx }),
+  } as unknown as SpyStateAdapter<TStateAdapter>;
 };

@@ -216,8 +216,7 @@ const wrapInScenario = (defs: JobTypeDef[], middlewareCount = 1): string => {
   const mwList = middlewareList(middlewareCount);
   const mwPart = mwList ? `attemptMiddleware: [${mwList}], ` : "";
 
-  return `import { defineJobTypes, createProcessors, createWorkerRunner, createClient, type AttemptMiddleware } from "queuert";
-import { createInProcessStateAdapter } from "queuert/internal";
+  return `import { defineJobTypes, createProcessors, createWorkerRunner, createClient, type AttemptMiddleware, createInProcessStateAdapter } from "queuert";
 
 type Defs = {
 ${typeStrings.join("\n")}
@@ -269,9 +268,7 @@ const ${slice.name}Registry = defineJobTypes<${slice.name}Defs>();`;
   const clientCalls = generateClientCalls(allDefs);
   const middleware = generateMiddleware(middlewareCount);
 
-  return `import { defineJobTypes, createProcessors, createWorkerRunner, createClient, type AttemptMiddleware } from "queuert";
-import { createInProcessStateAdapter } from "queuert/internal";
-${sliceTypeDecls.join("\n")}
+  return `${sliceTypeDecls.join("\n")}
 
 const stateAdapter = createInProcessStateAdapter();
 

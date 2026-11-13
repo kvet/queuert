@@ -114,7 +114,9 @@ export const compareTools: CompareTool[] = [
       deadLetter: { mark: "no", text: "Errors stay on the job as lastAttemptError" },
       priority: { mark: "no", text: "Partition job types across workers" },
       rateLimit: { mark: "no", text: "Not provided" },
-      wakeup: { text: "LISTEN/NOTIFY, Redis or NATS — tens of ms; polling fallback" },
+      wakeup: {
+        text: "LISTEN/NOTIFY, Redis, NATS or IPC on one host — tens of ms; polling fallback",
+      },
       durableWaits: { mark: "no", text: "Schedule the next job instead" },
       languages: { text: "TypeScript on Node.js and Bun" },
     },

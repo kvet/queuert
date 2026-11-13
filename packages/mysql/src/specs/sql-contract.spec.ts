@@ -1,7 +1,7 @@
 // oxlint-disable no-empty-pattern -- vitest fixtures must destructure their context
 import { conformanceTestSuite } from "@queuert/helpers/conformance";
 import { acquireMysql } from "@queuert/testcontainers";
-import type { RuntimeType } from "@queuert/typed-sql";
+import type { RuntimeType } from "@queuert/typed-sql/sql";
 import { type Pool, createPool } from "mysql2/promise";
 import {
   stateAdapterBaseGroups,
@@ -122,6 +122,7 @@ for (const { image, dialect, connectionOptions } of acquired) {
 
   describe(`${image} SQL contract`, () => {
     conformanceTestSuite({
+      mode: "async",
       it,
       groups: [...stateAdapterBaseGroups, ...stateAdapterConcurrentTransactionGroups],
     });

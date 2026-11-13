@@ -1,15 +1,15 @@
 import { RpcError } from "@queuert/rpc";
 import type { ServerFn } from "@queuert/rpc/server";
-import type { Client, Page, Worker } from "queuert";
+import type { Page, Worker } from "queuert";
 import * as v from "valibot";
 
 import type { UnknownJob, WorkerWithRunningJobs } from "../../shared/types.ts";
-import { createServerFn } from "../createServerFn.ts";
+import { type DashboardClient, createServerFn } from "../createServerFn.ts";
 import { checkCursor, id, ids, type PageArguments, pageArguments } from "./arguments.ts";
 import { lookupEachOrNotFound, lookupOrNotFound } from "./lookup.ts";
 
 const withRunningJobCounts = async (
-  client: Client<any, any>,
+  client: DashboardClient,
   workers: Worker<string>[],
 ): Promise<WorkerWithRunningJobs[]> => {
   const counts = await client.countRunningJobsByWorkerId({

@@ -1,8 +1,8 @@
-import type { Client } from "queuert";
+import type { DashboardClient } from "../createServerFn.ts";
 
 const PER_ID_CONCURRENCY = 8;
 
-export const probeOrRethrow = async (client: Client<any, any>, err: unknown): Promise<void> => {
+export const probeOrRethrow = async (client: DashboardClient, err: unknown): Promise<void> => {
   try {
     await client.getChainTypeNames();
   } catch {
@@ -12,7 +12,7 @@ export const probeOrRethrow = async (client: Client<any, any>, err: unknown): Pr
 };
 
 export const lookupOrNotFound = async <T>(
-  client: Client<any, any>,
+  client: DashboardClient,
   lookup: () => Promise<T>,
 ): Promise<T | undefined> => {
   try {
@@ -24,7 +24,7 @@ export const lookupOrNotFound = async <T>(
 };
 
 export const lookupEachOrNotFound = async <T>(
-  client: Client<any, any>,
+  client: DashboardClient,
   ids: string[],
   lookupMany: (ids: string[]) => Promise<(T | undefined)[]>,
 ): Promise<T[]> => {

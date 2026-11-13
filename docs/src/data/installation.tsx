@@ -82,7 +82,35 @@ export const stateInstallOptions: (InstallOption & { notify: InstallOption[] })[
         See <a href="/queuert/integrations/state-adapters/sqlite/">SQLite State Adapter</a>.
       </>
     ),
-    notify: [redisNotify, natsNotify, noNotify],
+    notify: [
+      {
+        label: "IPC",
+        packages: ["@queuert/ipc"],
+        experimental: <code>@queuert/ipc</code>,
+        note: (
+          <>
+            For processes on one host, such as workers sharing a SQLite database file through a{" "}
+            <a href="/queuert/integrations/state-adapters/sqlite/#synchronous-providers">
+              synchronous provider
+            </a>
+            . No server to run. See{" "}
+            <a href="/queuert/integrations/notify-adapters/ipc/">IPC Notify Adapter</a>.
+          </>
+        ),
+      },
+      {
+        label: "None",
+        packages: [],
+        note: (
+          <>
+            No extra packages required. The client wakes its own worker runners in memory, so one
+            process needs nothing more; workers in other processes poll the database on a
+            configurable interval. See{" "}
+            <a href="/queuert/integrations/notify-adapters/#default">Without a notify adapter</a>.
+          </>
+        ),
+      },
+    ],
   },
   {
     label: "MySQL / MariaDB",

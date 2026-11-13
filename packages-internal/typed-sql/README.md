@@ -6,6 +6,8 @@ Internal helpers shared by the SQL state adapters: typed SQL templates (`sql`/`t
 
 `createMigrator({ migrations, store, lock?, before?, after? })` runs an ordered list of migrations against a `MigrationStore` implemented by each adapter. Migration names are `NNN_snake_case` (`001_initial_schema`) and must sort ascending. Every migration has a `type` that controls its execution envelope:
 
+`createSyncMigrator({ migrations, store, before?, after? })` runs the same steps against a `MigrationStore<TTxContext, "sync">` and returns its result directly; it takes no lease, and a migration or script that returns a promise throws. Both factories call `createModeMigrator`, whose steps are written once as `modal` generators (`@queuert/helpers/modal`) and run synchronously or awaiting each step. The lease lives in `migration-lock.ts`.
+
 - **`transactional`** — all statements and the migration record commit in a single transaction. The default for schema changes; a failure rolls back cleanly.
 - **`non-transactional`** — statements run outside any transaction, one by one. Required for statements that refuse to run inside a transaction (e.g. Postgres `CREATE INDEX CONCURRENTLY`). Statements must be individually idempotent (`IF NOT EXISTS`, guarded `DO` blocks) because a crash between statements leaves the migration half-applied and it will re-run from the first statement.
 - **`batched`** — each statement is executed repeatedly via `executeBatchMigrationStatement` until it reports 0 affected rows. Used for large backfills: the statement must update a bounded slice per run (e.g. `WHERE id IN (SELECT … LIMIT n)`) and select only not-yet-migrated rows so it converges and can resume after an interruption.

@@ -1,13 +1,16 @@
 import assert from "node:assert/strict";
 
-import { createClient } from "../../client.ts";
+import { caseBody, resource, wait } from "@queuert/helpers/case-body";
+import { step } from "@queuert/helpers/steps";
+
+import { createClient } from "../../client/client.ts";
 import type { StateAdapterConformanceContext } from "../../conformance.state-adapter/types.ts";
 import { retryUntilPasses } from "../../conformance/retry-until-passes.ts";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
 import { InvalidJobIdError } from "../../errors.ts";
 import { createProcessors } from "../../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../../job-types/define-job-types.ts";
-import { createWorkerRunner } from "../../worker-runner.ts";
+import { createWorkerRunner } from "../../worker/worker-runner.ts";
 import { createCaseNotifyAdapter } from "../support/create-case-notify-adapter.ts";
 import { withCaseTransaction } from "../support/with-case-transaction.ts";
 import type { EndToEndStateAdapter } from "../types.ts";
@@ -22,9 +25,11 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   cases: [
     {
       name: "handles chained jobs",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           linear: {
             entry: true;
@@ -42,89 +47,97 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         }>();
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
-        await using workerRunner = createWorkerRunner({
-          client,
-          concurrency: 1,
-          processors: createProcessors({
+        const workerRunner = yield* resource(
+          createWorkerRunner({
             client,
-            jobTypes,
-            processors: {
-              linear: {
-                attemptHandler: async ({ job, complete }) => {
-                  assert.deepEqual(job.id, chain.id);
-                  assert.deepEqual(job.chainId, chain.id);
+            concurrency: 1,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                linear: {
+                  attemptHandler: async ({ job, complete }) => {
+                    assert.deepEqual(job.id, chain.id);
+                    assert.deepEqual(job.chainId, chain.id);
 
-                  return withCaseTransaction(stateAdapter, async (txCtx) => {
-                    const completedJob = await complete({
-                      ...txCtx,
-                      continueWith: {
-                        typeName: "linear_next",
-                        input: { valueNext: job.input.value + 1 },
-                      },
+                    return withCaseTransaction(stateAdapter, function* (txCtx) {
+                      const completedJob = yield* step(
+                        complete({
+                          ...txCtx,
+                          continueWith: {
+                            typeName: "linear_next",
+                            input: { valueNext: job.input.value + 1 },
+                          },
+                        }),
+                      );
+                      assert.equal(completedJob.continuedTo.typeName, "linear_next");
+                      assert.equal(completedJob.continuedTo.status, "pending");
+                      assert.deepEqual(completedJob.continuedTo.chainId, chain.id);
+                      assert.equal(completedJob.status, "completed");
+                      assert.equal(completedJob.continuedToId, completedJob.continuedTo.id);
+                      return completedJob;
                     });
-                    assert.equal(completedJob.continuedTo.typeName, "linear_next");
-                    assert.equal(completedJob.continuedTo.status, "pending");
-                    assert.deepEqual(completedJob.continuedTo.chainId, chain.id);
-                    assert.equal(completedJob.status, "completed");
-                    assert.equal(completedJob.continuedToId, completedJob.continuedTo.id);
-                    return completedJob;
-                  });
+                  },
+                },
+                linear_next: {
+                  attemptHandler: async ({ job, complete }) => {
+                    assert.notDeepEqual(job.id, chain.id);
+                    assert.deepEqual(job.chainId, chain.id);
+
+                    return withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({
+                        ...txCtx,
+                        continueWith: {
+                          typeName: "linear_next_next",
+                          input: { valueNextNext: job.input.valueNext + 1 },
+                        },
+                      }),
+                    );
+                  },
+                },
+                linear_next_next: {
+                  attemptHandler: async ({ job, complete }) => {
+                    assert.notDeepEqual(job.id, chain.id);
+                    assert.deepEqual(job.chainId, chain.id);
+
+                    return withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({
+                        ...txCtx,
+                        output: {
+                          result: job.input.valueNextNext,
+                        },
+                      }),
+                    );
+                  },
                 },
               },
-              linear_next: {
-                attemptHandler: async ({ job, complete }) => {
-                  assert.notDeepEqual(job.id, chain.id);
-                  assert.deepEqual(job.chainId, chain.id);
-
-                  return withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({
-                      ...txCtx,
-                      continueWith: {
-                        typeName: "linear_next_next",
-                        input: { valueNextNext: job.input.valueNext + 1 },
-                      },
-                    }),
-                  );
-                },
-              },
-              linear_next_next: {
-                attemptHandler: async ({ job, complete }) => {
-                  assert.notDeepEqual(job.id, chain.id);
-                  assert.deepEqual(job.chainId, chain.id);
-
-                  return withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({
-                      ...txCtx,
-                      output: {
-                        result: job.input.valueNextNext,
-                      },
-                    }),
-                  );
-                },
-              },
-            },
-          }),
-        });
-
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "linear",
-            input: { value: 1 },
+            }),
           }),
         );
 
-        await workerRunner.start();
-        const finishedChain = await client.awaitChain(chain, completionOptions);
+        const chain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "linear",
+              input: { value: 1 },
+            }),
+          ),
+        );
+
+        yield* wait(workerRunner.start());
+        const finishedChain = yield* wait(client.awaitChain(chain, completionOptions));
 
         assert.deepEqual(finishedChain.output, { result: 3 });
-      },
+      }),
     },
     {
       name: "handles branched chains",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           main: {
             entry: true;
@@ -142,81 +155,91 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         }>();
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
-        await using workerRunner = createWorkerRunner({
-          client,
-          concurrency: 1,
-          processors: createProcessors({
+        const workerRunner = yield* resource(
+          createWorkerRunner({
             client,
-            jobTypes,
-            processors: {
-              main: {
-                attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({
-                      ...txCtx,
-                      continueWith: {
-                        typeName: job.input.value % 2 === 0 ? "branch1" : "branch2",
-                        input: { valueBranched: job.input.value },
-                      },
-                    }),
-                  ),
+            concurrency: 1,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                main: {
+                  attemptHandler: async ({ job, complete }) =>
+                    withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({
+                        ...txCtx,
+                        continueWith: {
+                          typeName: job.input.value % 2 === 0 ? "branch1" : "branch2",
+                          input: { valueBranched: job.input.value },
+                        },
+                      }),
+                    ),
+                },
+                branch1: {
+                  attemptHandler: async ({ job, complete }) =>
+                    withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({
+                        ...txCtx,
+                        output: {
+                          result1: job.input.valueBranched,
+                        },
+                      }),
+                    ),
+                },
+                branch2: {
+                  attemptHandler: async ({ job, complete }) =>
+                    withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({
+                        ...txCtx,
+                        output: {
+                          result2: job.input.valueBranched,
+                        },
+                      }),
+                    ),
+                },
               },
-              branch1: {
-                attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({
-                      ...txCtx,
-                      output: {
-                        result1: job.input.valueBranched,
-                      },
-                    }),
-                  ),
-              },
-              branch2: {
-                attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({
-                      ...txCtx,
-                      output: {
-                        result2: job.input.valueBranched,
-                      },
-                    }),
-                  ),
-              },
-            },
-          }),
-        });
-
-        const evenChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "main",
-            input: { value: 2 },
-          }),
-        );
-        const oddChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "main",
-            input: { value: 3 },
+            }),
           }),
         );
 
-        await workerRunner.start();
-        const [succeededJobEven, succeededJobOdd] = await Promise.all([
-          client.awaitChain(evenChain, completionOptions),
-          client.awaitChain(oddChain, completionOptions),
-        ]);
+        const evenChain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "main",
+              input: { value: 2 },
+            }),
+          ),
+        );
+        const oddChain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "main",
+              input: { value: 3 },
+            }),
+          ),
+        );
+
+        yield* wait(workerRunner.start());
+        const [succeededJobEven, succeededJobOdd] = yield* wait(
+          Promise.all([
+            client.awaitChain(evenChain, completionOptions),
+            client.awaitChain(oddChain, completionOptions),
+          ]),
+        );
 
         assert.deepEqual(succeededJobEven.output, { result1: 2 });
         assert.deepEqual(succeededJobOdd.output, { result2: 3 });
-      },
+      }),
     },
     {
       name: "handles branched chains with different inputs",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           main: {
             entry: true;
@@ -234,90 +257,100 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         }>();
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
-        await using workerRunner = createWorkerRunner({
-          client,
-          concurrency: 1,
-          processors: createProcessors({
+        const workerRunner = yield* resource(
+          createWorkerRunner({
             client,
-            jobTypes,
-            processors: {
-              main: {
-                attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx) => {
-                    if (job.input.value % 2 === 0) {
+            concurrency: 1,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                main: {
+                  attemptHandler: async ({ job, complete }) =>
+                    withCaseTransaction(stateAdapter, (txCtx) => {
+                      if (job.input.value % 2 === 0) {
+                        return complete({
+                          ...txCtx,
+                          continueWith: {
+                            typeName: "branch1",
+                            input: { valueBranched1: job.input.value },
+                          },
+                        });
+                      }
                       return complete({
                         ...txCtx,
                         continueWith: {
-                          typeName: "branch1",
-                          input: { valueBranched1: job.input.value },
+                          typeName: "branch2",
+                          input: { valueBranched2: job.input.value },
                         },
                       });
-                    }
-                    return complete({
-                      ...txCtx,
-                      continueWith: {
-                        typeName: "branch2",
-                        input: { valueBranched2: job.input.value },
-                      },
-                    });
-                  }),
-              },
-              branch1: {
-                attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({
-                      ...txCtx,
-                      output: {
-                        result: job.input.valueBranched1,
-                      },
                     }),
-                  ),
+                },
+                branch1: {
+                  attemptHandler: async ({ job, complete }) =>
+                    withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({
+                        ...txCtx,
+                        output: {
+                          result: job.input.valueBranched1,
+                        },
+                      }),
+                    ),
+                },
+                branch2: {
+                  attemptHandler: async ({ job, complete }) =>
+                    withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({
+                        ...txCtx,
+                        output: {
+                          result: job.input.valueBranched2,
+                        },
+                      }),
+                    ),
+                },
               },
-              branch2: {
-                attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({
-                      ...txCtx,
-                      output: {
-                        result: job.input.valueBranched2,
-                      },
-                    }),
-                  ),
-              },
-            },
-          }),
-        });
-
-        const evenChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "main",
-            input: { value: 2 },
-          }),
-        );
-        const oddChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "main",
-            input: { value: 3 },
+            }),
           }),
         );
 
-        await workerRunner.start();
-        const [succeededJobEven, succeededJobOdd] = await Promise.all([
-          client.awaitChain(evenChain, completionOptions),
-          client.awaitChain(oddChain, completionOptions),
-        ]);
+        const evenChain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "main",
+              input: { value: 2 },
+            }),
+          ),
+        );
+        const oddChain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "main",
+              input: { value: 3 },
+            }),
+          ),
+        );
+
+        yield* wait(workerRunner.start());
+        const [succeededJobEven, succeededJobOdd] = yield* wait(
+          Promise.all([
+            client.awaitChain(evenChain, completionOptions),
+            client.awaitChain(oddChain, completionOptions),
+          ]),
+        );
 
         assert.deepEqual(succeededJobEven.output, { result: 2 });
         assert.deepEqual(succeededJobOdd.output, { result: 3 });
-      },
+      }),
     },
     {
       name: "handles loops",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           loop: {
             entry: true;
@@ -328,49 +361,55 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         }>();
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
-        await using workerRunner = createWorkerRunner({
-          client,
-          concurrency: 1,
-          processors: createProcessors({
+        const workerRunner = yield* resource(
+          createWorkerRunner({
             client,
-            jobTypes,
-            processors: {
-              loop: {
-                attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx) =>
-                    job.input.counter < 3
-                      ? complete({
-                          ...txCtx,
-                          continueWith: {
-                            typeName: "loop",
-                            input: { counter: job.input.counter + 1 },
-                          },
-                        })
-                      : complete({ ...txCtx, output: { done: true } }),
-                  ),
+            concurrency: 1,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                loop: {
+                  attemptHandler: async ({ job, complete }) =>
+                    withCaseTransaction(stateAdapter, (txCtx) =>
+                      job.input.counter < 3
+                        ? complete({
+                            ...txCtx,
+                            continueWith: {
+                              typeName: "loop",
+                              input: { counter: job.input.counter + 1 },
+                            },
+                          })
+                        : complete({ ...txCtx, output: { done: true } }),
+                    ),
+                },
               },
-            },
-          }),
-        });
-
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "loop",
-            input: { counter: 0 },
+            }),
           }),
         );
 
-        await workerRunner.start();
-        const succeededChain = await client.awaitChain(chain, completionOptions);
+        const chain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "loop",
+              input: { counter: 0 },
+            }),
+          ),
+        );
+
+        yield* wait(workerRunner.start());
+        const succeededChain = yield* wait(client.awaitChain(chain, completionOptions));
         assert.deepEqual(succeededChain.output, { done: true });
-      },
+      }),
     },
     {
       name: "handles go-to",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           start: {
             entry: true;
@@ -385,67 +424,73 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         }>();
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
-        await using workerRunner = createWorkerRunner({
-          client,
-          concurrency: 1,
-          processors: createProcessors({
+        const workerRunner = yield* resource(
+          createWorkerRunner({
             client,
-            jobTypes,
-            processors: {
-              start: {
-                attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({
-                      ...txCtx,
-                      continueWith: {
-                        typeName: "end",
-                        input: { result: job.input.value + 1 },
-                      },
-                    }),
-                  ),
-              },
-              end: {
-                attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx) => {
-                    if (job.input.result < 3) {
-                      return complete({
+            concurrency: 1,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                start: {
+                  attemptHandler: async ({ job, complete }) =>
+                    withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({
                         ...txCtx,
                         continueWith: {
-                          typeName: "start",
-                          input: { value: job.input.result },
+                          typeName: "end",
+                          input: { result: job.input.value + 1 },
                         },
-                      });
-                    } else {
-                      return complete({
-                        ...txCtx,
-                        output: { finalResult: job.input.result },
-                      });
-                    }
-                  }),
+                      }),
+                    ),
+                },
+                end: {
+                  attemptHandler: async ({ job, complete }) =>
+                    withCaseTransaction(stateAdapter, (txCtx) => {
+                      if (job.input.result < 3) {
+                        return complete({
+                          ...txCtx,
+                          continueWith: {
+                            typeName: "start",
+                            input: { value: job.input.result },
+                          },
+                        });
+                      } else {
+                        return complete({
+                          ...txCtx,
+                          output: { finalResult: job.input.result },
+                        });
+                      }
+                    }),
+                },
               },
-            },
-          }),
-        });
-
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "start",
-            input: { value: 0 },
+            }),
           }),
         );
 
-        await workerRunner.start();
-        const succeededChain = await client.awaitChain(chain, completionOptions);
+        const chain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "start",
+              input: { value: 0 },
+            }),
+          ),
+        );
+
+        yield* wait(workerRunner.start());
+        const succeededChain = yield* wait(client.awaitChain(chain, completionOptions));
 
         assert.deepEqual(succeededChain.output, { finalResult: 3 });
-      },
+      }),
     },
     {
       name: "correctly types chainTypeName for jobs reachable from multiple chains",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           entryA: { entry: true; input: { fromA: true }; continueWith: { typeName: "shared" } };
           entryB: { entry: true; input: { fromB: true }; continueWith: { typeName: "shared" } };
@@ -453,76 +498,86 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         }>();
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
-        await using workerRunner = createWorkerRunner({
-          client,
-          concurrency: 1,
-          processors: createProcessors({
+        const workerRunner = yield* resource(
+          createWorkerRunner({
             client,
-            jobTypes,
-            processors: {
-              entryA: {
-                attemptHandler: async ({ job, complete }) => {
-                  assert.equal(job.chainTypeName, "entryA");
-                  return withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({
-                      ...txCtx,
-                      continueWith: { typeName: "shared", input: { data: 1 } },
-                    }),
-                  );
+            concurrency: 1,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                entryA: {
+                  attemptHandler: async ({ job, complete }) => {
+                    assert.equal(job.chainTypeName, "entryA");
+                    return withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({
+                        ...txCtx,
+                        continueWith: { typeName: "shared", input: { data: 1 } },
+                      }),
+                    );
+                  },
+                },
+                entryB: {
+                  attemptHandler: async ({ job, complete }) => {
+                    assert.equal(job.chainTypeName, "entryB");
+                    return withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({
+                        ...txCtx,
+                        continueWith: { typeName: "shared", input: { data: 2 } },
+                      }),
+                    );
+                  },
+                },
+                shared: {
+                  attemptHandler: async ({ job, complete }) => {
+                    assert.ok(["entryA", "entryB"].includes(job.chainTypeName));
+                    return withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({ ...txCtx, output: { done: true } }),
+                    );
+                  },
                 },
               },
-              entryB: {
-                attemptHandler: async ({ job, complete }) => {
-                  assert.equal(job.chainTypeName, "entryB");
-                  return withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({
-                      ...txCtx,
-                      continueWith: { typeName: "shared", input: { data: 2 } },
-                    }),
-                  );
-                },
-              },
-              shared: {
-                attemptHandler: async ({ job, complete }) => {
-                  assert.ok(["entryA", "entryB"].includes(job.chainTypeName));
-                  return withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({ ...txCtx, output: { done: true } }),
-                  );
-                },
-              },
-            },
-          }),
-        });
-
-        const chainA = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "entryA",
-            input: { fromA: true },
-          }),
-        );
-        const chainB = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "entryB",
-            input: { fromB: true },
+            }),
           }),
         );
 
-        await workerRunner.start();
-        const [resultA, resultB] = await Promise.all([
-          client.awaitChain(chainA, { pollIntervalMs: 100, timeoutMs: 5000 }),
-          client.awaitChain(chainB, { pollIntervalMs: 100, timeoutMs: 5000 }),
-        ]);
+        const chainA = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "entryA",
+              input: { fromA: true },
+            }),
+          ),
+        );
+        const chainB = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "entryB",
+              input: { fromB: true },
+            }),
+          ),
+        );
+
+        yield* wait(workerRunner.start());
+        const [resultA, resultB] = yield* wait(
+          Promise.all([
+            client.awaitChain(chainA, { pollIntervalMs: 100, timeoutMs: 5000 }),
+            client.awaitChain(chainB, { pollIntervalMs: 100, timeoutMs: 5000 }),
+          ]),
+        );
         assert.deepEqual(resultA.output, { done: true });
         assert.deepEqual(resultB.output, { done: true });
-      },
+      }),
     },
     {
       name: "independent chains created during job processing do not inherit context",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           parent: {
             entry: true;
@@ -539,76 +594,87 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
         const independentChainCreated = Promise.withResolvers<string>();
 
-        await using workerRunner = createWorkerRunner({
-          client,
-          concurrency: 1,
-          processors: createProcessors({
+        const workerRunner = yield* resource(
+          createWorkerRunner({
             client,
-            jobTypes,
-            processors: {
-              parent: {
-                attemptHandler: async ({ job, complete }) => {
-                  const independentChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-                    client.createChain({
-                      ...txCtx,
-                      typeName: "independent",
-                      input: { fromParent: job.input.value },
-                    }),
-                  );
+            concurrency: 1,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                parent: {
+                  attemptHandler: async ({ job, complete }) => {
+                    const independentChain = await withCaseTransaction(stateAdapter, (txCtx) =>
+                      client.createChain({
+                        ...txCtx,
+                        typeName: "independent",
+                        input: { fromParent: job.input.value },
+                      }),
+                    );
 
-                  independentChainCreated.resolve(independentChain.id);
+                    independentChainCreated.resolve(independentChain.id);
 
-                  return withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({
-                      ...txCtx,
-                      output: {
-                        childChainId: independentChain.id,
-                      },
-                    }),
-                  );
+                    return withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({
+                        ...txCtx,
+                        output: {
+                          childChainId: independentChain.id,
+                        },
+                      }),
+                    );
+                  },
+                },
+                independent: {
+                  attemptHandler: async ({ job, complete }) =>
+                    withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({
+                        ...txCtx,
+                        output: {
+                          result: job.input.fromParent * 2,
+                        },
+                      }),
+                    ),
                 },
               },
-              independent: {
-                attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({
-                      ...txCtx,
-                      output: {
-                        result: job.input.fromParent * 2,
-                      },
-                    }),
-                  ),
-              },
-            },
-          }),
-        });
-
-        const parentChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "parent",
-            input: { value: 42 },
+            }),
           }),
         );
 
-        await workerRunner.start();
-        const [completedParent] = await Promise.all([
-          client.awaitChain(parentChain, completionOptions),
-          (async () =>
-            client.awaitChain(
-              { id: await independentChainCreated.promise, typeName: "independent" },
-              completionOptions,
-            ))(),
-        ]);
+        const parentChain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "parent",
+              input: { value: 42 },
+            }),
+          ),
+        );
 
-        assert.equal(completedParent.output.childChainId, await independentChainCreated.promise);
-      },
+        yield* wait(workerRunner.start());
+        const [completedParent] = yield* wait(
+          Promise.all([
+            client.awaitChain(parentChain, completionOptions),
+            (async () =>
+              client.awaitChain(
+                { id: await independentChainCreated.promise, typeName: "independent" },
+                completionOptions,
+              ))(),
+          ]),
+        );
+
+        assert.equal(
+          completedParent.output.childChainId,
+          yield* wait(independentChainCreated.promise),
+        );
+      }),
     },
     {
       name: "continueWith accepts caller-supplied id",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           step1: { entry: true; input: null; continueWith: { typeName: "step2" } };
           step2: { input: null; output: { id: string } };
@@ -618,48 +684,54 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         const userId = stateAdapter.config.generateJobId();
 
-        await using workerRunner = createWorkerRunner({
-          client,
-          concurrency: 1,
-          processors: createProcessors({
+        const workerRunner = yield* resource(
+          createWorkerRunner({
             client,
-            jobTypes,
-            processors: {
-              step1: {
-                attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({
-                      ...txCtx,
-                      continueWith: { typeName: "step2", id: userId, input: null },
-                    }),
-                  ),
-              },
-              step2: {
-                attemptHandler: async ({ job, complete }) => {
-                  assert.equal(job.id, userId);
-                  return withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({ ...txCtx, output: { id: job.id } }),
-                  );
+            concurrency: 1,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                step1: {
+                  attemptHandler: async ({ complete }) =>
+                    withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({
+                        ...txCtx,
+                        continueWith: { typeName: "step2", id: userId, input: null },
+                      }),
+                    ),
+                },
+                step2: {
+                  attemptHandler: async ({ job, complete }) => {
+                    assert.equal(job.id, userId);
+                    return withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({ ...txCtx, output: { id: job.id } }),
+                    );
+                  },
                 },
               },
-            },
+            }),
           }),
-        });
-
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({ ...txCtx, typeName: "step1", input: null }),
         );
 
-        await workerRunner.start();
-        const finished = await client.awaitChain(chain, completionOptions);
+        const chain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({ ...txCtx, typeName: "step1", input: null }),
+          ),
+        );
+
+        yield* wait(workerRunner.start());
+        const finished = yield* wait(client.awaitChain(chain, completionOptions));
         assert.deepEqual(finished.output, { id: userId });
-      },
+      }),
     },
     {
       name: "continueWith rejects caller-supplied id that fails validateJobId",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           step1: { entry: true; input: null; continueWith: { typeName: "step2" } };
           step2: { input: null; output: null };
@@ -675,59 +747,69 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         });
 
         let continueWithError: unknown;
-        await using workerRunner = createWorkerRunner({
-          client,
-          concurrency: 1,
-          processors: createProcessors({
+        const workerRunner = yield* resource(
+          createWorkerRunner({
             client,
-            jobTypes,
-            processors: {
-              step1: {
-                attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx) => {
-                    try {
-                      return await complete({
-                        ...txCtx,
-                        continueWith: { typeName: "step2", id: "bad-id", input: null },
-                      });
-                    } catch (err) {
-                      continueWithError = err;
-                      throw err;
-                    }
-                  }),
+            concurrency: 1,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                step1: {
+                  attemptHandler: async ({ complete }) =>
+                    withCaseTransaction(stateAdapter, function* (txCtx) {
+                      try {
+                        return yield* step(
+                          complete({
+                            ...txCtx,
+                            continueWith: { typeName: "step2", id: "bad-id", input: null },
+                          }),
+                        );
+                      } catch (err) {
+                        continueWithError = err;
+                        throw err;
+                      }
+                    }),
+                },
+                step2: {
+                  attemptHandler: async ({ complete }) =>
+                    withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({ ...txCtx, output: null }),
+                    ),
+                },
               },
-              step2: {
-                attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({ ...txCtx, output: null }),
-                  ),
-              },
-            },
+            }),
           }),
-        });
-
-        await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({ ...txCtx, typeName: "step1", input: null }),
         );
 
-        await workerRunner.start();
-        await retryUntilPasses(
-          async () => {
-            assert.ok(continueWithError instanceof InvalidJobIdError);
-          },
-          { timeoutMs: 5000, intervalMs: 25 },
+        yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({ ...txCtx, typeName: "step1", input: null }),
+          ),
+        );
+
+        yield* wait(workerRunner.start());
+        yield* wait(
+          retryUntilPasses(
+            async () => {
+              assert.ok(continueWithError instanceof InvalidJobIdError);
+            },
+            { timeoutMs: 5000, intervalMs: 25 },
+          ),
         );
 
         assert.ok(continueWithError instanceof InvalidJobIdError);
         assert.equal(continueWithError.source, "caller");
         assert.equal(continueWithError.id, "bad-id");
-      },
+      }),
     },
     {
       name: "continueWith duplicate caller-supplied id errors",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           step1: { entry: true; input: null; continueWith: { typeName: "step2" } };
           step2: { input: null; output: null };
@@ -738,54 +820,60 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         const sharedId = stateAdapter.config.generateJobId();
         let collisionOccurred = false;
 
-        await using workerRunner = createWorkerRunner({
-          client,
-          concurrency: 1,
-          processors: createProcessors({
+        const workerRunner = yield* resource(
+          createWorkerRunner({
             client,
-            jobTypes,
-            processors: {
-              step1: {
-                backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-                attemptHandler: async ({ job, complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx) => {
-                    if (job.attempt > 1) {
-                      collisionOccurred = true;
+            concurrency: 1,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                step1: {
+                  backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+                  attemptHandler: async ({ job, complete }) =>
+                    withCaseTransaction(stateAdapter, (txCtx) => {
+                      if (job.attempt > 1) {
+                        collisionOccurred = true;
+                        return complete({
+                          ...txCtx,
+                          continueWith: { typeName: "step2", input: null },
+                        });
+                      }
                       return complete({
                         ...txCtx,
-                        continueWith: { typeName: "step2", input: null },
+                        continueWith: { typeName: "step2", id: sharedId, input: null },
                       });
-                    }
-                    return complete({
-                      ...txCtx,
-                      continueWith: { typeName: "step2", id: sharedId, input: null },
-                    });
-                  }),
+                    }),
+                },
+                step2: {
+                  attemptHandler: async ({ complete }) =>
+                    withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({ ...txCtx, output: null }),
+                    ),
+                },
               },
-              step2: {
-                attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({ ...txCtx, output: null }),
-                  ),
-              },
-            },
+            }),
           }),
-        });
-
-        const chain1 = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({ ...txCtx, typeName: "step1", input: null }),
         );
 
-        const chain2 = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({ ...txCtx, typeName: "step1", input: null }),
+        const chain1 = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({ ...txCtx, typeName: "step1", input: null }),
+          ),
         );
 
-        await workerRunner.start();
-        await client.awaitChain(chain1, completionOptions);
-        await client.awaitChain(chain2, completionOptions);
+        const chain2 = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({ ...txCtx, typeName: "step1", input: null }),
+          ),
+        );
+
+        yield* wait(workerRunner.start());
+        yield* wait(client.awaitChain(chain1, completionOptions));
+        yield* wait(client.awaitChain(chain2, completionOptions));
 
         assert.equal(collisionOccurred, true);
-      },
+      }),
     },
   ],
 };

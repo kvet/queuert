@@ -1,12 +1,13 @@
 import type { BaseJobTypeDefinitions } from "../job-types/job-type.ts";
 import type { ResolvedRunningJob } from "../job-types/job-types.resolvers.ts";
 import type {
+  AnyStateAdapter,
   GetStateAdapterJobId,
   GetStateAdapterWorkerId,
   StateAdapter,
 } from "../state-adapter/state-adapter.ts";
 
-type RunningJob<TStateAdapter extends StateAdapter<any, any, any>> = ResolvedRunningJob<
+type RunningJob<TStateAdapter extends AnyStateAdapter> = ResolvedRunningJob<
   GetStateAdapterJobId<TStateAdapter>,
   GetStateAdapterWorkerId<TStateAdapter>,
   BaseJobTypeDefinitions,
@@ -26,7 +27,7 @@ type RunningJob<TStateAdapter extends StateAdapter<any, any, any>> = ResolvedRun
  * outermost. Each `next(ctx)` accumulates ctx for inner layers.
  */
 export type AttemptMiddleware<
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends AnyStateAdapter,
   THandlerCtx extends Record<string, unknown> = Record<string, unknown>,
 > = {
   wrapHandler: <T>(opts: {

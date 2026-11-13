@@ -23,11 +23,9 @@ import {
   createWorkerRunner,
   createProcessors,
   defineJobTypes,
-} from "queuert";
-import {
   createInProcessNotifyAdapter,
   createInProcessStateAdapter,
-} from "queuert/conformance-internal";
+} from "queuert";
 import { it as baseIt, describe, expect, expectTypeOf, vi } from "vitest";
 
 import { createOtelObservabilityAdapter } from "../observability-adapter/observability-adapter.otel.ts";

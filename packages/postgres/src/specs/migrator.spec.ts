@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { createDeploymentSpawner, startPaused, startTogether } from "@queuert/helpers/testing";
 import { acquirePostgres } from "@queuert/testcontainers";
-import type { MigrationResult } from "@queuert/typed-sql";
+import type { MigrationResult } from "@queuert/typed-sql/migrator";
 import { Pool } from "pg";
 import { it as baseIt, describe, expect, vi } from "vitest";
 

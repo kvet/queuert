@@ -1,20 +1,25 @@
+import { type Mode, andThen } from "@queuert/helpers/maybe-promise";
+import { modal } from "@queuert/helpers/modal";
+import { step } from "@queuert/helpers/steps";
+import { assertMigrationLockOptions } from "@queuert/typed-sql/migration-lock";
 import {
   type Migration,
   type MigrationScript,
   type MigrationStore,
   type Migrator,
-  type TypedSqlTemplate,
-  assertMigrationLockOptions,
-  createMigrator,
-  createTemplateApplier,
-  createTypedSqlExecutor,
-  sql,
-  t,
-  validateSqlIdentifier,
-} from "@queuert/typed-sql";
+  createModeMigrator,
+} from "@queuert/typed-sql/migrator";
+import { type TypedSqlTemplate, sql, t } from "@queuert/typed-sql/sql";
+import { createTypedSqlExecutor, validateSqlIdentifier } from "@queuert/typed-sql/sql-executor";
+import { createTemplateApplier } from "@queuert/typed-sql/template-applier";
 import type { BaseTxContext } from "queuert";
+import { isSyncAdapter } from "queuert/internal";
 
-import type { SqliteStateProvider } from "../state-provider/state-provider.sqlite.ts";
+import type {
+  ModeSqliteStateProvider,
+  SqliteStateProvider,
+  SyncSqliteStateProvider,
+} from "../state-provider/state-provider.sqlite.ts";
 
 const createMigrationTableStatement = sql(
   /* sql */ `
@@ -37,6 +42,27 @@ CREATE TABLE IF NOT EXISTS {{write_lock_table}} (
 )`,
   { id: "createLeaseTable", params: [], columns: {} },
 );
+export const takeWriteLockStatement: TypedSqlTemplate<readonly [], Record<string, never>> = sql(
+  /* sql */ `UPDATE {{write_lock_table}} SET id = id WHERE 0`,
+  {
+    id: "takeWriteLock",
+    params: [],
+    columns: {},
+  },
+);
+const getAppliedMigrationsStatement = sql(
+  /* sql */ `SELECT name FROM {{migration_table}} ORDER BY name`,
+  { id: "getAppliedMigrations", params: [], columns: { name: t.string() }, readOnly: true },
+);
+const recordMigrationStatement = sql(
+  /* sql */ `INSERT INTO {{migration_table}} (name) VALUES (?) ON CONFLICT (name) DO NOTHING`,
+  { id: "recordMigration", params: [t.string()], columns: {} },
+);
+const unrecordMigrationStatement = sql(/* sql */ `DELETE FROM {{migration_table}} WHERE name = ?`, {
+  id: "unrecordMigration",
+  params: [t.string()],
+  columns: {},
+});
 const acquireMigrationLockStatement = sql(
   /* sql */ `
 INSERT INTO {{write_lock_table}} (id, locked_by, locked_until)
@@ -66,39 +92,23 @@ const releaseMigrationLockStatement = sql(
   /* sql */ `DELETE FROM {{write_lock_table}} WHERE id = 1 AND locked_by = ?`,
   { id: "releaseMigrationLock", params: [t.string()], columns: {} },
 );
-export const takeWriteLockStatement: TypedSqlTemplate<readonly [], Record<string, never>> = sql(
-  /* sql */ `UPDATE {{write_lock_table}} SET id = id WHERE 0`,
-  {
-    id: "takeWriteLock",
-    params: [],
-    columns: {},
-  },
-);
-const getAppliedMigrationsStatement = sql(
-  /* sql */ `SELECT name FROM {{migration_table}} ORDER BY name`,
-  { id: "getAppliedMigrations", params: [], columns: { name: t.string() }, readOnly: true },
-);
-const recordMigrationStatement = sql(
-  /* sql */ `INSERT INTO {{migration_table}} (name) VALUES (?) ON CONFLICT (name) DO NOTHING`,
-  { id: "recordMigration", params: [t.string()], columns: {} },
-);
-const unrecordMigrationStatement = sql(/* sql */ `DELETE FROM {{migration_table}} WHERE name = ?`, {
-  id: "unrecordMigration",
-  params: [t.string()],
-  columns: {},
-});
 
-export const createSqliteMigrationStore = <TTxContext extends BaseTxContext>({
+type MigrationStoreOptions<TStateProvider> = {
+  stateProvider: TStateProvider;
+  migrationTable: string;
+  writeLockTable: string;
+  lease: boolean;
+};
+
+const createModeSqliteMigrationStore = <TTxContext extends BaseTxContext>({
   stateProvider,
   migrationTable,
   writeLockTable,
   lease,
-}: {
-  stateProvider: SqliteStateProvider<TTxContext>;
-  migrationTable: string;
-  writeLockTable: string;
-  lease: boolean;
-}): MigrationStore<TTxContext> => {
+}: MigrationStoreOptions<ModeSqliteStateProvider<TTxContext>>): MigrationStore<
+  TTxContext,
+  Mode
+> => {
   const exec = createTypedSqlExecutor(stateProvider);
 
   const applyTemplate = createTemplateApplier({
@@ -109,38 +119,58 @@ export const createSqliteMigrationStore = <TTxContext extends BaseTxContext>({
   const createWriteLockTableSql = applyTemplate(
     lease ? createLeaseTableStatement : createWriteLockTableStatement,
   );
-  const acquireMigrationLockSql = applyTemplate(acquireMigrationLockStatement);
-  const extendMigrationLockSql = applyTemplate(extendMigrationLockStatement);
-  const releaseMigrationLockSql = applyTemplate(releaseMigrationLockStatement);
   const takeWriteLockSql = applyTemplate(takeWriteLockStatement);
   const getAppliedMigrationsSql = applyTemplate(getAppliedMigrationsStatement);
   const recordMigrationSql = applyTemplate(recordMigrationStatement);
   const unrecordMigrationSql = applyTemplate(unrecordMigrationStatement);
 
-  const store: MigrationStore<TTxContext> = {
-    initialize: async () => {
-      await exec({ sql: createMigrationTableSql });
-      await exec({ sql: createWriteLockTableSql });
-    },
-    runInTransaction: async (fn) =>
-      stateProvider.withTransaction(async (txCtx) => {
-        await exec({ txCtx, sql: takeWriteLockSql });
-        return fn(txCtx);
-      }),
-    getAppliedMigrationNames: async (txCtx) => {
-      const applied = await exec({ txCtx, sql: getAppliedMigrationsSql });
-      return applied.map((m) => m.name);
-    },
-    recordMigration: async (txCtx, name) => {
-      await exec({ txCtx, sql: recordMigrationSql, params: [name] });
-    },
-    unrecordMigration: async (txCtx, name) => {
-      await exec({ txCtx, sql: unrecordMigrationSql, params: [name] });
-    },
+  const initialize = modal(function* () {
+    yield* step(exec({ sql: createMigrationTableSql }));
+    yield* step(exec({ sql: createWriteLockTableSql }));
+  });
+  const sync = isSyncAdapter(stateProvider);
+
+  return {
+    initialize: sync ? initialize.sync : initialize.async,
+    runInTransaction: (fn) =>
+      stateProvider.withTransaction((txCtx) =>
+        andThen(exec({ txCtx, sql: takeWriteLockSql }), () => fn(txCtx)),
+      ),
+    getAppliedMigrationNames: (txCtx) =>
+      andThen(exec({ txCtx, sql: getAppliedMigrationsSql }), (applied) =>
+        applied.map((m) => m.name),
+      ),
+    recordMigration: (txCtx, name) =>
+      andThen(exec({ txCtx, sql: recordMigrationSql, params: [name] }), () => undefined),
+    unrecordMigration: (txCtx, name) =>
+      andThen(exec({ txCtx, sql: unrecordMigrationSql, params: [name] }), () => undefined),
   };
-  if (!lease) {
-    return store;
-  }
+};
+
+export const createSqliteMigrationStore: {
+  <TTxContext extends BaseTxContext>(
+    options: MigrationStoreOptions<SyncSqliteStateProvider<TTxContext>>,
+  ): MigrationStore<TTxContext, "sync">;
+  <TTxContext extends BaseTxContext>(
+    options: MigrationStoreOptions<SqliteStateProvider<TTxContext>>,
+  ): MigrationStore<TTxContext>;
+  <TTxContext extends BaseTxContext>(
+    options: MigrationStoreOptions<ModeSqliteStateProvider<TTxContext>>,
+  ): MigrationStore<TTxContext, Mode>;
+} = createModeSqliteMigrationStore as any;
+
+const withMigrationLease = <TTxContext extends BaseTxContext>(
+  store: MigrationStore<TTxContext, Mode>,
+  {
+    stateProvider,
+    writeLockTable,
+  }: { stateProvider: ModeSqliteStateProvider<TTxContext>; writeLockTable: string },
+): MigrationStore<TTxContext, Mode> => {
+  const exec = createTypedSqlExecutor(stateProvider);
+  const applyTemplate = createTemplateApplier({ write_lock_table: writeLockTable });
+  const acquireMigrationLockSql = applyTemplate(acquireMigrationLockStatement);
+  const extendMigrationLockSql = applyTemplate(extendMigrationLockStatement);
+  const releaseMigrationLockSql = applyTemplate(releaseMigrationLockStatement);
   return {
     ...store,
     acquireMigrationLock: async (ownerId, ttlMs) => {
@@ -157,40 +187,80 @@ export const createSqliteMigrationStore = <TTxContext extends BaseTxContext>({
   };
 };
 
-export const createApplicationSqliteMigrationStore = <TTxContext extends BaseTxContext>({
+const createModeApplicationSqliteMigrationStore = <TTxContext extends BaseTxContext>({
   stateProvider,
   migrationTableName = "migration",
   lockTableName = "migration_lock",
 }: {
-  stateProvider: SqliteStateProvider<TTxContext>;
+  stateProvider: ModeSqliteStateProvider<TTxContext>;
   migrationTableName?: string;
   lockTableName?: string;
-}): MigrationStore<TTxContext> => {
+}): MigrationStore<TTxContext, Mode> => {
   validateSqlIdentifier(migrationTableName, "migrationTableName");
   validateSqlIdentifier(lockTableName, "lockTableName");
 
-  return createSqliteMigrationStore({
+  const store = createModeSqliteMigrationStore({
     stateProvider,
     migrationTable: migrationTableName,
     writeLockTable: lockTableName,
     lease: true,
   });
+  return isSyncAdapter(stateProvider)
+    ? store
+    : withMigrationLease(store, { stateProvider, writeLockTable: lockTableName });
+};
+
+type ApplicationMigrationStoreOptions<TStateProvider> = {
+  stateProvider: TStateProvider;
+  migrationTableName?: string;
+  lockTableName?: string;
+};
+
+export const createApplicationSqliteMigrationStore: {
+  <TTxContext extends BaseTxContext>(
+    options: ApplicationMigrationStoreOptions<SyncSqliteStateProvider<TTxContext>>,
+  ): MigrationStore<TTxContext, "sync">;
+  <TTxContext extends BaseTxContext>(
+    options: ApplicationMigrationStoreOptions<SqliteStateProvider<TTxContext>>,
+  ): MigrationStore<TTxContext>;
+  <TTxContext extends BaseTxContext>(
+    options: ApplicationMigrationStoreOptions<ModeSqliteStateProvider<TTxContext>>,
+  ): MigrationStore<TTxContext, Mode>;
+} = createModeApplicationSqliteMigrationStore as any;
+
+type SqliteMigratorTableOptions = {
+  /** Table that records applied migrations. @defaultValue "migration" */
+  migrationTableName?: string;
+  /**
+   * Table every migration transaction writes first, so it takes SQLite's write lock before it
+   * reads the history; the migrator over a {@link SqliteStateProvider} also keeps its lease there.
+   *
+   * @defaultValue "migration_lock"
+   */
+  lockTableName?: string;
 };
 
 /**
  * Create a migrator for your application's own migrations, kept in SQLite through the state
- * provider you pass to the state adapter.
+ * provider you pass to the state adapter. The migrator follows the provider's mode.
  *
- * The migrator creates its history and lock tables on the first run, if they are missing. Every
- * run claims a lease row in the lock table first, so processes migrating at once take turns: one
- * migrates and extends the lease while it works, the others wait and then skip what it applied.
- * Each migration transaction also writes to the lock table first, so it takes SQLite's write lock
- * before it reads the history. Set the driver's busy timeout longer than your longest migration
+ * The migrator creates its history and lock tables on the first run, if they are missing. Each
+ * migration transaction writes to the lock table first, so it takes SQLite's write lock before it
+ * reads the history. Set the driver's busy timeout longer than your longest migration
  * transaction, or a waiting process fails with `SQLITE_BUSY` instead of waiting its turn.
  *
+ * - Over a {@link SqliteStateProvider} it returns a {@link Migrator}. Every run claims a lease row
+ *   in the lock table first, so processes migrating at once take turns: one migrates and extends
+ *   the lease while it works, the others wait and then skip what it applied.
+ * - Over a {@link SyncSqliteStateProvider} it takes synchronous migrations and returns a
+ *   `Migrator<"sync">`, whose `migrateToLatest` and `migrateTo` return their results directly.
+ *   It takes no lease: each transactional migration still takes SQLite's write lock before it
+ *   reads the history, so processes migrating at once apply it once, but a non-transactional
+ *   migration can run in two of them. Migrate from one process when you have those.
+ *
  * Inside a `transactional` migration, run queries only through the `txCtx` that `up` and `down`
- * receive. The provider holds its write lock for the whole transaction, so a query through the
- * outer client, or taking the provider's lock again, waits forever.
+ * receive. An asynchronous provider holds its write lock for the whole transaction, so a query
+ * through the outer client, or taking the provider's lock again, waits forever.
  *
  * @experimental
  * @param options - Migrator configuration.
@@ -218,44 +288,69 @@ export const createApplicationSqliteMigrationStore = <TTxContext extends BaseTxC
  * await migrator.migrateToLatest();
  * ```
  */
-export const createSqliteMigrator = <TTxContext extends BaseTxContext>({
+export const createSqliteMigrator: {
+  <TTxContext extends BaseTxContext>(
+    options: {
+      /** The provider the migrator runs the migrations and keeps its history through. */
+      stateProvider: SyncSqliteStateProvider<TTxContext>;
+      /** The migrations, in the order they run. Append new migrations at the end. */
+      migrations: Migration<NoInfer<TTxContext>, "sync">[];
+      /** Runs on every run, before the history is read. Records nothing. */
+      before?: MigrationScript<"sync">;
+      /** Runs after the migrations have run, unless one failed. Records nothing. */
+      after?: MigrationScript<"sync">;
+    } & SqliteMigratorTableOptions,
+  ): Migrator<"sync">;
+  <TTxContext extends BaseTxContext>(
+    options: {
+      /** The provider the migrator runs the migrations and keeps its history through. */
+      stateProvider: SqliteStateProvider<TTxContext>;
+      /** The migrations, in the order they run. Append new migrations at the end. */
+      migrations: Migration<NoInfer<TTxContext>>[];
+      /** Timing of the lease. */
+      lock?: {
+        /** How long a claimed lease stays valid without a heartbeat. @defaultValue 60s */
+        ttlMs?: number;
+        /**
+         * How often the lease is extended while migrating. Below a third of `ttlMs`.
+         *
+         * @defaultValue the lower of 15s and a quarter of `ttlMs`
+         */
+        heartbeatIntervalMs?: number;
+        /** How often a waiting process re-attempts to claim the lease. @defaultValue 1s */
+        pollIntervalMs?: number;
+      };
+      /** Runs under the lease on every run, before the history is read. Records nothing. */
+      before?: MigrationScript;
+      /** Runs under the lease after the migrations have run, unless one failed. Records nothing. */
+      after?: MigrationScript;
+    } & SqliteMigratorTableOptions,
+  ): Migrator;
+} = ({
   stateProvider,
   migrations,
+  migrationTableName,
+  lockTableName,
   lock,
   before,
   after,
-  ...tables
 }: {
-  /** The provider the migrator keeps its history and lease through. */
-  stateProvider: SqliteStateProvider<TTxContext>;
-  /** The migrations, in the order they run. Append new migrations at the end. */
-  migrations: Migration<NoInfer<TTxContext>>[];
-  /** Table that records applied migrations. @defaultValue "migration" */
-  migrationTableName?: string;
-  /** Table that holds the migration lease, written first by every migration transaction. @defaultValue "migration_lock" */
-  lockTableName?: string;
-  /** Timing of the lease. */
-  lock?: {
-    /** How long a claimed lease stays valid without a heartbeat. @defaultValue 60s */
-    ttlMs?: number;
-    /**
-     * How often the lease is extended while migrating. Below a third of `ttlMs`.
-     *
-     * @defaultValue the lower of 15s and a quarter of `ttlMs`
-     */
-    heartbeatIntervalMs?: number;
-    /** How often a waiting process re-attempts to claim the lease. @defaultValue 1s */
-    pollIntervalMs?: number;
-  };
-  /** Runs under the lease on every run, before the history is read. Records nothing. */
-  before?: MigrationScript;
-  /** Runs under the lease after the migrations have run, unless one failed. Records nothing. */
-  after?: MigrationScript;
-}): Migrator => {
+  stateProvider: ModeSqliteStateProvider<any>;
+  migrations: Migration<any, Mode>[];
+  lock?: { ttlMs?: number; heartbeatIntervalMs?: number; pollIntervalMs?: number };
+  before?: MigrationScript<Mode>;
+  after?: MigrationScript<Mode>;
+} & SqliteMigratorTableOptions): any => {
   assertMigrationLockOptions("createSqliteMigrator", lock);
-  return createMigrator({
+  const store = createModeApplicationSqliteMigrationStore({
+    stateProvider,
+    migrationTableName,
+    lockTableName,
+  });
+  return createModeMigrator({
+    sync: isSyncAdapter(stateProvider),
     migrations,
-    store: createApplicationSqliteMigrationStore({ stateProvider, ...tables }),
+    store,
     lock,
     before,
     after,

@@ -12,4 +12,4 @@ export {
   type MigrationResult,
   type MigrationScript,
   type Migrator,
-} from "@queuert/typed-sql";
+} from "@queuert/typed-sql/migrator";

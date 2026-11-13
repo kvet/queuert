@@ -8,7 +8,7 @@
  * 3. Structural reference validation (by input shape)
  */
 
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createSqliteStateAdapter } from "@queuert/sqlite";
 import { Type } from "@sinclair/typebox";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
@@ -77,14 +77,14 @@ const jobTypes = createTypeBoxJobTypes({
 // #endregion
 
 // Create queuert client with the jobTypes
-await using drivers = new AsyncDisposableStack();
+using drivers = new DisposableStack();
 const db = drivers.adopt(new Database(":memory:"), (db) => {
   db.close();
 });
-await using stateAdapter = createSqliteStateAdapter({
-  stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
+using stateAdapter = createSqliteStateAdapter({
+  stateProvider: createBetterSqlite3StateProvider({ db }),
 });
-await stateAdapter.migrateToLatest();
+stateAdapter.migrateToLatest();
 
 const client = createClient({ stateAdapter, jobTypes });
 
@@ -100,7 +100,7 @@ await using workerRunner = createWorkerRunner({
           console.log(`Fetching data from ${job.input.url}`);
           const data = { items: [1, 2, 3], source: job.input.url };
 
-          return stateAdapter.withTransaction(async (ctx) =>
+          return stateAdapter.withTransaction((ctx) =>
             complete({
               ...ctx,
               continueWith: {
@@ -116,7 +116,7 @@ await using workerRunner = createWorkerRunner({
           console.log("Processing data:", job.input.data);
           const data = job.input.data as { items: number[] };
 
-          return stateAdapter.withTransaction(async (ctx) =>
+          return stateAdapter.withTransaction((ctx) =>
             complete({
               ...ctx,
               output: {
@@ -132,7 +132,7 @@ await using workerRunner = createWorkerRunner({
           console.log(`Processing batch ${job.input.batchId}`);
           console.log("Blockers completed:", job.blockers.length);
 
-          return stateAdapter.withTransaction(async (ctx) =>
+          return stateAdapter.withTransaction((ctx) =>
             complete({ ...ctx, output: { success: true } }),
           );
         },
@@ -141,7 +141,7 @@ await using workerRunner = createWorkerRunner({
         attemptHandler: async ({ job, complete }) => {
           console.log(`Authenticating with token: ${job.input.token.substring(0, 8)}...`);
 
-          return stateAdapter.withTransaction(async (ctx) =>
+          return stateAdapter.withTransaction((ctx) =>
             complete({
               ...ctx,
               output: {
@@ -159,7 +159,7 @@ await workerRunner.start();
 
 // Run a chain
 console.log("\n=== Running fetch-data chain ===");
-const chain = await stateAdapter.withTransaction(async (ctx) =>
+const chain = stateAdapter.withTransaction((ctx) =>
   client.createChain({
     ...ctx,
     typeName: "fetch-data",

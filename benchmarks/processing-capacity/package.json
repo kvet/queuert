@@ -11,7 +11,7 @@
     "start:state-sqlite-node-sqlite": "node src/index.ts --state-sqlite-node-sqlite",
     "start:state-mysql-mysql2": "node src/index.ts --state-mysql-mysql2",
     "start:state-mariadb-mysql2": "node src/index.ts --state-mariadb-mysql2",
-    "start:state-in-process": "node src/index.ts --state-in-process",
+    "start:state-in-process-sync": "node src/index.ts --state-in-process-sync",
     "start:state-redis-redis": "node src/index.ts --state-redis-redis",
     "start:state-redis-ioredis": "node src/index.ts --state-redis-ioredis",
     "start:notify-redis-redis": "node src/index.ts --notify-redis-redis",
@@ -19,7 +19,8 @@
     "start:notify-postgres-pg": "node src/index.ts --notify-postgres-pg",
     "start:notify-postgres-postgres-js": "node src/index.ts --notify-postgres-postgres-js",
     "start:notify-nats-transport-node": "node src/index.ts --notify-nats-transport-node",
-    "start:notify-in-process": "node src/index.ts --notify-in-process",
+    "start:notify-in-process-sync": "node src/index.ts --notify-in-process-sync",
+    "start:notify-ipc": "node src/index.ts --notify-ipc",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -49,6 +50,7 @@
     "redis": "6.3.1"
   },
   "devDependencies": {
+    "@queuert/ipc": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@testcontainers/nats": "12.2.1",
     "@testcontainers/postgresql": "12.2.1",

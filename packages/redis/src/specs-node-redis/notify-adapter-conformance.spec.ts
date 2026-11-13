@@ -39,6 +39,7 @@ baseIt("index");
 
 describe("Redis Notify Provider Conformance", () => {
   conformanceTestSuite({
+    mode: "async",
     it,
     groups: [...redisNotifyProviderConformanceGroups, ...notifyAdapterEndToEndGroups],
   });

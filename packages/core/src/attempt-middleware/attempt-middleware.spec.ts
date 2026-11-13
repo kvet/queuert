@@ -1,9 +1,9 @@
 import { describe, expectTypeOf, it } from "vitest";
 
-import { type Client, createClient } from "../client.ts";
+import { type Client, createClient } from "../client/client.ts";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../job-types/define-job-types.ts";
-import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.ts";
+import { createInProcessStateAdapter } from "../state-adapter.in-process/state-adapter.in-process.ts";
 import type { StateAdapter } from "../state-adapter/state-adapter.ts";
 import type { AttemptMiddleware, MergedAttemptHandlerCtx } from "./attempt-middleware.ts";
 
@@ -161,16 +161,10 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
   });
 
   it("merges ctx across a tuple mixing any- and concrete-adapter middleware", () => {
-    type DbStateAdapter = StateAdapter<
-      { db: { query: (sql: string) => Promise<unknown> } },
-      string,
-      string
-    >;
-
     const agnosticMw: AttemptMiddleware<any, { traceId: string }> = {
       wrapHandler: async ({ next }) => next({ traceId: "t" }),
     };
-    const concreteMw: AttemptMiddleware<DbStateAdapter, { log: (msg: string) => void }> = {
+    const concreteMw: AttemptMiddleware<typeof stateAdapter, { log: (msg: string) => void }> = {
       wrapHandler: async ({ next }) => next({ log: () => {} }),
     };
 

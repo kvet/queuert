@@ -4,12 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createDeploymentSpawner, startPaused, startTogether } from "@queuert/helpers/testing";
-import {
-  type MigrationResult,
-  createMigrator,
-  createTemplateApplier,
-  createTemplateExecutor,
-} from "@queuert/typed-sql";
+import { type MigrationResult, createMigrator } from "@queuert/typed-sql/migrator";
+import { createTemplateExecutor } from "@queuert/typed-sql/sql-executor";
+import { createTemplateApplier } from "@queuert/typed-sql/template-applier";
 import Database from "better-sqlite3";
 import { it as baseIt, describe, expect } from "vitest";
 
@@ -27,7 +24,7 @@ import { MARKER } from "./state-adapter-migration.process.ts";
 import { createV017Migrations } from "./v0.17-migrations.spec-helper.ts";
 
 const INSTALL = "001_initial_schema";
-const ALL = createSchemaMigrations(async () => {}).map((migration) => migration.name);
+const ALL = createSchemaMigrations(async () => {}, "async").map((migration) => migration.name);
 const spawnDeployment = createDeploymentSpawner<MigrationResult>(
   join(import.meta.dirname, "state-adapter-migration.process.ts"),
   join(import.meta.dirname, "..", ".."),

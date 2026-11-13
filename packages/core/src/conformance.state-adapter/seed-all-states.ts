@@ -1,10 +1,8 @@
-import type {
-  BaseTxContext,
-  StateAdapter,
-  StateJob,
-  StateJobInfo,
-  StateWorkerInfo,
-} from "../state-adapter/state-adapter.ts";
+import type { MaybePromise } from "@queuert/helpers/maybe-promise";
+import { type Steps, step } from "@queuert/helpers/steps";
+
+import { type ConformanceStateAdapter, inMode, inTransaction } from "../conformance/adapters.ts";
+import type { StateJob, StateJobInfo, StateWorkerInfo } from "../state-adapter/state-adapter.ts";
 
 export type SeedSentinels = {
   pending: {
@@ -123,402 +121,483 @@ const chunkIndexes = (total: number, size: number): number[][] => {
   return chunks;
 };
 
-export const seedAllStates = async <TTxContext extends BaseTxContext>(
-  stateAdapter: StateAdapter<TTxContext, string, any>,
+export const seedAllStates = (
+  stateAdapter: ConformanceStateAdapter,
   { scale = 1 }: { scale?: number } = {},
-): Promise<SeedSentinels> => {
-  const headJob = (typeName: string, index: number, schedule?: { afterMs: number }) => ({
-    id: stateAdapter.config.generateJobId(),
-    typeName,
-    input: { index },
-    ...(schedule ? { schedule } : {}),
-  });
-
-  const createChains = async (
-    typeName: string,
-    total: number,
-    schedule?: { afterMs: number },
-  ): Promise<StateJobInfo[]> => {
-    const created: StateJobInfo[] = [];
-    for (const indexes of chunkIndexes(total, CREATE_CHUNK)) {
-      const results = await stateAdapter.withTransaction(async (txCtx) =>
-        stateAdapter.createJobs({
-          txCtx,
-          jobs: indexes.map((i) => headJob(typeName, i, schedule)),
-        }),
-      );
-      created.push(...results.map((r) => r.head));
-    }
-    return created;
-  };
-
-  const createProcessed = async (
-    typeName: string,
-    total: number,
-    mode: "running" | "completed" | "retried",
-    worker: StateWorkerInfo = seedWorker,
-  ): Promise<StateJob[]> => {
-    const processed: StateJob[] = [];
-    for (const indexes of chunkIndexes(total, PROCESS_CHUNK)) {
-      const batch = await stateAdapter.withTransaction(async (txCtx) => {
-        await stateAdapter.createJobs({
-          txCtx,
-          jobs: indexes.map((i) => headJob(typeName, i)),
-        });
-        const jobs: StateJob[] = [];
-        const acquiredJobs = await stateAdapter.startJobAttempts({
-          txCtx,
-          typeNames: [typeName],
-          workerId: worker.id,
-          workerToken: worker.token,
-          limit: indexes.length,
-        });
-        for (const job of acquiredJobs) {
-          if (mode === "running") {
-            jobs.push(job);
-          } else if (mode === "completed") {
-            const completed = await stateAdapter.completeJobs({
-              txCtx,
-              jobs: [
-                {
-                  jobId: job.id,
-                  output: { ok: true, index: (job.input as { index: number }).index },
-                  attemptToken: job.attemptToken!,
-                  workerId: job.attemptBy!,
-                },
-              ],
-            });
-            jobs.push(...completed.filter((entry) => entry !== undefined));
-          } else {
-            const [rescheduled] = await stateAdapter.rescheduleJobs({
-              txCtx,
-              jobs: [
-                {
-                  jobId: job.id,
-                  schedule: { afterMs: seedConfig.futureMs },
-                  error: "seeded transient failure",
-                },
-              ],
-            });
-            jobs.push(rescheduled!);
-          }
-        }
-        return jobs;
-      });
-      processed.push(...batch);
-    }
-    return processed;
-  };
-
-  const seedWorker = await stateAdapter.startWorker({
-    workerId: seedConfig.workerId,
-    typeNames: [...seedConfig.workerTypeNames],
-    concurrency: seedConfig.workerConcurrency,
-    leaseMs: seedConfig.leaseMs,
-  });
-  for (const idleWorker of seedConfig.idleWorkers) {
-    await stateAdapter.startWorker({
-      workerId: idleWorker.id,
-      typeNames: [...idleWorker.typeNames],
-      concurrency: seedConfig.workerConcurrency,
-      leaseMs: seedConfig.leaseMs,
+): MaybePromise<SeedSentinels> =>
+  inMode(stateAdapter, function* () {
+    const headJob = (typeName: string, index: number, schedule?: { afterMs: number }) => ({
+      id: stateAdapter.config.generateJobId(),
+      typeName,
+      input: { index },
+      ...(schedule ? { schedule } : {}),
     });
-  }
-  const busyWorker = await stateAdapter.startWorker({
-    workerId: seedConfig.busyWorkerId,
-    typeNames: [...seedConfig.busyWorkerTypeNames],
-    concurrency: seedConfig.workerConcurrency,
-    leaseMs: seedConfig.leaseMs,
-  });
 
-  // --- Block: Pending jobs (created first = earlier createdAt) ---
-  const pendingJobs: StateJobInfo[] = [];
-  for (const typeName of seedConfig.pendingTypes) {
-    const jobs = await createChains(typeName, seedConfig.pendingPerType * scale);
-    for (const job of jobs) pendingJobs.push(job);
-  }
-
-  // --- Block: Scheduled ---
-  const scheduled = await createChains("seed:scheduled", seedConfig.scheduledCount * scale, {
-    afterMs: seedConfig.futureMs,
-  });
-
-  // --- Block: Running ---
-  const runningJobs: StateJob[] = [];
-  for (const typeName of seedConfig.runningTypes) {
-    const jobs = await createProcessed(typeName, seedConfig.runningPerType * scale, "running");
-    for (const job of jobs) runningJobs.push(job);
-  }
-
-  // --- Block: Completed (non-continued, created before continued ones) ---
-  const completedJobs: StateJob[] = [];
-  for (const typeName of seedConfig.completedTypes) {
-    const jobs = await createProcessed(typeName, seedConfig.completedPerType * scale, "completed");
-    for (const job of jobs) completedJobs.push(job);
-  }
-
-  // --- Block: Retried ---
-  const retried = await createProcessed("seed:retried", seedConfig.retriedCount * scale, "retried");
-
-  // --- Block: Fan-in (tiered: many×1, medium×10, few×100) ---
-  const fanInBlockerChains: StateJobInfo[] = [];
-  const fanInBlocked: StateJobInfo[] = [];
-  let fanInBlockedCount = 0;
-
-  for (const tier of seedConfig.fanInTiers) {
-    const tierBlockerName = `seed:blocker:gate:${tier.blockers}`;
-    const tierBlockedName = `seed:blocked:fanin:${tier.blockers}`;
-
-    const tierBlockers: StateJobInfo[] = [];
-    for (const indexes of chunkIndexes(tier.blockers, CREATE_CHUNK)) {
-      const results = await stateAdapter.withTransaction(async (txCtx) =>
-        stateAdapter.createJobs({
-          txCtx,
-          jobs: indexes.map((i) => headJob(tierBlockerName, i, { afterMs: seedConfig.futureMs })),
-        }),
-      );
-      tierBlockers.push(...results.map((r) => r.head));
-    }
-    fanInBlockerChains.push(...tierBlockers);
-
-    for (const indexes of chunkIndexes(tier.blocked * scale, CREATE_CHUNK / 2)) {
-      const batch = await stateAdapter.withTransaction(async (txCtx) => {
-        const created = await stateAdapter.createJobs({
-          txCtx,
-          jobs: indexes.map((i) => headJob(tierBlockedName, i)),
-        });
-        await stateAdapter.addJobsBlockers({
-          txCtx,
-          jobBlockers: created.map((r) => ({
-            jobId: r.head.id,
-            blockedByChainIds: tierBlockers.map((b) => b.chainId),
-          })),
-        });
-        return created.map((r) => r.head);
-      });
-      fanInBlocked.push(...batch);
-    }
-    fanInBlockedCount += tier.blocked * scale;
-  }
-
-  // --- Block: Fan-out (tiered: 1→1000, 10→100, 100→10) ---
-  let fanOutBlockerChainId: string | undefined;
-  const fanOutBlocked: StateJobInfo[] = [];
-  let fanOutBlockedCount = 0;
-
-  for (const tier of seedConfig.fanOutTiers) {
-    const tierBlockerName = `seed:blocker:fanout:${tier.blockers}`;
-    const tierBlockedName = `seed:blocked:fanout:${tier.blockers}`;
-
-    const tierBlockers: StateJobInfo[] = [];
-    const scaledBlockers = tier.blockers * scale;
-    for (const indexes of chunkIndexes(scaledBlockers, CREATE_CHUNK)) {
-      const results = await stateAdapter.withTransaction(async (txCtx) =>
-        stateAdapter.createJobs({
-          txCtx,
-          jobs: indexes.map((i) => headJob(tierBlockerName, i, { afterMs: seedConfig.futureMs })),
-        }),
-      );
-      tierBlockers.push(...results.map((r) => r.head));
-    }
-    fanOutBlockerChainId ??= tierBlockers[0].chainId;
-
-    for (let bIdx = 0; bIdx < tierBlockers.length; bIdx++) {
-      const blocker = tierBlockers[bIdx];
-      for (const indexes of chunkIndexes(tier.blockedPer, CREATE_CHUNK / 2)) {
-        const batch = await stateAdapter.withTransaction(async (txCtx) => {
-          const created = await stateAdapter.createJobs({
-            txCtx,
-            jobs: indexes.map((i) => headJob(tierBlockedName, bIdx * tier.blockedPer + i)),
-          });
-          await stateAdapter.addJobsBlockers({
-            txCtx,
-            jobBlockers: created.map((r) => ({
-              jobId: r.head.id,
-              blockedByChainIds: [blocker.chainId],
-            })),
-          });
-          return created.map((r) => r.head);
-        });
-        fanOutBlocked.push(...batch);
+    function* createChains(
+      typeName: string,
+      total: number,
+      schedule?: { afterMs: number },
+    ): Steps<StateJobInfo[]> {
+      const created: StateJobInfo[] = [];
+      for (const indexes of chunkIndexes(total, CREATE_CHUNK)) {
+        const results = yield* step(
+          inTransaction(stateAdapter, (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: indexes.map((i) => headJob(typeName, i, schedule)),
+            }),
+          ),
+        );
+        created.push(...results.map((r) => r.head));
       }
+      return created;
     }
-    fanOutBlockedCount += scaledBlockers * tier.blockedPer;
-  }
 
-  // --- Block: Non-independent chains (blocked by fan-in gate, created AFTER unblocked) ---
-  const nonIndependentCount = seedConfig.nonIndependent * scale;
-  const nonIndependent: StateJobInfo[] = [];
-  for (const indexes of chunkIndexes(nonIndependentCount, CREATE_CHUNK / 2)) {
-    const batch = await stateAdapter.withTransaction(async (txCtx) => {
-      const created = await stateAdapter.createJobs({
-        txCtx,
-        jobs: indexes.map((i) => headJob("seed:nonindep", i)),
-      });
-      await stateAdapter.addJobsBlockers({
-        txCtx,
-        jobBlockers: created.map((r) => ({
-          jobId: r.head.id,
-          blockedByChainIds: [fanInBlockerChains[0].chainId],
-        })),
-      });
-      return created.map((r) => r.head);
+    function* createProcessed(
+      typeName: string,
+      total: number,
+      mode: "running" | "completed" | "retried",
+      worker: StateWorkerInfo = seedWorker,
+    ): Steps<StateJob[]> {
+      const processed: StateJob[] = [];
+      for (const indexes of chunkIndexes(total, PROCESS_CHUNK)) {
+        const batch = yield* step(
+          inTransaction(stateAdapter, function* (txCtx) {
+            yield* step(
+              stateAdapter.createJobs({
+                txCtx,
+                jobs: indexes.map((i) => headJob(typeName, i)),
+              }),
+            );
+            const jobs: StateJob[] = [];
+            const acquiredJobs = yield* step(
+              stateAdapter.startJobAttempts({
+                txCtx,
+                typeNames: [typeName],
+                workerId: worker.id,
+                workerToken: worker.token,
+                limit: indexes.length,
+              }),
+            );
+            for (const job of acquiredJobs) {
+              if (mode === "running") {
+                jobs.push(job);
+              } else if (mode === "completed") {
+                const completed = yield* step(
+                  stateAdapter.completeJobs({
+                    txCtx,
+                    jobs: [
+                      {
+                        jobId: job.id,
+                        output: { ok: true, index: (job.input as { index: number }).index },
+                        attemptToken: job.attemptToken!,
+                        workerId: job.attemptBy!,
+                      },
+                    ],
+                  }),
+                );
+                jobs.push(...completed.filter((entry) => entry !== undefined));
+              } else {
+                const [rescheduled] = yield* step(
+                  stateAdapter.rescheduleJobs({
+                    txCtx,
+                    jobs: [
+                      {
+                        jobId: job.id,
+                        schedule: { afterMs: seedConfig.futureMs },
+                        error: "seeded transient failure",
+                      },
+                    ],
+                  }),
+                );
+                jobs.push(rescheduled!);
+              }
+            }
+            return jobs;
+          }),
+        );
+        processed.push(...batch);
+      }
+      return processed;
+    }
+
+    const seedWorker = yield* step(
+      stateAdapter.startWorker({
+        workerId: seedConfig.workerId,
+        typeNames: [...seedConfig.workerTypeNames],
+        concurrency: seedConfig.workerConcurrency,
+        leaseMs: seedConfig.leaseMs,
+      }),
+    );
+    for (const idleWorker of seedConfig.idleWorkers) {
+      yield* step(
+        stateAdapter.startWorker({
+          workerId: idleWorker.id,
+          typeNames: [...idleWorker.typeNames],
+          concurrency: seedConfig.workerConcurrency,
+          leaseMs: seedConfig.leaseMs,
+        }),
+      );
+    }
+    const busyWorker = yield* step(
+      stateAdapter.startWorker({
+        workerId: seedConfig.busyWorkerId,
+        typeNames: [...seedConfig.busyWorkerTypeNames],
+        concurrency: seedConfig.workerConcurrency,
+        leaseMs: seedConfig.leaseMs,
+      }),
+    );
+
+    // --- Block: Pending jobs (created first = earlier createdAt) ---
+    const pendingJobs: StateJobInfo[] = [];
+    for (const typeName of seedConfig.pendingTypes) {
+      const jobs = yield* createChains(typeName, seedConfig.pendingPerType * scale);
+      for (const job of jobs) pendingJobs.push(job);
+    }
+
+    // --- Block: Scheduled ---
+    const scheduled = yield* createChains("seed:scheduled", seedConfig.scheduledCount * scale, {
+      afterMs: seedConfig.futureMs,
     });
-    nonIndependent.push(...batch);
-  }
 
-  // --- Block: Long chain with continuations ---
-  const chainLength = seedConfig.chainLength * scale;
-  const [longChain] = await stateAdapter.withTransaction(async (txCtx) =>
-    stateAdapter.createJobs({
-      txCtx,
-      jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "seed:chain", input: { n: 0 } }],
-    }),
-  );
-  let longChainTail = longChain.head;
-  for (let step = 1; step < chainLength; step++) {
-    await stateAdapter.withTransaction(async (txCtx) => {
-      const [acquired] = await stateAdapter.startJobAttempts({
-        txCtx,
-        typeNames: ["seed:chain"],
-        workerId: seedWorker.id,
-        workerToken: seedWorker.token,
-        limit: 1,
-      });
-      if (!acquired) return;
-      const [continued] = await stateAdapter.continueJobs({
-        txCtx,
-        jobs: [
-          {
+    // --- Block: Running ---
+    const runningJobs: StateJob[] = [];
+    for (const typeName of seedConfig.runningTypes) {
+      const jobs = yield* createProcessed(typeName, seedConfig.runningPerType * scale, "running");
+      for (const job of jobs) runningJobs.push(job);
+    }
+
+    // --- Block: Completed (non-continued, created before continued ones) ---
+    const completedJobs: StateJob[] = [];
+    for (const typeName of seedConfig.completedTypes) {
+      const jobs = yield* createProcessed(
+        typeName,
+        seedConfig.completedPerType * scale,
+        "completed",
+      );
+      for (const job of jobs) completedJobs.push(job);
+    }
+
+    // --- Block: Retried ---
+    const retried = yield* createProcessed(
+      "seed:retried",
+      seedConfig.retriedCount * scale,
+      "retried",
+    );
+
+    // --- Block: Fan-in (tiered: many×1, medium×10, few×100) ---
+    const fanInBlockerChains: StateJobInfo[] = [];
+    const fanInBlocked: StateJobInfo[] = [];
+    let fanInBlockedCount = 0;
+
+    for (const tier of seedConfig.fanInTiers) {
+      const tierBlockerName = `seed:blocker:gate:${tier.blockers}`;
+      const tierBlockedName = `seed:blocked:fanin:${tier.blockers}`;
+
+      const tierBlockers: StateJobInfo[] = [];
+      for (const indexes of chunkIndexes(tier.blockers, CREATE_CHUNK)) {
+        const results = yield* step(
+          inTransaction(stateAdapter, (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: indexes.map((i) =>
+                headJob(tierBlockerName, i, { afterMs: seedConfig.futureMs }),
+              ),
+            }),
+          ),
+        );
+        tierBlockers.push(...results.map((r) => r.head));
+      }
+      fanInBlockerChains.push(...tierBlockers);
+
+      for (const indexes of chunkIndexes(tier.blocked * scale, CREATE_CHUNK / 2)) {
+        const batch = yield* step(
+          inTransaction(stateAdapter, function* (txCtx) {
+            const created = yield* step(
+              stateAdapter.createJobs({
+                txCtx,
+                jobs: indexes.map((i) => headJob(tierBlockedName, i)),
+              }),
+            );
+            yield* step(
+              stateAdapter.addJobsBlockers({
+                txCtx,
+                jobBlockers: created.map((r) => ({
+                  jobId: r.head.id,
+                  blockedByChainIds: tierBlockers.map((b) => b.chainId),
+                })),
+              }),
+            );
+            return created.map((r) => r.head);
+          }),
+        );
+        fanInBlocked.push(...batch);
+      }
+      fanInBlockedCount += tier.blocked * scale;
+    }
+
+    // --- Block: Fan-out (tiered: 1→1000, 10→100, 100→10) ---
+    let fanOutBlockerChainId: string | undefined;
+    const fanOutBlocked: StateJobInfo[] = [];
+    let fanOutBlockedCount = 0;
+
+    for (const tier of seedConfig.fanOutTiers) {
+      const tierBlockerName = `seed:blocker:fanout:${tier.blockers}`;
+      const tierBlockedName = `seed:blocked:fanout:${tier.blockers}`;
+
+      const tierBlockers: StateJobInfo[] = [];
+      const scaledBlockers = tier.blockers * scale;
+      for (const indexes of chunkIndexes(scaledBlockers, CREATE_CHUNK)) {
+        const results = yield* step(
+          inTransaction(stateAdapter, (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: indexes.map((i) =>
+                headJob(tierBlockerName, i, { afterMs: seedConfig.futureMs }),
+              ),
+            }),
+          ),
+        );
+        tierBlockers.push(...results.map((r) => r.head));
+      }
+      fanOutBlockerChainId ??= tierBlockers[0].chainId;
+
+      for (let bIdx = 0; bIdx < tierBlockers.length; bIdx++) {
+        const blocker = tierBlockers[bIdx];
+        for (const indexes of chunkIndexes(tier.blockedPer, CREATE_CHUNK / 2)) {
+          const batch = yield* step(
+            inTransaction(stateAdapter, function* (txCtx) {
+              const created = yield* step(
+                stateAdapter.createJobs({
+                  txCtx,
+                  jobs: indexes.map((i) => headJob(tierBlockedName, bIdx * tier.blockedPer + i)),
+                }),
+              );
+              yield* step(
+                stateAdapter.addJobsBlockers({
+                  txCtx,
+                  jobBlockers: created.map((r) => ({
+                    jobId: r.head.id,
+                    blockedByChainIds: [blocker.chainId],
+                  })),
+                }),
+              );
+              return created.map((r) => r.head);
+            }),
+          );
+          fanOutBlocked.push(...batch);
+        }
+      }
+      fanOutBlockedCount += scaledBlockers * tier.blockedPer;
+    }
+
+    // --- Block: Non-independent chains (blocked by fan-in gate, created AFTER unblocked) ---
+    const nonIndependentCount = seedConfig.nonIndependent * scale;
+    const nonIndependent: StateJobInfo[] = [];
+    for (const indexes of chunkIndexes(nonIndependentCount, CREATE_CHUNK / 2)) {
+      const batch = yield* step(
+        inTransaction(stateAdapter, function* (txCtx) {
+          const created = yield* step(
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: indexes.map((i) => headJob("seed:nonindep", i)),
+            }),
+          );
+          yield* step(
+            stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: created.map((r) => ({
+                jobId: r.head.id,
+                blockedByChainIds: [fanInBlockerChains[0].chainId],
+              })),
+            }),
+          );
+          return created.map((r) => r.head);
+        }),
+      );
+      nonIndependent.push(...batch);
+    }
+
+    // --- Block: Long chain with continuations ---
+    const chainLength = seedConfig.chainLength * scale;
+    const [longChain] = yield* step(
+      inTransaction(stateAdapter, (txCtx) =>
+        stateAdapter.createJobs({
+          txCtx,
+          jobs: [
+            { id: stateAdapter.config.generateJobId(), typeName: "seed:chain", input: { n: 0 } },
+          ],
+        }),
+      ),
+    );
+    let longChainTail = longChain.head;
+    for (let chainStep = 1; chainStep < chainLength; chainStep++) {
+      yield* step(
+        inTransaction(stateAdapter, function* (txCtx) {
+          const [acquired] = yield* step(
+            stateAdapter.startJobAttempts({
+              txCtx,
+              typeNames: ["seed:chain"],
+              workerId: seedWorker.id,
+              workerToken: seedWorker.token,
+              limit: 1,
+            }),
+          );
+          if (!acquired) return;
+          const [continued] = yield* step(
+            stateAdapter.continueJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "seed:chain",
+                  input: { n: chainStep },
+                  continueFromId: acquired.id,
+                  attemptToken: acquired.attemptToken!,
+                  workerId: acquired.attemptBy!,
+                },
+              ],
+            }),
+          );
+          const { continuation } = continued!;
+          longChainTail = continuation;
+        }),
+      );
+    }
+
+    // --- Block: Busy worker (running jobs bounded by its concurrency) ---
+    yield* createProcessed("seed:busy", seedConfig.workerConcurrency, "running", busyWorker);
+
+    // --- Block: Throwaway inventory (consumed by operational query benchmarks) ---
+    yield* createChains("seed:throwaway:pending", seedConfig.throwawayPending * scale);
+    yield* createProcessed(
+      "seed:throwaway:running",
+      seedConfig.throwawayRunning * scale,
+      "running",
+    );
+
+    const expiredWorker = yield* step(
+      stateAdapter.startWorker({
+        workerId: seedConfig.expiredWorkerId,
+        typeNames: [...seedConfig.expiredWorkerTypeNames],
+        concurrency: seedConfig.workerConcurrency,
+        leaseMs: seedConfig.leaseMs,
+      }),
+    );
+    yield* createProcessed(
+      "seed:throwaway:expired",
+      seedConfig.throwawayExpiredRunning * scale,
+      "running",
+      expiredWorker,
+    );
+    yield* step(
+      stateAdapter.extendWorkerLease({
+        workerId: expiredWorker.id,
+        workerToken: expiredWorker.token,
+        leaseMs: 1,
+      }),
+    );
+
+    const throwawayChainResults = yield* step(
+      inTransaction(stateAdapter, (txCtx) =>
+        stateAdapter.createJobs({
+          txCtx,
+          jobs: Array.from({ length: seedConfig.throwawayChains * scale }, (_, i) => ({
             id: stateAdapter.config.generateJobId(),
-            typeName: "seed:chain",
-            input: { n: step },
-            continueFromId: acquired.id,
-            attemptToken: acquired.attemptToken!,
-            workerId: acquired.attemptBy!,
-          },
-        ],
-      });
-      const { continuation } = continued!;
-      longChainTail = continuation;
-    });
-  }
+            typeName: "seed:throwaway:chain",
+            input: { index: i },
+          })),
+        }),
+      ),
+    );
 
-  // --- Block: Busy worker (running jobs bounded by its concurrency) ---
-  await createProcessed("seed:busy", seedConfig.workerConcurrency, "running", busyWorker);
+    const throwawayUnblockerResults = yield* step(
+      inTransaction(stateAdapter, function* (txCtx) {
+        const blockers = yield* step(
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: Array.from({ length: seedConfig.throwawayUnblockers * scale }, (_, i) => ({
+              id: stateAdapter.config.generateJobId(),
+              typeName: "seed:throwaway:unblocker",
+              input: { index: i },
+            })),
+          }),
+        );
+        const targets = yield* step(
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: Array.from({ length: seedConfig.throwawayUnblockers * scale }, (_, i) => ({
+              id: stateAdapter.config.generateJobId(),
+              typeName: "seed:throwaway:unblock-target",
+              input: { index: i },
+            })),
+          }),
+        );
+        yield* step(
+          stateAdapter.addJobsBlockers({
+            txCtx,
+            jobBlockers: targets.map((t, i) => ({
+              jobId: t.head.id,
+              blockedByChainIds: [blockers[i].id],
+            })),
+          }),
+        );
+        return blockers;
+      }),
+    );
 
-  // --- Block: Throwaway inventory (consumed by operational query benchmarks) ---
-  await createChains("seed:throwaway:pending", seedConfig.throwawayPending * scale);
-  await createProcessed("seed:throwaway:running", seedConfig.throwawayRunning * scale, "running");
-
-  const expiredWorker = await stateAdapter.startWorker({
-    workerId: seedConfig.expiredWorkerId,
-    typeNames: [...seedConfig.expiredWorkerTypeNames],
-    concurrency: seedConfig.workerConcurrency,
-    leaseMs: seedConfig.leaseMs,
+    return {
+      pending: {
+        jobId: pendingJobs[0].id,
+        typeNames: [...seedConfig.pendingTypes],
+      },
+      scheduled: {
+        jobId: scheduled[0].id,
+        typeName: "seed:scheduled",
+      },
+      running: {
+        jobId: runningJobs[0].id,
+        typeNames: [...seedConfig.runningTypes],
+      },
+      completed: {
+        jobId: completedJobs[0].id,
+        typeNames: [...seedConfig.completedTypes],
+      },
+      retried: {
+        jobId: retried[0].id,
+        typeName: "seed:retried",
+      },
+      longChain: {
+        chainId: longChain.head.chainId,
+        length: chainLength,
+        headJobId: longChain.head.id,
+        tailJobId: longChainTail.id,
+      },
+      fanIn: {
+        blockerChainIds: fanInBlockerChains.map((j) => j.chainId),
+        blockedCount: fanInBlockedCount,
+        blockersPerJob: seedConfig.fanInTiers[seedConfig.fanInTiers.length - 1].blockers,
+        blockedJobId: fanInBlocked[0].id,
+      },
+      fanOut: {
+        blockerChainId: fanOutBlockerChainId!,
+        blockedJobIds: fanOutBlocked.slice(0, 10).map((j) => j.id),
+        blockedCount: fanOutBlockedCount,
+      },
+      nonIndependent: {
+        chainId: nonIndependent[0].chainId,
+        count: nonIndependentCount,
+      },
+      workers: {
+        idleWorkerIds: seedConfig.idleWorkers.map((idleWorker) => idleWorker.id),
+        busyWorkerId: seedConfig.busyWorkerId,
+      },
+      throwaway: {
+        pendingTypeName: "seed:throwaway:pending",
+        runningTypeName: "seed:throwaway:running",
+        expiredRunningTypeName: "seed:throwaway:expired",
+        chainIds: throwawayChainResults.map((r) => r.id),
+        unblockerChainIds: throwawayUnblockerResults.map((r) => r.id),
+      },
+    };
   });
-  await createProcessed(
-    "seed:throwaway:expired",
-    seedConfig.throwawayExpiredRunning * scale,
-    "running",
-    expiredWorker,
-  );
-  await stateAdapter.extendWorkerLease({
-    workerId: expiredWorker.id,
-    workerToken: expiredWorker.token,
-    leaseMs: 1,
-  });
-
-  const throwawayChainResults = await stateAdapter.withTransaction(async (txCtx) =>
-    stateAdapter.createJobs({
-      txCtx,
-      jobs: Array.from({ length: seedConfig.throwawayChains * scale }, (_, i) => ({
-        id: stateAdapter.config.generateJobId(),
-        typeName: "seed:throwaway:chain",
-        input: { index: i },
-      })),
-    }),
-  );
-
-  const throwawayUnblockerResults = await stateAdapter.withTransaction(async (txCtx) => {
-    const blockers = await stateAdapter.createJobs({
-      txCtx,
-      jobs: Array.from({ length: seedConfig.throwawayUnblockers * scale }, (_, i) => ({
-        id: stateAdapter.config.generateJobId(),
-        typeName: "seed:throwaway:unblocker",
-        input: { index: i },
-      })),
-    });
-    const targets = await stateAdapter.createJobs({
-      txCtx,
-      jobs: Array.from({ length: seedConfig.throwawayUnblockers * scale }, (_, i) => ({
-        id: stateAdapter.config.generateJobId(),
-        typeName: "seed:throwaway:unblock-target",
-        input: { index: i },
-      })),
-    });
-    await stateAdapter.addJobsBlockers({
-      txCtx,
-      jobBlockers: targets.map((t, i) => ({
-        jobId: t.head.id,
-        blockedByChainIds: [blockers[i].id],
-      })),
-    });
-    return blockers;
-  });
-
-  return {
-    pending: {
-      jobId: pendingJobs[0].id,
-      typeNames: [...seedConfig.pendingTypes],
-    },
-    scheduled: {
-      jobId: scheduled[0].id,
-      typeName: "seed:scheduled",
-    },
-    running: {
-      jobId: runningJobs[0].id,
-      typeNames: [...seedConfig.runningTypes],
-    },
-    completed: {
-      jobId: completedJobs[0].id,
-      typeNames: [...seedConfig.completedTypes],
-    },
-    retried: {
-      jobId: retried[0].id,
-      typeName: "seed:retried",
-    },
-    longChain: {
-      chainId: longChain.head.chainId,
-      length: chainLength,
-      headJobId: longChain.head.id,
-      tailJobId: longChainTail.id,
-    },
-    fanIn: {
-      blockerChainIds: fanInBlockerChains.map((j) => j.chainId),
-      blockedCount: fanInBlockedCount,
-      blockersPerJob: seedConfig.fanInTiers[seedConfig.fanInTiers.length - 1].blockers,
-      blockedJobId: fanInBlocked[0].id,
-    },
-    fanOut: {
-      blockerChainId: fanOutBlockerChainId!,
-      blockedJobIds: fanOutBlocked.slice(0, 10).map((j) => j.id),
-      blockedCount: fanOutBlockedCount,
-    },
-    nonIndependent: {
-      chainId: nonIndependent[0].chainId,
-      count: nonIndependentCount,
-    },
-    workers: {
-      idleWorkerIds: seedConfig.idleWorkers.map((idleWorker) => idleWorker.id),
-      busyWorkerId: seedConfig.busyWorkerId,
-    },
-    throwaway: {
-      pendingTypeName: "seed:throwaway:pending",
-      runningTypeName: "seed:throwaway:running",
-      expiredRunningTypeName: "seed:throwaway:expired",
-      chainIds: throwawayChainResults.map((r) => r.id),
-      unblockerChainIds: throwawayUnblockerResults.map((r) => r.id),
-    },
-  };
-};

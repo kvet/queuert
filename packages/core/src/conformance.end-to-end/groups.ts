@@ -1,7 +1,11 @@
+import { isSyncAdapter } from "../adapter-mode.ts";
 import type { NotifyAdapterConformanceContext } from "../conformance.notify-adapter/types.ts";
 import type { StateAdapterConformanceContext } from "../conformance.state-adapter/types.ts";
 import type { ConformanceGroup } from "../conformance/runner.ts";
-import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.ts";
+import {
+  createInProcessStateAdapter,
+  createSyncInProcessStateAdapter,
+} from "../state-adapter.in-process/state-adapter.in-process.ts";
 import { awaitChainGroup } from "./cases/await-chain.ts";
 import {
   blockerChainsConcurrentTransactionsGroup,
@@ -91,11 +95,17 @@ export const notifyAdapterEndToEndGroups: ConformanceGroup<NotifyAdapterConforma
     name: group.name,
     cases: group.cases.map((testCase) => ({
       name: testCase.name,
-      run: async ({ createNotifyAdapter }) =>
-        testCase.run({
-          createStateAdapter: async () => createInProcessStateAdapter(),
-          withNonTransactionContext: async (fn) => fn({ outsideTransaction: true }),
-          createNotifyAdapter,
-        }),
+      mode: testCase.mode,
+      run: async ({ createNotifyAdapter }) => {
+        const notifyAdapter = await createNotifyAdapter();
+        return testCase.run({
+          createStateAdapter: () =>
+            isSyncAdapter(notifyAdapter)
+              ? createSyncInProcessStateAdapter()
+              : createInProcessStateAdapter(),
+          withNonTransactionContext: (fn) => fn({ outsideTransaction: true }),
+          createNotifyAdapter: () => notifyAdapter,
+        });
+      },
     })),
   }));

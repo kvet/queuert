@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node src/index.ts --all",
     "start:state-postgres": "node src/index.ts --state-postgres",
+    "start:state-in-process-sync": "node src/index.ts --state-in-process-sync",
     "start:state-sqlite": "node src/index.ts --state-sqlite",
     "start:state-mysql": "node src/index.ts --state-mysql",
     "start:state-mariadb": "node src/index.ts --state-mariadb",
@@ -13,6 +14,7 @@
     "start:notify-redis": "node src/index.ts --notify-redis",
     "start:notify-postgres": "node src/index.ts --notify-postgres",
     "start:notify-nats": "node src/index.ts --notify-nats",
+    "start:notify-ipc": "node src/index.ts --notify-ipc",
     "start:otel": "node src/index.ts --otel",
     "start:dashboard": "node src/index.ts --dashboard",
     "start:validation": "node src/index.ts --validation",
@@ -54,6 +56,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@queuert/ipc": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@testcontainers/nats": "12.2.1",
     "@testcontainers/postgresql": "12.2.1",

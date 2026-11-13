@@ -127,6 +127,20 @@ const Page = () => (
       three runners. The full API is in the{" "}
       <A href="/api/conformance/readme/">conformance reference</A>.
     </p>
+    <p>
+      For a <code>SyncStateAdapter</code>, register the{" "}
+      <code>syncStateAdapterConformanceCases</code> and{" "}
+      <code>syncStateAdapterEndToEndConformanceCases</code> instead. They call the adapter's members
+      synchronously, the end-to-end ones through a client over it, and leave out the cases that hold
+      a transaction open across an <code>await</code>. They run against the same{" "}
+      <code>StateAdapterConformanceContext</code>, with a <code>createStateAdapter</code> that
+      returns the adapter directly and a synchronous <code>withNonTransactionContext</code>. Every
+      case takes its mode from your adapter's <code>sync</code> marker and checks the adapter calls
+      it makes against it: a sync adapter fails a case when a call returns a promise or rejects
+      instead of throwing, and an async one when a call returns a plain value. There are no
+      concurrent cases for it: a synchronous transaction never overlaps another one on the same
+      thread.
+    </p>
   </>
 );
 

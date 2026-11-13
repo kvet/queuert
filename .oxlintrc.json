@@ -177,5 +177,20 @@
   "env": {
     "builtin": true
   },
-  "globals": {}
+  "globals": {},
+  "overrides": [
+    {
+      "files": [
+        "packages/core/**",
+        "packages-internal/helpers/**",
+        "packages-internal/typed-sql/**",
+        "packages/sqlite/**",
+        "packages/ipc/**"
+      ],
+      "rules": {
+        "typescript/promise-function-async": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["**/*.sync.ts", "**/*.sync.spec.ts"]
 }

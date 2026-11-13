@@ -66,7 +66,7 @@ const stateProvider = {
   },
 };
 
-const stateAdapter = createPgStateAdapter<PgPoolContext, string>({ stateProvider });
+const stateAdapter = createPgStateAdapter<PgPoolContext, string, string>({ stateProvider });
 await stateAdapter.migrateToLatest();
 
 console.log(`Seeding data (scale=${scale})...`);
@@ -115,8 +115,6 @@ for (const row of sizeResult.rows) {
 }
 console.log("");
 
-capturing = true;
-
 rmSync(EXPLANATIONS_DIR, { recursive: true, force: true });
 mkdirSync(EXPLANATIONS_DIR, { recursive: true });
 writeFileSync(`${EXPLANATIONS_DIR}/_table_sizes.txt`, sizeLines.join("\n") + "\n");
@@ -128,15 +126,19 @@ report("════════════════════════
 for (const group of [...operationalCoverageGroups, ...observabilityCoverageGroups]) {
   report(`  ${group.name}`);
   for (const testCase of group.cases) {
+    const captureAct = await testCase.run(stateAdapter, sentinels);
+    captured.length = 0;
+    capturing = true;
+    await captureAct(stateAdapter, sentinels);
+    capturing = false;
+    const planCapture = [...captured];
+
     const times: number[] = [];
-    let planCapture: CapturedQuery[] = [];
     for (let i = 0; i < ITERATIONS; i++) {
       const act = await testCase.run(stateAdapter, sentinels);
-      captured.length = 0;
       const start = performance.now();
       await act(stateAdapter, sentinels);
       times.push(performance.now() - start);
-      if (i === 0) planCapture = [...captured];
     }
     times.sort((a, b) => a - b);
     const s = stats(times);

@@ -38,9 +38,5 @@ export {
   seedConfig,
 } from "./conformance.state-adapter/seed-all-states.ts";
 export { createFlakyBatchGenerator } from "./conformance.end-to-end/support/flaky-batch-generator.ts";
-export { createInProcessNotifyAdapter } from "./notify-adapter/notify-adapter.in-process.ts";
-export { noopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.ts";
-export {
-  createInProcessStateAdapter,
-  type InProcessStateAdapter,
-} from "./state-adapter/state-adapter.in-process.ts";
+export { noopNotifyAdapter, syncNoopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.ts";
+export { inMode, inTransaction } from "./conformance/adapters.ts";

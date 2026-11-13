@@ -1,11 +1,11 @@
 import { RpcError } from "@queuert/rpc";
 import type { ServerFn } from "@queuert/rpc/server";
-import { BlockerReferenceError, type Client, type Page } from "queuert";
+import { BlockerReferenceError, type Page } from "queuert";
 import { helpersSymbol } from "queuert/internal";
 import * as v from "valibot";
 
 import type { UnknownChain, UnknownJob } from "../../shared/types.ts";
-import { createServerFn } from "../createServerFn.ts";
+import { type DashboardClient, createServerFn } from "../createServerFn.ts";
 import {
   checkCursor,
   DEFAULT_PAGE_LIMIT,
@@ -31,7 +31,7 @@ type DeleteChainOutcome = { outcome: "deleted"; count: number } | { outcome: "bl
 const chainNotFound = () => new RpcError("Chain not found", { status: 404 });
 
 const listChainJobsWithBlockers = async (
-  client: Client<any, any>,
+  client: DashboardClient,
   chainId: string,
   options: { cursor?: string; limit: number },
 ): Promise<ChainJobsPage> => {
@@ -167,12 +167,12 @@ export const listBlockedJobs: ServerFn<
   });
 
 const deleteChainNow = async (
-  client: Client<any, any>,
+  client: DashboardClient,
   chainId: string,
 ): Promise<DeleteChainOutcome> => {
   try {
-    const { stateAdapter } = client[helpersSymbol];
-    const deleted = await stateAdapter.withTransaction(async (txCtx) =>
+    // oxlint-disable-next-line typescript/promise-function-async -- runs in the client's mode: a sync state adapter rejects an async callback
+    const deleted = await client[helpersSymbol].stateAdapter.withTransaction((txCtx) =>
       client.deleteChains({ ids: [chainId], ...txCtx }),
     );
     return { outcome: "deleted", count: deleted.length };

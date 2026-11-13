@@ -1,5 +1,18 @@
-import { isPositiveFinite } from "@queuert/helpers/number";
-import { sleep } from "@queuert/helpers/sleep";
+import {
+  type MaybePromise,
+  type Mode,
+  type ModeResult,
+  requireSync,
+} from "@queuert/helpers/maybe-promise";
+import { type Modal, modal } from "@queuert/helpers/modal";
+import { step } from "@queuert/helpers/steps";
+
+import {
+  type MigrationLease,
+  type MigrationLockMethods,
+  type MigrationLockOptions,
+  runMigrationsLocked,
+} from "./migration-lock.ts";
 
 /**
  * A free-form migration script: the `up` and `down` of a `non-transactional` migration, and the
@@ -9,7 +22,9 @@ import { sleep } from "@queuert/helpers/sleep";
  *
  * @experimental
  */
-export type MigrationScript = (context: { assertLockHeld: () => void }) => Promise<void>;
+export type MigrationScript<TMode extends Mode = "async"> = (context: {
+  assertLockHeld: () => void;
+}) => ModeResult<TMode, void>;
 
 /**
  * One migration. Migrations run in the order of their list, and `name` identifies a migration in
@@ -28,18 +43,24 @@ export type MigrationScript = (context: { assertLockHeld: () => void }) => Promi
  *   function resolves, so it must be safe to run again.
  *
  * @typeParam TTxContext - The state provider's transaction context.
+ * @typeParam TMode - Whether `up` and `down` return promises or run synchronously.
  * @experimental
  */
-export type Migration<TTxContext> = {
-  name: string;
-} & (
+export type Migration<TTxContext, TMode extends Mode = "async"> =
+  | TransactionalMigration<TTxContext, TMode>
   | {
-      type?: "transactional";
-      up: (txCtx: TTxContext) => Promise<void>;
-      down: (txCtx: TTxContext) => Promise<void>;
-    }
-  | { type: "non-transactional"; up: MigrationScript; down: MigrationScript }
-);
+      name: string;
+      type: "non-transactional";
+      up: MigrationScript<TMode>;
+      down: MigrationScript<TMode>;
+    };
+
+type TransactionalMigration<TTxContext, TMode extends Mode> = {
+  name: string;
+  type?: "transactional";
+  up: (txCtx: TTxContext) => ModeResult<TMode, void>;
+  down: (txCtx: TTxContext) => ModeResult<TMode, void>;
+};
 
 /**
  * Result of a migration run: which migrations were skipped (already applied), applied, reverted,
@@ -52,92 +73,25 @@ export type MigrationResult = {
   unrecognized: string[];
 };
 
-export type MigrationStore<TTxContext> = {
-  initialize?: () => Promise<void>;
-  runInTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
-  getAppliedMigrationNames: (txCtx: TTxContext | undefined) => Promise<string[]>;
-  recordMigration: (txCtx: TTxContext | undefined, name: string) => Promise<void>;
-  unrecordMigration: (txCtx: TTxContext | undefined, name: string) => Promise<void>;
-} & (
-  | {
-      acquireMigrationLock: (ownerId: string, ttlMs: number) => Promise<boolean>;
-      extendMigrationLock: (ownerId: string, ttlMs: number) => Promise<boolean>;
-      releaseMigrationLock: (ownerId: string) => Promise<void>;
-    }
-  | {
-      acquireMigrationLock?: never;
-      extendMigrationLock?: never;
-      releaseMigrationLock?: never;
-    }
-);
-
-export type MigrationLockOptions = {
-  /** How long a claimed lease stays valid without a heartbeat. @defaultValue 60s */
-  ttlMs?: number;
-  /** How often the lease is extended while migrating. @defaultValue the lower of 15s and a quarter of `ttlMs` */
-  heartbeatIntervalMs?: number;
-  /** How often a waiting process re-attempts to claim the lease. @defaultValue 1s */
-  pollIntervalMs?: number;
-};
-
-export const resolveMigrationLockOptions = (
-  lock: MigrationLockOptions | undefined,
-): Required<MigrationLockOptions> => {
-  const ttlMs = lock?.ttlMs ?? 60_000;
-  return {
-    ttlMs,
-    heartbeatIntervalMs:
-      lock?.heartbeatIntervalMs ?? (isPositiveFinite(ttlMs) ? Math.min(15_000, ttlMs / 4) : 15_000),
-    pollIntervalMs: lock?.pollIntervalMs ?? 1_000,
-  };
-};
-
-const MAX_HEARTBEAT_INTERVAL_MS = 2_147_483_647;
-
-export const migrationLockViolations = ({
-  ttlMs,
-  heartbeatIntervalMs,
-  pollIntervalMs,
-}: Required<MigrationLockOptions>): string[] => [
-  ...Object.entries({ ttlMs, heartbeatIntervalMs, pollIntervalMs })
-    .filter(([, value]) => !isPositiveFinite(value))
-    .map(
-      ([field, value]) => `lock.${field} must be a positive finite number (got ${String(value)})`,
-    ),
-  ...(heartbeatIntervalMs > MAX_HEARTBEAT_INTERVAL_MS && Number.isFinite(heartbeatIntervalMs)
-    ? [
-        `lock.heartbeatIntervalMs must be at most ${String(MAX_HEARTBEAT_INTERVAL_MS)} (got ${String(heartbeatIntervalMs)})`,
-      ]
-    : []),
-  ...(isPositiveFinite(ttlMs) &&
-  isPositiveFinite(heartbeatIntervalMs) &&
-  3 * heartbeatIntervalMs >= ttlMs
-    ? [
-        `lock.heartbeatIntervalMs must be below a third of lock.ttlMs (got ${String(heartbeatIntervalMs)} and ${String(ttlMs)})`,
-      ]
-    : []),
-];
-
-export const assertMigrationLockOptions = (
-  factoryName: string,
-  lock: MigrationLockOptions | undefined,
-): void => {
-  const violations = migrationLockViolations(resolveMigrationLockOptions(lock));
-  if (violations.length > 0) {
-    throw new TypeError(
-      `${factoryName}: invalid configuration:\n${violations.map((violation) => `  - ${violation}`).join("\n")}`,
-    );
-  }
-};
+/** Where a migrator keeps its history. A synchronous store takes no lease, so it has no lock. */
+export type MigrationStore<TTxContext, TMode extends Mode = "async"> = {
+  initialize?: () => ModeResult<TMode, void>;
+  runInTransaction: <T>(fn: (txCtx: TTxContext) => ModeResult<TMode, T>) => ModeResult<TMode, T>;
+  getAppliedMigrationNames: (txCtx: TTxContext | undefined) => ModeResult<TMode, string[]>;
+  recordMigration: (txCtx: TTxContext | undefined, name: string) => ModeResult<TMode, void>;
+  unrecordMigration: (txCtx: TTxContext | undefined, name: string) => ModeResult<TMode, void>;
+} & ([TMode] extends ["sync"] ? unknown : MigrationLockMethods);
 
 /**
  * Runs migrations, from `createPgMigrator` or `createSqliteMigrator`. Each call takes the
  * migration lease first, so many processes can migrate on boot at once: one migrates, the others
- * wait for it and then find nothing left to do.
+ * wait for it and then find nothing left to do. A synchronous migrator (`TMode` `"sync"`) takes no
+ * lease and returns its results directly.
  *
+ * @typeParam TMode - Whether the methods return promises or plain values.
  * @experimental
  */
-export type Migrator = {
+export type Migrator<TMode extends Mode = "async"> = {
   /**
    * Apply every pending migration, in list order. Applied migrations the code doesn't know are
    * reported in `unrecognized` and don't stop the run, so an older release keeps booting against a
@@ -146,7 +100,7 @@ export type Migrator = {
    * @throws Error if a pending migration is listed before an applied one, or if a migration
    * fails, naming it, with the original error as `cause`.
    */
-  migrateToLatest: () => Promise<MigrationResult>;
+  migrateToLatest: () => ModeResult<TMode, MigrationResult>;
   /**
    * Bring the database to the migration named `name`: apply the pending migrations up to and
    * including it, or revert the applied migrations after it with their `down`, last first. With
@@ -157,8 +111,20 @@ export type Migrator = {
    * doesn't know. Also if a migration's `up` or `down` fails, naming it, with the original error
    * as `cause`.
    */
-  migrateTo: (name: string | null) => Promise<MigrationResult>;
+  migrateTo: (name: string | null) => ModeResult<TMode, MigrationResult>;
 };
+
+type MigrationRun = {
+  sync: boolean;
+  migrations: Migration<any, Mode>[];
+  knownNames: Set<string>;
+  store: MigrationStore<any, Mode>;
+  lock: MigrationLockOptions | undefined;
+  before: MigrationScript<Mode> | undefined;
+  after: MigrationScript<Mode> | undefined;
+};
+
+type Direction = "up" | "down";
 
 const validateMigrations = (migrations: { name: string }[]): void => {
   const seen = new Set<string>();
@@ -173,231 +139,221 @@ const validateMigrations = (migrations: { name: string }[]): void => {
   }
 };
 
-const withMigrationName = async <T>(
-  action: string,
+const targetIndexOf = (migrations: { name: string }[], name: string | null): number => {
+  if (name === null) {
+    return -1;
+  }
+  const targetIndex = migrations.findIndex((m) => m.name === name);
+  if (targetIndex === -1) {
+    throw new Error(`Unknown migration "${name}": it is not in the migration list.`);
+  }
+  return targetIndex;
+};
+
+const inMode = <TArgs extends unknown[], TResult>(
+  body: Modal<TArgs, TResult>,
+  sync: boolean,
+): ((...args: TArgs) => MaybePromise<TResult>) => (sync ? body.sync : body.async);
+
+const callbackResult = <T>(run: MigrationRun, value: MaybePromise<T>): MaybePromise<T> =>
+  run.sync
+    ? requireSync(value, "Expected a synchronous callback, but it returned a promise")
+    : value;
+
+const updateHistory = (
+  run: MigrationRun,
   migration: { name: string },
-  run: Promise<T>,
-): Promise<T> => {
+  direction: Direction,
+  txCtx: unknown,
+): MaybePromise<void> =>
+  direction === "up"
+    ? run.store.recordMigration(txCtx, migration.name)
+    : run.store.unrecordMigration(txCtx, migration.name);
+
+const checkLease: Modal<[lease: MigrationLease], void> = modal(function* (lease) {
+  yield* step(lease.renewLeaseIfStale());
+  lease.assertLockHeld();
+});
+
+const runTransactionalMigration: Modal<
+  [
+    run: MigrationRun,
+    migration: TransactionalMigration<any, Mode>,
+    direction: Direction,
+    txCtx: unknown,
+  ],
+  boolean
+> = modal(function* (run, migration, direction, txCtx) {
+  const applied = (yield* step(run.store.getAppliedMigrationNames(txCtx))).includes(migration.name);
+  if (applied !== (direction === "down")) {
+    return false;
+  }
+  yield* step(callbackResult(run, migration[direction](txCtx)));
+  yield* step(updateHistory(run, migration, direction, txCtx));
+  return true;
+});
+
+const runMigration: Modal<
+  [run: MigrationRun, migration: Migration<any, Mode>, direction: Direction, lease: MigrationLease],
+  boolean
+> = modal(function* (run, migration, direction, lease) {
   try {
-    return await run;
+    lease.assertLockHeld();
+    if (migration.type === "non-transactional") {
+      yield* step(
+        callbackResult(run, migration[direction]({ assertLockHeld: lease.assertLockHeld })),
+      );
+      yield* checkLease.steps(lease);
+      yield* step(updateHistory(run, migration, direction, undefined));
+      return true;
+    }
+    const runInTransaction = inMode(runTransactionalMigration, run.sync);
+    return yield* step(
+      run.store.runInTransaction((txCtx) => runInTransaction(run, migration, direction, txCtx)),
+    );
   } catch (error) {
+    const label =
+      direction === "up"
+        ? `Migration "${migration.name}"`
+        : `Reverting migration "${migration.name}"`;
+    throw new Error(`${label} failed: ${error instanceof Error ? error.message : String(error)}`, {
+      cause: error,
+    });
+  }
+});
+
+const migrate: Modal<
+  [run: MigrationRun, targetIndex: number, lease: MigrationLease],
+  MigrationResult
+> = modal(function* (run, targetIndex, lease) {
+  const { migrations, store, knownNames, before, after } = run;
+  const { assertLockHeld } = lease;
+  if (before) {
+    yield* checkLease.steps(lease);
+    yield* step(callbackResult(run, before({ assertLockHeld })));
+  }
+
+  const previouslyApplied = new Set(
+    yield* step(store.runInTransaction((txCtx) => store.getAppliedMigrationNames(txCtx))),
+  );
+  const unrecognized = [...previouslyApplied].filter((name) => !knownNames.has(name));
+
+  const lastAppliedIndex = migrations.findLastIndex((m) => previouslyApplied.has(m.name));
+  const outOfOrder = migrations
+    .slice(0, Math.max(lastAppliedIndex, 0))
+    .filter((m) => !previouslyApplied.has(m.name));
+  if (outOfOrder.length > 0) {
     throw new Error(
-      `${action} "${migration.name}" failed: ${error instanceof Error ? error.message : String(error)}`,
-      { cause: error },
+      `Pending migrations are listed before the applied migration "${migrations[lastAppliedIndex].name}": ${outOfOrder.map((m) => `"${m.name}"`).join(", ")}. Append new migrations to the end of the list.`,
     );
   }
-};
 
-const withMigrationLock = async <T>(
-  store: Pick<
-    MigrationStore<unknown>,
-    "acquireMigrationLock" | "extendMigrationLock" | "releaseMigrationLock"
-  >,
-  { ttlMs, heartbeatIntervalMs, pollIntervalMs }: Required<MigrationLockOptions>,
-  fn: (lease: { assertLockHeld: () => void; renewLeaseIfStale: () => Promise<void> }) => Promise<T>,
-): Promise<T> => {
-  const { acquireMigrationLock, extendMigrationLock, releaseMigrationLock } = store;
-  if (!acquireMigrationLock || !extendMigrationLock || !releaseMigrationLock) {
-    return fn({ assertLockHeld: () => {}, renewLeaseIfStale: async () => {} });
+  const toApply = migrations
+    .slice(0, targetIndex + 1)
+    .filter((m) => !previouslyApplied.has(m.name));
+  const toRevert = migrations
+    .slice(targetIndex + 1)
+    .filter((m) => previouslyApplied.has(m.name))
+    .reverse();
+
+  if (toRevert.length > 0 && unrecognized.length > 0) {
+    throw new Error(
+      `Cannot revert: the database has applied migrations the code doesn't know: ${unrecognized.map((name) => `"${name}"`).join(", ")}.`,
+    );
   }
 
-  const ownerId = crypto.randomUUID();
-  let lastExtendedAt = performance.now();
-  while (!(await acquireMigrationLock(ownerId, ttlMs))) {
-    await sleep(pollIntervalMs);
-    lastExtendedAt = performance.now();
-  }
-
-  let lockLost = false;
-  let inFlightTick: Promise<void> | undefined;
-  const extend = async (): Promise<void> => {
-    const sentAt = performance.now();
-    const extended = await extendMigrationLock(ownerId, ttlMs).catch(() => undefined);
-    if (extended === true) {
-      lastExtendedAt = sentAt;
-    } else if (extended === false) {
-      lockLost = true;
-      clearInterval(heartbeat);
+  const skipped = migrations
+    .filter((m) => previouslyApplied.has(m.name) && !toRevert.includes(m))
+    .map((m) => m.name);
+  const applied: string[] = [];
+  const reverted: string[] = [];
+  for (const migration of toApply) {
+    yield* checkLease.steps(lease);
+    if (yield* runMigration.steps(run, migration, "up", lease)) {
+      applied.push(migration.name);
+    } else {
+      skipped.push(migration.name);
     }
-  };
-  const startExtend = async (): Promise<void> => {
-    inFlightTick = extend().finally(() => {
-      inFlightTick = undefined;
-    });
-    return inFlightTick;
-  };
-  const heartbeat = setInterval(() => {
-    if (lockLost || inFlightTick) return;
-    void startExtend();
-  }, heartbeatIntervalMs);
-  const isStale = (): boolean => performance.now() - lastExtendedAt > ttlMs - heartbeatIntervalMs;
-
-  try {
-    return await fn({
-      renewLeaseIfStale: async () => {
-        if (lockLost || !isStale()) return;
-        await inFlightTick;
-        if (lockLost || !isStale()) return;
-        await startExtend();
-      },
-      assertLockHeld: () => {
-        if (lockLost) {
-          throw new Error(
-            "Migration lock lost: the lease is no longer held by this run, so another process may have migrated. Aborting to avoid concurrent migration runs.",
-          );
-        }
-        if (isStale()) {
-          throw new Error(
-            "Migration lock lost: the lease could not be extended in time. Aborting to avoid concurrent migration runs.",
-          );
-        }
-      },
-    });
-  } finally {
-    clearInterval(heartbeat);
-    await inFlightTick;
-    await releaseMigrationLock(ownerId).catch(() => {});
   }
+  for (const migration of toRevert) {
+    yield* checkLease.steps(lease);
+    if (yield* runMigration.steps(run, migration, "down", lease)) {
+      reverted.push(migration.name);
+    }
+  }
+
+  if (after) {
+    yield* checkLease.steps(lease);
+    yield* step(callbackResult(run, after({ assertLockHeld })));
+  }
+
+  return { skipped, applied, reverted, unrecognized };
+});
+
+const unlockedLease: MigrationLease = {
+  assertLockHeld: () => {},
+  renewLeaseIfStale: () => {},
 };
 
-export const createMigrator = <TTxContext>({
+const migrateToName: Modal<[run: MigrationRun, name: string | null], MigrationResult> = modal(
+  function* (run, name) {
+    const targetIndex = targetIndexOf(run.migrations, name);
+    yield* step(run.store.initialize?.());
+    const migrateLeased = inMode(migrate, run.sync);
+    return yield* step(
+      run.sync
+        ? migrateLeased(run, targetIndex, unlockedLease)
+        : runMigrationsLocked(run.store, run.lock, (lease) =>
+            migrateLeased(run, targetIndex, lease),
+          ),
+    );
+  },
+);
+
+export const createModeMigrator = <TTxContext>({
+  sync,
   migrations,
   store,
   lock,
   before,
   after,
 }: {
+  sync: boolean;
+  migrations: NoInfer<Migration<TTxContext, Mode>>[];
+  store: MigrationStore<TTxContext, Mode>;
+  lock?: MigrationLockOptions;
+  before?: MigrationScript<Mode>;
+  after?: MigrationScript<Mode>;
+}): Migrator<Mode> => {
+  validateMigrations(migrations);
+  const run: MigrationRun = {
+    sync,
+    migrations,
+    knownNames: new Set(migrations.map((m) => m.name)),
+    store,
+    lock,
+    before,
+    after,
+  };
+  const latest = migrations.at(-1)?.name ?? null;
+  const toName = inMode(migrateToName, sync);
+  return {
+    migrateToLatest: () => toName(run, latest),
+    migrateTo: (name) => toName(run, name),
+  };
+};
+
+export const createMigrator = <TTxContext>(options: {
   migrations: NoInfer<Migration<TTxContext>>[];
   store: MigrationStore<TTxContext>;
   lock?: MigrationLockOptions;
   before?: MigrationScript;
   after?: MigrationScript;
-}): Migrator => {
-  validateMigrations(migrations);
-  const knownNames = new Set(migrations.map((m) => m.name));
-  const lockOptions = resolveMigrationLockOptions(lock);
+}): Migrator => createModeMigrator({ ...options, sync: false }) as Migrator;
 
-  const runMigration = async (
-    migration: Migration<TTxContext>,
-    direction: "up" | "down",
-    { assertLockHeld, checkLease }: { assertLockHeld: () => void; checkLease: () => Promise<void> },
-  ): Promise<boolean> => {
-    const updateHistory = async (txCtx: TTxContext | undefined): Promise<void> =>
-      direction === "up"
-        ? store.recordMigration(txCtx, migration.name)
-        : store.unrecordMigration(txCtx, migration.name);
-    assertLockHeld();
-    if (migration.type === "non-transactional") {
-      await migration[direction]({ assertLockHeld });
-      await checkLease();
-      await updateHistory(undefined);
-      return true;
-    }
-    const run = migration[direction];
-    return store.runInTransaction(async (txCtx) => {
-      const applied = (await store.getAppliedMigrationNames(txCtx)).includes(migration.name);
-      if (applied !== (direction === "down")) {
-        return false;
-      }
-      await run(txCtx);
-      await updateHistory(txCtx);
-      return true;
-    });
-  };
-
-  const run = async (targetIndex: number): Promise<MigrationResult> => {
-    await store.initialize?.();
-    return withMigrationLock(store, lockOptions, async ({ assertLockHeld, renewLeaseIfStale }) => {
-      const checkLease = async (): Promise<void> => {
-        await renewLeaseIfStale();
-        assertLockHeld();
-      };
-      if (before) {
-        await checkLease();
-        await before({ assertLockHeld });
-      }
-
-      const previouslyApplied = new Set(
-        await store.runInTransaction(async (txCtx) => store.getAppliedMigrationNames(txCtx)),
-      );
-      const unrecognized = [...previouslyApplied].filter((name) => !knownNames.has(name));
-
-      const lastAppliedIndex = migrations.findLastIndex((m) => previouslyApplied.has(m.name));
-      const outOfOrder = migrations
-        .slice(0, Math.max(lastAppliedIndex, 0))
-        .filter((m) => !previouslyApplied.has(m.name));
-      if (outOfOrder.length > 0) {
-        throw new Error(
-          `Pending migrations are listed before the applied migration "${migrations[lastAppliedIndex].name}": ${outOfOrder.map((m) => `"${m.name}"`).join(", ")}. Append new migrations to the end of the list.`,
-        );
-      }
-
-      const toApply = migrations
-        .slice(0, targetIndex + 1)
-        .filter((m) => !previouslyApplied.has(m.name));
-      const toRevert = migrations
-        .slice(targetIndex + 1)
-        .filter((m) => previouslyApplied.has(m.name))
-        .reverse();
-
-      if (toRevert.length > 0 && unrecognized.length > 0) {
-        throw new Error(
-          `Cannot revert: the database has applied migrations the code doesn't know: ${unrecognized.map((name) => `"${name}"`).join(", ")}.`,
-        );
-      }
-
-      const skipped = migrations
-        .filter((m) => previouslyApplied.has(m.name) && !toRevert.includes(m))
-        .map((m) => m.name);
-      const applied: string[] = [];
-      const reverted: string[] = [];
-      for (const migration of toApply) {
-        await checkLease();
-        if (
-          await withMigrationName(
-            "Migration",
-            migration,
-            runMigration(migration, "up", { assertLockHeld, checkLease }),
-          )
-        ) {
-          applied.push(migration.name);
-        } else {
-          skipped.push(migration.name);
-        }
-      }
-      for (const migration of toRevert) {
-        await checkLease();
-        if (
-          await withMigrationName(
-            "Reverting migration",
-            migration,
-            runMigration(migration, "down", { assertLockHeld, checkLease }),
-          )
-        ) {
-          reverted.push(migration.name);
-        }
-      }
-
-      if (after) {
-        await checkLease();
-        await after({ assertLockHeld });
-      }
-
-      return { skipped, applied, reverted, unrecognized };
-    });
-  };
-
-  return {
-    migrateToLatest: async () => run(migrations.length - 1),
-    migrateTo: async (name) => {
-      if (name === null) {
-        return run(-1);
-      }
-      const targetIndex = migrations.findIndex((m) => m.name === name);
-      if (targetIndex === -1) {
-        throw new Error(`Unknown migration "${name}": it is not in the migration list.`);
-      }
-      return run(targetIndex);
-    },
-  };
-};
+export const createSyncMigrator = <TTxContext>(options: {
+  migrations: NoInfer<Migration<TTxContext, "sync">>[];
+  store: MigrationStore<TTxContext, "sync">;
+  before?: MigrationScript<"sync">;
+  after?: MigrationScript<"sync">;
+}): Migrator<"sync"> => createModeMigrator({ ...options, sync: true }) as Migrator<"sync">;

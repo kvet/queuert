@@ -88,6 +88,7 @@ prompt: |
 "@queuert/sqlite": <bump>
 "@queuert/redis": <bump>
 "@queuert/nats": <bump>
+"@queuert/ipc": <bump>
 "@queuert/otel": <bump>
 "@queuert/dashboard": <bump>
 ---
@@ -163,7 +164,7 @@ gh release create v<version> --title "v<version>" --notes "$(cat <<'EOF'
 
 ### Packages
 
-All packages released at `<version>`: `queuert`, `@queuert/postgres`, `@queuert/sqlite`, `@queuert/redis`, `@queuert/nats`, `@queuert/otel`, `@queuert/dashboard`.
+All packages released at `<version>`: `queuert`, `@queuert/postgres`, `@queuert/sqlite`, `@queuert/redis`, `@queuert/nats`, `@queuert/ipc`, `@queuert/otel`, `@queuert/dashboard`.
 EOF
 )"
 ```

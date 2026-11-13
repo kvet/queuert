@@ -1,6 +1,6 @@
 import { createResettableLatch } from "@queuert/helpers/latch";
-import { noop } from "@queuert/helpers/noop";
-import { isThenable } from "@queuert/helpers/promise";
+import { type MaybePromise, isPromise, tryCatch, tryFinally } from "@queuert/helpers/maybe-promise";
+import { silence } from "@queuert/helpers/promise";
 
 import { HookRegistry } from "./hook-registry.ts";
 
@@ -14,6 +14,10 @@ type CommitCallback = () => void | Promise<void>;
  * callback belongs to the innermost savepoint or `retryBoundary` try that was open when it was
  * registered. Once the hooks are flushed or discarded, registering a callback, savepoints and
  * `retryBoundary` tries throw, and rolling back an earlier savepoint does nothing.
+ *
+ * The hooks follow the transaction they wrap: when its callback returns a promise, commit
+ * callbacks may return promises too and `flush` awaits them; when it returns a plain value, as in
+ * a driver's own synchronous transaction, commit callbacks must be synchronous.
  */
 export type TxHooks = {
   /**
@@ -22,7 +26,9 @@ export type TxHooks = {
    * Commit callbacks start in registration order and run concurrently: a returned promise is
    * awaited by `flush`, but not before the next callback starts. Every callback runs even if an
    * earlier one throws, and `flush` then rethrows the first error. A callback registered in a
-   * savepoint or `retryBoundary` try that is rolled back never runs.
+   * savepoint or `retryBoundary` try that is rolled back never runs. In a synchronous
+   * transaction, a callback that returns a promise makes the flush throw after every callback has
+   * run.
    */
   onCommit(callback: () => void | Promise<void>): void;
   /**
@@ -35,8 +41,11 @@ export type TxHooks = {
    * error, while a savepoint or `retryBoundary` rollback ignores it.
    */
   onRollback(callback: () => void): void;
-  /** Run `fn` inside a savepoint. Auto-rollback on error, auto-release on success. */
-  withSavepoint<T>(fn: (txHooks: TxHooks) => T | Promise<T>): Promise<T>;
+  /**
+   * Run `fn` inside a savepoint and return its result. Rolls back if `fn` throws or the promise it
+   * returns rejects, and releases otherwise.
+   */
+  withSavepoint<T>(fn: (txHooks: TxHooks) => T): T;
   /**
    * Create a manual savepoint. `rollback()` drops the commit callbacks registered since and runs
    * the rollback callbacks registered since; `release()` keeps them.
@@ -49,12 +58,13 @@ export type TxHooks = {
    * Each call after the first rolls back what the previous try registered, then calls `fn` with
    * the same arguments and returns its result. Callbacks registered before the first call are
    * kept.
-   * A call while the previous call's `fn` is still running rejects. Create one wrapper per
-   * transaction: every call after the first is treated as a rerun of the same transaction.
+   * A call while the previous call's `fn` is still running throws, or rejects when that `fn`
+   * returned a promise. Create one wrapper per transaction: every call after the first is
+   * treated as a rerun of the same transaction.
    */
   retryBoundary<TArgs extends unknown[], TResult>(
-    fn: (...args: TArgs) => Promise<TResult>,
-  ): (...args: TArgs) => Promise<TResult>;
+    fn: (...args: TArgs) => TResult,
+  ): (...args: TArgs) => TResult;
 };
 
 /** A savepoint handle with manual rollback/release control. */
@@ -67,50 +77,15 @@ export type TxHooksSavepoint = {
 /**
  * A {@link TxHooks} instance with `flush` and `discard` lifecycle methods.
  *
- * - Call `flush()` after the transaction commits to run the commit callbacks.
+ * - Call `flush()` after the transaction commits to run the commit callbacks. It returns a promise
+ *   only when a commit callback returned one.
  * - Call `discard()` on rollback to run the rollback callbacks instead.
  */
 export type TxHooksHandle = {
   txHooks: TxHooks;
-  flush: () => Promise<void>;
+  flush: () => void | Promise<void>;
   discard: () => void;
 };
-
-class AsyncTxHooks extends HookRegistry<CommitCallback> implements TxHooks {
-  createSavepoint(): TxHooksSavepoint {
-    return { txHooks: this, rollback: this.snapshot(), release: () => {} };
-  }
-
-  async withSavepoint<T>(fn: (txHooks: TxHooks) => T | Promise<T>): Promise<T> {
-    const rollback = this.snapshot();
-    try {
-      return await fn(this);
-    } catch (error) {
-      rollback();
-      throw error;
-    }
-  }
-
-  retryBoundary<TArgs extends unknown[], TResult>(
-    fn: (...args: TArgs) => Promise<TResult>,
-  ): (...args: TArgs) => Promise<TResult> {
-    let rollbackPreviousTry: (() => void) | undefined;
-    const running = createResettableLatch(
-      "txHooks.retryBoundary: the previous try is still running",
-    );
-    return async (...args) => {
-      running.throwIfTripped();
-      rollbackPreviousTry?.();
-      rollbackPreviousTry = this.snapshot();
-      running.trip();
-      try {
-        return await fn(...args);
-      } finally {
-        running.reset();
-      }
-    };
-  }
-}
 
 const runCommitCallback = (callback: CommitCallback): unknown => {
   try {
@@ -127,13 +102,84 @@ const throwFirstRejection = (results: PromiseSettledResult<unknown>[]): void => 
   if (failed) throw failed.reason;
 };
 
-const flushHooks = (registry: AsyncTxHooks): Promise<void> | undefined => {
+const flushAsync = (registry: HookRegistry<CommitCallback>): void | Promise<void> => {
   const results = registry.takeCommitCallbacks().map(runCommitCallback);
-  const pending = results.filter(isThenable);
-  if (pending.length === 0) return undefined;
-  if (pending.length === 1) return Promise.resolve(pending[0]).then(noop);
+  const pending = results.filter(isPromise);
+  if (pending.length === 0) return;
+  if (pending.length === 1) return pending[0].then(() => {});
   return Promise.allSettled(results).then(throwFirstRejection);
 };
+
+const flushSync = (registry: HookRegistry<CommitCallback>): void => {
+  let failure: { error: unknown } | undefined;
+  let returnedPromise = false;
+  for (const callback of registry.takeCommitCallbacks()) {
+    try {
+      const result: unknown = callback();
+      if (isPromise(result)) {
+        returnedPromise = true;
+        silence(result);
+      }
+    } catch (error) {
+      failure ??= { error };
+    }
+  }
+  // oxlint-disable-next-line typescript/only-throw-error -- re-throwing caught error
+  if (failure) throw failure.error;
+  if (returnedPromise) {
+    throw new Error(
+      "txHooks of a synchronous transaction require synchronous commit callbacks: a commit callback returned a promise",
+    );
+  }
+};
+
+class TxHooksRegistry extends HookRegistry<CommitCallback> implements TxHooks {
+  createSavepoint(): TxHooksSavepoint {
+    return { txHooks: this, rollback: this.snapshot(), release: () => {} };
+  }
+
+  withSavepoint<T>(fn: (txHooks: TxHooks) => T): T {
+    const rollback = this.snapshot();
+    return tryCatch(
+      () => fn(this) as MaybePromise<unknown>,
+      (error) => {
+        rollback();
+        // oxlint-disable-next-line typescript/only-throw-error -- re-throwing caught error
+        throw error;
+      },
+    ) as T;
+  }
+
+  retryBoundary<TArgs extends unknown[], TResult>(
+    fn: (...args: TArgs) => TResult,
+  ): (...args: TArgs) => TResult {
+    let rollbackPreviousTry: (() => void) | undefined;
+    let previousTryReturnedPromise = false;
+    const running = createResettableLatch(
+      "txHooks.retryBoundary: the previous try is still running",
+    );
+    return (...args) => {
+      if (running.tripped && previousTryReturnedPromise) {
+        // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- the latch error is an Error
+        return Promise.reject(
+          new Error("txHooks.retryBoundary: the previous try is still running"),
+        ) as TResult;
+      }
+      running.throwIfTripped();
+      rollbackPreviousTry?.();
+      rollbackPreviousTry = this.snapshot();
+      running.trip();
+      const result = tryFinally(
+        () => fn(...args) as MaybePromise<unknown>,
+        () => {
+          running.reset();
+        },
+      );
+      previousTryReturnedPromise = isPromise(result);
+      return result as TResult;
+    };
+  }
+}
 
 /**
  * Create a new tx hooks handle.
@@ -143,14 +189,20 @@ const flushHooks = (registry: AsyncTxHooks): Promise<void> | undefined => {
  * commit), and `discard` (call on rollback).
  */
 export const createTxHooks = (): TxHooksHandle => {
-  const txHooks = new AsyncTxHooks();
+  const txHooks = new TxHooksRegistry();
   return {
     txHooks,
-    flush: async () => flushHooks(txHooks),
+    flush: () => flushAsync(txHooks),
     discard: () => {
       txHooks.discard();
     },
   };
+};
+
+const discardQuietly = (txHooks: TxHooksRegistry): void => {
+  try {
+    txHooks.discard();
+  } catch {}
 };
 
 /**
@@ -159,18 +211,33 @@ export const createTxHooks = (): TxHooksHandle => {
  * Wrap the transaction from outside, so the hooks flush after COMMIT. A state provider without
  * transaction events of its own calls it in `withTransaction`; open your own transaction inside it
  * and pass `txHooks` in the transaction context.
+ *
+ * When `cb` returns a promise, `withTxHooks` returns a promise that settles after the commit
+ * callbacks. When `cb` returns a plain value, as a driver's own synchronous transaction does, the
+ * commit callbacks run synchronously and `withTxHooks` returns the value; a commit callback that
+ * returns a promise then makes it throw after every callback has run.
  */
-export const withTxHooks = async <T>(cb: (txHooks: TxHooks) => Promise<T>): Promise<T> => {
-  const txHooks = new AsyncTxHooks();
+export const withTxHooks = <T>(cb: (txHooks: TxHooks) => T): T => {
+  const txHooks = new TxHooksRegistry();
+  let result: T;
   try {
-    const result = await cb(txHooks);
-    const flushing = flushHooks(txHooks);
-    if (flushing !== undefined) await flushing;
-    return result;
+    result = cb(txHooks);
   } catch (error) {
-    try {
-      txHooks.discard();
-    } catch {}
+    discardQuietly(txHooks);
     throw error;
   }
+  if (!isPromise(result)) {
+    flushSync(txHooks);
+    return result;
+  }
+  return result.then(
+    async (value) => {
+      await flushAsync(txHooks);
+      return value;
+    },
+    (error: unknown) => {
+      discardQuietly(txHooks);
+      throw error;
+    },
+  ) as T;
 };

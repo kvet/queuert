@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 
-import { createClient } from "../../client.ts";
+import { assertRejects } from "@queuert/helpers/assert-rejects";
+import { caseBody, resource } from "@queuert/helpers/case-body";
+import { step } from "@queuert/helpers/steps";
+
+import { createClient } from "../../client/client.ts";
 import type { StateAdapterConformanceContext } from "../../conformance.state-adapter/types.ts";
+import { inMode } from "../../conformance/adapters.ts";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
 import { defineJobTypes } from "../../job-types/define-job-types.ts";
 import { createCaseNotifyAdapter } from "../support/create-case-notify-adapter.ts";
@@ -13,9 +18,11 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
   cases: [
     {
       name: "deduplicates chains with same deduplication key",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           test: {
             entry: true;
@@ -26,26 +33,36 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const [chain1, chain2, chain3] = await withCaseTransaction(stateAdapter, async (txCtx) => [
-          await client.createChain({
-            ...txCtx,
-            typeName: "test",
-            input: { value: 1 },
-            deduplication: { key: "same-key", scope: "running" },
+        const [chain1, chain2, chain3] = yield* step(
+          withCaseTransaction(stateAdapter, function* (txCtx) {
+            return [
+              yield* step(
+                client.createChain({
+                  ...txCtx,
+                  typeName: "test",
+                  input: { value: 1 },
+                  deduplication: { key: "same-key", scope: "running" },
+                }),
+              ),
+              yield* step(
+                client.createChain({
+                  ...txCtx,
+                  typeName: "test",
+                  input: { value: 2 },
+                  deduplication: { key: "same-key", scope: "running" },
+                }),
+              ),
+              yield* step(
+                client.createChain({
+                  ...txCtx,
+                  typeName: "test",
+                  input: { value: 3 },
+                  deduplication: { key: "different-key", scope: "running" },
+                }),
+              ),
+            ];
           }),
-          await client.createChain({
-            ...txCtx,
-            typeName: "test",
-            input: { value: 2 },
-            deduplication: { key: "same-key", scope: "running" },
-          }),
-          await client.createChain({
-            ...txCtx,
-            typeName: "test",
-            input: { value: 3 },
-            deduplication: { key: "different-key", scope: "running" },
-          }),
-        ]);
+        );
 
         assert.equal(chain1.deduplicated, false);
         assert.equal(chain2.deduplicated, true);
@@ -53,28 +70,32 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
         assert.equal(chain3.deduplicated, false);
         assert.notEqual(chain3.id, chain1.id);
 
-        const completed1 = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.completeChain({
-            ...txCtx,
-            ...chain1,
-            handler: async ({ job, completeJob }) => {
-              return completeJob(job, async ({ complete }) =>
-                complete({ output: { result: job.input.value } }),
-              );
-            },
-          }),
+        const completed1 = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.completeChain({
+              ...txCtx,
+              ...chain1,
+              handler: ({ job, completeJob }) => {
+                return completeJob(job, ({ complete }) =>
+                  complete({ output: { result: job.input.value } }),
+                );
+              },
+            }),
+          ),
         );
 
-        const completed3 = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.completeChain({
-            ...txCtx,
-            ...chain3,
-            handler: async ({ job, completeJob }) => {
-              return completeJob(job, async ({ complete }) =>
-                complete({ output: { result: job.input.value } }),
-              );
-            },
-          }),
+        const completed3 = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.completeChain({
+              ...txCtx,
+              ...chain3,
+              handler: ({ job, completeJob }) => {
+                return completeJob(job, ({ complete }) =>
+                  complete({ output: { result: job.input.value } }),
+                );
+              },
+            }),
+          ),
         );
 
         assert.equal(completed1.status, "completed");
@@ -82,17 +103,19 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
         assert.deepEqual(completed1.output, { result: 1 });
         assert.deepEqual(completed3.output, { result: 3 });
 
-        const fetched2 = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.getChain({ ...txCtx, ...chain2 }),
+        const fetched2 = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) => client.getChain({ ...txCtx, ...chain2 })),
         );
         assert.deepEqual("output" in fetched2! && fetched2.output, { result: 1 });
-      },
+      }),
     },
     {
       name: "scope 'running' deduplicates against multi-step chains that have continued",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           step1: {
             entry: true;
@@ -107,75 +130,85 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain1 = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "step1",
-            input: { value: 1 },
-            deduplication: { key: "multi-step-key", scope: "running" },
-          }),
+        const chain1 = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "step1",
+              input: { value: 1 },
+              deduplication: { key: "multi-step-key", scope: "running" },
+            }),
+          ),
         );
 
         assert.equal(chain1.deduplicated, false);
 
-        await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.completeChain({
-            ...txCtx,
-            ...chain1,
-            handler: async ({ job, completeJob }) => {
-              if (job.typeName === "step1") {
-                await completeJob(job, async ({ complete }) =>
-                  complete({ continueWith: { typeName: "step2", input: { continued: true } } }),
-                );
-              }
-            },
-          }),
+        yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.completeChain({
+              ...txCtx,
+              ...chain1,
+              handler: ({ job, completeJob }) => {
+                if (job.typeName === "step1") {
+                  return completeJob(job, ({ complete }) =>
+                    complete({ continueWith: { typeName: "step2", input: { continued: true } } }),
+                  );
+                }
+              },
+            }),
+          ),
         );
 
-        const chain2 = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "step1",
-            input: { value: 2 },
-            deduplication: { key: "multi-step-key", scope: "running" },
-          }),
+        const chain2 = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "step1",
+              input: { value: 2 },
+              deduplication: { key: "multi-step-key", scope: "running" },
+            }),
+          ),
         );
 
         assert.equal(chain2.deduplicated, true);
         assert.equal(chain2.id, chain1.id);
 
-        await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.completeChain({
-            ...txCtx,
-            ...chain1,
-            handler: async ({ job, completeJob }) => {
-              if (job.typeName === "step2") {
-                return completeJob(job, async ({ complete }) =>
-                  complete({ output: { result: 42 } }),
-                );
-              }
-            },
-          }),
+        yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.completeChain({
+              ...txCtx,
+              ...chain1,
+              handler: ({ job, completeJob }) => {
+                if (job.typeName === "step2") {
+                  return completeJob(job, ({ complete }) => complete({ output: { result: 42 } }));
+                }
+              },
+            }),
+          ),
         );
 
-        const chain3 = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "step1",
-            input: { value: 3 },
-            deduplication: { key: "multi-step-key", scope: "running" },
-          }),
+        const chain3 = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "step1",
+              input: { value: 3 },
+              deduplication: { key: "multi-step-key", scope: "running" },
+            }),
+          ),
         );
 
         assert.equal(chain3.deduplicated, false);
         assert.notEqual(chain3.id, chain1.id);
-      },
+      }),
     },
     {
       name: "scope 'any' returns the output of a completed multi-step chain it matches",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           step1: {
             entry: true;
@@ -190,54 +223,67 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "step1",
-            input: { value: 1 },
-            deduplication: { key: "any-multi-step-key", scope: "any" },
-          }),
+        const chain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "step1",
+              input: { value: 1 },
+              deduplication: { key: "any-multi-step-key", scope: "any" },
+            }),
+          ),
         );
 
-        await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.completeChain({
-            ...txCtx,
-            ...chain,
-            handler: async ({ job, completeJob }) => {
-              if (job.typeName === "step1") {
-                job = await completeJob(job, async ({ complete }) =>
-                  complete({ continueWith: { typeName: "step2", input: { value: 42 } } }),
-                );
-              }
-              if (job.typeName === "step2") {
-                return completeJob(job, async ({ complete }) =>
-                  complete({ output: { result: job.input.value } }),
-                );
-              }
-            },
-          }),
+        yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.completeChain({
+              ...txCtx,
+              ...chain,
+              handler: ({ job, completeJob }) =>
+                inMode(stateAdapter, function* () {
+                  if (job.typeName === "step1") {
+                    job = yield* step(
+                      completeJob(job, ({ complete }) =>
+                        complete({ continueWith: { typeName: "step2", input: { value: 42 } } }),
+                      ),
+                    );
+                  }
+                  if (job.typeName === "step2") {
+                    return yield* step(
+                      completeJob(job, ({ complete }) =>
+                        complete({ output: { result: job.input.value } }),
+                      ),
+                    );
+                  }
+                }),
+            }),
+          ),
         );
 
-        const matched = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "step1",
-            input: { value: 2 },
-            deduplication: { key: "any-multi-step-key", scope: "any" },
-          }),
+        const matched = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "step1",
+              input: { value: 2 },
+              deduplication: { key: "any-multi-step-key", scope: "any" },
+            }),
+          ),
         );
 
         assert.equal(matched.deduplicated, true);
         assert.equal(matched.id, chain.id);
         assert.equal(matched.status, "completed");
         assert.deepEqual("output" in matched && matched.output, { result: 42 });
-      },
+      }),
     },
     {
       name: "scope 'running' picks running chain when completed chain exists with same key",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           test: {
             entry: true;
@@ -248,55 +294,65 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const chain1 = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "test",
-            input: { value: 1 },
-            deduplication: { key: "coexist-key", scope: "running" },
-          }),
+        const chain1 = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "test",
+              input: { value: 1 },
+              deduplication: { key: "coexist-key", scope: "running" },
+            }),
+          ),
         );
 
-        await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.completeChain({
-            ...txCtx,
-            ...chain1,
-            handler: async ({ job, completeJob }) => {
-              return completeJob(job, async ({ complete }) => complete({ output: { result: 1 } }));
-            },
-          }),
+        yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.completeChain({
+              ...txCtx,
+              ...chain1,
+              handler: ({ job, completeJob }) => {
+                return completeJob(job, ({ complete }) => complete({ output: { result: 1 } }));
+              },
+            }),
+          ),
         );
 
-        const chain2 = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "test",
-            input: { value: 2 },
-            deduplication: { key: "coexist-key", scope: "running" },
-          }),
+        const chain2 = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "test",
+              input: { value: 2 },
+              deduplication: { key: "coexist-key", scope: "running" },
+            }),
+          ),
         );
 
         assert.equal(chain2.deduplicated, false);
         assert.notEqual(chain2.id, chain1.id);
 
-        const chain3 = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "test",
-            input: { value: 3 },
-            deduplication: { key: "coexist-key", scope: "running" },
-          }),
+        const chain3 = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "test",
+              input: { value: 3 },
+              deduplication: { key: "coexist-key", scope: "running" },
+            }),
+          ),
         );
 
         assert.equal(chain3.deduplicated, true);
         assert.equal(chain3.id, chain2.id);
-      },
+      }),
     },
     {
       name: "deduplication scopes: 'any' vs 'running'",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           test: {
             entry: true;
@@ -307,92 +363,108 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const allChain1 = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "test",
-            input: { value: 1 },
-            deduplication: { key: "all-key", scope: "any" },
-          }),
+        const allChain1 = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "test",
+              input: { value: 1 },
+              deduplication: { key: "all-key", scope: "any" },
+            }),
+          ),
         );
 
-        await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.completeChain({
-            ...txCtx,
-            ...allChain1,
-            handler: async ({ job, completeJob }) => {
-              await completeJob(job, async ({ complete }) =>
-                complete({ output: { result: job.input.value } }),
-              );
-            },
-          }),
+        yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.completeChain({
+              ...txCtx,
+              ...allChain1,
+              handler: ({ job, completeJob }) => {
+                return completeJob(job, ({ complete }) =>
+                  complete({ output: { result: job.input.value } }),
+                );
+              },
+            }),
+          ),
         );
 
-        const allChain2 = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "test",
-            input: { value: 2 },
-            deduplication: { key: "all-key", scope: "any" },
-          }),
+        const allChain2 = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "test",
+              input: { value: 2 },
+              deduplication: { key: "all-key", scope: "any" },
+            }),
+          ),
         );
 
         assert.equal(allChain2.deduplicated, true);
         assert.equal(allChain2.id, allChain1.id);
 
-        const completedChain1 = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "test",
-            input: { value: 3 },
-            deduplication: { key: "completed-key", scope: "running" },
-          }),
+        const completedChain1 = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "test",
+              input: { value: 3 },
+              deduplication: { key: "completed-key", scope: "running" },
+            }),
+          ),
         );
 
-        await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.completeChain({
-            ...txCtx,
-            ...completedChain1,
-            handler: async ({ job, completeJob }) => {
-              await completeJob(job, async ({ complete }) =>
-                complete({ output: { result: job.input.value } }),
-              );
-            },
-          }),
+        yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.completeChain({
+              ...txCtx,
+              ...completedChain1,
+              handler: ({ job, completeJob }) => {
+                return completeJob(job, ({ complete }) =>
+                  complete({ output: { result: job.input.value } }),
+                );
+              },
+            }),
+          ),
         );
 
-        const completedChain2 = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "test",
-            input: { value: 4 },
-            deduplication: { key: "completed-key", scope: "running" },
-          }),
+        const completedChain2 = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "test",
+              input: { value: 4 },
+              deduplication: { key: "completed-key", scope: "running" },
+            }),
+          ),
         );
 
         assert.equal(completedChain2.deduplicated, false);
         assert.notEqual(completedChain2.id, completedChain1.id);
 
-        const completed2 = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.completeChain({
-            ...txCtx,
-            ...completedChain2,
-            handler: async ({ job, completeJob }) => {
-              return completeJob(job, async ({ complete }) =>
-                complete({ output: { result: job.input.value } }),
-              );
-            },
-          }),
+        const completed2 = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.completeChain({
+              ...txCtx,
+              ...completedChain2,
+              handler: ({ job, completeJob }) => {
+                return completeJob(job, ({ complete }) =>
+                  complete({ output: { result: job.input.value } }),
+                );
+              },
+            }),
+          ),
         );
         assert.equal(completed2.status, "completed");
         assert.deepEqual(completed2.output, { result: 4 });
-      },
+      }),
     },
     {
       name: "does not deduplicate across different chain types with the same key",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           typeA: {
             entry: true;
@@ -408,31 +480,41 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const [chainA, chainB] = await withCaseTransaction(stateAdapter, async (txCtx) => [
-          await client.createChain({
-            ...txCtx,
-            typeName: "typeA",
-            input: { value: 1 },
-            deduplication: { key: "shared-key", scope: "running" },
+        const [chainA, chainB] = yield* step(
+          withCaseTransaction(stateAdapter, function* (txCtx) {
+            return [
+              yield* step(
+                client.createChain({
+                  ...txCtx,
+                  typeName: "typeA",
+                  input: { value: 1 },
+                  deduplication: { key: "shared-key", scope: "running" },
+                }),
+              ),
+              yield* step(
+                client.createChain({
+                  ...txCtx,
+                  typeName: "typeB",
+                  input: { value: 2 },
+                  deduplication: { key: "shared-key", scope: "running" },
+                }),
+              ),
+            ];
           }),
-          await client.createChain({
-            ...txCtx,
-            typeName: "typeB",
-            input: { value: 2 },
-            deduplication: { key: "shared-key", scope: "running" },
-          }),
-        ]);
+        );
 
         assert.equal(chainA.deduplicated, false);
         assert.equal(chainB.deduplicated, false);
         assert.notEqual(chainB.id, chainA.id);
-      },
+      }),
     },
     {
       name: "deduplicates within a batch",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           test: {
             entry: true;
@@ -443,27 +525,29 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const [chain1, chain2, chain3] = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChains({
-            ...txCtx,
-            items: [
-              {
-                typeName: "test",
-                input: { value: 1 },
-                deduplication: { key: "same-key", scope: "running" },
-              },
-              {
-                typeName: "test",
-                input: { value: 2 },
-                deduplication: { key: "same-key", scope: "running" },
-              },
-              {
-                typeName: "test",
-                input: { value: 3 },
-                deduplication: { key: "different-key", scope: "running" },
-              },
-            ],
-          }),
+        const [chain1, chain2, chain3] = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChains({
+              ...txCtx,
+              items: [
+                {
+                  typeName: "test",
+                  input: { value: 1 },
+                  deduplication: { key: "same-key", scope: "running" },
+                },
+                {
+                  typeName: "test",
+                  input: { value: 2 },
+                  deduplication: { key: "same-key", scope: "running" },
+                },
+                {
+                  typeName: "test",
+                  input: { value: 3 },
+                  deduplication: { key: "different-key", scope: "running" },
+                },
+              ],
+            }),
+          ),
         );
 
         assert.equal(chain1.deduplicated, false);
@@ -471,13 +555,15 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
         assert.equal(chain2.id, chain1.id);
         assert.equal(chain3.deduplicated, false);
         assert.notEqual(chain3.id, chain1.id);
-      },
+      }),
     },
     {
       name: "deduplicates against pre-existing chains",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           test: {
             entry: true;
@@ -488,44 +574,50 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const existing = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "test",
-            input: { value: 100 },
-            deduplication: { key: "existing-key", scope: "running" },
-          }),
+        const existing = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "test",
+              input: { value: 100 },
+              deduplication: { key: "existing-key", scope: "running" },
+            }),
+          ),
         );
 
-        const [chain1, chain2] = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChains({
-            ...txCtx,
-            items: [
-              {
-                typeName: "test",
-                input: { value: 1 },
-                deduplication: { key: "existing-key", scope: "running" },
-              },
-              {
-                typeName: "test",
-                input: { value: 2 },
-                deduplication: { key: "fresh-key", scope: "running" },
-              },
-            ],
-          }),
+        const [chain1, chain2] = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChains({
+              ...txCtx,
+              items: [
+                {
+                  typeName: "test",
+                  input: { value: 1 },
+                  deduplication: { key: "existing-key", scope: "running" },
+                },
+                {
+                  typeName: "test",
+                  input: { value: 2 },
+                  deduplication: { key: "fresh-key", scope: "running" },
+                },
+              ],
+            }),
+          ),
         );
 
         assert.equal(chain1.deduplicated, true);
         assert.equal(chain1.id, existing.id);
         assert.equal(chain2.deduplicated, false);
         assert.notEqual(chain2.id, existing.id);
-      },
+      }),
     },
     {
       name: "deduplication scopes: 'any' vs 'running' in a createChains batch",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           test: {
             entry: true;
@@ -536,51 +628,58 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const anyChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "test",
-            input: { value: 1 },
-            deduplication: { key: "any-key", scope: "any" },
-          }),
+        const anyChain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "test",
+              input: { value: 1 },
+              deduplication: { key: "any-key", scope: "any" },
+            }),
+          ),
         );
 
-        await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.completeChain({
-            ...txCtx,
-            ...anyChain,
-            handler: async ({ job, completeJob }) => {
-              await completeJob(job, async ({ complete }) =>
-                complete({ output: { result: job.input.value } }),
-              );
-            },
-          }),
+        yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.completeChain({
+              ...txCtx,
+              ...anyChain,
+              handler: ({ job, completeJob }) => {
+                return completeJob(job, ({ complete }) =>
+                  complete({ output: { result: job.input.value } }),
+                );
+              },
+            }),
+          ),
         );
 
-        const incompleteChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "test",
-            input: { value: 2 },
-            deduplication: { key: "incomplete-key", scope: "running" },
-          }),
+        const incompleteChain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "test",
+              input: { value: 2 },
+              deduplication: { key: "incomplete-key", scope: "running" },
+            }),
+          ),
         );
 
-        await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.completeChain({
-            ...txCtx,
-            ...incompleteChain,
-            handler: async ({ job, completeJob }) => {
-              await completeJob(job, async ({ complete }) =>
-                complete({ output: { result: job.input.value } }),
-              );
-            },
-          }),
+        yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.completeChain({
+              ...txCtx,
+              ...incompleteChain,
+              handler: ({ job, completeJob }) => {
+                return completeJob(job, ({ complete }) =>
+                  complete({ output: { result: job.input.value } }),
+                );
+              },
+            }),
+          ),
         );
 
-        const [anyResult, incompleteResult] = await withCaseTransaction(
-          stateAdapter,
-          async (txCtx) =>
+        const [anyResult, incompleteResult] = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
             client.createChains({
               ...txCtx,
               items: [
@@ -596,19 +695,22 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
                 },
               ],
             }),
+          ),
         );
 
         assert.equal(anyResult.deduplicated, true);
         assert.equal(anyResult.id, anyChain.id);
         assert.equal(incompleteResult.deduplicated, false);
         assert.notEqual(incompleteResult.id, incompleteChain.id);
-      },
+      }),
     },
     {
       name: "does not deduplicate across different chain types with the same key in a createChains batch",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           typeA: {
             entry: true;
@@ -624,34 +726,38 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const [chainA, chainB] = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChains({
-            ...txCtx,
-            items: [
-              {
-                typeName: "typeA",
-                input: { value: 1 },
-                deduplication: { key: "shared-key", scope: "running" },
-              },
-              {
-                typeName: "typeB",
-                input: { value: 2 },
-                deduplication: { key: "shared-key", scope: "running" },
-              },
-            ],
-          }),
+        const [chainA, chainB] = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChains({
+              ...txCtx,
+              items: [
+                {
+                  typeName: "typeA",
+                  input: { value: 1 },
+                  deduplication: { key: "shared-key", scope: "running" },
+                },
+                {
+                  typeName: "typeB",
+                  input: { value: 2 },
+                  deduplication: { key: "shared-key", scope: "running" },
+                },
+              ],
+            }),
+          ),
         );
 
         assert.equal(chainA.deduplicated, false);
         assert.equal(chainB.deduplicated, false);
         assert.notEqual(chainB.id, chainA.id);
-      },
+      }),
     },
     {
       name: "rejects a missing or unknown deduplication scope",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           test: {
             entry: true;
@@ -663,20 +769,22 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
         for (const deduplication of [{ key: "k" }, { key: "k", scope: "incomplete" }]) {
-          await assert.rejects(
-            async () =>
-              withCaseTransaction(stateAdapter, async (txCtx) =>
-                client.createChain({
-                  ...txCtx,
-                  typeName: "test",
-                  input: null,
-                  deduplication: deduplication as any,
-                }),
-              ),
-            /Invalid deduplication scope/,
+          yield* step(
+            assertRejects(
+              () =>
+                withCaseTransaction(stateAdapter, (txCtx) =>
+                  client.createChain({
+                    ...txCtx,
+                    typeName: "test",
+                    input: null,
+                    deduplication: deduplication as any,
+                  }),
+                ),
+              /Invalid deduplication scope/,
+            ),
           );
         }
-      },
+      }),
     },
   ],
 };

@@ -1,5 +1,5 @@
 import { runDeploymentProcess } from "@queuert/helpers/testing";
-import { type Migration, createMigrator } from "@queuert/typed-sql";
+import { type Migration, createMigrator } from "@queuert/typed-sql/migrator";
 import { Pool } from "pg";
 
 import { createApplicationPgMigrationStore } from "../migration-store/migration-store.pg.ts";

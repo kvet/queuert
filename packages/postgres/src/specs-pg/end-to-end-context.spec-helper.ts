@@ -1,6 +1,6 @@
 import { sleep } from "@queuert/helpers/sleep";
 import type { Pool } from "pg";
-import type { NotifyAdapter, StateAdapter } from "queuert";
+import type { StateAdapter } from "queuert";
 import {
   type EndToEndFlakyDbContext,
   type EndToEndPoisonTransactionContext,
@@ -83,7 +83,7 @@ export const createPgEndToEndContext = async ({
   createNotifyAdapter,
 }: {
   pool: Pool;
-  createNotifyAdapter?: () => Promise<NotifyAdapter>;
+  createNotifyAdapter?: EndToEndSavepointContext["createNotifyAdapter"];
 }): Promise<
   EndToEndSavepointContext & EndToEndPoisonTransactionContext & EndToEndFlakyDbContext
 > => ({

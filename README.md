@@ -107,7 +107,7 @@ For deeper comparisons, see the [docs site](https://kvet.github.io/queuert/compa
 - **Transactional, both ends.** Enqueue commits inside your DB transaction; handler completion and next-step `continueWith` commit in the same transaction as your domain writes. For DB-bound work, no outbox at enqueue and no idempotency-key ritual at processing — both halves are structural.
 - **Typed job chains.** Inputs, outputs, continuations, and blockers infer end-to-end via `defineJobTypes`. Refactoring is compiler-checked.
 - **Lives in your database.** Postgres, SQLite, MySQL/MariaDB or Redis. No workflow server, no separate persistence tier to operate.
-- **Sub-second wakeup.** `LISTEN/NOTIFY` (or Redis pub/sub, or NATS) wakes workers when a row commits — not on a polling timer.
+- **Sub-second wakeup.** `LISTEN/NOTIFY` (or Redis pub/sub, NATS, or IPC between processes on one host) wakes workers when a row commits — not on a polling timer.
 - **Schedule for later.** Delay a chain to a specific time or duration. Schedule retries with backoff. Future work, no extra infrastructure.
 - **Deduplication.** Pass a deduplication key on enqueue. Identical keys collapse to a single chain — at-most-once, by construction.
 - **Lean and battle-tested.** Zero runtime dependencies in every package — driver libraries are `peerDependencies` you already own. Thousands of tests across adapters and a shared conformance suite every state and notify adapter must pass.
@@ -128,6 +128,7 @@ npm install @queuert/redis      # Redis (experimental)
 npm install @queuert/postgres   # PostgreSQL LISTEN/NOTIFY
 npm install @queuert/redis      # Redis pub/sub
 npm install @queuert/nats       # NATS pub/sub (experimental)
+npm install @queuert/ipc        # Processes on one host, e.g. sharing a SQLite file (experimental)
 
 # Dashboard (optional)
 npm install @queuert/dashboard

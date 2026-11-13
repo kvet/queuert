@@ -1,21 +1,19 @@
 import { type UUID, randomUUID } from "node:crypto";
 
 import { createLatch } from "@queuert/helpers/latch";
+import { type Migration, type MigrationResult, createMigrator } from "@queuert/typed-sql/migrator";
 import {
   type DataType,
-  type Migration,
-  type MigrationResult,
   type RuntimeType,
   type TypedSql,
-  createMigrator,
-  createTemplateApplier,
-  createTemplateCache,
   extractColumnTypes,
   extractParamTypes,
   sql,
   t,
-  validateSqlIdentifier,
-} from "@queuert/typed-sql";
+} from "@queuert/typed-sql/sql";
+import { validateSqlIdentifier } from "@queuert/typed-sql/sql-executor";
+import { createTemplateApplier } from "@queuert/typed-sql/template-applier";
+import { createTemplateCache } from "@queuert/typed-sql/template-cache";
 import {
   type BaseTxContext,
   SchemaFencedError,

@@ -1,38 +1,46 @@
-import { reportErrors } from "@queuert/helpers/report-errors.async-only";
+import { andThen } from "@queuert/helpers/maybe-promise";
+import { reportErrors } from "@queuert/helpers/report-errors";
 
+import { isSyncAdapter } from "../adapter-mode.ts";
 import type { ObservabilityHelper } from "../observability-adapter/observability-helper.ts";
-import type { NotifyAdapter } from "./notify-adapter.ts";
+import type { AnyNotifyAdapter } from "./notify-adapter.ts";
 
-// unasync: rename wrapSyncNotifyAdapterWithLogging
-export const wrapNotifyAdapterWithLogging = ({
+export const wrapNotifyAdapterWithLogging = <TNotifyAdapter extends AnyNotifyAdapter>({
   notifyAdapter,
   observabilityHelper,
 }: {
-  notifyAdapter: NotifyAdapter;
+  notifyAdapter: TNotifyAdapter;
   observabilityHelper: ObservabilityHelper;
-}): NotifyAdapter => {
-  const wrap = <T extends (...args: never[]) => Promise<unknown>>(
-    operationName: Extract<keyof NotifyAdapter, string>,
+}): TNotifyAdapter => {
+  // An async adapter's callers expect a promise, so a synchronous throw from it becomes a rejection.
+  const rejectSyncThrows = !isSyncAdapter(notifyAdapter);
+  const wrap = <T extends (...args: never[]) => unknown>(
+    operationName: Extract<keyof AnyNotifyAdapter, string>,
     fn: T,
   ): T =>
-    reportErrors(fn, (error) => {
-      observabilityHelper.notifyAdapterError(operationName, error);
-    });
-  const wrapListen = <T extends (...args: never[]) => Promise<() => Promise<void>>>(
-    operationName: Extract<keyof NotifyAdapter, string>,
+    reportErrors(
+      fn,
+      (error) => {
+        observabilityHelper.notifyAdapterError(operationName, error);
+      },
+      { rejectSyncThrows },
+    );
+  const wrapListen = <T extends (...args: never[]) => unknown>(
+    operationName: Extract<keyof AnyNotifyAdapter, string>,
     listen: T,
   ): T =>
-    wrap(operationName, (async (...args: Parameters<T>) =>
-      wrap(operationName, await listen(...args))) as T);
+    wrap(operationName, ((...args: Parameters<T>) =>
+      andThen(listen(...args) as (() => unknown) | Promise<() => unknown>, (dispose) =>
+        wrap(operationName, dispose),
+      )) as unknown as T);
 
   return {
+    ...notifyAdapter,
     notifyJobsScheduled: wrap("notifyJobsScheduled", notifyAdapter.notifyJobsScheduled),
     listenJobScheduled: wrapListen("listenJobScheduled", notifyAdapter.listenJobScheduled),
     notifyChainsCompleted: wrap("notifyChainsCompleted", notifyAdapter.notifyChainsCompleted),
     listenChainCompleted: wrapListen("listenChainCompleted", notifyAdapter.listenChainCompleted),
     notifyJobAttemptsLost: wrap("notifyJobAttemptsLost", notifyAdapter.notifyJobAttemptsLost),
     listenJobAttemptLost: wrapListen("listenJobAttemptLost", notifyAdapter.listenJobAttemptLost),
-    close: notifyAdapter.close,
-    [Symbol.asyncDispose]: notifyAdapter.close,
   };
 };

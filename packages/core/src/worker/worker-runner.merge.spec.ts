@@ -1,0 +1,819 @@
+import { describe, expect, expectTypeOf, it } from "vitest";
+
+import { createClient } from "../client/client.ts";
+import { DuplicateJobTypeError } from "../errors.ts";
+import { createProcessors } from "../job-type-processors/create-job-type-processors.ts";
+import {
+  type ProcessorDefinitions,
+  type Processors,
+  processorsDefinitionsSymbol,
+} from "../job-type-processors/job-type-processors.ts";
+import { mergeProcessors } from "../job-type-processors/merge-job-type-processors.ts";
+import { defineJobTypes } from "../job-types/define-job-types.ts";
+import type { JobTypeProperty } from "../job-types/job-types.resolvers.ts";
+import type { JobTypeDefinitions } from "../job-types/job-types.ts";
+import { mergeJobTypes } from "../job-types/merge-job-types.ts";
+import { createInProcessStateAdapter } from "../state-adapter.in-process/state-adapter.in-process.ts";
+import { createWorkerRunner } from "./worker-runner.ts";
+
+type OrderDefs = {
+  "orders.create": { entry: true; input: { userId: string }; output: { orderId: string } };
+  "orders.fulfill": { input: { orderId: string }; output: { fulfilled: boolean } };
+};
+
+type NotificationDefs = {
+  "notifications.send": { entry: true; input: { to: string }; output: { sent: boolean } };
+};
+
+type BillingDefs = {
+  "billing.charge": { entry: true; input: { amount: number }; output: { charged: boolean } };
+};
+
+const orderJobTypes = defineJobTypes<OrderDefs>();
+const notificationJobTypes = defineJobTypes<NotificationDefs>();
+const billingJobTypes = defineJobTypes<BillingDefs>();
+
+const stateAdapter = createInProcessStateAdapter();
+const client = createClient({
+  stateAdapter,
+  jobTypes: mergeJobTypes([orderJobTypes, notificationJobTypes, billingJobTypes]),
+});
+
+const orderProcessors = createProcessors({
+  client,
+  jobTypes: orderJobTypes,
+  processors: {
+    "orders.create": {
+      attemptHandler: async ({ complete }) =>
+        stateAdapter.withTransaction(async (txCtx) =>
+          complete({ ...txCtx, output: { orderId: "1" } }),
+        ),
+    },
+    "orders.fulfill": {
+      attemptHandler: async ({ complete }) =>
+        stateAdapter.withTransaction(async (txCtx) =>
+          complete({ ...txCtx, output: { fulfilled: true } }),
+        ),
+    },
+  },
+});
+
+const notificationProcessors = createProcessors({
+  client,
+  jobTypes: notificationJobTypes,
+  processors: {
+    "notifications.send": {
+      attemptHandler: async ({ complete }) =>
+        stateAdapter.withTransaction(async (txCtx) =>
+          complete({ ...txCtx, output: { sent: true } }),
+        ),
+    },
+  },
+});
+
+describe("createProcessors", () => {
+  it("accepts merged client for a slice registry", () => {
+    createProcessors({
+      client,
+      jobTypes: orderJobTypes,
+      processors: {
+        "orders.create": {
+          attemptHandler: async ({ complete }) =>
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { orderId: "1" } }),
+            ),
+        },
+      },
+    });
+  });
+
+  it("rejects client missing required job types", async () => {
+    const orderOnlyClient = createClient({
+      stateAdapter,
+      jobTypes: orderJobTypes,
+    });
+    const billingProcessors = createProcessors({
+      client,
+      jobTypes: billingJobTypes,
+      processors: {
+        "billing.charge": {
+          attemptHandler: async ({ complete }) =>
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { charged: true } }),
+            ),
+        },
+      },
+    });
+
+    createProcessors({
+      // @ts-expect-error — client is missing "billing.charge" from the slice's job types
+      client: orderOnlyClient,
+      jobTypes: billingJobTypes,
+      processors: {
+        "billing.charge": billingProcessors["billing.charge"],
+      },
+    });
+  });
+
+  it("rejects unknown keys at compile time", () => {
+    createProcessors({
+      client,
+      jobTypes: orderJobTypes,
+      processors: {
+        // @ts-expect-error — "orders.craete" is not a key of the client's defs
+        "orders.craete": orderProcessors["orders.create"],
+      },
+    });
+  });
+
+  it("rejects a mix of valid and unknown keys at compile time", () => {
+    createProcessors({
+      client,
+      jobTypes: orderJobTypes,
+      processors: {
+        "orders.create": {
+          attemptHandler: async ({ complete }) =>
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { orderId: "1" } }),
+            ),
+        },
+        // @ts-expect-error — "orders.unknown" is not a key of the client's defs
+        "orders.unknown": orderProcessors["orders.create"],
+      },
+    });
+  });
+
+  it("allows partial subsets of definitions", () => {
+    const processors = createProcessors({
+      client,
+      jobTypes: orderJobTypes,
+      processors: {
+        "orders.create": {
+          attemptHandler: async ({ complete }) =>
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { orderId: "1" } }),
+            ),
+        },
+      },
+    });
+    expect(processors).toHaveProperty("orders.create");
+    expect(processors).not.toHaveProperty("orders.fulfill");
+  });
+
+  it("carries definitions via symbols", () => {
+    expectTypeOf<ProcessorDefinitions<typeof orderProcessors>>().toEqualTypeOf<OrderDefs>();
+  });
+
+  it("sets symbols at runtime", () => {
+    expect(processorsDefinitionsSymbol in orderProcessors).toBe(true);
+  });
+
+  it("includes processor handlers accessible by key", () => {
+    const handler = orderProcessors["orders.create"].attemptHandler;
+    const jobTypes = createProcessors({
+      client,
+      jobTypes: orderJobTypes,
+      processors: {
+        "orders.create": { attemptHandler: handler },
+      },
+    });
+    expect(jobTypes["orders.create"].attemptHandler).toBe(handler);
+    expect(jobTypes["orders.fulfill"]).toBeUndefined();
+  });
+
+  it("does not mutate the input processors object", () => {
+    const processors = {
+      "orders.create": orderProcessors["orders.create"],
+    };
+    const keysBefore = Object.keys(processors);
+    createProcessors({
+      client,
+      jobTypes: orderJobTypes,
+      processors,
+    });
+    expect(Object.keys(processors)).toEqual(keysBefore);
+    expect(processorsDefinitionsSymbol in processors).toBe(false);
+  });
+});
+
+describe("mergeProcessors", () => {
+  it("merges two processor slices into a single object", () => {
+    const merged = mergeProcessors([orderProcessors, notificationProcessors]);
+
+    expect(merged).toHaveProperty("orders.create");
+    expect(merged).toHaveProperty("orders.fulfill");
+    expect(merged).toHaveProperty("notifications.send");
+  });
+
+  it("merges three processor slices", () => {
+    const billingProcessors = createProcessors({
+      client,
+      jobTypes: billingJobTypes,
+      processors: {
+        "billing.charge": {
+          attemptHandler: async ({ complete }) =>
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { charged: true } }),
+            ),
+        },
+      },
+    });
+
+    const merged = mergeProcessors([orderProcessors, notificationProcessors, billingProcessors]);
+
+    expect(merged).toHaveProperty("orders.create");
+    expect(merged).toHaveProperty("notifications.send");
+    expect(merged).toHaveProperty("billing.charge");
+  });
+
+  it("preserves handler references", () => {
+    const merged = mergeProcessors([orderProcessors, notificationProcessors]);
+
+    expect(merged["orders.create"]).toBe(orderProcessors["orders.create"]);
+    expect(merged["notifications.send"]).toBe(notificationProcessors["notifications.send"]);
+  });
+
+  it("merged result carries definitions via symbols", () => {
+    const merged = mergeProcessors([orderProcessors, notificationProcessors]);
+
+    expectTypeOf<OrderDefs>().toExtend<ProcessorDefinitions<typeof merged>>();
+    expectTypeOf<NotificationDefs>().toExtend<ProcessorDefinitions<typeof merged>>();
+  });
+
+  it("merged result sets symbols at runtime", () => {
+    const merged = mergeProcessors([orderProcessors, notificationProcessors]);
+
+    expect(processorsDefinitionsSymbol in merged).toBe(true);
+  });
+
+  it("throws DuplicateJobTypeError for duplicate keys at runtime", () => {
+    const altOrderProcessors = createProcessors({
+      client,
+      jobTypes: orderJobTypes,
+      processors: {
+        "orders.create": {
+          attemptHandler: async ({ complete }) =>
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { orderId: "alt" } }),
+            ),
+        },
+      },
+    });
+
+    expect(() => {
+      // @ts-expect-error — also detected at compile time
+      mergeProcessors([orderProcessors, altOrderProcessors]);
+    }).toThrow(DuplicateJobTypeError);
+  });
+
+  it("merges registries where one has a single processor key", () => {
+    const singleKeyProcessors = createProcessors({
+      client,
+      jobTypes: orderJobTypes,
+      processors: {
+        "orders.create": {
+          attemptHandler: async ({ complete }) =>
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { orderId: "1" } }),
+            ),
+        },
+      },
+    });
+
+    const merged = mergeProcessors([singleKeyProcessors, notificationProcessors]);
+
+    expect(merged).toHaveProperty("orders.create");
+    expect(merged).not.toHaveProperty("orders.fulfill");
+    expect(merged).toHaveProperty("notifications.send");
+  });
+
+  it("includes duplicate keys in the error", () => {
+    expect.assertions(2);
+
+    const altOrderProcessors = createProcessors({
+      client,
+      jobTypes: orderJobTypes,
+      processors: {
+        "orders.create": {
+          attemptHandler: async ({ complete }) =>
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { orderId: "alt" } }),
+            ),
+        },
+      },
+    });
+
+    try {
+      // @ts-expect-error — also detected at compile time
+      mergeProcessors([orderProcessors, altOrderProcessors]);
+    } catch (error) {
+      expect(error).toBeInstanceOf(DuplicateJobTypeError);
+      expect((error as DuplicateJobTypeError).duplicateTypeNames).toEqual(["orders.create"]);
+    }
+  });
+});
+
+describe("cross-slice blocker type resolution", () => {
+  it("resolves blocker output type from external slice (tuple blockers)", async () => {
+    const notifJobTypes = defineJobTypes<{
+      "notif.send": {
+        entry: true;
+        input: { userId: string; message: string };
+        output: { sentAt: string };
+      };
+    }>();
+
+    const orderJobTypes = defineJobTypes<
+      {
+        "orders.place": {
+          entry: true;
+          input: { userId: string };
+          continueWith: { typeName: "orders.confirm" };
+        };
+        "orders.confirm": {
+          input: { orderId: number };
+          output: { confirmedAt: string };
+          blockers: [{ typeName: "notif.send" }];
+        };
+      },
+      JobTypeDefinitions<typeof notifJobTypes>
+    >();
+
+    const mergedJobTypes = mergeJobTypes([notifJobTypes, orderJobTypes]);
+    const stateAdapter = createInProcessStateAdapter();
+    const client = createClient({ stateAdapter, jobTypes: mergedJobTypes });
+
+    const notifProcessors = createProcessors({
+      client,
+      jobTypes: notifJobTypes,
+      processors: {
+        "notif.send": {
+          attemptHandler: async ({ complete }) =>
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { sentAt: "now" } }),
+            ),
+        },
+      },
+    });
+
+    const orderProcessors = createProcessors({
+      client,
+      jobTypes: orderJobTypes,
+      processors: {
+        "orders.place": {
+          attemptHandler: async ({ complete }) =>
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({
+                ...txCtx,
+                continueWith: {
+                  typeName: "orders.confirm",
+                  input: { orderId: 1 },
+                  blockers: [] as never,
+                },
+              }),
+            ),
+        },
+        "orders.confirm": {
+          attemptHandler: async ({ job, complete }) => {
+            expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ sentAt: string }>();
+            return stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { confirmedAt: "now" } }),
+            );
+          },
+        },
+      },
+    });
+
+    const mergedProcessors = mergeProcessors([notifProcessors, orderProcessors]);
+    expect(mergedProcessors).toHaveProperty("notif.send");
+    expect(mergedProcessors).toHaveProperty("orders.place");
+    expect(mergedProcessors).toHaveProperty("orders.confirm");
+  });
+
+  it("resolves blocker output type from external slice (array blockers)", async () => {
+    const notifJobTypes = defineJobTypes<{
+      "notif.send": {
+        entry: true;
+        input: { userId: string; message: string };
+        output: { sentAt: string };
+      };
+    }>();
+
+    const orderJobTypes = defineJobTypes<
+      {
+        "orders.place": {
+          entry: true;
+          input: { userId: string };
+          continueWith: { typeName: "orders.confirm" };
+        };
+        "orders.confirm": {
+          input: { orderId: number };
+          output: { confirmedAt: string };
+          blockers: { typeName: "notif.send" }[];
+        };
+      },
+      JobTypeDefinitions<typeof notifJobTypes>
+    >();
+
+    const mergedJobTypes = mergeJobTypes([notifJobTypes, orderJobTypes]);
+    const stateAdapter = createInProcessStateAdapter();
+    const client = createClient({ stateAdapter, jobTypes: mergedJobTypes });
+
+    createProcessors({
+      client,
+      jobTypes: orderJobTypes,
+      processors: {
+        "orders.place": {
+          attemptHandler: async ({ complete }) =>
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({
+                ...txCtx,
+                continueWith: {
+                  typeName: "orders.confirm",
+                  input: { orderId: 1 },
+                  blockers: [] as never,
+                },
+              }),
+            ),
+        },
+        "orders.confirm": {
+          attemptHandler: async ({ job, complete }) => {
+            expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ sentAt: string }>();
+            return stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { confirmedAt: "now" } }),
+            );
+          },
+        },
+      },
+    });
+  });
+
+  it("resolves blocker output type from multi-slice external (tuple blockers)", async () => {
+    const extAJobTypes = defineJobTypes<{
+      "ext-a.task": {
+        entry: true;
+        input: { aId: string };
+        output: { aResult: string };
+      };
+    }>();
+
+    const extBJobTypes = defineJobTypes<{
+      "ext-b.task": {
+        entry: true;
+        input: { bId: string };
+        output: { bResult: number };
+      };
+    }>();
+
+    const localJobTypes = defineJobTypes<
+      {
+        "local.start": {
+          entry: true;
+          input: { id: string };
+          continueWith: { typeName: "local.finish" };
+        };
+        "local.finish": {
+          input: { id: string };
+          output: { done: boolean };
+          blockers: [{ typeName: "ext-a.task" }];
+        };
+      },
+      JobTypeDefinitions<typeof extAJobTypes> | JobTypeDefinitions<typeof extBJobTypes>
+    >();
+
+    const mergedJobTypes = mergeJobTypes([extAJobTypes, extBJobTypes, localJobTypes]);
+    const stateAdapter = createInProcessStateAdapter();
+    const client = createClient({ stateAdapter, jobTypes: mergedJobTypes });
+
+    createProcessors({
+      client,
+      jobTypes: localJobTypes,
+      processors: {
+        "local.finish": {
+          attemptHandler: async ({ job, complete }) => {
+            expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ aResult: string }>();
+            return stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { done: true } }),
+            );
+          },
+        },
+      },
+    });
+  });
+
+  it("resolves blocker output type from multi-slice external (array blockers)", async () => {
+    const extAJobTypes = defineJobTypes<{
+      "ext-a.task": {
+        entry: true;
+        input: { aId: string };
+        output: { aResult: string };
+      };
+    }>();
+
+    const extBJobTypes = defineJobTypes<{
+      "ext-b.task": {
+        entry: true;
+        input: { bId: string };
+        output: { bResult: number };
+      };
+    }>();
+
+    const localJobTypes = defineJobTypes<
+      {
+        "local.start": {
+          entry: true;
+          input: { id: string };
+          continueWith: { typeName: "local.finish" };
+        };
+        "local.finish": {
+          input: { id: string };
+          output: { done: boolean };
+          blockers: { typeName: "ext-a.task" }[];
+        };
+      },
+      JobTypeDefinitions<typeof extAJobTypes> | JobTypeDefinitions<typeof extBJobTypes>
+    >();
+
+    const mergedJobTypes = mergeJobTypes([extAJobTypes, extBJobTypes, localJobTypes]);
+    const stateAdapter = createInProcessStateAdapter();
+    const client = createClient({ stateAdapter, jobTypes: mergedJobTypes });
+
+    createProcessors({
+      client,
+      jobTypes: localJobTypes,
+      processors: {
+        "local.finish": {
+          attemptHandler: async ({ job, complete }) => {
+            expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ aResult: string }>();
+            return stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { done: true } }),
+            );
+          },
+        },
+      },
+    });
+  });
+
+  it("resolves blocker output types referencing different external slices", async () => {
+    const extAJobTypes = defineJobTypes<{
+      "ext-a.task": {
+        entry: true;
+        input: { aId: string };
+        output: { aResult: string };
+      };
+    }>();
+
+    const extBJobTypes = defineJobTypes<{
+      "ext-b.task": {
+        entry: true;
+        input: { bId: string };
+        output: { bResult: number };
+      };
+    }>();
+
+    const localJobTypes = defineJobTypes<
+      {
+        "local.start-a": {
+          entry: true;
+          input: { id: string };
+          continueWith: { typeName: "local.finish-a" };
+        };
+        "local.finish-a": {
+          input: { id: string };
+          output: { resultA: string };
+          blockers: [{ typeName: "ext-a.task" }];
+        };
+        "local.start-b": {
+          entry: true;
+          input: { id: string };
+          continueWith: { typeName: "local.finish-b" };
+        };
+        "local.finish-b": {
+          input: { id: string };
+          output: { resultB: string };
+          blockers: [{ typeName: "ext-b.task" }];
+        };
+      },
+      JobTypeDefinitions<typeof extAJobTypes> | JobTypeDefinitions<typeof extBJobTypes>
+    >();
+
+    const mergedJobTypes = mergeJobTypes([extAJobTypes, extBJobTypes, localJobTypes]);
+    const stateAdapter = createInProcessStateAdapter();
+    const client = createClient({ stateAdapter, jobTypes: mergedJobTypes });
+
+    createProcessors({
+      client,
+      jobTypes: localJobTypes,
+      processors: {
+        "local.finish-a": {
+          attemptHandler: async ({ job, complete }) => {
+            expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ aResult: string }>();
+            return stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { resultA: "pass" } }),
+            );
+          },
+        },
+        "local.finish-b": {
+          attemptHandler: async ({ job, complete }) => {
+            expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ bResult: number }>();
+            return stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { resultB: "pass" } }),
+            );
+          },
+        },
+      },
+    });
+  });
+});
+
+describe("cross-slice blocker type resolution in workerless completion", () => {
+  it("resolves blocker types with multiple external slices", async () => {
+    const extAJobTypes = defineJobTypes<{
+      "ext-a.task": {
+        entry: true;
+        input: { aId: string };
+        output: { aResult: string };
+      };
+    }>();
+
+    const extBJobTypes = defineJobTypes<{
+      "ext-b.task": {
+        entry: true;
+        input: { bId: string };
+        output: { bResult: number };
+      };
+    }>();
+
+    const localJobTypes = defineJobTypes<
+      {
+        "local.start": {
+          entry: true;
+          input: { id: string };
+          continueWith: { typeName: "local.finish" };
+        };
+        "local.finish": {
+          input: { id: string };
+          output: { done: boolean };
+          blockers: [{ typeName: "ext-a.task" }];
+        };
+      },
+      JobTypeDefinitions<typeof extAJobTypes> | JobTypeDefinitions<typeof extBJobTypes>
+    >();
+
+    const mergedJobTypes = mergeJobTypes([extAJobTypes, extBJobTypes, localJobTypes]);
+    const stateAdapter = createInProcessStateAdapter();
+    const client = createClient({ stateAdapter, jobTypes: mergedJobTypes });
+
+    const blockerChain = await stateAdapter.withTransaction(async (txCtx) =>
+      client.createChain({
+        ...txCtx,
+        typeName: "ext-a.task",
+        input: { aId: "a-1" },
+      }),
+    );
+
+    const chain = await stateAdapter.withTransaction(async (txCtx) =>
+      client.createChain({
+        ...txCtx,
+        typeName: "local.start",
+        input: { id: "1" },
+      }),
+    );
+
+    await stateAdapter.withTransaction(async (txCtx) =>
+      client.completeChain({
+        ...txCtx,
+        ...chain,
+        handler: async ({ job, completeJob }) => {
+          if (job.typeName === "local.start") {
+            return completeJob(job, async ({ complete }) =>
+              complete({
+                continueWith: {
+                  typeName: "local.finish",
+                  input: { id: "1" },
+                  blockers: [blockerChain],
+                },
+              }),
+            );
+          }
+        },
+      }),
+    );
+  });
+});
+
+describe("2-level merge (merge of merges)", () => {
+  it("preserves processor registries through nested merges", async () => {
+    const billingProcessors = createProcessors({
+      client,
+      jobTypes: billingJobTypes,
+      processors: {
+        "billing.charge": {
+          attemptHandler: async ({ complete }) =>
+            stateAdapter.withTransaction(async (txCtx) =>
+              complete({ ...txCtx, output: { charged: true } }),
+            ),
+        },
+      },
+    });
+
+    const firstMerge = mergeProcessors([orderProcessors, notificationProcessors]);
+    const secondMerge = mergeProcessors([firstMerge, billingProcessors]);
+
+    expect(secondMerge).toHaveProperty("orders.create");
+    expect(secondMerge).toHaveProperty("orders.fulfill");
+    expect(secondMerge).toHaveProperty("notifications.send");
+    expect(secondMerge).toHaveProperty("billing.charge");
+
+    expectTypeOf<OrderDefs>().toExtend<ProcessorDefinitions<typeof secondMerge>>();
+    expectTypeOf<NotificationDefs>().toExtend<ProcessorDefinitions<typeof secondMerge>>();
+    expectTypeOf<
+      JobTypeProperty<ProcessorDefinitions<typeof secondMerge>, "billing.charge", "input">
+    >().toEqualTypeOf<{ amount: number }>();
+  });
+});
+
+describe("createWorkerRunner with partial processor registries", () => {
+  it("accepts a processor jobTypes covering a single slice of the client's job types", async () => {
+    await using workerRunner = createWorkerRunner({
+      client,
+      processors: orderProcessors,
+    });
+    await workerRunner.start();
+  });
+
+  it("accepts a processor jobTypes covering a different single slice", async () => {
+    await using workerRunner = createWorkerRunner({
+      client,
+      processors: notificationProcessors,
+    });
+    await workerRunner.start();
+  });
+
+  it("rejects a plain object that is not a processor jobTypes", () => {
+    void createWorkerRunner({
+      client,
+      // @ts-expect-error — plain object is not a Processors
+      processors: { "orders.create": { attemptHandler: async () => {} } },
+    });
+  });
+
+  it("rejects a processor jobTypes with job types unknown to the client", async () => {
+    const unrelatedJobTypes = defineJobTypes<{
+      "unrelated.task": { entry: true; input: { x: number }; output: { y: number } };
+    }>();
+    const unrelatedClient = createClient({
+      stateAdapter: createInProcessStateAdapter(),
+      jobTypes: unrelatedJobTypes,
+    });
+    const unrelatedProcessors = createProcessors({
+      client: unrelatedClient,
+      jobTypes: unrelatedJobTypes,
+      processors: {
+        "unrelated.task": {
+          attemptHandler: async ({ complete }) =>
+            stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: { y: 1 } })),
+        },
+      },
+    });
+
+    void createWorkerRunner({
+      client,
+      // @ts-expect-error — processor jobTypes contains job types not known to the client
+      processors: unrelatedProcessors,
+    });
+  });
+
+  it("rejects overlapping slices in the processors array", async () => {
+    expect(() => {
+      createWorkerRunner({
+        client,
+        // @ts-expect-error — "orders.create" and "orders.fulfill" are in both slices
+        processors: [orderProcessors, orderProcessors],
+      });
+    }).toThrow(DuplicateJobTypeError);
+  });
+
+  it("leaves overlap checks of variable-length arrays to runtime", async () => {
+    const slices: Processors[] = [orderProcessors, notificationProcessors];
+    const includeNotifications = slices.length > 1;
+
+    createWorkerRunner({ client, processors: slices });
+    createWorkerRunner({
+      client,
+      processors: [orderProcessors, ...(includeNotifications ? [notificationProcessors] : [])],
+    });
+    expect(() => {
+      createWorkerRunner({ client, processors: [...slices, orderProcessors] });
+    }).toThrow(DuplicateJobTypeError);
+  });
+
+  it("still accepts a fully merged processor jobTypes", async () => {
+    const merged = mergeProcessors([orderProcessors, notificationProcessors]);
+    await using workerRunner = createWorkerRunner({
+      client,
+      processors: merged,
+    });
+    await workerRunner.start();
+  });
+});

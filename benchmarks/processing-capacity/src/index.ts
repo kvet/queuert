@@ -25,9 +25,9 @@ const benchmarkModules: Record<
     service?: ServiceKind;
   }
 > = {
-  "state-in-process": {
-    modulePath: "state-in-process.ts",
-    label: "In-process",
+  "state-in-process-sync": {
+    modulePath: "state-in-process-sync.ts",
+    label: "In-process (sync)",
     axis: "state",
   },
   "state-sqlite-better-sqlite3": {
@@ -76,9 +76,9 @@ const benchmarkModules: Record<
     axis: "state",
     service: "redis",
   },
-  "notify-in-process": {
-    modulePath: "notify-in-process.ts",
-    label: "In-process",
+  "notify-in-process-sync": {
+    modulePath: "notify-in-process-sync.ts",
+    label: "In-process (sync)",
     axis: "notify",
   },
   "notify-redis-redis": {
@@ -110,6 +110,11 @@ const benchmarkModules: Record<
     label: "NATS",
     axis: "notify",
     service: "nats",
+  },
+  "notify-ipc": {
+    modulePath: "notify-ipc.ts",
+    label: "IPC",
+    axis: "notify",
   },
 };
 
@@ -155,7 +160,7 @@ const readResults = async (resultFile: string): Promise<ScenarioResult[]> => {
 
 const formatResult = (result: ScenarioResult | undefined): string => {
   if (!result) return "-";
-  return `${result.drained ? ">" : "~"}${formatRate(result.count, result.durationMs)}`;
+  return `~${formatRate(result.count, result.durationMs)}`;
 };
 
 const formatMarkdownTable = (header: string[], rows: string[][]): string => {

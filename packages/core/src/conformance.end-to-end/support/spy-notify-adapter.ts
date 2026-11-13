@@ -1,34 +1,33 @@
-import type { NotifyAdapter } from "../../notify-adapter/notify-adapter.ts";
+import { andThen, type MaybePromise } from "@queuert/helpers/maybe-promise";
+
+import type { ConformanceNotifyAdapter } from "../../conformance/adapters.ts";
 
 export type NotifySpyCall = {
   name: "notifyJobsScheduled" | "notifyChainsCompleted" | "notifyJobAttemptsLost";
   args: string[];
 };
 
-export type SpyNotifyAdapter = NotifyAdapter & {
+export type SpyNotifyAdapter<TNotifyAdapter extends ConformanceNotifyAdapter> = TNotifyAdapter & {
   calls: NotifySpyCall[];
 };
 
-export const createSpyNotifyAdapter = (notifyAdapter: NotifyAdapter): SpyNotifyAdapter => {
+export const createSpyNotifyAdapter = <TNotifyAdapter extends ConformanceNotifyAdapter>(
+  notifyAdapter: TNotifyAdapter,
+): SpyNotifyAdapter<TNotifyAdapter> => {
   const calls: NotifySpyCall[] = [];
 
   const wrap =
     (name: NotifySpyCall["name"]) =>
-    async (args: string[]): Promise<void> => {
+    (args: string[]): MaybePromise<void> => {
       calls.push({ name, args });
-      await notifyAdapter[name](args);
+      return andThen(notifyAdapter[name](args), () => undefined);
     };
 
   return {
+    ...notifyAdapter,
     calls,
-
     notifyJobsScheduled: wrap("notifyJobsScheduled"),
-    listenJobScheduled: notifyAdapter.listenJobScheduled,
     notifyChainsCompleted: wrap("notifyChainsCompleted"),
-    listenChainCompleted: notifyAdapter.listenChainCompleted,
     notifyJobAttemptsLost: wrap("notifyJobAttemptsLost"),
-    listenJobAttemptLost: notifyAdapter.listenJobAttemptLost,
-    close: notifyAdapter.close,
-    [Symbol.asyncDispose]: notifyAdapter.close,
-  };
+  } as unknown as SpyNotifyAdapter<TNotifyAdapter>;
 };

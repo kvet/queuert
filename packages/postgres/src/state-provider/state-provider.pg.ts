@@ -1,4 +1,4 @@
-import type { RuntimeType } from "@queuert/typed-sql";
+import type { RuntimeType } from "@queuert/typed-sql/sql";
 import type { BaseTxContext } from "queuert";
 
 /**
@@ -40,8 +40,8 @@ export type PgStateProvider<TTxContext extends BaseTxContext> = {
 
   /**
    * Runs `callback` after `txCtx`'s transaction commits, before the call that opened it settles.
-   * A provider whose driver has no transaction events carries `TxHooks` in its transaction context, creates them
-   * in `withTransaction`, and registers `callback` on them.
+   * A provider whose driver has no transaction events carries `TxHooks` in its transaction
+   * context, creates them in `withTransaction`, and registers `callback` on them.
    */
   onTransactionCommit: (txCtx: TTxContext, callback: () => void | Promise<void>) => void;
 

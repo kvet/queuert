@@ -6,8 +6,12 @@ import { createPgNotifyAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { createPostgresJsNotifyProvider } from "example-notify-postgres-postgres-js/provider";
 import postgres from "postgres";
-import { createClient, createWorkerRunner, createProcessors } from "queuert";
-import { createInProcessStateAdapter } from "queuert/internal";
+import {
+  createClient,
+  createWorkerRunner,
+  createProcessors,
+  createInProcessStateAdapter,
+} from "queuert";
 
 import {
   createCompletionCounter,

@@ -22,18 +22,26 @@ import {
   extendWorkerLeaseConcurrentTransactionsGroup,
 } from "./cases/extend-worker-lease.ts";
 import { getChainTypeNamesGroup } from "./cases/get-chain-type-names.ts";
-import { getChainsGroup, getChainsConcurrentTransactionsGroup } from "./cases/get-chains.ts";
+import {
+  getChainsGroup,
+  getChainsHeldTransactionGroup,
+  getChainsConcurrentTransactionsGroup,
+} from "./cases/get-chains.ts";
 import {
   getJobBlockersGroup,
   getJobBlockersConcurrentTransactionsGroup,
 } from "./cases/get-job-blockers.ts";
 import { getJobTypeNamesGroup } from "./cases/get-job-type-names.ts";
-import { getJobsGroup, getJobsConcurrentTransactionsGroup } from "./cases/get-jobs.ts";
+import {
+  getJobsGroup,
+  getJobsHeldTransactionGroup,
+  getJobsConcurrentTransactionsGroup,
+} from "./cases/get-jobs.ts";
 import {
   getStartAttemptDelayMsGroup,
   getStartAttemptDelayMsConcurrentTransactionsGroup,
 } from "./cases/get-start-attempt-delay-ms.ts";
-import { getWorkersGroup } from "./cases/get-workers.ts";
+import { getWorkersGroup, getWorkersHeldTransactionGroup } from "./cases/get-workers.ts";
 import { isTransactionGroup } from "./cases/is-transaction.ts";
 import {
   listBlockedJobsGroup,
@@ -51,14 +59,20 @@ import { rescheduleJobsGroup } from "./cases/reschedule-jobs.ts";
 import { schemaFenceConcurrentTransactionsGroup, schemaFenceGroup } from "./cases/schema-fence.ts";
 import {
   startJobAttemptGroup,
+  startJobAttemptHeldTransactionGroup,
   startJobAttemptConcurrentTransactionsGroup,
 } from "./cases/start-job-attempt.ts";
 import { startWorkerGroup } from "./cases/start-worker.ts";
 import { stopWorkerGroup } from "./cases/stop-worker.ts";
-import { txCallbacksGroup, txCallbacksSavepointGroup } from "./cases/tx-callbacks.ts";
+import {
+  txCallbacksAsyncCallbackGroup,
+  txCallbacksGroup,
+  txCallbacksSavepointGroup,
+} from "./cases/tx-callbacks.ts";
 import { unblockJobsGroup, unblockJobsConcurrentTransactionsGroup } from "./cases/unblock-jobs.ts";
 import {
   withTransactionGroup,
+  withTransactionHeldTransactionGroup,
   withTransactionConcurrentTransactionsGroup,
 } from "./cases/with-transaction.ts";
 import type {
@@ -67,41 +81,64 @@ import type {
   StateAdapterConformanceContext,
 } from "./types.ts";
 
-export const stateAdapterBaseGroups: ConformanceGroup<StateAdapterConformanceContext>[] = [
-  withTransactionGroup,
-  isTransactionGroup,
-  txCallbacksGroup,
-  getChainsGroup,
-  getJobsGroup,
-  getWorkersGroup,
-  createJobsGroup,
-  continueJobsGroup,
-  addJobsBlockersGroup,
-  getJobBlockersGroup,
-  unblockJobsGroup,
-  startWorkerGroup,
-  extendWorkerLeaseGroup,
-  stopWorkerGroup,
-  startJobAttemptGroup,
-  completeJobsGroup,
-  getStartAttemptDelayMsGroup,
-  rescheduleJobsGroup,
-  deleteChainsGroup,
-  getJobTypeNamesGroup,
-  getChainTypeNamesGroup,
-  countJobsByTypeNameGroup,
-  countChainsByTypeNameGroup,
-  countWorkersGroup,
-  countWorkersByTypeNameGroup,
-  countRunningJobsByWorkerIdGroup,
-  listChainsGroup,
-  listJobsGroup,
-  listChainJobsGroup,
-  listBlockedJobsGroup,
-  listWorkersGroup,
-  listWorkerJobsGroup,
-  closeGroup,
-];
+const asyncOnly = <TContext>(group: ConformanceGroup<TContext>): ConformanceGroup<TContext> => ({
+  ...group,
+  cases: group.cases.map((testCase) => ({ ...testCase, mode: "async" })),
+});
+
+const withAsyncOnlyGroups = (
+  groups: ConformanceGroup<StateAdapterConformanceContext>[],
+): ConformanceGroup<StateAdapterConformanceContext>[] => {
+  const asyncOnlyGroups = [
+    withTransactionHeldTransactionGroup,
+    txCallbacksAsyncCallbackGroup,
+    getChainsHeldTransactionGroup,
+    getJobsHeldTransactionGroup,
+    getWorkersHeldTransactionGroup,
+    startJobAttemptHeldTransactionGroup,
+  ].map(asyncOnly);
+  return groups.flatMap((group) => [
+    group,
+    ...asyncOnlyGroups.filter((asyncOnly) => asyncOnly.name === group.name),
+  ]);
+};
+
+export const stateAdapterBaseGroups: ConformanceGroup<StateAdapterConformanceContext>[] =
+  withAsyncOnlyGroups([
+    withTransactionGroup,
+    isTransactionGroup,
+    txCallbacksGroup,
+    getChainsGroup,
+    getJobsGroup,
+    getWorkersGroup,
+    createJobsGroup,
+    continueJobsGroup,
+    addJobsBlockersGroup,
+    getJobBlockersGroup,
+    unblockJobsGroup,
+    startWorkerGroup,
+    extendWorkerLeaseGroup,
+    stopWorkerGroup,
+    startJobAttemptGroup,
+    completeJobsGroup,
+    getStartAttemptDelayMsGroup,
+    rescheduleJobsGroup,
+    deleteChainsGroup,
+    getJobTypeNamesGroup,
+    getChainTypeNamesGroup,
+    countJobsByTypeNameGroup,
+    countChainsByTypeNameGroup,
+    countWorkersGroup,
+    countWorkersByTypeNameGroup,
+    countRunningJobsByWorkerIdGroup,
+    listChainsGroup,
+    listJobsGroup,
+    listChainJobsGroup,
+    listBlockedJobsGroup,
+    listWorkersGroup,
+    listWorkerJobsGroup,
+    closeGroup,
+  ]);
 
 export const stateAdapterConcurrentTransactionGroups: ConformanceGroup<StateAdapterConformanceContext>[] =
   [

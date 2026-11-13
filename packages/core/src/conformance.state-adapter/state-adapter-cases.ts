@@ -39,7 +39,16 @@ import type { StateAdapterConformanceContext } from "./types.ts";
  * ```
  */
 export const stateAdapterConformanceCases: ConformanceTestCase<StateAdapterConformanceContext>[] =
-  toConformanceTestCases(stateAdapterBaseGroups);
+  toConformanceTestCases(stateAdapterBaseGroups, "async");
+
+/**
+ * The state adapter conformance cases for a {@link SyncStateAdapter}: the cases of
+ * {@link stateAdapterConformanceCases}, without those that hold a transaction open across an
+ * `await`. The context creates sync adapters, whose calls must return plain values and throw
+ * rather than reject.
+ */
+export const syncStateAdapterConformanceCases: ConformanceTestCase<StateAdapterConformanceContext>[] =
+  toConformanceTestCases(stateAdapterBaseGroups, "sync");
 
 /**
  * The state adapter conformance cases that hold two transactions open at once: blocker races,
@@ -51,7 +60,14 @@ export const concurrentStateAdapterConformanceCases: ConformanceTestCase<StateAd
 
 /** End-to-end cases that build a client and worker runners over the adapter under test. */
 export const stateAdapterEndToEndConformanceCases: ConformanceTestCase<StateAdapterConformanceContext>[] =
-  toConformanceTestCases([...endToEndBaseGroups, ...endToEndNotifyGroups]);
+  toConformanceTestCases([...endToEndBaseGroups, ...endToEndNotifyGroups], "async");
+
+/**
+ * End-to-end cases that build a client and worker runners over a {@link SyncStateAdapter}; the
+ * cases that hold a transaction open across an `await` are left out.
+ */
+export const syncStateAdapterEndToEndConformanceCases: ConformanceTestCase<StateAdapterConformanceContext>[] =
+  toConformanceTestCases([...endToEndBaseGroups, ...endToEndNotifyGroups], "sync");
 
 /** End-to-end cases that need transactions running in parallel, for adapters that support it. */
 export const concurrentStateAdapterEndToEndConformanceCases: ConformanceTestCase<StateAdapterConformanceContext>[] =

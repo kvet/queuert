@@ -17,9 +17,9 @@ import {
 } from "../conformance.state-adapter/state-adapter-cases.ts";
 import type { StateAdapterConformanceContext } from "../conformance.state-adapter/types.ts";
 import { validationAdapterConformanceCases } from "../conformance.validation-adapter/validation-adapter-cases.ts";
-import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.ts";
+import { createInProcessNotifyAdapter } from "../notify-adapter.in-process/notify-adapter.in-process.ts";
 import type { NotifyAdapter } from "../notify-adapter/notify-adapter.ts";
-import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.ts";
+import { createInProcessStateAdapter } from "../state-adapter.in-process/state-adapter.in-process.ts";
 import type { StateAdapter } from "../state-adapter/state-adapter.ts";
 import {
   endToEndBaseGroups,

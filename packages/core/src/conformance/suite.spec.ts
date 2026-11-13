@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 
+import { syncNotifyAdapterConformanceCases } from "../conformance.notify-adapter/notify-adapter-cases.ts";
+import {
+  stateAdapterConformanceCases,
+  syncStateAdapterConformanceCases,
+  syncStateAdapterEndToEndConformanceCases,
+} from "../conformance.state-adapter/state-adapter-cases.ts";
+import { createSyncInProcessNotifyAdapter } from "../notify-adapter.in-process/notify-adapter.in-process.ts";
+import { createSyncInProcessStateAdapter } from "../state-adapter.in-process/state-adapter.in-process.ts";
 import type { ConformanceGroup } from "./runner.ts";
-import { toConformanceTestCases } from "./suite.ts";
+import { type ConformanceTestCase, toConformanceTestCases } from "./suite.ts";
 
 type Ctx = { log: string[] };
 
@@ -81,5 +89,75 @@ describe("toConformanceTestCases", () => {
     ]);
 
     await expect(conformanceCase.run({ log: [] })).rejects.toThrow("boom");
+  });
+});
+
+const withPromiseFrom = <TAdapter extends object>(
+  adapter: TAdapter,
+  method: keyof TAdapter & string,
+): TAdapter => {
+  const call = (adapter[method] as (...args: unknown[]) => unknown).bind(adapter);
+  return { ...adapter, [method]: async (...args: unknown[]) => call(...args) };
+};
+
+const failuresOf = async <TContext>(
+  cases: ConformanceTestCase<TContext>[],
+  group: string,
+  context: TContext,
+): Promise<string[]> => {
+  const failures: string[] = [];
+  for (const conformanceCase of cases.filter((testCase) => testCase.group === group)) {
+    try {
+      await conformanceCase.run(context);
+    } catch (error) {
+      failures.push((error as Error).message);
+    }
+  }
+  return failures;
+};
+
+describe("conformance cases check the adapter's mode", () => {
+  it("fail a sync state adapter that returns a promise", async () => {
+    const failures = await failuresOf(syncStateAdapterConformanceCases, "getJobs", {
+      createStateAdapter: () => withPromiseFrom(createSyncInProcessStateAdapter(), "getJobs"),
+      withNonTransactionContext: (fn) => fn({ outsideTransaction: true }),
+    });
+
+    expect(failures).toContain("A synchronous step got a promise: the value must be synchronous");
+  });
+
+  it("fail an async state adapter that returns plain values", async () => {
+    const failures = await failuresOf(stateAdapterConformanceCases, "getJobs", {
+      createStateAdapter: () => ({ ...createSyncInProcessStateAdapter(), sync: undefined }),
+      withNonTransactionContext: async (fn) => fn({ outsideTransaction: true }),
+    });
+
+    expect(failures).toContain(
+      "An asynchronous step got a plain value: the value must be a promise",
+    );
+  });
+
+  it("fail a sync notify adapter that returns a promise", async () => {
+    const failures = await failuresOf(
+      syncNotifyAdapterConformanceCases,
+      "notifyJobsScheduled / listenJobScheduled",
+      {
+        createNotifyAdapter: () =>
+          withPromiseFrom(createSyncInProcessNotifyAdapter(), "notifyJobsScheduled"),
+      },
+    );
+
+    expect(failures).toContain("A synchronous step got a promise: the value must be synchronous");
+  });
+
+  it("fail a sync state adapter that returns a promise end to end", async () => {
+    const failures = await failuresOf(syncStateAdapterEndToEndConformanceCases, "client-queries", {
+      createStateAdapter: () => withPromiseFrom(createSyncInProcessStateAdapter(), "getChains"),
+      withNonTransactionContext: (fn) => fn({ outsideTransaction: true }),
+    });
+
+    expect(failures).toContain(
+      "A synchronous state adapter returned a promise: every method of an adapter with `sync: true` must return its result directly",
+    );
   });
 });

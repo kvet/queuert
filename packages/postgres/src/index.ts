@@ -11,5 +11,5 @@ export {
   type MigrationResult,
   type MigrationScript,
   type Migrator,
-  type RuntimeType,
-} from "@queuert/typed-sql";
+} from "@queuert/typed-sql/migrator";
+export { type RuntimeType } from "@queuert/typed-sql/sql";

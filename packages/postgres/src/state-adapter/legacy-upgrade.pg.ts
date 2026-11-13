@@ -1,12 +1,7 @@
-import {
-  type MigrationScript,
-  type MigrationStore,
-  type TemplateApplier,
-  sql,
-  t,
-  createTemplateExecutor,
-  createTypedSqlExecutor,
-} from "@queuert/typed-sql";
+import type { MigrationScript, MigrationStore } from "@queuert/typed-sql/migrator";
+import { sql, t } from "@queuert/typed-sql/sql";
+import { createTemplateExecutor, createTypedSqlExecutor } from "@queuert/typed-sql/sql-executor";
+import type { TemplateApplier } from "@queuert/typed-sql/template-applier";
 import type { BaseTxContext } from "queuert";
 
 import type { PgStateProvider } from "../state-provider/state-provider.pg.ts";

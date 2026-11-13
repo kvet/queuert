@@ -29,8 +29,5 @@ describe("PostgreSQL State Adapter Variance - Custom Schema", () => {
     expect(tableNames).toContain("queuert_migration");
   });
 
-  conformanceTestSuite({
-    it,
-    groups: pgStateAdapterConformanceGroups,
-  });
+  conformanceTestSuite({ mode: "async", it, groups: pgStateAdapterConformanceGroups });
 });

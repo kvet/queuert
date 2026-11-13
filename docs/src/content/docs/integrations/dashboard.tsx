@@ -42,10 +42,11 @@ const Page = () => (
       </ol>
     </Steps>
     <p>
-      <code>createDashboard</code> accepts a Queuert <code>client</code> (created via{" "}
-      <code>createClient</code>) and returns <code>{"{ fetch }"}</code> — a standard web{" "}
-      <code>fetch</code> handler. Pass it to any server runtime (Node.js, Bun, Deno, etc.). The
-      handler serves both the dashboard API and the pre-built frontend.
+      <code>createDashboard</code> accepts a Queuert <code>client</code>, created with{" "}
+      <code>createClient</code> over a state adapter of either mode, and returns{" "}
+      <code>{"{ fetch }"}</code> — a standard web <code>fetch</code> handler. Pass it to any server
+      runtime (Node.js, Bun, Deno, etc.). The handler serves both the dashboard API and the
+      pre-built frontend.
     </p>
 
     <h2>Configuration</h2>
@@ -57,11 +58,7 @@ const Page = () => (
           name: "client",
           chips: [{ label: "required", tone: "strong" }],
           meta: <code>Client</code>,
-          description: (
-            <>
-              The Queuert client created with <code>createClient</code>.
-            </>
-          ),
+          description: <>The Queuert client the dashboard reads from, async or synchronous.</>,
         },
         {
           name: "basePath",

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 
+import { caseBody, resource } from "@queuert/helpers/case-body";
 import { sleep } from "@queuert/helpers/sleep";
+import { step } from "@queuert/helpers/steps";
 
 import type { ConformanceGroup } from "../../conformance/runner.ts";
 import type { StateAdapterConformanceContext } from "../types.ts";
@@ -12,30 +14,38 @@ export const getJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   cases: [
     {
       name: "returns undefined for nonexistent job ID",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
         // Create a real job to get a valid ID format, then look up a derived nonexistent one
-        const [realChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "lookup-test", input: null },
-            ],
-          }),
+        const [realChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "lookup-test", input: null },
+              ],
+            }),
+          ),
         );
         const nonexistentId =
           realChain.head.id.slice(0, -1) + (realChain.head.id.endsWith("0") ? "1" : "0");
-        const result = await stateAdapter.getJobs({ jobIds: [nonexistentId] });
+        const result = yield* step(stateAdapter.getJobs({ jobIds: [nonexistentId] }));
         assert.deepEqual(result, [undefined]);
-      },
+      }),
     },
+  ],
+};
+
+export const getJobsHeldTransactionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
+  name: "getJobs",
+  cases: [
     {
       name: "lock: exclusive blocks a concurrent locked read until the holding tx commits",
       run: async ({ createStateAdapter }) => {
         await using stateAdapter = await createStateAdapter();
 
-        const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [seedChain] = await stateAdapter.withTransaction((txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -68,14 +78,14 @@ export const getJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         // Tx B: also try to lock the same row. Should not resolve while A holds.
         let waiterResolved = false;
-        const waiterTx = stateAdapter
-          .withTransaction(async (txCtx) =>
+        const waiterTx = Promise.resolve(
+          stateAdapter.withTransaction((txCtx) =>
             stateAdapter.getJobs({ txCtx, jobIds: [seedChain.head.id], lock: "exclusive" }),
-          )
-          .then((job) => {
-            waiterResolved = true;
-            return job;
-          });
+          ),
+        ).then((job) => {
+          waiterResolved = true;
+          return job;
+        });
 
         await sleep(LOCK_BLOCK_OBSERVATION_MS);
         assert.equal(waiterResolved, false);
@@ -101,7 +111,7 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
         run: async ({ createStateAdapter }) => {
           await using stateAdapter = await createStateAdapter();
 
-          const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          const [headChain] = await stateAdapter.withTransaction((txCtx) =>
             stateAdapter.createJobs({
               txCtx,
               jobs: [
@@ -113,7 +123,7 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
               ],
             }),
           );
-          const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
+          const [continued] = await stateAdapter.withTransaction((txCtx) =>
             stateAdapter.continueJobs({
               txCtx,
               jobs: [
@@ -146,14 +156,14 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
           await lockHeld;
 
           let waiterResolved = false;
-          const waiterTx = stateAdapter
-            .withTransaction(async (txCtx) =>
+          const waiterTx = Promise.resolve(
+            stateAdapter.withTransaction((txCtx) =>
               stateAdapter.getChains({ txCtx, chainIds: [headChain.head.id], lock: "exclusive" }),
-            )
-            .then((chains) => {
-              waiterResolved = true;
-              return chains;
-            });
+            ),
+          ).then((chains) => {
+            waiterResolved = true;
+            return chains;
+          });
 
           await sleep(LOCK_BLOCK_OBSERVATION_MS);
           assert.equal(waiterResolved, false);
@@ -172,7 +182,7 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
           await using stateAdapter = await createStateAdapter();
 
           const count = 10;
-          const created = await stateAdapter.withTransaction(async (txCtx) =>
+          const created = await stateAdapter.withTransaction((txCtx) =>
             stateAdapter.createJobs({
               txCtx,
               jobs: Array.from({ length: count }, (_, i) => ({
@@ -244,7 +254,7 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
             concurrency: 1,
             leaseMs: 60_000,
           });
-          const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          const [seedChain] = await stateAdapter.withTransaction((txCtx) =>
             stateAdapter.createJobs({
               txCtx,
               jobs: [
@@ -294,7 +304,7 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
         run: async ({ createStateAdapter }) => {
           await using stateAdapter = await createStateAdapter();
 
-          const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          const [seedChain] = await stateAdapter.withTransaction((txCtx) =>
             stateAdapter.createJobs({
               txCtx,
               jobs: [
@@ -341,7 +351,7 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
             concurrency: 1,
             leaseMs: 60_000,
           });
-          const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          const [seedChain] = await stateAdapter.withTransaction((txCtx) =>
             stateAdapter.createJobs({
               txCtx,
               jobs: [
@@ -379,7 +389,7 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
             .catch(() => {});
 
           await txReady;
-          const readPromise = stateAdapter.withTransaction(async (readTxCtx) =>
+          const readPromise = stateAdapter.withTransaction((readTxCtx) =>
             stateAdapter.getJobs({
               txCtx: readTxCtx,
               jobIds: [seedChain.head.id],

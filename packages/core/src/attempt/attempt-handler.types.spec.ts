@@ -6,7 +6,10 @@ import type {
   OutputJob,
   RescheduledJob,
 } from "../job-types/job-types.resolvers.ts";
-import type { InProcessStateAdapter } from "../state-adapter/state-adapter.in-process.ts";
+import type {
+  InProcessStateAdapter,
+  SyncInProcessStateAdapter,
+} from "../state-adapter.in-process/state-adapter.in-process.ts";
 import type { GetStateAdapterTxContext, StateAdapter } from "../state-adapter/state-adapter.ts";
 import type { TxHooks } from "../tx-hooks/tx-hooks.ts";
 import type { AttemptComplete, AttemptFence, AttemptHandler } from "./attempt-handler.types.ts";
@@ -351,10 +354,7 @@ describe("AttemptHandler", () => {
     expectTypeOf<Options["job"]["blockers"]>().toEqualTypeOf<[]>();
   });
 
-  it("accepts a handler that returns what complete returned", () => {
-    const handler: Handler = async ({ complete }) =>
-      complete({ ...inProcessTx, continueWith: { typeName: "step", input: { stepValue: true } } });
-    expectTypeOf(handler).toBeFunction();
+  it("resolves to what complete returned", () => {
     expectTypeOf<Awaited<ReturnType<typeof commitContinue>>>().toExtend<
       Awaited<ReturnType<Handler>>
     >();
@@ -389,6 +389,17 @@ describe("AttemptHandler", () => {
     expectTypeOf(handBuilt).toBeFunction();
   });
 
+  it("accepts a handler that returns what complete returned", () => {
+    const handler: Handler = async ({ complete }) =>
+      complete({ ...inProcessTx, continueWith: { typeName: "step", input: { stepValue: true } } });
+    expectTypeOf(handler).toBeFunction();
+  });
+
+  it("types complete and fence as asynchronous", () => {
+    expectTypeOf<ReturnType<Options["complete"]>>().toExtend<Promise<unknown>>();
+    expectTypeOf<ReturnType<Options["fence"]>>().toEqualTypeOf<Promise<void>>();
+  });
+
   it("merges the middleware ctx into the handler options", () => {
     type CtxHandler = AttemptHandler<
       InProcessStateAdapter,
@@ -418,5 +429,29 @@ describe("AttemptComplete variance", () => {
     expectTypeOf<
       AttemptComplete<InProcessStateAdapter, LinearDefs, "entry", string>
     >().not.toExtend<AttemptComplete<InProcessStateAdapter, LinearDefs, "entry", "entry">>();
+  });
+});
+
+describe("AttemptHandler over a sync state adapter", () => {
+  type SyncDefs = { entry: { entry: true; input: null; output: { result: string } } };
+  type SyncHandler = AttemptHandler<SyncInProcessStateAdapter, SyncDefs, "entry", "entry", unknown>;
+  const syncTx = {} as GetStateAdapterTxContext<SyncInProcessStateAdapter>;
+
+  it("accepts an async handler that returns what complete returned", () => {
+    const handler: SyncHandler = async ({ complete }) =>
+      complete({ ...syncTx, output: { result: "x" } });
+    expectTypeOf(handler).toBeFunction();
+  });
+
+  it("types complete and fence as synchronous", () => {
+    type Options = Parameters<SyncHandler>[0];
+    expectTypeOf<ReturnType<Options["complete"]>>().not.toExtend<Promise<unknown>>();
+    expectTypeOf<ReturnType<Options["fence"]>>().toEqualTypeOf<void>();
+  });
+
+  it("rejects a synchronous handler", () => {
+    // @ts-expect-error the handler returns a promise
+    const handler: SyncHandler = ({ complete }) => complete({ ...syncTx, output: { result: "x" } });
+    expectTypeOf(handler).toBeFunction();
   });
 });

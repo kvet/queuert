@@ -1,43 +1,42 @@
 import type { Database, SQLQueryBindings } from "bun:sqlite";
 
-import type { AsyncRwLock, SqliteStateProvider } from "@queuert/sqlite";
+import type { SyncSqliteStateProvider } from "@queuert/sqlite";
 import { type TxHooks, withTxHooks } from "queuert";
 
 export type BunSqliteContext = { db: Database; txHooks: TxHooks };
 
+const requireTxHooks = (txCtx: Partial<BunSqliteContext>): TxHooks => {
+  if (txCtx.txHooks === undefined) {
+    throw new Error(
+      "The transaction context has no txHooks: open the transaction with withTransaction, or create txHooks with withTxHooks and pass them in the context",
+    );
+  }
+  return txCtx.txHooks;
+};
+
 export const createBunSqliteStateProvider = ({
   db,
-  lock,
 }: {
   db: Database;
-  lock: AsyncRwLock;
-}): SqliteStateProvider<BunSqliteContext> => {
+}): SyncSqliteStateProvider<BunSqliteContext> => {
   return {
-    withTransaction: async (fn) =>
-      withTxHooks(async (txHooks) => {
-        using _h = await lock.acquireWrite();
-        db.run("BEGIN");
-        try {
-          const result = await fn({ db, txHooks });
-          db.run("COMMIT");
-          return result;
-        } catch (error) {
-          if (db.inTransaction) {
-            try {
-              db.run("ROLLBACK");
-            } catch {
-              // ignore rollback errors
-            }
+    sync: true,
+    withTransaction: (fn) =>
+      withTxHooks((txHooks) =>
+        db.transaction(() => {
+          const result = fn({ db, txHooks });
+          if (result instanceof Promise) {
+            throw new TypeError("withTransaction callback must not return a promise");
           }
-          throw error;
-        }
-      }),
+          return result;
+        })(),
+      ),
     isTransaction: (txCtx) => txCtx.db.inTransaction,
     onTransactionCommit: (txCtx, callback) => {
-      txCtx.txHooks.onCommit(callback);
+      requireTxHooks(txCtx).onCommit(callback);
     },
     onTransactionRollback: (txCtx, callback) => {
-      txCtx.txHooks.onRollback(callback);
+      requireTxHooks(txCtx).onRollback(callback);
     },
     classifyError: ({ error }) => {
       const tableName = /no such table: (\S+)/.exec(
@@ -45,18 +44,15 @@ export const createBunSqliteStateProvider = ({
       )?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
     },
-    executeSql: async ({ txCtx, id, sql, params, readOnly }) => {
-      const run = (): unknown[] => {
-        const database = txCtx?.db ?? db;
-        const statement =
-          id !== undefined
-            ? database.query<unknown, SQLQueryBindings[]>(sql)
-            : database.prepare<unknown, SQLQueryBindings[]>(sql);
-        return statement.all(...(params as SQLQueryBindings[]));
-      };
-      if (txCtx) return run();
-      using _h = readOnly ? await lock.acquireRead() : await lock.acquireWrite();
-      return run();
+    executeSql: ({ txCtx, id, sql, params }) => {
+      if (!txCtx && db.inTransaction) {
+        throw new Error("executeSql without txCtx ran inside an open transaction");
+      }
+      const statement =
+        id !== undefined
+          ? db.query<unknown, SQLQueryBindings[]>(sql)
+          : db.prepare<unknown, SQLQueryBindings[]>(sql);
+      return statement.all(...(params as SQLQueryBindings[]));
     },
   };
 };

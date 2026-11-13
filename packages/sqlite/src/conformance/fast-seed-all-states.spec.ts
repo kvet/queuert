@@ -77,71 +77,74 @@ const assertTemporalRelationships = (rows: TimestampRow[], label: string) => {
 };
 
 describe("fast seed conformance", { timeout: 120_000 }, () => {
-  it("produces identical data to seedAllStates", async () => {
-    for (const scale of [1, 2]) {
-      // Correct seed
-      const correctDb = new Database(":memory:");
-      const correctProvider = createBetterSqlite3Provider({ db: correctDb });
-      const correctAdapter = createSqliteStateAdapter<BetterSqlite3Context, string>({
-        stateProvider: correctProvider,
-      });
-      await correctAdapter.migrateToLatest();
-      await seedAllStates(correctAdapter, { scale });
-      correctDb.exec("ANALYZE");
-      const correctJobs = correctDb.prepare(jobQuery).all() as TimestampRow[];
-      const correctBlockers = correctDb.prepare(blockerQuery).all();
-      const correctWorkers = correctDb.prepare(workerQuery).all();
+  it.for(["async", "sync"] as const)(
+    "produces identical data to seedAllStates over a %s provider",
+    async (mode) => {
+      for (const scale of [1, 2]) {
+        // Correct seed
+        const correctDb = new Database(":memory:");
+        const correctProvider = createBetterSqlite3Provider({ db: correctDb });
+        const correctAdapter = createSqliteStateAdapter<BetterSqlite3Context, string>({
+          stateProvider: correctProvider,
+        });
+        await correctAdapter.migrateToLatest();
+        await seedAllStates(correctAdapter, { scale });
+        correctDb.exec("ANALYZE");
+        const correctJobs = correctDb.prepare(jobQuery).all() as TimestampRow[];
+        const correctBlockers = correctDb.prepare(blockerQuery).all();
+        const correctWorkers = correctDb.prepare(workerQuery).all();
 
-      // Fast seed
-      const fastDb = new Database(":memory:");
-      const fastProvider = createBetterSqlite3Provider({ db: fastDb });
-      const fastAdapter = createSqliteStateAdapter<BetterSqlite3Context, string>({
-        stateProvider: fastProvider,
-      });
-      await fastAdapter.migrateToLatest();
-      await fastSeedAllStates(fastProvider, { scale });
-      fastDb.exec("ANALYZE");
-      const fastJobs = fastDb.prepare(jobQuery).all() as TimestampRow[];
-      const fastBlockers = fastDb.prepare(blockerQuery).all();
-      const fastWorkers = fastDb.prepare(workerQuery).all();
+        // Fast seed
+        const fastDb = new Database(":memory:");
+        const fastProvider = createBetterSqlite3Provider({ db: fastDb, mode });
+        const fastAdapter = createSqliteStateAdapter<BetterSqlite3Context, string>({
+          stateProvider: fastProvider,
+        });
+        await fastAdapter.migrateToLatest();
+        await fastSeedAllStates(fastProvider, { scale });
+        fastDb.exec("ANALYZE");
+        const fastJobs = fastDb.prepare(jobQuery).all() as TimestampRow[];
+        const fastBlockers = fastDb.prepare(blockerQuery).all();
+        const fastWorkers = fastDb.prepare(workerQuery).all();
 
-      // Structural equivalence (non-timestamp columns)
-      const stripTimestamps = (row: TimestampRow) => {
-        const {
-          created_at: _,
-          scheduled_at: _2,
-          attempt_at: _3,
-          completed_at: _4,
-          last_attempt_at: _5,
-          ...rest
-        } = row;
-        return rest;
-      };
-      expect(fastJobs.map(stripTimestamps), `scale=${scale} structure`).toEqual(
-        correctJobs.map(stripTimestamps),
-      );
-      expect(fastBlockers, `scale=${scale} blockers`).toEqual(correctBlockers);
-      expect(fastWorkers, `scale=${scale} workers`).toEqual(correctWorkers);
+        // Structural equivalence (non-timestamp columns)
+        const stripTimestamps = (row: TimestampRow) => {
+          const {
+            created_at: _,
+            scheduled_at: _2,
+            attempt_at: _3,
+            completed_at: _4,
+            last_attempt_at: _5,
+            ...rest
+          } = row;
+          return rest;
+        };
+        expect(fastJobs.map(stripTimestamps), `scale=${scale} structure`).toEqual(
+          correctJobs.map(stripTimestamps),
+        );
+        expect(fastBlockers, `scale=${scale} blockers`).toEqual(correctBlockers);
+        expect(fastWorkers, `scale=${scale} workers`).toEqual(correctWorkers);
 
-      // Timestamp nullability must match
-      const toShape = (row: TimestampRow) => ({
-        type_name: row.type_name,
-        chain_index: row.chain_index,
-        has_scheduled_at: row.scheduled_at != null,
-        has_attempt_at: row.attempt_at != null,
-        has_completed_at: row.completed_at != null,
-        has_last_attempt_at: row.last_attempt_at != null,
-      });
-      expect(fastJobs.map(toShape), `scale=${scale} timestamp nullability`).toEqual(
-        correctJobs.map(toShape),
-      );
+        // Timestamp nullability must match
+        const toShape = (row: TimestampRow) => ({
+          type_name: row.type_name,
+          chain_index: row.chain_index,
+          has_scheduled_at: row.scheduled_at != null,
+          has_attempt_at: row.attempt_at != null,
+          has_completed_at: row.completed_at != null,
+          has_last_attempt_at: row.last_attempt_at != null,
+        });
+        expect(fastJobs.map(toShape), `scale=${scale} timestamp nullability`).toEqual(
+          correctJobs.map(toShape),
+        );
 
-      // Temporal relationship correctness
-      assertTemporalRelationships(correctJobs, `scale=${scale} correct`);
-      assertTemporalRelationships(fastJobs, `scale=${scale} fast`);
+        // Temporal relationship correctness
+        assertTemporalRelationships(correctJobs, `scale=${scale} correct`);
+        assertTemporalRelationships(fastJobs, `scale=${scale} fast`);
 
-      correctDb.close();
-      fastDb.close();
-    }
-  });
+        correctDb.close();
+        fastDb.close();
+      }
+    },
+  );
 });

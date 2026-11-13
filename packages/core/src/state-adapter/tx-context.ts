@@ -1,4 +1,4 @@
-import type { StateAdapter } from "./state-adapter.ts";
+import type { AnyStateAdapter } from "./state-adapter.ts";
 
 /** The transaction context fields spread into an options object, or `undefined` when none were. */
 export const normalizeTxCtx = <T extends Record<string, unknown>>(rest: T): T | undefined =>
@@ -10,7 +10,7 @@ export const normalizeTxCtx = <T extends Record<string, unknown>>(rest: T): T | 
  * this is the backstop for callers that bypass them.
  */
 export const requireTxCtx = <T extends Record<string, unknown>>(
-  stateAdapter: StateAdapter<any, any, any>,
+  stateAdapter: Pick<AnyStateAdapter, "isTransaction">,
   rest: T,
   caller: string,
 ): T => {

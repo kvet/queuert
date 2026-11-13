@@ -2,7 +2,7 @@ import {
   type MigratorConformanceContext,
   migrationStoreBaseGroups,
   migrationStoreLeaseGroups,
-} from "@queuert/typed-sql";
+} from "@queuert/typed-sql/migration-store-conformance";
 import type { ConformanceTestCase } from "queuert/conformance";
 import { type ConformanceGroup, toConformanceTestCases } from "queuert/conformance-internal";
 

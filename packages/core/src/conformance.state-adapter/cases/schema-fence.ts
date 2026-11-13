@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 
+import { assertRejects } from "@queuert/helpers/assert-rejects";
+import { caseBody, resource } from "@queuert/helpers/case-body";
 import { sleep } from "@queuert/helpers/sleep";
+import { step } from "@queuert/helpers/steps";
 
+import { inMode } from "../../conformance/adapters.ts";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
 import { SchemaFencedError } from "../../errors.ts";
 import type { StateChain } from "../../state-adapter/state-adapter.ts";
@@ -14,333 +18,429 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceContext> =
   cases: [
     {
       name: "createJobs fails with SchemaFencedError once its writes are fenced, even through a statement that already ran, creating nothing",
-      run: async ({ createStateAdapter, withWritesFenced }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter, ...context }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "fenced-create", input: null },
-            ],
-          }),
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "fenced-create", input: null },
+              ],
+            }),
+          ),
         );
         const fencedJobId = stateAdapter.config.generateJobId();
 
-        const error = await withWritesFenced(async () =>
-          stateAdapter
-            .withTransaction(async (txCtx) =>
-              stateAdapter.createJobs({
-                txCtx,
-                jobs: [{ id: fencedJobId, typeName: "fenced-create", input: null }],
-              }),
-            )
-            .catch((caught: unknown) => caught),
+        yield* step(
+          context.withWritesFenced(() =>
+            assertRejects(
+              () =>
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.createJobs({
+                    txCtx,
+                    jobs: [{ id: fencedJobId, typeName: "fenced-create", input: null }],
+                  }),
+                ),
+              (error: unknown) => error instanceof SchemaFencedError && error.cause !== undefined,
+            ),
+          ),
         );
 
-        assert.ok(error instanceof SchemaFencedError);
-        assert.notEqual(error.cause, undefined);
-        assert.deepEqual(await stateAdapter.getJobs({ jobIds: [fencedJobId] }), [undefined]);
-      },
+        assert.deepEqual(yield* step(stateAdapter.getJobs({ jobIds: [fencedJobId] })), [undefined]);
+      }),
     },
     {
       name: "continueJobs fails with SchemaFencedError once its writes are fenced, leaving the running job unchanged",
-      run: async ({ createStateAdapter, withWritesFenced }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter, ...context }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        const worker = await stateAdapter.startWorker({
-          workerId: stateAdapter.config.generateWorkerId(),
-          typeNames: ["fenced-continue"],
-          concurrency: 1,
-          leaseMs: 60_000,
-        });
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "fenced-continue", input: null },
-            ],
+        const worker = yield* step(
+          stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["fenced-continue"],
+            concurrency: 1,
+            leaseMs: 60_000,
           }),
         );
-        const [job] = await stateAdapter.startJobAttempts({
-          workerId: worker.id,
-          workerToken: worker.token,
-          typeNames: ["fenced-continue"],
-          limit: 1,
-        });
-        const before = await stateAdapter.getJobs({ jobIds: [job.id] });
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "fenced-continue",
+                  input: null,
+                },
+              ],
+            }),
+          ),
+        );
+        const [job] = yield* step(
+          stateAdapter.startJobAttempts({
+            workerId: worker.id,
+            workerToken: worker.token,
+            typeNames: ["fenced-continue"],
+            limit: 1,
+          }),
+        );
+        const before = yield* step(stateAdapter.getJobs({ jobIds: [job.id] }));
         const continuationId = stateAdapter.config.generateJobId();
 
-        await withWritesFenced(async () =>
-          assert.rejects(
-            stateAdapter.withTransaction(async (txCtx) =>
-              stateAdapter.continueJobs({
-                txCtx,
-                jobs: [
-                  {
-                    id: continuationId,
-                    typeName: "fenced-continue:next",
-                    input: null,
-                    continueFromId: job.id,
-                    attemptToken: job.attemptToken!,
-                    workerId: job.attemptBy!,
-                  },
-                ],
-              }),
+        yield* step(
+          context.withWritesFenced(() =>
+            assertRejects(
+              () =>
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.continueJobs({
+                    txCtx,
+                    jobs: [
+                      {
+                        id: continuationId,
+                        typeName: "fenced-continue:next",
+                        input: null,
+                        continueFromId: job.id,
+                        attemptToken: job.attemptToken!,
+                        workerId: job.attemptBy!,
+                      },
+                    ],
+                  }),
+                ),
+              SchemaFencedError,
             ),
-            SchemaFencedError,
           ),
         );
 
-        assert.deepEqual(await stateAdapter.getJobs({ jobIds: [job.id] }), before);
-        assert.deepEqual(await stateAdapter.getJobs({ jobIds: [continuationId] }), [undefined]);
-      },
+        assert.deepEqual(yield* step(stateAdapter.getJobs({ jobIds: [job.id] })), before);
+        assert.deepEqual(yield* step(stateAdapter.getJobs({ jobIds: [continuationId] })), [
+          undefined,
+        ]);
+      }),
     },
     {
       name: "addJobsBlockers fails with SchemaFencedError once its writes are fenced, adding no blocker",
-      run: async ({ createStateAdapter, withWritesFenced }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter, ...context }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        const [blockerChain, mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "fenced-blocker", input: null },
-              { id: stateAdapter.config.generateJobId(), typeName: "fenced-main", input: null },
-            ],
-          }),
+        const [blockerChain, mainChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "fenced-blocker",
+                  input: null,
+                },
+                { id: stateAdapter.config.generateJobId(), typeName: "fenced-main", input: null },
+              ],
+            }),
+          ),
         );
-        const before = await stateAdapter.getJobs({ jobIds: [mainChain.head.id] });
+        const before = yield* step(stateAdapter.getJobs({ jobIds: [mainChain.head.id] }));
 
-        await withWritesFenced(async () =>
-          assert.rejects(
-            stateAdapter.withTransaction(async (txCtx) =>
-              stateAdapter.addJobsBlockers({
-                txCtx,
-                jobBlockers: [{ jobId: mainChain.head.id, blockedByChainIds: [blockerChain.id] }],
-              }),
+        yield* step(
+          context.withWritesFenced(() =>
+            assertRejects(
+              () =>
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.addJobsBlockers({
+                    txCtx,
+                    jobBlockers: [
+                      { jobId: mainChain.head.id, blockedByChainIds: [blockerChain.id] },
+                    ],
+                  }),
+                ),
+              SchemaFencedError,
             ),
-            SchemaFencedError,
           ),
         );
 
-        assert.deepEqual(await stateAdapter.getJobs({ jobIds: [mainChain.head.id] }), before);
-        assert.deepEqual(await stateAdapter.getJobBlockers({ jobId: mainChain.head.id }), []);
-      },
+        assert.deepEqual(
+          yield* step(stateAdapter.getJobs({ jobIds: [mainChain.head.id] })),
+          before,
+        );
+        assert.deepEqual(
+          yield* step(stateAdapter.getJobBlockers({ jobId: mainChain.head.id })),
+          [],
+        );
+      }),
     },
     {
       name: "unblockJobs fails with SchemaFencedError once its writes are fenced, leaving the dependent blocked",
-      run: async ({ createStateAdapter, withWritesFenced }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter, ...context }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        const [blockerChain, mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "fenced-blocker", input: null },
-              { id: stateAdapter.config.generateJobId(), typeName: "fenced-main", input: null },
-            ],
-          }),
+        const [blockerChain, mainChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "fenced-blocker",
+                  input: null,
+                },
+                { id: stateAdapter.config.generateJobId(), typeName: "fenced-main", input: null },
+              ],
+            }),
+          ),
         );
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.addJobsBlockers({
-            txCtx,
-            jobBlockers: [{ jobId: mainChain.head.id, blockedByChainIds: [blockerChain.id] }],
-          }),
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [{ jobId: mainChain.head.id, blockedByChainIds: [blockerChain.id] }],
+            }),
+          ),
         );
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.completeJobs({
-            txCtx,
-            jobs: [{ jobId: blockerChain.head.id, output: null }],
-          }),
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.completeJobs({
+              txCtx,
+              jobs: [{ jobId: blockerChain.head.id, output: null }],
+            }),
+          ),
         );
-        const before = await stateAdapter.getJobs({ jobIds: [mainChain.head.id] });
+        const before = yield* step(stateAdapter.getJobs({ jobIds: [mainChain.head.id] }));
 
-        await withWritesFenced(async () =>
-          assert.rejects(
-            stateAdapter.withTransaction(async (txCtx) =>
-              stateAdapter.unblockJobs({ txCtx, blockedByChainId: blockerChain.id }),
+        yield* step(
+          context.withWritesFenced(() =>
+            assertRejects(
+              () =>
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.unblockJobs({ txCtx, blockedByChainId: blockerChain.id }),
+                ),
+              SchemaFencedError,
             ),
-            SchemaFencedError,
           ),
         );
 
         assert.equal(before[0]!.status, "blocked");
-        assert.deepEqual(await stateAdapter.getJobs({ jobIds: [mainChain.head.id] }), before);
-      },
+        assert.deepEqual(
+          yield* step(stateAdapter.getJobs({ jobIds: [mainChain.head.id] })),
+          before,
+        );
+      }),
     },
     {
       name: "startWorker fails with SchemaFencedError once its writes are fenced, registering no worker",
-      run: async ({ createStateAdapter, withWritesFenced }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter, ...context }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
         const workerId = stateAdapter.config.generateWorkerId();
 
-        await withWritesFenced(async () =>
-          assert.rejects(
-            stateAdapter.startWorker({
-              workerId,
-              typeNames: ["fenced-worker"],
-              concurrency: 1,
-              leaseMs: 60_000,
-            }),
-            SchemaFencedError,
+        yield* step(
+          context.withWritesFenced(() =>
+            assertRejects(
+              () =>
+                stateAdapter.startWorker({
+                  workerId,
+                  typeNames: ["fenced-worker"],
+                  concurrency: 1,
+                  leaseMs: 60_000,
+                }),
+              SchemaFencedError,
+            ),
           ),
         );
 
-        assert.deepEqual(await stateAdapter.getWorkers({ workerIds: [workerId] }), [undefined]);
-      },
+        assert.deepEqual(yield* step(stateAdapter.getWorkers({ workerIds: [workerId] })), [
+          undefined,
+        ]);
+      }),
     },
     {
       name: "extendWorkerLease fails with SchemaFencedError once its writes are fenced, leaving the lease unchanged",
-      run: async ({ createStateAdapter, withWritesFenced }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter, ...context }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        const worker = await stateAdapter.startWorker({
-          workerId: stateAdapter.config.generateWorkerId(),
-          typeNames: ["fenced-lease"],
-          concurrency: 1,
-          leaseMs: 60_000,
-        });
-        const before = await stateAdapter.getWorkers({ workerIds: [worker.id] });
+        const worker = yield* step(
+          stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["fenced-lease"],
+            concurrency: 1,
+            leaseMs: 60_000,
+          }),
+        );
+        const before = yield* step(stateAdapter.getWorkers({ workerIds: [worker.id] }));
 
-        await withWritesFenced(async () =>
-          assert.rejects(
-            stateAdapter.extendWorkerLease({
-              workerId: worker.id,
-              workerToken: worker.token,
-              leaseMs: 120_000,
-            }),
-            SchemaFencedError,
+        yield* step(
+          context.withWritesFenced(() =>
+            assertRejects(
+              () =>
+                stateAdapter.extendWorkerLease({
+                  workerId: worker.id,
+                  workerToken: worker.token,
+                  leaseMs: 120_000,
+                }),
+              SchemaFencedError,
+            ),
           ),
         );
 
-        assert.deepEqual(await stateAdapter.getWorkers({ workerIds: [worker.id] }), before);
-      },
+        assert.deepEqual(yield* step(stateAdapter.getWorkers({ workerIds: [worker.id] })), before);
+      }),
     },
     {
       name: "startJobAttempts fails with SchemaFencedError once its writes are fenced, leaving the job pending",
-      run: async ({ createStateAdapter, withWritesFenced }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter, ...context }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        const worker = await stateAdapter.startWorker({
-          workerId: stateAdapter.config.generateWorkerId(),
-          typeNames: ["fenced-start-attempt"],
-          concurrency: 1,
-          leaseMs: 60_000,
-        });
-        const [chain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              {
-                id: stateAdapter.config.generateJobId(),
-                typeName: "fenced-start-attempt",
-                input: null,
-              },
-            ],
+        const worker = yield* step(
+          stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["fenced-start-attempt"],
+            concurrency: 1,
+            leaseMs: 60_000,
           }),
         );
-        const before = await stateAdapter.getJobs({ jobIds: [chain.head.id] });
-
-        await withWritesFenced(async () =>
-          assert.rejects(
-            stateAdapter.startJobAttempts({
-              workerId: worker.id,
-              workerToken: worker.token,
-              typeNames: ["fenced-start-attempt"],
-              limit: 1,
+        const [chain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "fenced-start-attempt",
+                  input: null,
+                },
+              ],
             }),
-            SchemaFencedError,
+          ),
+        );
+        const before = yield* step(stateAdapter.getJobs({ jobIds: [chain.head.id] }));
+
+        yield* step(
+          context.withWritesFenced(() =>
+            assertRejects(
+              () =>
+                stateAdapter.startJobAttempts({
+                  workerId: worker.id,
+                  workerToken: worker.token,
+                  typeNames: ["fenced-start-attempt"],
+                  limit: 1,
+                }),
+              SchemaFencedError,
+            ),
           ),
         );
 
-        assert.deepEqual(await stateAdapter.getJobs({ jobIds: [chain.head.id] }), before);
-      },
+        assert.deepEqual(yield* step(stateAdapter.getJobs({ jobIds: [chain.head.id] })), before);
+      }),
     },
     {
       name: "completeJobs fails with SchemaFencedError once its writes are fenced, leaving the job unchanged",
-      run: async ({ createStateAdapter, withWritesFenced }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter, ...context }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        const [chain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "fenced-complete", input: null },
-            ],
-          }),
+        const [chain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "fenced-complete",
+                  input: null,
+                },
+              ],
+            }),
+          ),
         );
-        const before = await stateAdapter.getJobs({ jobIds: [chain.head.id] });
+        const before = yield* step(stateAdapter.getJobs({ jobIds: [chain.head.id] }));
 
-        await withWritesFenced(async () =>
-          assert.rejects(
-            stateAdapter.withTransaction(async (txCtx) =>
-              stateAdapter.completeJobs({ txCtx, jobs: [{ jobId: chain.head.id, output: null }] }),
+        yield* step(
+          context.withWritesFenced(() =>
+            assertRejects(
+              () =>
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.completeJobs({
+                    txCtx,
+                    jobs: [{ jobId: chain.head.id, output: null }],
+                  }),
+                ),
+              SchemaFencedError,
             ),
-            SchemaFencedError,
           ),
         );
 
-        assert.deepEqual(await stateAdapter.getJobs({ jobIds: [chain.head.id] }), before);
-      },
+        assert.deepEqual(yield* step(stateAdapter.getJobs({ jobIds: [chain.head.id] })), before);
+      }),
     },
     {
       name: "rescheduleJobs fails with SchemaFencedError once its writes are fenced, leaving the job unchanged",
-      run: async ({ createStateAdapter, withWritesFenced }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter, ...context }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        const [chain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              {
-                id: stateAdapter.config.generateJobId(),
-                typeName: "fenced-reschedule",
-                input: null,
-              },
-            ],
-          }),
-        );
-        const before = await stateAdapter.getJobs({ jobIds: [chain.head.id] });
-
-        await withWritesFenced(async () =>
-          assert.rejects(
-            stateAdapter.rescheduleJobs({
-              jobs: [{ jobId: chain.head.id, schedule: { afterMs: 60_000 } }],
+        const [chain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "fenced-reschedule",
+                  input: null,
+                },
+              ],
             }),
-            SchemaFencedError,
+          ),
+        );
+        const before = yield* step(stateAdapter.getJobs({ jobIds: [chain.head.id] }));
+
+        yield* step(
+          context.withWritesFenced(() =>
+            assertRejects(
+              () =>
+                stateAdapter.rescheduleJobs({
+                  jobs: [{ jobId: chain.head.id, schedule: { afterMs: 60_000 } }],
+                }),
+              SchemaFencedError,
+            ),
           ),
         );
 
-        assert.deepEqual(await stateAdapter.getJobs({ jobIds: [chain.head.id] }), before);
-      },
+        assert.deepEqual(yield* step(stateAdapter.getJobs({ jobIds: [chain.head.id] })), before);
+      }),
     },
     {
       name: "reads and deletes chains while writes are fenced",
-      run: async ({ createStateAdapter, withWritesFenced }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter, ...context }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        const [chain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "fenced-delete", input: null },
-            ],
-          }),
+        const [chain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "fenced-delete", input: null },
+              ],
+            }),
+          ),
         );
 
-        await withWritesFenced(async () => {
-          const [job] = await stateAdapter.getJobs({ jobIds: [chain.head.id] });
-          assert.equal(job?.id, chain.head.id);
-          const [deleted] = await stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.deleteChains({ txCtx, chainIds: [chain.id] }),
-          );
-          assert.equal((deleted as StateChain).id, chain.id);
-        });
+        yield* step(
+          context.withWritesFenced(() =>
+            inMode(stateAdapter, function* () {
+              const [job] = yield* step(stateAdapter.getJobs({ jobIds: [chain.head.id] }));
+              assert.equal(job?.id, chain.head.id);
+              const [deleted] = yield* step(
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.deleteChains({ txCtx, chainIds: [chain.id] }),
+                ),
+              );
+              assert.equal((deleted as StateChain).id, chain.id);
+            }),
+          ),
+        );
 
-        assert.deepEqual(await stateAdapter.getJobs({ jobIds: [chain.head.id] }), [undefined]);
-      },
+        assert.deepEqual(yield* step(stateAdapter.getJobs({ jobIds: [chain.head.id] })), [
+          undefined,
+        ]);
+      }),
     },
   ],
 };
@@ -351,10 +451,10 @@ export const schemaFenceConcurrentTransactionsGroup: ConformanceGroup<SchemaFenc
     cases: [
       {
         name: "fails a write with SchemaFencedError when its writes are fenced after the transaction began",
-        run: async ({ createStateAdapter, withWritesFenced }) => {
+        run: async ({ createStateAdapter, ...context }) => {
           await using stateAdapter = await createStateAdapter();
 
-          const [chain] = await stateAdapter.withTransaction(async (txCtx) =>
+          const [chain] = await stateAdapter.withTransaction((txCtx) =>
             stateAdapter.createJobs({
               txCtx,
               jobs: [
@@ -369,15 +469,17 @@ export const schemaFenceConcurrentTransactionsGroup: ConformanceGroup<SchemaFenc
           const fencedJobId = stateAdapter.config.generateJobId();
 
           await assert.rejects(
-            stateAdapter.withTransaction(async (txCtx) => {
-              await stateAdapter.getJobs({ txCtx, jobIds: [chain.head.id] });
-              await withWritesFenced(async () =>
-                stateAdapter.createJobs({
-                  txCtx,
-                  jobs: [{ id: fencedJobId, typeName: "fenced-open-tx", input: null }],
-                }),
-              );
-            }),
+            Promise.resolve(
+              stateAdapter.withTransaction(async (txCtx) => {
+                await stateAdapter.getJobs({ txCtx, jobIds: [chain.head.id] });
+                await context.withWritesFenced(async () =>
+                  stateAdapter.createJobs({
+                    txCtx,
+                    jobs: [{ id: fencedJobId, typeName: "fenced-open-tx", input: null }],
+                  }),
+                );
+              }),
+            ),
             SchemaFencedError,
           );
 
@@ -386,7 +488,7 @@ export const schemaFenceConcurrentTransactionsGroup: ConformanceGroup<SchemaFenc
       },
       {
         name: "commits a transaction that already wrote before its writes are fenced",
-        run: async ({ createStateAdapter, withWritesFenced }) => {
+        run: async ({ createStateAdapter, ...context }) => {
           await using stateAdapter = await createStateAdapter();
 
           const jobId = stateAdapter.config.generateJobId();
@@ -398,10 +500,12 @@ export const schemaFenceConcurrentTransactionsGroup: ConformanceGroup<SchemaFenc
               txCtx,
               jobs: [{ id: jobId, typeName: "fenced-committed", input: null }],
             });
-            readAfterDrop = withWritesFenced(async () => {
-              dropped = true;
-              return stateAdapter.getJobs({ jobIds: [jobId] });
-            });
+            readAfterDrop = Promise.resolve(
+              context.withWritesFenced(async () => {
+                dropped = true;
+                return stateAdapter.getJobs({ jobIds: [jobId] });
+              }),
+            );
             await sleep(LOCK_BLOCK_OBSERVATION_MS);
             assert.equal(dropped, false);
           });

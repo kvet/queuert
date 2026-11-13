@@ -33,6 +33,7 @@ baseIt("index");
 
 describe("PostgreSQL Notify Provider Conformance", () => {
   conformanceTestSuite({
+    mode: "async",
     it,
     groups: [...pgNotifyProviderConformanceGroups, ...notifyAdapterEndToEndGroups],
   });

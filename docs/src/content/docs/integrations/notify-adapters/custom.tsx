@@ -63,6 +63,16 @@ const Page = () => (
       <A href="/api/conformance/readme/">conformance reference</A>.
     </p>
     <p>
+      For a <code>SyncNotifyAdapter</code>, register the{" "}
+      <code>syncNotifyAdapterConformanceCases</code> and{" "}
+      <code>syncNotifyAdapterEndToEndConformanceCases</code> instead, against the same{" "}
+      <code>NotifyAdapterConformanceContext</code>, whose <code>createNotifyAdapter</code> may
+      return the sync adapter directly. The contract cases call it synchronously, fail when a call
+      returns a promise, and still wait for delivery; the end-to-end cases build a client over your
+      adapter and an in-memory sync state adapter. Every case takes its mode from your adapter's{" "}
+      <code>sync</code> marker, so over an async adapter it checks that the calls return promises.
+    </p>
+    <p>
       A provider for PostgreSQL or Redis has its own cases and a helper that builds the adapter over
       the provider for you: see{" "}
       <A href="/integrations/notify-adapters/postgres/#testing-your-provider">PostgreSQL</A> or{" "}

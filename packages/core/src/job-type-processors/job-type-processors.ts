@@ -3,11 +3,11 @@ import type { AttemptHandler } from "../attempt/attempt-handler.types.ts";
 import type { BackoffConfig } from "../entities/backoff.ts";
 import type { BaseJobTypeDefinitions } from "../job-types/job-type.ts";
 import type { JobTypeNames, JobTypeReachingEntry } from "../job-types/job-types.resolvers.ts";
-import type { StateAdapter } from "../state-adapter/state-adapter.ts";
+import type { AnyStateAdapter } from "../state-adapter/state-adapter.ts";
 
 /** Configuration for processing a single job type. */
 export type Processor<
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends AnyStateAdapter,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   THandlerCtx,

@@ -58,8 +58,5 @@ describe("PostgreSQL State Adapter Variance - All Custom Options", () => {
     ]);
   });
 
-  conformanceTestSuite({
-    it,
-    groups: pgStateAdapterConformanceGroups,
-  });
+  conformanceTestSuite({ mode: "async", it, groups: pgStateAdapterConformanceGroups });
 });

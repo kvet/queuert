@@ -99,6 +99,7 @@ const notifyPostgres = {
 };
 const notifyRedis = { title: "Redis Notify Adapter", href: "/integrations/notify-adapters/redis/" };
 const notifyNats = { title: "NATS Notify Adapter", href: "/integrations/notify-adapters/nats/" };
+const notifyIpc = { title: "IPC Notify Adapter", href: "/integrations/notify-adapters/ipc/" };
 const stateCustom = {
   title: "Custom State Adapter",
   href: "/integrations/state-adapters/custom/",
@@ -226,12 +227,24 @@ export const examples: Example[] = [
     guide: { title: "Horizontal Scaling", href: "/guides/horizontal-scaling/" },
   },
   {
+    name: "state-sqlite-multi-worker",
+    category: "state",
+    page: "operations",
+    label: "multiple workers on SQLite",
+    description:
+      "Three worker processes (forked from the main process) share one SQLite database file in WAL mode and compete for jobs, waking each other through the IPC notify adapter — the main process creates orders and their chains in one better-sqlite3 transaction.",
+    runtime: "Node.js",
+    services: [],
+    files: ["src/index.ts", "src/worker.ts"],
+    guide: { title: "Horizontal Scaling", href: "/guides/horizontal-scaling/" },
+  },
+  {
     name: "state-sqlite-better-sqlite3",
     category: "state",
     page: "state-adapters",
     label: "better-sqlite3",
     description:
-      "SQLite state storage via @queuert/sqlite with the better-sqlite3 driver — job creation and completion inside application transactions, with createAsyncRwLock() for write serialization: the handler holds the same lock around the transaction it passes to complete.",
+      "SQLite state storage via @queuert/sqlite with the better-sqlite3 driver through a synchronous SyncSqliteStateProvider — job creation and completion inside better-sqlite3's own db.transaction, with no lock.",
     runtime: "Node.js",
     services: [],
     files: stateProviderFiles,
@@ -243,7 +256,7 @@ export const examples: Example[] = [
     page: "state-adapters",
     label: "node:sqlite",
     description:
-      "SQLite state storage via @queuert/sqlite using Node's built-in node:sqlite module — no external SQLite dependencies. The handler holds the provider's createAsyncRwLock() write lock around the transaction it passes to complete.",
+      "SQLite state storage via @queuert/sqlite using Node's built-in node:sqlite module through a synchronous SyncSqliteStateProvider — no external SQLite dependencies, and job creation and completion inside a BEGIN/COMMIT transaction with no lock.",
     runtime: "Node.js",
     services: [],
     files: stateProviderFiles,
@@ -255,7 +268,7 @@ export const examples: Example[] = [
     page: "state-adapters",
     label: "Drizzle ORM",
     description:
-      "SQLite state storage via @queuert/sqlite with Drizzle ORM — job creation and completion inside application transactions, with createAsyncRwLock() for write serialization: the handler holds the same lock around the transaction it passes to complete.",
+      "SQLite state storage via @queuert/sqlite with Drizzle ORM through a synchronous SyncSqliteStateProvider — job creation and completion inside Drizzle's synchronous transaction over better-sqlite3, with no lock.",
     runtime: "Node.js",
     services: [],
     files: stateProviderFiles,
@@ -315,7 +328,7 @@ export const examples: Example[] = [
     page: "state-adapters",
     label: "bun:sqlite",
     description:
-      "SQLite state storage via @queuert/sqlite using Bun's built-in bun:sqlite module — no external SQLite dependencies. The handler holds the provider's createAsyncRwLock() write lock around the transaction it passes to complete.",
+      "SQLite state storage via @queuert/sqlite using Bun's built-in bun:sqlite module through a synchronous SyncSqliteStateProvider — no external SQLite dependencies, and job creation and completion inside bun:sqlite's db.transaction with no lock.",
     runtime: "Bun",
     services: [],
     files: stateProviderFiles,
@@ -482,6 +495,18 @@ export const examples: Example[] = [
     services: ["PostgreSQL", "NATS"],
     files: ["src/index.ts"],
     guide: notifyNats,
+  },
+  {
+    name: "notify-ipc",
+    category: "notify",
+    page: "notify-adapters",
+    label: "IPC",
+    description:
+      "IPC notifications via @queuert/ipc between a main process and a forked worker process sharing one SQLite database file through a synchronous SyncSqliteStateProvider.",
+    runtime: "Node.js",
+    services: [],
+    files: ["src/index.ts", "src/worker.ts"],
+    guide: notifyIpc,
   },
   {
     name: "notify-custom-memory",

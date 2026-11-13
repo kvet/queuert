@@ -1,14 +1,14 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import type { AttemptMiddleware } from "../attempt-middleware/attempt-middleware.ts";
-import { createClient } from "../client.ts";
+import { createClient } from "../client/client.ts";
 import { DuplicateJobTypeError } from "../errors.ts";
 import { defineJobTypes } from "../job-types/define-job-types.ts";
 import {
   createInProcessStateAdapter,
   type InProcessStateAdapter,
-} from "../state-adapter/state-adapter.in-process.ts";
-import { createWorkerRunner } from "../worker-runner.ts";
+} from "../state-adapter.in-process/state-adapter.in-process.ts";
+import { createWorkerRunner } from "../worker/worker-runner.ts";
 import { createProcessors } from "./create-job-type-processors.ts";
 import {
   type ProcessorDefinitions,

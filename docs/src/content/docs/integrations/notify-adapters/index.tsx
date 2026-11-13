@@ -44,6 +44,17 @@ const adapters: OptionCard[] = [
     action: { label: "NATS notify adapter", href: "/integrations/notify-adapters/nats/" },
   },
   {
+    name: "IPC",
+    status: { label: "experimental", tone: "caution" },
+    pick: "For processes on one host, such as workers sharing a SQLite file. No server: processes find each other through a shared directory.",
+    facts: [
+      { label: "Package", value: "@queuert/ipc" },
+      { label: "Transport", value: "Unix sockets · named pipes" },
+      { label: "Adapter", value: "SyncNotifyAdapter" },
+    ],
+    action: { label: "IPC notify adapter", href: "/integrations/notify-adapters/ipc/" },
+  },
+  {
     name: "Custom",
     pick: "A NotifyAdapter of your own, for another message broker.",
     facts: [
@@ -110,7 +121,10 @@ const Page = () => (
       itself: the worker runners created from it and its <code>awaitChain</code> calls wake the
       moment a transaction commits. Nothing crosses the process, or even the client: a worker runner
       in another process, or one built from a second client in the same process, polls the database
-      every <code>pollIntervalMs</code>. No additional packages or infrastructure are required.
+      every <code>pollIntervalMs</code>. No additional packages or infrastructure are required. To
+      let several clients in one process wake each other, pass them one shared{" "}
+      <code>createInProcessNotifyAdapter()</code> from <code>queuert</code>, or{" "}
+      <code>createSyncInProcessNotifyAdapter()</code> over a synchronous state adapter.
     </p>
     <Aside type="tip">
       A single process with one client needs no notify adapter. Once workers run in other processes,
@@ -134,6 +148,12 @@ const Page = () => (
       proseNames
       items={members()}
     />
+    <p>
+      A transport that never waits, such as in-process listeners or local sockets, can implement{" "}
+      <code>SyncNotifyAdapter</code> instead: the same members, each returning its result directly
+      and throwing on failure, plus <code>sync: true</code>. <code>createClient</code> takes either
+      kind, over a state adapter of either mode.
+    </p>
 
     <h2>How adapters behave</h2>
     <ul>

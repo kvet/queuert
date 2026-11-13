@@ -12,7 +12,7 @@
  * 6. Workerless Completion: Job completed externally → CONSUMER job span without attempt spans
  */
 
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 import { createClient, createWorkerRunner, createProcessors, defineJobTypes } from "queuert";
@@ -143,14 +143,14 @@ telemetry.defer(async () => {
   await flush();
   await shutdown();
 });
-await using drivers = new AsyncDisposableStack();
+using drivers = new DisposableStack();
 const db = drivers.adopt(new Database(":memory:"), (db) => {
   db.close();
 });
-await using stateAdapter = createSqliteStateAdapter({
-  stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
+using stateAdapter = createSqliteStateAdapter({
+  stateProvider: createBetterSqlite3StateProvider({ db }),
 });
-await stateAdapter.migrateToLatest();
+stateAdapter.migrateToLatest();
 
 // #region client
 const client = createClient({
@@ -171,7 +171,7 @@ await using workerRunner = createWorkerRunner({
       greet: {
         attemptHandler: async ({ job, complete }) => {
           await new Promise((r) => setTimeout(r, 20));
-          return stateAdapter.withTransaction(async (ctx) =>
+          return stateAdapter.withTransaction((ctx) =>
             complete({
               ...ctx,
               output: {
@@ -186,7 +186,7 @@ await using workerRunner = createWorkerRunner({
       "order:validate": {
         attemptHandler: async ({ job, complete }) => {
           await new Promise((r) => setTimeout(r, 50));
-          return stateAdapter.withTransaction(async (ctx) =>
+          return stateAdapter.withTransaction((ctx) =>
             complete({
               ...ctx,
               continueWith: {
@@ -200,7 +200,7 @@ await using workerRunner = createWorkerRunner({
       "order:process": {
         attemptHandler: async ({ job, complete }) => {
           await new Promise((r) => setTimeout(r, 100));
-          return stateAdapter.withTransaction(async (ctx) =>
+          return stateAdapter.withTransaction((ctx) =>
             complete({
               ...ctx,
               continueWith: {
@@ -214,7 +214,7 @@ await using workerRunner = createWorkerRunner({
       "order:complete": {
         attemptHandler: async ({ job, complete }) => {
           await new Promise((r) => setTimeout(r, 30));
-          return stateAdapter.withTransaction(async (ctx) =>
+          return stateAdapter.withTransaction((ctx) =>
             complete({
               ...ctx,
               output: {
@@ -230,7 +230,7 @@ await using workerRunner = createWorkerRunner({
       "fetch-user": {
         attemptHandler: async ({ job, complete }) => {
           await new Promise((r) => setTimeout(r, 80));
-          return stateAdapter.withTransaction(async (ctx) =>
+          return stateAdapter.withTransaction((ctx) =>
             complete({
               ...ctx,
               output: {
@@ -244,7 +244,7 @@ await using workerRunner = createWorkerRunner({
       "fetch-permissions": {
         attemptHandler: async ({ job, complete }) => {
           await new Promise((r) => setTimeout(r, 60));
-          return stateAdapter.withTransaction(async (ctx) =>
+          return stateAdapter.withTransaction((ctx) =>
             complete({
               ...ctx,
               output: {
@@ -259,7 +259,7 @@ await using workerRunner = createWorkerRunner({
         attemptHandler: async ({ job, complete }) => {
           const [userBlocker, permBlocker] = job.blockers;
           await new Promise((r) => setTimeout(r, 40));
-          return stateAdapter.withTransaction(async (ctx) =>
+          return stateAdapter.withTransaction((ctx) =>
             complete({
               ...ctx,
               output: {
@@ -276,14 +276,10 @@ await using workerRunner = createWorkerRunner({
         attemptHandler: async ({ job, complete }) => {
           let total = 0;
           for (const item of job.input.items) {
-            total += await stateAdapter.withTransaction(async () => {
-              await new Promise((r) => setTimeout(r, 30));
-              return item * 2;
-            });
+            await new Promise((r) => setTimeout(r, 30));
+            total += stateAdapter.withTransaction(() => item * 2);
           }
-          return stateAdapter.withTransaction(async (ctx) =>
-            complete({ ...ctx, output: { total } }),
-          );
+          return stateAdapter.withTransaction((ctx) => complete({ ...ctx, output: { total } }));
         },
       },
 
@@ -293,7 +289,7 @@ await using workerRunner = createWorkerRunner({
           if (job.input.shouldFail && job.attempt < 2) {
             throw new Error("Simulated failure");
           }
-          return stateAdapter.withTransaction(async (ctx) =>
+          return stateAdapter.withTransaction((ctx) =>
             complete({ ...ctx, output: { success: true as const } }),
           );
         },
@@ -312,7 +308,7 @@ console.log("Optional: Run `pnpm tui` in another terminal to view traces\n");
 // Scenario 1: Single Job
 console.log("--- Scenario 1: Single Job ---");
 console.log("One chain, one job, one attempt. Simplest trace structure.\n");
-const greetChain = await stateAdapter.withTransaction(async (ctx) =>
+const greetChain = stateAdapter.withTransaction((ctx) =>
   client.createChain({ ...ctx, typeName: "greet", input: { name: "World" } }),
 );
 const greetResult = await client.awaitChain(greetChain, { timeoutMs: 5000 });
@@ -321,7 +317,7 @@ console.log("Result:", greetResult.output);
 // Scenario 2: Continuations
 console.log("\n--- Scenario 2: Continuations ---");
 console.log("validate → process → complete. Chain span contains 3 sequential job spans.\n");
-const orderChain = await stateAdapter.withTransaction(async (ctx) =>
+const orderChain = stateAdapter.withTransaction((ctx) =>
   client.createChain({
     ...ctx,
     typeName: "order:validate",
@@ -334,13 +330,13 @@ console.log("Result:", orderResult.output);
 // Scenario 3: Blockers (fan-out)
 console.log("\n--- Scenario 3: Blockers ---");
 console.log("Two blockers run in parallel, main job waits. Traces linked across chains.\n");
-const blockerChain = await stateAdapter.withTransaction(async (ctx) => {
-  const userBlocker = await client.createChain({
+const blockerChain = stateAdapter.withTransaction((ctx) => {
+  const userBlocker = client.createChain({
     ...ctx,
     typeName: "fetch-user",
     input: { userId: "user-1" },
   });
-  const permBlocker = await client.createChain({
+  const permBlocker = client.createChain({
     ...ctx,
     typeName: "fetch-permissions",
     input: { userId: "user-1" },
@@ -360,7 +356,7 @@ console.log("\n--- Scenario 4: Batched Work ---");
 console.log(
   "Handler runs one transaction per batch, then finishes in its own. One attempt span, no child spans.\n",
 );
-const batchChain = await stateAdapter.withTransaction(async (ctx) =>
+const batchChain = stateAdapter.withTransaction((ctx) =>
   client.createChain({
     ...ctx,
     typeName: "batch-process",
@@ -373,7 +369,7 @@ console.log("Result:", batchResult.output);
 // Scenario 5: Retries
 console.log("\n--- Scenario 5: Retries ---");
 console.log("First attempt fails, second succeeds. Job span shows multiple attempt spans.\n");
-const retryChain = await stateAdapter.withTransaction(async (ctx) =>
+const retryChain = stateAdapter.withTransaction((ctx) =>
   client.createChain({
     ...ctx,
     typeName: "might-fail",
@@ -386,19 +382,19 @@ console.log("Result:", retryResult.output);
 // Scenario 6: Workerless Completion
 console.log("\n--- Scenario 6: Workerless Completion ---");
 console.log("Job completed externally without a worker. CONSUMER job span, no attempt spans.\n");
-const approvalChain = await stateAdapter.withTransaction(async (ctx) =>
+const approvalChain = stateAdapter.withTransaction((ctx) =>
   client.createChain({
     ...ctx,
     typeName: "awaiting-approval",
     input: { requestId: "REQ-789" },
   }),
 );
-const approvalResult = await stateAdapter.withTransaction(async (ctx) =>
+const approvalResult = stateAdapter.withTransaction((ctx) =>
   client.completeChain({
     ...ctx,
     ...approvalChain,
-    handler: async ({ job, completeJob }) =>
-      completeJob(job, async ({ complete }) =>
+    handler: ({ job, completeJob }) =>
+      completeJob(job, ({ complete }) =>
         complete({ output: { approved: true, approvedBy: "admin" } }),
       ),
   }),

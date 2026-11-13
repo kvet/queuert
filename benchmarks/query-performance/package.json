@@ -4,12 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node src/postgres.ts && node src/sqlite.ts && node src/mysql.ts && node src/mysql.ts --mariadb && node src/redis.ts",
+    "start": "node src/postgres.ts && node src/sqlite.ts && node src/mysql.ts && node src/mysql.ts --mariadb && node src/redis.ts && node src/in-process.ts",
     "start:postgres": "node src/postgres.ts",
     "start:sqlite": "node src/sqlite.ts",
     "start:mysql": "node src/mysql.ts",
     "start:mariadb": "node src/mysql.ts --mariadb",
-    "start:redis": "node src/redis.ts"
+    "start:redis": "node src/redis.ts",
+    "start:in-process-sync": "node src/in-process.ts"
   },
   "dependencies": {
     "@queuert/mysql": "workspace:*",

@@ -1,16 +1,14 @@
+import { assertMigrationLockOptions } from "@queuert/typed-sql/migration-lock";
 import {
   type Migration,
   type MigrationScript,
   type MigrationStore,
   type Migrator,
-  assertMigrationLockOptions,
   createMigrator,
-  createTemplateApplier,
-  createTypedSqlExecutor,
-  sql,
-  t,
-  validateSqlIdentifier,
-} from "@queuert/typed-sql";
+} from "@queuert/typed-sql/migrator";
+import { sql, t } from "@queuert/typed-sql/sql";
+import { createTypedSqlExecutor, validateSqlIdentifier } from "@queuert/typed-sql/sql-executor";
+import { createTemplateApplier } from "@queuert/typed-sql/template-applier";
 import type { BaseTxContext } from "queuert";
 
 import type { MysqlStateProvider } from "../state-provider/state-provider.mysql.ts";

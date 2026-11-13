@@ -1,3 +1,5 @@
+import { type MaybePromise, andThen } from "@queuert/helpers/maybe-promise";
+
 import {
   type DataType,
   type InferColumns,
@@ -10,17 +12,21 @@ import {
 } from "./sql.ts";
 import type { TemplateApplier } from "./template-applier.ts";
 
-export type SqlExecutor<TTxContext> = {
-  executeSql: (options: {
-    txCtx?: TTxContext;
-    id?: string;
-    sql: string;
-    params: unknown[];
-    paramTypes: Record<number, RuntimeType>;
-    columnTypes: Record<string, RuntimeType>;
-    readOnly: boolean;
-  }) => Promise<unknown[]>;
+type SqlExecutorOptions<TTxContext> = {
+  txCtx?: TTxContext;
+  id?: string;
+  sql: string;
+  params: unknown[];
+  paramTypes: Record<number, RuntimeType>;
+  columnTypes: Record<string, RuntimeType>;
+  readOnly: boolean;
 };
+
+type AnySqlExecutor<TTxContext, TRows extends MaybePromise<unknown[]>> = {
+  executeSql: (options: SqlExecutorOptions<TTxContext>) => TRows;
+};
+
+type ResultLike<TRows, T> = TRows extends Promise<unknown> ? Promise<T> : T;
 
 const SQL_IDENTIFIER_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
@@ -33,8 +39,10 @@ export const validateSqlIdentifier = (value: string, name: string): void => {
 };
 
 export const createTypedSqlExecutor =
-  <TTxContext>(executor: SqlExecutor<TTxContext>) =>
-  async <TParams extends readonly DataType[], TColumns extends Record<string, DataType>>({
+  <TTxContext, TRows extends MaybePromise<unknown[]>>(
+    executor: AnySqlExecutor<TTxContext, TRows>,
+  ) =>
+  <TParams extends readonly DataType[], TColumns extends Record<string, DataType>>({
     txCtx,
     sql: typedSql,
     params,
@@ -43,7 +51,7 @@ export const createTypedSqlExecutor =
     sql: TypedSql<TParams, TColumns>;
   } & (TParams extends readonly []
     ? { params?: undefined }
-    : { params: [...InferParams<TParams>] })): Promise<InferColumns<TColumns>[]> =>
+    : { params: [...InferParams<TParams>] })): ResultLike<TRows, InferColumns<TColumns>[]> =>
     executor.executeSql({
       txCtx,
       id: typedSql.id,
@@ -52,19 +60,25 @@ export const createTypedSqlExecutor =
       paramTypes: extractParamTypes(typedSql.params),
       columnTypes: extractColumnTypes(typedSql.columns),
       readOnly: typedSql.readOnly,
-    }) as Promise<InferColumns<TColumns>[]>;
+    }) as ResultLike<TRows, InferColumns<TColumns>[]>;
 
 export const createTemplateExecutor =
-  <TTxContext>(executor: SqlExecutor<TTxContext>, applyTemplate: TemplateApplier) =>
-  async (txCtx: TTxContext, statement: TypedSqlTemplate<readonly []>): Promise<void> => {
+  <TTxContext, TRows extends MaybePromise<unknown[]>>(
+    executor: AnySqlExecutor<TTxContext, TRows>,
+    applyTemplate: TemplateApplier,
+  ) =>
+  (txCtx: TTxContext, statement: TypedSqlTemplate<readonly []>): ResultLike<TRows, void> => {
     const applied = applyTemplate(statement);
-    await executor.executeSql({
-      txCtx,
-      id: applied.id,
-      sql: applied.sql,
-      params: [],
-      paramTypes: {},
-      columnTypes: {},
-      readOnly: applied.readOnly,
-    });
+    return andThen(
+      executor.executeSql({
+        txCtx,
+        id: applied.id,
+        sql: applied.sql,
+        params: [],
+        paramTypes: {},
+        columnTypes: {},
+        readOnly: applied.readOnly,
+      }),
+      () => undefined,
+    ) as ResultLike<TRows, void>;
   };

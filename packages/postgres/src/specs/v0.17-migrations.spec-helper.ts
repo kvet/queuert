@@ -1,4 +1,5 @@
-import { type Migration, type TypedSqlTemplate, sql } from "@queuert/typed-sql";
+import type { Migration } from "@queuert/typed-sql/migrator";
+import { type TypedSqlTemplate, sql } from "@queuert/typed-sql/sql";
 
 const transactional = <TTxContext>(
   name: string,

@@ -1,4 +1,4 @@
-import type { Migration, MigrationStore } from "@queuert/typed-sql";
+import type { Migration, MigrationStore } from "@queuert/typed-sql/migrator";
 
 import type { RedisStoreContext } from "../state-adapter/redis-transaction.ts";
 import type { RedisSchema } from "../state-adapter/schema.redis.ts";

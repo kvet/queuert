@@ -1,4 +1,4 @@
-export { createClient, type Client } from "./client.ts";
+export { createClient, type Client } from "./client/client.ts";
 export { type Chain, type ChainStatus, type CompletedChain } from "./entities/chain.ts";
 export { type DeduplicationOptions } from "./entities/deduplication.ts";
 export { defineJobTypes } from "./job-types/define-job-types.ts";
@@ -48,16 +48,25 @@ export {
   type JobTypeValidationErrorCode,
 } from "./errors.ts";
 export { type BackoffConfig } from "./entities/backoff.ts";
-export { createWorkerRunner, type WorkerRunner } from "./worker-runner.ts";
+export { createWorkerRunner, type WorkerRunner } from "./worker/worker-runner.ts";
 export { type WorkerLeaseConfig } from "./worker/worker-lease.ts";
-export { type NotifyAdapter } from "./notify-adapter/notify-adapter.ts";
+export {
+  type AnyNotifyAdapter,
+  type NotifyAdapter,
+  type NotifyAdapterOperations,
+  type SyncNotifyAdapter,
+} from "./notify-adapter/notify-adapter.ts";
+export { type AdapterMode, type AdapterModeOf, type ModeResult } from "./adapter-mode.ts";
 export { createConsoleLog } from "./observability-adapter/log.console.ts";
 export { type Log } from "./observability-adapter/log.ts";
 export { type ObservabilityAdapter } from "./observability-adapter/observability-adapter.ts";
 export { type OrderDirection, type Page } from "./entities/pagination.ts";
 export {
+  type AnyStateAdapter,
   type BaseTxContext,
   type StateAdapter,
+  type StateAdapterOperations,
+  type SyncStateAdapter,
   type StateAdapterConfig,
   type StateBlockedJob,
   type StateChain,
@@ -83,3 +92,13 @@ export { type AttemptMiddleware } from "./attempt-middleware/attempt-middleware.
 export { createProcessors } from "./job-type-processors/create-job-type-processors.ts";
 export { omitProcessors, pickProcessors } from "./job-type-processors/pick-job-type-processors.ts";
 export { type Processors } from "./job-type-processors/job-type-processors.ts";
+export {
+  createInProcessNotifyAdapter,
+  createSyncInProcessNotifyAdapter,
+} from "./notify-adapter.in-process/notify-adapter.in-process.ts";
+export {
+  createInProcessStateAdapter,
+  createSyncInProcessStateAdapter,
+  type InProcessStateAdapter,
+  type SyncInProcessStateAdapter,
+} from "./state-adapter.in-process/state-adapter.in-process.ts";

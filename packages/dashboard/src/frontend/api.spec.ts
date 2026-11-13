@@ -1,6 +1,5 @@
 import { RpcError } from "@queuert/rpc";
-import { createClient, defineJobTypes } from "queuert";
-import { createInProcessStateAdapter } from "queuert/conformance-internal";
+import { createClient, defineJobTypes, createInProcessStateAdapter } from "queuert";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createDashboard } from "../api/dashboard.ts";

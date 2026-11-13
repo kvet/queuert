@@ -15,7 +15,7 @@ Each benchmark runs in its own child process (`node --expose-gc --no-flush-bytec
 2. **Warmup run.** Build queuert adapters, process 100 jobs, close everything. Discarded — its job is to JIT-compile queuert code paths, the measurement helpers (`measureMemory`, `diffMemory`, `formatBytes`), the console.log call chain, and trigger lazy module loads in transitive dependencies (e.g. `protobufjs` schemas pulled in by `testcontainers`). The warmup uses the same context shape as the measured run, with stdout suppressed at the `process.stdout.write` level so the full code path fires.
 3. **Capture the infrastructure baseline.** A heap snapshot first, then multi-cycle GC and `process.memoryUsage()`. Taking the snapshot frees several MB of heap, so the `heapUsed` baseline comes after it; the other way round, that freed memory shows up as negative setup cost. Both are baselines for the measured run.
 4. **Measured run.** Same lifecycle. Each step's heap delta logs from the infra baseline; the post-processing peak is captured.
-5. **Snapshot after close.** Multi-cycle GC, second snapshot. Two deltas are computed from the snapshots: the **live JS object** delta (the "does queuert leak?" answer, typically ~10 KB across all adapters) and the **V8 JIT code** delta (module-permanent compilation cost, varies by adapter complexity).
+5. **Snapshot after close.** Multi-cycle GC, second snapshot. Two deltas are computed from the snapshots: the **live JS object** delta (the "does queuert leak?" answer, 10–75 KB depending on the adapter, and the same after three lifecycles as after one) and the **V8 JIT code** delta (module-permanent compilation cost, varies by adapter complexity).
 
 The lifecycle is wrapped in a function so its locals (adapter references captured by `measureMemory` tuples) truly go out of scope when it returns — without that, destructured refs would pin adapters past `close()`.
 
@@ -69,6 +69,7 @@ The schema library's own time lands in `dependencies` and the example adapter's 
 ```bash
 pnpm start                 # all measurements (requires Docker)
 pnpm start:state-postgres  # PostgreSQL state adapter
+pnpm start:state-in-process-sync  # Synchronous in-process state adapter
 pnpm start:state-sqlite    # SQLite state adapter
 pnpm start:state-mysql     # MySQL state adapter
 pnpm start:state-mariadb   # MariaDB state adapter
@@ -76,6 +77,7 @@ pnpm start:state-redis     # Redis state adapter (experimental)
 pnpm start:notify-redis    # Redis notify adapter
 pnpm start:notify-postgres # PostgreSQL notify adapter
 pnpm start:notify-nats     # NATS notify adapter
+pnpm start:notify-ipc      # IPC notify adapter
 pnpm start:otel            # OpenTelemetry observability adapter
 pnpm start:dashboard       # Dashboard
 pnpm start:validation      # every job type registry (validation-* measurements)

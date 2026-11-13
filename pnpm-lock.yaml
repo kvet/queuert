@@ -275,6 +275,9 @@ importers:
         specifier: 6.3.1
         version: 6.3.1(@opentelemetry/api@1.10.0)
     devDependencies:
+      '@queuert/ipc':
+        specifier: workspace:*
+        version: link:../../packages/ipc
       '@queuert/tsconfig':
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
@@ -457,6 +460,9 @@ importers:
         specifier: 4.6.7
         version: 4.6.7
     devDependencies:
+      '@queuert/ipc':
+        specifier: workspace:*
+        version: link:../../packages/ipc
       '@queuert/tsconfig':
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
@@ -787,6 +793,33 @@ importers:
 
   examples/notify-custom-memory:
     devDependencies:
+      '@queuert/sqlite':
+        specifier: workspace:*
+        version: link:../../packages/sqlite
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages-internal/tsconfig
+      '@types/better-sqlite3':
+        specifier: 9.6.0
+        version: 9.6.0
+      better-sqlite3:
+        specifier: 13.0.3
+        version: 13.0.3
+      example-state-sqlite-kysely:
+        specifier: workspace:*
+        version: link:../state-sqlite-kysely
+      kysely:
+        specifier: 0.29.8
+        version: 0.29.8
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+
+  examples/notify-ipc:
+    devDependencies:
+      '@queuert/ipc':
+        specifier: workspace:*
+        version: link:../../packages/ipc
       '@queuert/sqlite':
         specifier: workspace:*
         version: link:../../packages/sqlite
@@ -1919,6 +1952,30 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
+  examples/state-sqlite-multi-worker:
+    devDependencies:
+      '@queuert/ipc':
+        specifier: workspace:*
+        version: link:../../packages/ipc
+      '@queuert/sqlite':
+        specifier: workspace:*
+        version: link:../../packages/sqlite
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages-internal/tsconfig
+      '@types/better-sqlite3':
+        specifier: 9.6.0
+        version: 9.6.0
+      better-sqlite3:
+        specifier: 13.0.3
+        version: 13.0.3
+      example-state-sqlite-better-sqlite3:
+        specifier: workspace:*
+        version: link:../state-sqlite-better-sqlite3
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+
   examples/state-sqlite-node-sqlite:
     devDependencies:
       '@queuert/sqlite':
@@ -2187,6 +2244,18 @@ importers:
       vite-plugin-solid:
         specifier: 2.11.15
         version: 2.11.15(solid-js@1.9.18)(vite@8.3.5(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+
+  packages/ipc:
+    devDependencies:
+      '@queuert/helpers':
+        specifier: workspace:*
+        version: link:../../packages-internal/helpers
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages-internal/tsconfig
+      queuert:
+        specifier: workspace:*
+        version: link:../core
 
   packages/mysql:
     devDependencies:

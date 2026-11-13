@@ -138,7 +138,7 @@ One heartbeat per worker renews the lease every `heartbeatMs`, however many atte
   </Timeline>
 </Diagram>
 
-On the in-process and SQLite adapters a user transaction holds the global write lock, so a renewal waits for it; with the defaults a user transaction can run for 45s before the worker runner counts its worker's lease as lost.
+On SQLite a user transaction holds an async provider's write lock, or blocks the thread with a synchronous provider, so a renewal waits for it; with the defaults a user transaction can run for 45s before the worker runner counts its worker's lease as lost.
 
 A handler learns that its attempt was lost elsewhere (the job was taken over, completed externally or deleted) from the notify adapter's attempt-lost notification, which aborts its `signal`. When no notification reaches it, such as when the loss happened in another process and the client uses no shared notify adapter, it learns when its `complete` writes nothing and throws.
 

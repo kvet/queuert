@@ -74,15 +74,20 @@ const capabilityGroups: ConformanceGroup<
 baseIt("index");
 
 describe("PostgreSQL End-to-End Conformance, noop notify", () => {
-  conformanceTestSuite({ it: noopNotifyIt, groups: [...endToEndBaseGroups, ...capabilityGroups] });
+  conformanceTestSuite({
+    mode: "async",
+    it: noopNotifyIt,
+    groups: [...endToEndBaseGroups, ...capabilityGroups],
+  });
 });
 
 describe("PostgreSQL End-to-End Conformance, in-process notify", () => {
-  conformanceTestSuite({ it: inProcessNotifyIt, groups: capabilityGroups });
+  conformanceTestSuite({ mode: "async", it: inProcessNotifyIt, groups: capabilityGroups });
 });
 
 describe("PostgreSQL End-to-End Conformance, PostgreSQL notify", () => {
   conformanceTestSuite({
+    mode: "async",
     it: pgNotifyIt,
     groups: [...endToEndBaseGroups, ...endToEndNotifyGroups, ...capabilityGroups],
   });

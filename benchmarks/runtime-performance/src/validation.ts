@@ -7,8 +7,13 @@
  * every input and output through a schema library.
  */
 
-import { type JobTypes, createClient, createProcessors, createWorkerRunner } from "queuert";
-import { createInProcessStateAdapter } from "queuert/internal";
+import {
+  type JobTypes,
+  createClient,
+  createProcessors,
+  createWorkerRunner,
+  createInProcessStateAdapter,
+} from "queuert";
 
 import { createCompletionCounter, printHeader, runDoubleRunBenchmark } from "./utils.ts";
 

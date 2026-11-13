@@ -27,8 +27,5 @@ const it = baseIt.extend("conformance", { scope: "file" }, async ({}, { onCleanu
 baseIt("index");
 
 describe("Redis State Provider Conformance (node-redis)", () => {
-  conformanceTestSuite({
-    it,
-    groups: redisStateProviderConformanceGroups,
-  });
+  conformanceTestSuite({ mode: "async", it, groups: redisStateProviderConformanceGroups });
 });

@@ -31,7 +31,7 @@ const setup = [
   {
     label: "Seeded queue",
     value: "40,000 jobs",
-    note: "Every completion scenario starts from the same queue, so only concurrency varies.",
+    note: "Every completion scenario starts from the same queue, so only concurrency varies. A run that drains it early is timed from its first job to its last.",
   },
 ] satisfies KeyValueItem[];
 
@@ -40,12 +40,15 @@ const Page = () => (
     <p>
       Throughput along two separate axes. When the state adapter varies, notify is a no-op, so only
       the state adapter is measured; when the notify adapter varies, state stays in-process. Each
-      chart is one scenario, with the two axes as separate groups on their own scales. A
+      chart is one scenario, with the two axes as separate groups on their own scales. The SQLite
+      rows run the synchronous adapter, <code>SyncSqliteStateAdapter</code>, and IPC, a synchronous
+      notify adapter, runs over the synchronous in-process state adapter while the other notify
+      adapters run over the asynchronous one, so the IPC row is not directly comparable with them. A
       deployment's steady-state throughput is bounded by the lower of its creation and completion
       rates.
     </p>
     <StackFilter
-      backends={["postgres", "sqlite", "mysql", "mariadb", "redis", "nats", "in-process"]}
+      backends={["postgres", "sqlite", "mysql", "mariadb", "redis", "nats", "ipc", "in-process"]}
     />
     <KeyValueList title="Test setup" items={setup} />
     <h2 id="creation">Creation</h2>
@@ -73,11 +76,6 @@ const Page = () => (
       <code>complete</code> in it. With one slot, every job's full round trip (acquire, then{" "}
       <code>complete</code> and commit) runs back to back; 4 and 16 slots show how far parallel
       slots scale it.
-    </p>
-    <p>
-      The in-process state adapter keeps its indexes in sorted arrays, so its completion rate falls
-      with queue depth. At 40,000 queued jobs that cost, not the worker, bounds every row that uses
-      in-process state, including the whole notify axis.
     </p>
     <For each={["1 slot", "4 slots", "16 slots"]}>
       {(scenario, index) => (

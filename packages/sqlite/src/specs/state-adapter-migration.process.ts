@@ -1,12 +1,9 @@
 import { randomUUID } from "node:crypto";
 
 import { runDeploymentProcess } from "@queuert/helpers/testing";
-import {
-  type Migration,
-  createMigrator,
-  createTemplateApplier,
-  createTemplateExecutor,
-} from "@queuert/typed-sql";
+import { type Migration, createMigrator } from "@queuert/typed-sql/migrator";
+import { createTemplateExecutor } from "@queuert/typed-sql/sql-executor";
+import { createTemplateApplier } from "@queuert/typed-sql/template-applier";
 import Database from "better-sqlite3";
 
 import {
@@ -43,7 +40,10 @@ if (process.argv[1] === import.meta.filename) {
     worker_id_type: "TEXT",
   });
   const store = createMigrationStore(provider, applyTemplate);
-  const migrations = createSchemaMigrations(createTemplateExecutor(provider, applyTemplate));
+  const migrations = createSchemaMigrations(
+    createTemplateExecutor(provider, applyTemplate),
+    "async",
+  );
   await runDeploymentProcess({
     migrate: async ({ version, pause }) => {
       const recordMigration = store.recordMigration;

@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { isDeepStrictEqual } from "node:util";
 
-import { createClient } from "../../client.ts";
+import { assertRejects } from "@queuert/helpers/assert-rejects";
+import { caseBody, resource, wait } from "@queuert/helpers/case-body";
+import { step } from "@queuert/helpers/steps";
+
+import { createClient } from "../../client/client.ts";
 import type { StateAdapterConformanceContext } from "../../conformance.state-adapter/types.ts";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
 import { JobTypeValidationError } from "../../errors.ts";
@@ -9,7 +13,7 @@ import { createProcessors } from "../../job-type-processors/create-job-type-proc
 import type { BaseJobTypeDefinitions } from "../../job-types/job-type.ts";
 import { createJobTypes } from "../../job-types/job-types.ts";
 import { createNoopObservabilityAdapter } from "../../observability-adapter/observability-adapter.noop.ts";
-import { createWorkerRunner } from "../../worker-runner.ts";
+import { createWorkerRunner } from "../../worker/worker-runner.ts";
 import { createCaseNotifyAdapter } from "../support/create-case-notify-adapter.ts";
 import { withCaseTransaction } from "../support/with-case-transaction.ts";
 import type { EndToEndStateAdapter } from "../types.ts";
@@ -177,7 +181,7 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
   cases: [
     {
       name: "getTypeNames returns registered type names",
-      run: async (_fixture) => {
+      run: async () => {
         assert.deepEqual(simpleJobTypes.getTypeNames(), ["main"]);
         assert.partialDeepStrictEqual(
           new Set(continuationJobTypes.getTypeNames()),
@@ -191,30 +195,36 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
     },
     {
       name: "accepts valid input at chain start",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes: simpleJobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "main",
-            input: { value: 42 },
-          }),
+        const chain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "main",
+              input: { value: 42 },
+            }),
+          ),
         );
 
         assert.equal(chain.status, "running");
-        const startedJob = await client.getJob({ id: chain.id });
+        const startedJob = yield* step(client.getJob({ id: chain.id }));
         assert.equal(startedJob!.status, "pending");
         assert.deepEqual(chain.input, { value: 42 });
-      },
+      }),
     },
     {
       name: "reports the encoded input when a chain is created",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const chainCreated = Promise.withResolvers<unknown>();
         const jobCreated = Promise.withResolvers<unknown>();
         const client = createClient({
@@ -233,83 +243,99 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
         });
 
         const at = new Date("2024-01-01T00:00:00.000Z");
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({ ...txCtx, typeName: "timed", input: { at } }),
+        const chain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({ ...txCtx, typeName: "timed", input: { at } }),
+          ),
         );
 
         assert.deepEqual(chain.input, { at });
-        assert.deepEqual(await chainCreated.promise, { at: at.toISOString() });
-        assert.deepEqual(await jobCreated.promise, { at: at.toISOString() });
-      },
+        assert.deepEqual(yield* wait(chainCreated.promise), { at: at.toISOString() });
+        assert.deepEqual(yield* wait(jobCreated.promise), { at: at.toISOString() });
+      }),
     },
     {
       name: "rejects non-entry type at chain start",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes: simpleJobTypes });
 
-        await assert.rejects(
-          async () =>
-            withCaseTransaction(stateAdapter, async (txCtx) =>
-              client.createChain({
-                ...txCtx,
-                // @ts-expect-error testing runtime validation
-                typeName: "nonexistent",
-                input: { value: 1 },
-              }),
-            ),
-          JobTypeValidationError,
+        yield* step(
+          assertRejects(
+            () =>
+              withCaseTransaction(stateAdapter, (txCtx) =>
+                client.createChain({
+                  ...txCtx,
+                  // @ts-expect-error testing runtime validation
+                  typeName: "nonexistent",
+                  input: { value: 1 },
+                }),
+              ),
+            JobTypeValidationError,
+          ),
         );
-      },
+      }),
     },
     {
       name: "rejects invalid input at chain start",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes: simpleJobTypes });
 
-        await assert.rejects(
-          async () =>
-            withCaseTransaction(stateAdapter, async (txCtx) =>
-              client.createChain({
-                ...txCtx,
-                typeName: "main",
-                // @ts-expect-error testing runtime validation
-                input: { value: "not-a-number" },
-              }),
-            ),
-          JobTypeValidationError,
+        yield* step(
+          assertRejects(
+            () =>
+              withCaseTransaction(stateAdapter, (txCtx) =>
+                client.createChain({
+                  ...txCtx,
+                  typeName: "main",
+                  // @ts-expect-error testing runtime validation
+                  input: { value: "not-a-number" },
+                }),
+              ),
+            JobTypeValidationError,
+          ),
         );
-      },
+      }),
     },
     {
       name: "rejects invalid blockers at chain start",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes: blockerJobTypes });
 
-        await assert.rejects(
-          async () =>
-            withCaseTransaction(stateAdapter, async (txCtx) =>
-              // @ts-expect-error testing runtime validation - no blockers
-              client.createChain({
-                ...txCtx,
-                typeName: "main",
-                input: { id: "main-1" },
-              }),
-            ),
-          JobTypeValidationError,
+        yield* step(
+          assertRejects(
+            () =>
+              withCaseTransaction(stateAdapter, (txCtx) =>
+                // @ts-expect-error testing runtime validation - no blockers
+                client.createChain({
+                  ...txCtx,
+                  typeName: "main",
+                  input: { id: "main-1" },
+                }),
+              ),
+            JobTypeValidationError,
+          ),
         );
-      },
+      }),
     },
     {
       name: "validates blockers against the stored chain, not the passed object",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const validatedBlockers: unknown[] = [];
         const jobTypes = createJobTypes<{
           main: {
@@ -333,168 +359,196 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
         });
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        await withCaseTransaction(stateAdapter, async (txCtx) => {
-          const authChain = await client.createChain({
-            ...txCtx,
-            typeName: "auth",
-            input: { token: "stored" },
-          });
-          const forgedAuthChain = { ...authChain, input: { token: "forged" } };
-          await client.createChain({
-            ...txCtx,
-            typeName: "main",
-            input: null,
-            blockers: [forgedAuthChain],
-          });
-          await client.createChain({
-            ...txCtx,
-            typeName: "main",
-            input: null,
-            blockers: [{ id: authChain.id }],
-          });
-        });
+        yield* step(
+          withCaseTransaction(stateAdapter, function* (txCtx) {
+            const authChain = yield* step(
+              client.createChain({
+                ...txCtx,
+                typeName: "auth",
+                input: { token: "stored" },
+              }),
+            );
+            const forgedAuthChain = { ...authChain, input: { token: "forged" } };
+            yield* step(
+              client.createChain({
+                ...txCtx,
+                typeName: "main",
+                input: null,
+                blockers: [forgedAuthChain],
+              }),
+            );
+            yield* step(
+              client.createChain({
+                ...txCtx,
+                typeName: "main",
+                input: null,
+                blockers: [{ id: authChain.id }],
+              }),
+            );
+          }),
+        );
 
         assert.deepEqual(validatedBlockers, [
           { typeName: "auth", input: { token: "stored" } },
           { typeName: "auth", input: { token: "stored" } },
         ]);
-      },
+      }),
     },
     {
       name: "accepts valid output during worker completion",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes: simpleJobTypes });
-        await using workerRunner = createWorkerRunner({
-          client,
-          concurrency: 1,
-          processors: createProcessors({
+        const workerRunner = yield* resource(
+          createWorkerRunner({
             client,
-            jobTypes: simpleJobTypes,
-            processors: {
-              main: {
-                attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({ ...txCtx, output: { result: 84 } }),
-                  ),
+            concurrency: 1,
+            processors: createProcessors({
+              client,
+              jobTypes: simpleJobTypes,
+              processors: {
+                main: {
+                  attemptHandler: async ({ complete }) =>
+                    withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({ ...txCtx, output: { result: 84 } }),
+                    ),
+                },
               },
-            },
-          }),
-        });
-
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "main",
-            input: { value: 42 },
+            }),
           }),
         );
 
-        await workerRunner.start();
-        const completed = await client.awaitChain(chain, completionOptions);
+        const chain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "main",
+              input: { value: 42 },
+            }),
+          ),
+        );
+
+        yield* wait(workerRunner.start());
+        const completed = yield* wait(client.awaitChain(chain, completionOptions));
         assert.deepEqual(completed.output, { result: 84 });
-      },
+      }),
     },
     {
       name: "rejects invalid output during worker completion",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const validationFailed = Promise.withResolvers<unknown>();
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes: simpleJobTypes });
-        await using workerRunner = createWorkerRunner({
-          client,
-          concurrency: 1,
-          processors: createProcessors({
+        const workerRunner = yield* resource(
+          createWorkerRunner({
             client,
-            jobTypes: simpleJobTypes,
-            processors: {
-              main: {
-                attemptHandler: async ({ complete }) => {
-                  try {
-                    return await withCaseTransaction(stateAdapter, async (txCtx) =>
-                      // @ts-expect-error testing runtime validation
-                      complete({ ...txCtx, output: { result: "not-a-number" } }),
-                    );
-                  } catch (error) {
-                    validationFailed.resolve(error);
-                    throw error;
-                  }
+            concurrency: 1,
+            processors: createProcessors({
+              client,
+              jobTypes: simpleJobTypes,
+              processors: {
+                main: {
+                  attemptHandler: async ({ complete }) => {
+                    try {
+                      return await withCaseTransaction(stateAdapter, (txCtx) =>
+                        // @ts-expect-error testing runtime validation
+                        complete({ ...txCtx, output: { result: "not-a-number" } }),
+                      );
+                    } catch (error) {
+                      validationFailed.resolve(error);
+                      throw error;
+                    }
+                  },
                 },
               },
-            },
-          }),
-        });
-
-        await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "main",
-            input: { value: 42 },
+            }),
           }),
         );
 
-        await workerRunner.start();
-        const error = await validationFailed.promise;
+        yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "main",
+              input: { value: 42 },
+            }),
+          ),
+        );
+
+        yield* wait(workerRunner.start());
+        const error = yield* wait(validationFailed.promise);
         assert.ok(error instanceof JobTypeValidationError);
-      },
+      }),
     },
     {
       name: "accepts valid continueWith during worker completion",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const client = createClient({
           stateAdapter,
           notifyAdapter,
           jobTypes: continuationJobTypes,
         });
-        await using workerRunner = createWorkerRunner({
-          client,
-          concurrency: 1,
-          processors: createProcessors({
+        const workerRunner = yield* resource(
+          createWorkerRunner({
             client,
-            jobTypes: continuationJobTypes,
-            processors: {
-              step1: {
-                attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({
-                      ...txCtx,
-                      continueWith: { typeName: "step2", input: { data: 1 } },
-                    }),
-                  ),
+            concurrency: 1,
+            processors: createProcessors({
+              client,
+              jobTypes: continuationJobTypes,
+              processors: {
+                step1: {
+                  attemptHandler: async ({ complete }) =>
+                    withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({
+                        ...txCtx,
+                        continueWith: { typeName: "step2", input: { data: 1 } },
+                      }),
+                    ),
+                },
+                step2: {
+                  attemptHandler: async ({ complete }) =>
+                    withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({ ...txCtx, output: { result: 42 } }),
+                    ),
+                },
               },
-              step2: {
-                attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({ ...txCtx, output: { result: 42 } }),
-                  ),
-              },
-            },
-          }),
-        });
-
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "step1",
-            input: { value: 1 },
+            }),
           }),
         );
 
-        await workerRunner.start();
-        const completed = await client.awaitChain(chain, completionOptions);
+        const chain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "step1",
+              input: { value: 1 },
+            }),
+          ),
+        );
+
+        yield* wait(workerRunner.start());
+        const completed = yield* wait(client.awaitChain(chain, completionOptions));
         assert.deepEqual(completed.output, { result: 42 });
-      },
+      }),
     },
     {
       name: "rejects invalid continueWith during worker completion",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const validationFailed = Promise.withResolvers<unknown>();
 
         const client = createClient({
@@ -502,239 +556,277 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
           notifyAdapter,
           jobTypes: continuationNoFollowUpJobTypes,
         });
-        await using workerRunner = createWorkerRunner({
-          client,
-          concurrency: 1,
-          processors: createProcessors({
+        const workerRunner = yield* resource(
+          createWorkerRunner({
             client,
-            jobTypes: continuationNoFollowUpJobTypes,
-            processors: {
-              step1: {
-                attemptHandler: async ({ complete }) => {
-                  try {
-                    return await withCaseTransaction(stateAdapter, async (txCtx) =>
-                      complete({
-                        ...txCtx,
-                        continueWith: { typeName: "step2", input: { data: 1 } },
-                      }),
-                    );
-                  } catch (error) {
-                    validationFailed.resolve(error);
-                    throw error;
-                  }
+            concurrency: 1,
+            processors: createProcessors({
+              client,
+              jobTypes: continuationNoFollowUpJobTypes,
+              processors: {
+                step1: {
+                  attemptHandler: async ({ complete }) => {
+                    try {
+                      return await withCaseTransaction(stateAdapter, (txCtx) =>
+                        complete({
+                          ...txCtx,
+                          continueWith: { typeName: "step2", input: { data: 1 } },
+                        }),
+                      );
+                    } catch (error) {
+                      validationFailed.resolve(error);
+                      throw error;
+                    }
+                  },
+                },
+                step2: {
+                  attemptHandler: async ({ complete }) =>
+                    withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({ ...txCtx, output: { result: 1 } }),
+                    ),
                 },
               },
-              step2: {
-                attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({ ...txCtx, output: { result: 1 } }),
-                  ),
-              },
-            },
-          }),
-        });
-
-        await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "step1",
-            input: { value: 1 },
+            }),
           }),
         );
 
-        await workerRunner.start();
-        const error = await validationFailed.promise;
+        yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "step1",
+              input: { value: 1 },
+            }),
+          ),
+        );
+
+        yield* wait(workerRunner.start());
+        const error = yield* wait(validationFailed.promise);
         assert.ok(error instanceof JobTypeValidationError);
-      },
+      }),
     },
     {
       name: "accepts valid output during workerless completion",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes: simpleJobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "main",
-            input: { value: 42 },
-          }),
+        const chain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "main",
+              input: { value: 42 },
+            }),
+          ),
         );
 
-        const completedChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.completeChain({
-            ...txCtx,
-            ...chain,
-            handler: async ({ job, completeJob }) =>
-              completeJob(job, async ({ complete }) => complete({ output: { result: 84 } })),
-          }),
+        const completedChain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.completeChain({
+              ...txCtx,
+              ...chain,
+              handler: ({ job, completeJob }) =>
+                completeJob(job, ({ complete }) => complete({ output: { result: 84 } })),
+            }),
+          ),
         );
 
         if (completedChain.status !== "completed") {
           throw new Error("expected a completed chain");
         }
         assert.deepEqual(completedChain.output, { result: 84 });
-      },
+      }),
     },
     {
       name: "rejects invalid output during workerless completion",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes: simpleJobTypes });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "main",
-            input: { value: 42 },
-          }),
+        const chain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "main",
+              input: { value: 42 },
+            }),
+          ),
         );
 
-        await assert.rejects(
-          async () =>
-            withCaseTransaction(stateAdapter, async (txCtx) =>
-              client.completeChain({
-                ...txCtx,
-                ...chain,
-                handler: async ({ job, completeJob }) =>
-                  completeJob(job, async ({ complete }) =>
-                    // @ts-expect-error testing runtime validation
-                    complete({ output: { result: "not-a-number" } }),
-                  ),
-              }),
-            ),
-          JobTypeValidationError,
+        yield* step(
+          assertRejects(
+            () =>
+              withCaseTransaction(stateAdapter, (txCtx) =>
+                client.completeChain({
+                  ...txCtx,
+                  ...chain,
+                  handler: ({ job, completeJob }) =>
+                    completeJob(job, ({ complete }) =>
+                      // @ts-expect-error testing runtime validation
+                      complete({ output: { result: "not-a-number" } }),
+                    ),
+                }),
+              ),
+            JobTypeValidationError,
+          ),
         );
-      },
+      }),
     },
     {
       name: "accepts valid continueWith during workerless completion",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const client = createClient({
           stateAdapter,
           notifyAdapter,
           jobTypes: continuationJobTypes,
         });
-        await using workerRunner = createWorkerRunner({
-          client,
-          concurrency: 1,
-          processors: createProcessors({
+        const workerRunner = yield* resource(
+          createWorkerRunner({
             client,
-            jobTypes: continuationJobTypes,
-            processors: {
-              step2: {
-                attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({ ...txCtx, output: { result: 42 } }),
-                  ),
+            concurrency: 1,
+            processors: createProcessors({
+              client,
+              jobTypes: continuationJobTypes,
+              processors: {
+                step2: {
+                  attemptHandler: async ({ complete }) =>
+                    withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({ ...txCtx, output: { result: 42 } }),
+                    ),
+                },
               },
-            },
-          }),
-        });
-
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "step1",
-            input: { value: 1 },
+            }),
           }),
         );
 
-        const partialChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.completeChain({
-            ...txCtx,
-            ...chain,
-            handler: async ({ job, completeJob }) => {
-              if (job.typeName === "step1") {
-                await completeJob(job, async ({ complete }) =>
-                  complete({ continueWith: { typeName: "step2", input: { data: 1 } } }),
-                );
-              }
-            },
-          }),
+        const chain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "step1",
+              input: { value: 1 },
+            }),
+          ),
+        );
+
+        const partialChain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.completeChain({
+              ...txCtx,
+              ...chain,
+              handler: ({ job, completeJob }) => {
+                if (job.typeName === "step1") {
+                  return completeJob(job, ({ complete }) =>
+                    complete({ continueWith: { typeName: "step2", input: { data: 1 } } }),
+                  );
+                }
+              },
+            }),
+          ),
         );
 
         assert.equal(partialChain.status, "running");
-        const partialTail = await client.listChainJobs({
-          chainId: partialChain.id,
-          orderDirection: "desc",
-          limit: 1,
-        });
+        const partialTail = yield* step(
+          client.listChainJobs({
+            chainId: partialChain.id,
+            orderDirection: "desc",
+            limit: 1,
+          }),
+        );
         assert.equal(partialTail.items[0].status, "pending");
 
-        await workerRunner.start();
-        const completed = await client.awaitChain(partialChain, completionOptions);
+        yield* wait(workerRunner.start());
+        const completed = yield* wait(client.awaitChain(partialChain, completionOptions));
         assert.deepEqual(completed.output, { result: 42 });
-      },
+      }),
     },
     {
       name: "rejects invalid continueWith during workerless completion",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const client = createClient({
           stateAdapter,
           notifyAdapter,
           jobTypes: continuationNoFollowUpJobTypes,
         });
 
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({
-            ...txCtx,
-            typeName: "step1",
-            input: { value: 1 },
-          }),
+        const chain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "step1",
+              input: { value: 1 },
+            }),
+          ),
         );
 
-        await assert.rejects(
-          async () =>
-            withCaseTransaction(stateAdapter, async (txCtx) =>
-              client.completeChain({
-                ...txCtx,
-                typeName: "step1",
-                id: chain.id,
-                handler: async ({ job, completeJob }) => {
-                  if (job.typeName === "step1") {
-                    await completeJob(job, async ({ complete }) =>
-                      complete({ continueWith: { typeName: "step2", input: { data: 1 } } }),
-                    );
-                  }
-                },
-              }),
-            ),
-          JobTypeValidationError,
+        yield* step(
+          assertRejects(
+            () =>
+              withCaseTransaction(stateAdapter, (txCtx) =>
+                client.completeChain({
+                  ...txCtx,
+                  typeName: "step1",
+                  id: chain.id,
+                  handler: ({ job, completeJob }) => {
+                    if (job.typeName === "step1") {
+                      return completeJob(job, ({ complete }) =>
+                        complete({ continueWith: { typeName: "step2", input: { data: 1 } } }),
+                      );
+                    }
+                  },
+                }),
+              ),
+            JobTypeValidationError,
+          ),
         );
-      },
+      }),
     },
     {
       name: "rejects an encode failure as JobTypeValidationError",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes: codecJobTypes });
 
-        await assert.rejects(
-          async () =>
-            withCaseTransaction(stateAdapter, async (txCtx) =>
-              client.createChain({
-                ...txCtx,
-                typeName: "timed",
-                input: { at: "2024-01-01" as unknown as Date },
-              }),
-            ),
-          JobTypeValidationError,
+        yield* step(
+          assertRejects(
+            () =>
+              withCaseTransaction(stateAdapter, (txCtx) =>
+                client.createChain({
+                  ...txCtx,
+                  typeName: "timed",
+                  input: { at: "2024-01-01" as unknown as Date },
+                }),
+              ),
+            JobTypeValidationError,
+          ),
         );
-      },
+      }),
     },
     {
       name: "rejects an encoded value that is not JSON-serializable",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const client = createClient({
           stateAdapter,
           notifyAdapter,
@@ -750,67 +842,79 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
           }),
         });
 
-        await assert.rejects(
-          async () =>
-            withCaseTransaction(stateAdapter, async (txCtx) =>
-              client.createChain({
-                ...txCtx,
-                typeName: "timed",
-                input: { at: new Date("2024-01-01T00:00:00.000Z") },
-              }),
-            ),
-          (error: { code: string; details: { path: unknown } }) => {
-            assert.equal(error.code, "invalid_input");
-            assert.deepEqual(error.details.path, ["at"]);
-            return true;
-          },
+        yield* step(
+          assertRejects(
+            () =>
+              withCaseTransaction(stateAdapter, (txCtx) =>
+                client.createChain({
+                  ...txCtx,
+                  typeName: "timed",
+                  input: { at: new Date("2024-01-01T00:00:00.000Z") },
+                }),
+              ),
+            (error: { code: string; details: { path: unknown } }) => {
+              assert.equal(error.code, "invalid_input");
+              assert.deepEqual(error.details.path, ["at"]);
+              return true;
+            },
+          ),
         );
-      },
+      }),
     },
     {
       name: "decodes every input and every completed output on a page of jobs",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes: codecJobTypes });
         const doneAt = new Date("2024-03-01T00:00:00.000Z");
-        await using workerRunner = createWorkerRunner({
-          client,
-          concurrency: 1,
-          processors: createProcessors({
+        const workerRunner = yield* resource(
+          createWorkerRunner({
             client,
-            jobTypes: codecJobTypes,
-            processors: {
-              timed: {
-                attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({ ...txCtx, output: { doneAt } }),
-                  ),
+            concurrency: 1,
+            processors: createProcessors({
+              client,
+              jobTypes: codecJobTypes,
+              processors: {
+                timed: {
+                  attemptHandler: async ({ complete }) =>
+                    withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({ ...txCtx, output: { doneAt } }),
+                    ),
+                },
               },
-            },
+            }),
           }),
-        });
+        );
 
         const first = new Date("2024-01-01T00:00:00.000Z");
         const second = new Date("2024-02-01T00:00:00.000Z");
         const pending = new Date("2024-04-01T00:00:00.000Z");
-        const chains = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChains({
-            ...txCtx,
-            items: [
-              { typeName: "timed", input: { at: first } },
-              { typeName: "timed", input: { at: second } },
-            ],
-          }),
+        const chains = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChains({
+              ...txCtx,
+              items: [
+                { typeName: "timed", input: { at: first } },
+                { typeName: "timed", input: { at: second } },
+              ],
+            }),
+          ),
         );
-        await workerRunner.start();
-        await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
-        await workerRunner.close();
-        await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({ ...txCtx, typeName: "timed", input: { at: pending } }),
+        yield* wait(workerRunner.start());
+        yield* wait(
+          Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions))),
+        );
+        yield* wait(workerRunner.close());
+        yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({ ...txCtx, typeName: "timed", input: { at: pending } }),
+          ),
         );
 
-        const page = await client.listJobs({ typeName: "timed", limit: 10 });
+        const page = yield* step(client.listJobs({ typeName: "timed", limit: 10 }));
 
         for (const input of [{ at: first }, { at: second }, { at: pending }]) {
           assert.ok(page.items.some((job) => isDeepStrictEqual(job.input, input)));
@@ -819,20 +923,24 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
           page.items.flatMap((job) => (job.status === "completed" ? [job.output] : [])),
           [{ doneAt }, { doneAt }],
         );
-      },
+      }),
     },
     {
       name: "rejects a stored value the decoder rejects as JobTypeValidationError",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const writer = createClient({ stateAdapter, notifyAdapter, jobTypes: codecJobTypes });
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          writer.createChain({
-            ...txCtx,
-            typeName: "timed",
-            input: { at: new Date("2024-01-01T00:00:00.000Z") },
-          }),
+        const chain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            writer.createChain({
+              ...txCtx,
+              typeName: "timed",
+              input: { at: new Date("2024-01-01T00:00:00.000Z") },
+            }),
+          ),
         );
 
         const reader = createClient({
@@ -852,101 +960,122 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
           }),
         });
 
-        await assert.rejects(async () => reader.getJob({ id: chain.id }), JobTypeValidationError);
-      },
+        yield* step(assertRejects(() => reader.getJob({ id: chain.id }), JobTypeValidationError));
+      }),
     },
     {
       name: "reads chains created together in their stored form when the registry does not know the type",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const writer = createClient({ stateAdapter, notifyAdapter, jobTypes: codecJobTypes });
-        const [first, second] = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          writer.createChains({
-            ...txCtx,
-            items: [
-              { typeName: "timed", input: { at: new Date("2024-01-01T00:00:00.000Z") } },
-              { typeName: "timed", input: { at: new Date("2024-02-01T00:00:00.000Z") } },
-            ],
-          }),
+        const [first, second] = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            writer.createChains({
+              ...txCtx,
+              items: [
+                { typeName: "timed", input: { at: new Date("2024-01-01T00:00:00.000Z") } },
+                { typeName: "timed", input: { at: new Date("2024-02-01T00:00:00.000Z") } },
+              ],
+            }),
+          ),
         );
 
         const reader = createClient({ stateAdapter, notifyAdapter, jobTypes: simpleJobTypes });
 
-        assert.partialDeepStrictEqual(await reader.getJob({ id: first.id }), {
+        assert.partialDeepStrictEqual(yield* step(reader.getJob({ id: first.id })), {
           typeName: "timed",
           input: { at: "2024-01-01T00:00:00.000Z" },
         });
-        assert.partialDeepStrictEqual(await reader.getJob({ id: second.id }), {
+        assert.partialDeepStrictEqual(yield* step(reader.getJob({ id: second.id })), {
           typeName: "timed",
           input: { at: "2024-02-01T00:00:00.000Z" },
         });
-      },
+      }),
     },
     {
       name: "hands the worker the decoded input and returns the decoded output to the client",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes: codecJobTypes });
         const at = new Date("2024-01-01T00:00:00.000Z");
         const doneAt = new Date("2024-03-01T00:00:00.000Z");
-        await using workerRunner = createWorkerRunner({
-          client,
-          concurrency: 1,
-          processors: createProcessors({
+        const workerRunner = yield* resource(
+          createWorkerRunner({
             client,
-            jobTypes: codecJobTypes,
-            processors: {
-              timed: {
-                attemptHandler: async ({ job, complete }) => {
-                  assert.deepEqual(job.input, { at });
-                  return withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({ ...txCtx, output: { doneAt } }),
-                  );
+            concurrency: 1,
+            processors: createProcessors({
+              client,
+              jobTypes: codecJobTypes,
+              processors: {
+                timed: {
+                  attemptHandler: async ({ job, complete }) => {
+                    assert.deepEqual(job.input, { at });
+                    return withCaseTransaction(stateAdapter, (txCtx) =>
+                      complete({ ...txCtx, output: { doneAt } }),
+                    );
+                  },
                 },
               },
-            },
+            }),
           }),
-        });
-
-        const chain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({ ...txCtx, typeName: "timed", input: { at } }),
         );
 
-        await workerRunner.start();
-        const completed = await client.awaitChain(chain, completionOptions);
+        const chain = yield* step(
+          withCaseTransaction(stateAdapter, (txCtx) =>
+            client.createChain({ ...txCtx, typeName: "timed", input: { at } }),
+          ),
+        );
+
+        yield* wait(workerRunner.start());
+        const completed = yield* wait(client.awaitChain(chain, completionOptions));
         assert.deepEqual(completed.output, { doneAt });
-        assert.partialDeepStrictEqual(await client.getJob({ id: chain.id, typeName: "timed" }), {
-          input: { at },
-        });
-      },
+        assert.partialDeepStrictEqual(
+          yield* step(client.getJob({ id: chain.id, typeName: "timed" })),
+          {
+            input: { at },
+          },
+        );
+      }),
     },
     {
       name: "validates blockers against the decoded input of each stored chain",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: caseBody(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = (yield* resource(createStateAdapter())) as EndToEndStateAdapter;
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes: codecJobTypes });
 
-        const gatedChains = await withCaseTransaction(stateAdapter, async (txCtx) => {
-          const [first, second] = await client.createChains({
-            ...txCtx,
-            items: [
-              { typeName: "timed", input: { at: new Date("2024-01-01T00:00:00.000Z") } },
-              { typeName: "timed", input: { at: new Date("2024-02-01T00:00:00.000Z") } },
-            ],
-          });
-          return client.createChains({
-            ...txCtx,
-            items: [
-              { typeName: "gated", input: null, blockers: [{ id: first.id }] },
-              { typeName: "gated", input: null, blockers: [{ id: second.id }] },
-            ],
-          });
-        });
+        const gatedChains = yield* step(
+          withCaseTransaction(stateAdapter, function* (txCtx) {
+            const [first, second] = yield* step(
+              client.createChains({
+                ...txCtx,
+                items: [
+                  { typeName: "timed", input: { at: new Date("2024-01-01T00:00:00.000Z") } },
+                  { typeName: "timed", input: { at: new Date("2024-02-01T00:00:00.000Z") } },
+                ],
+              }),
+            );
+            return yield* step(
+              client.createChains({
+                ...txCtx,
+                items: [
+                  { typeName: "gated", input: null, blockers: [{ id: first.id }] },
+                  { typeName: "gated", input: null, blockers: [{ id: second.id }] },
+                ],
+              }),
+            );
+          }),
+        );
         assert.equal(gatedChains.length, 2);
-      },
+      }),
     },
   ],
 };

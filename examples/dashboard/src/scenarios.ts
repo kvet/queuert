@@ -1,7 +1,7 @@
 import {
   type Client,
   type JobTypesDefinitions,
-  type StateAdapter,
+  type SyncStateAdapter,
   type TxHooks,
   createProcessors,
   createWorkerRunner,
@@ -156,12 +156,12 @@ export const populateScenarios = async ({
   stateAdapter,
   withTransaction,
 }: {
-  client: Client<JobTypesDefinitions<typeof jobTypes>, StateAdapter<any, string, string>>;
-  stateAdapter: StateAdapter<any, string, string>;
-  withTransaction: <T>(fn: (ctx: object) => Promise<T>) => Promise<T>;
+  client: Client<JobTypesDefinitions<typeof jobTypes>, SyncStateAdapter<any, string, string>>;
+  stateAdapter: SyncStateAdapter<any, string, string>;
+  withTransaction: <T>(fn: (ctx: object) => T) => T;
 }) => {
-  const transaction = async <T>(fn: (ctx: { txHooks: TxHooks }) => Promise<T>) =>
-    withTxHooks(async (txHooks) => withTransaction(async (ctx) => fn({ ...ctx, txHooks })));
+  const transaction = <T>(fn: (ctx: { txHooks: TxHooks }) => T) =>
+    withTxHooks((txHooks) => withTransaction((ctx) => fn({ ...ctx, txHooks })));
 
   await using workerRunner = createWorkerRunner({
     client,
@@ -172,7 +172,7 @@ export const populateScenarios = async ({
         greet: {
           attemptHandler: async ({ job, complete }) => {
             await delay(20);
-            return transaction(async (ctx) =>
+            return transaction((ctx) =>
               complete({ ...ctx, output: { greeting: `Hello, ${job.input.name}!` } }),
             );
           },
@@ -181,7 +181,7 @@ export const populateScenarios = async ({
         "order:validate": {
           attemptHandler: async ({ job, complete }) => {
             await delay(50);
-            return transaction(async (ctx) =>
+            return transaction((ctx) =>
               complete({
                 ...ctx,
                 continueWith: {
@@ -195,7 +195,7 @@ export const populateScenarios = async ({
         "order:process": {
           attemptHandler: async ({ job, complete }) => {
             await delay(100);
-            return transaction(async (ctx) =>
+            return transaction((ctx) =>
               complete({
                 ...ctx,
                 continueWith: {
@@ -209,7 +209,7 @@ export const populateScenarios = async ({
         "order:complete": {
           attemptHandler: async ({ job, complete }) => {
             await delay(30);
-            return transaction(async (ctx) =>
+            return transaction((ctx) =>
               complete({ ...ctx, output: { orderId: job.input.orderId, status: "completed" } }),
             );
           },
@@ -218,7 +218,7 @@ export const populateScenarios = async ({
         "fetch-user": {
           attemptHandler: async ({ job, complete }) => {
             await delay(80);
-            return transaction(async (ctx) =>
+            return transaction((ctx) =>
               complete({ ...ctx, output: { userId: job.input.userId, name: "Alice" } }),
             );
           },
@@ -226,7 +226,7 @@ export const populateScenarios = async ({
         "fetch-permissions": {
           attemptHandler: async ({ job, complete }) => {
             await delay(60);
-            return transaction(async (ctx) =>
+            return transaction((ctx) =>
               complete({
                 ...ctx,
                 output: { userId: job.input.userId, permissions: ["read", "write"] },
@@ -238,7 +238,7 @@ export const populateScenarios = async ({
           attemptHandler: async ({ job, complete }) => {
             const [userBlocker, permBlocker] = job.blockers;
             await delay(40);
-            return transaction(async (ctx) =>
+            return transaction((ctx) =>
               complete({
                 ...ctx,
                 output: {
@@ -255,7 +255,7 @@ export const populateScenarios = async ({
             if (job.input.shouldFail && job.attempt < 2) {
               throw new Error("Simulated failure");
             }
-            return transaction(async (ctx) => complete({ ...ctx, output: { success: true } }));
+            return transaction((ctx) => complete({ ...ctx, output: { success: true } }));
           },
           backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },
         },
@@ -263,7 +263,7 @@ export const populateScenarios = async ({
         "scheduled-report": {
           attemptHandler: async ({ complete }) => {
             await delay(50);
-            return transaction(async (ctx) =>
+            return transaction((ctx) =>
               complete({ ...ctx, output: { generatedAt: new Date().toISOString() } }),
             );
           },
@@ -271,7 +271,7 @@ export const populateScenarios = async ({
 
         "count-step": {
           attemptHandler: async ({ job, complete }) =>
-            transaction(async (ctx) =>
+            transaction((ctx) =>
               job.input.n >= job.input.total
                 ? complete({ ...ctx, output: { total: job.input.total } })
                 : complete({
@@ -286,12 +286,12 @@ export const populateScenarios = async ({
 
         signal: {
           attemptHandler: async ({ complete }) =>
-            transaction(async (ctx) => complete({ ...ctx, output: { fired: true } })),
+            transaction((ctx) => complete({ ...ctx, output: { fired: true } })),
         },
 
         "blocked-task": {
           attemptHandler: async ({ job, complete }) =>
-            transaction(async (ctx) =>
+            transaction((ctx) =>
               complete({ ...ctx, output: { index: job.input.index, done: true } }),
             ),
         },
@@ -302,24 +302,24 @@ export const populateScenarios = async ({
   await workerRunner.start();
 
   // Scenario 1: Single Job
-  const greetChain = await transaction(async (ctx) =>
+  const greetChain = transaction((ctx) =>
     client.createChain({ ...ctx, typeName: "greet", input: { name: "World" } }),
   );
   await client.awaitChain(greetChain, { timeoutMs: 5000 });
 
   // Scenario 2: Continuations
-  const orderChain = await transaction(async (ctx) =>
+  const orderChain = transaction((ctx) =>
     client.createChain({ ...ctx, typeName: "order:validate", input: { orderId: "ORD-123" } }),
   );
   await client.awaitChain(orderChain, { timeoutMs: 5000 });
 
   // Scenario 3: Blockers (fan-out)
-  const blockerChain = await transaction(async (ctx) =>
+  const blockerChain = transaction((ctx) =>
     client.createChain({
       ...ctx,
       typeName: "process-with-blockers",
       input: { taskId: "TASK-456" },
-      blockers: await client.createChains({
+      blockers: client.createChains({
         ...ctx,
         items: [
           { typeName: "fetch-user", input: { userId: "user-1" } },
@@ -331,13 +331,13 @@ export const populateScenarios = async ({
   await client.awaitChain(blockerChain, { timeoutMs: 5000 });
 
   // Scenario 4: Retries
-  const retryChain = await transaction(async (ctx) =>
+  const retryChain = transaction((ctx) =>
     client.createChain({ ...ctx, typeName: "might-fail", input: { shouldFail: true } }),
   );
   await client.awaitChain(retryChain, { timeoutMs: 5000 });
 
   // Scenario 5: Scheduled Job (1 hour in the future — trigger it from the dashboard)
-  await transaction(async (ctx) =>
+  transaction((ctx) =>
     client.createChain({
       ...ctx,
       typeName: "scheduled-report",
@@ -347,7 +347,7 @@ export const populateScenarios = async ({
   );
 
   // Scenario 6: Long chain — one chain with many jobs (chain-detail job pagination)
-  const longChain = await transaction(async (ctx) =>
+  const longChain = transaction((ctx) =>
     client.createChain({
       ...ctx,
       typeName: "count-step",
@@ -357,7 +357,7 @@ export const populateScenarios = async ({
   await client.awaitChain(longChain, { timeoutMs: 5000 });
 
   // Scenario 7: Blocker fan-in — one pending chain blocking many jobs (chain-detail "Blocked jobs" pagination)
-  const hub = await transaction(async (ctx) =>
+  const hub = transaction((ctx) =>
     client.createChain({
       ...ctx,
       typeName: "signal",
@@ -366,7 +366,7 @@ export const populateScenarios = async ({
       schedule: { afterMs: HOUR_MS },
     }),
   );
-  await transaction(async (ctx) =>
+  transaction((ctx) =>
     client.createChains({
       ...ctx,
       items: Array.from({ length: DASHBOARD_PAGE_SIZE * 2 + 1 }, (_, index) => ({
@@ -380,7 +380,7 @@ export const populateScenarios = async ({
   await workerRunner.close();
 
   // Scenario 8: Bulk volume — many root chains/jobs (chain-list + job-list pagination)
-  await transaction(async (ctx) =>
+  transaction((ctx) =>
     client.createChains({
       ...ctx,
       items: Array.from({ length: DASHBOARD_PAGE_SIZE * 2 + 1 }, (_, index) => ({
@@ -392,18 +392,18 @@ export const populateScenarios = async ({
 
   // Scenario 9: Leftover workers — worker rows with a job running under each and no worker runner
   // to renew their leases (Workers page, worker detail, lease-lost warning)
-  const leaveWorkerRunning = async (options: { label: string; leaseMs: number }) => {
-    await transaction(async (ctx) =>
+  const leaveWorkerRunning = (options: { label: string; leaseMs: number }) => {
+    transaction((ctx) =>
       client.createChain({ ...ctx, typeName: "long-task", input: { label: options.label } }),
     );
     const workerId = stateAdapter.config.generateWorkerId();
-    const worker = await stateAdapter.startWorker({
+    const worker = stateAdapter.startWorker({
       workerId,
       typeNames: ["long-task"],
       concurrency: 1,
       leaseMs: options.leaseMs,
     });
-    await stateAdapter.startJobAttempts({
+    stateAdapter.startJobAttempts({
       typeNames: ["long-task"],
       workerId,
       workerToken: worker.token,
@@ -411,8 +411,8 @@ export const populateScenarios = async ({
     });
     return workerId;
   };
-  const liveWorkerId = await leaveWorkerRunning({ label: "long-runner-live", leaseMs: HOUR_MS });
-  await leaveWorkerRunning({ label: "long-runner-lost", leaseMs: LOST_LEASE_MS });
+  const liveWorkerId = leaveWorkerRunning({ label: "long-runner-live", leaseMs: HOUR_MS });
+  leaveWorkerRunning({ label: "long-runner-lost", leaseMs: LOST_LEASE_MS });
   await delay(LOST_LEASE_MS);
 
   return { orderChain, blockerChain, retryChain, liveWorkerId };

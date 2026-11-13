@@ -9,7 +9,7 @@
  * hop, into the completed output, and back out of a client read.
  */
 
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 import { createClient, createWorkerRunner, createProcessors } from "queuert";
@@ -36,14 +36,14 @@ const jobTypes = createZodCodecJobTypes({
   },
 });
 
-await using drivers = new AsyncDisposableStack();
+using drivers = new DisposableStack();
 const db = drivers.adopt(new Database(":memory:"), (db) => {
   db.close();
 });
-await using stateAdapter = createSqliteStateAdapter({
-  stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
+using stateAdapter = createSqliteStateAdapter({
+  stateProvider: createBetterSqlite3StateProvider({ db }),
 });
-await stateAdapter.migrateToLatest();
+stateAdapter.migrateToLatest();
 
 const client = createClient({ stateAdapter, jobTypes });
 
@@ -60,7 +60,7 @@ await using workerRunner = createWorkerRunner({
           );
 
           const from = new Date(job.input.runAt.getTime() - 24 * 60 * 60 * 1000);
-          return stateAdapter.withTransaction(async (ctx) =>
+          return stateAdapter.withTransaction((ctx) =>
             complete({
               ...ctx,
               continueWith: {
@@ -76,7 +76,7 @@ await using workerRunner = createWorkerRunner({
           const hours = (job.input.to.getTime() - job.input.from.getTime()) / 3_600_000;
           console.log(`Rendering ${job.input.reportId} over a ${hours}h window`);
 
-          return stateAdapter.withTransaction(async (ctx) =>
+          return stateAdapter.withTransaction((ctx) =>
             complete({
               ...ctx,
               output: { renderedAt: new Date(), rowCount: 128 },
@@ -91,7 +91,7 @@ await using workerRunner = createWorkerRunner({
 await workerRunner.start();
 
 const runAt = new Date("2024-06-01T09:00:00.000Z");
-const chain = await stateAdapter.withTransaction(async (ctx) =>
+const chain = stateAdapter.withTransaction((ctx) =>
   client.createChain({
     ...ctx,
     typeName: "schedule-report",
@@ -103,7 +103,7 @@ const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`\nrenderedAt is a ${result.output.renderedAt.constructor.name}`);
 console.log(`rowCount: ${result.output.rowCount}`);
 
-const readBack = await client.getJob({ id: chain.id, typeName: "schedule-report" });
+const readBack = client.getJob({ id: chain.id, typeName: "schedule-report" });
 console.log(`\nRead back from the client: runAt is a ${readBack?.input.runAt.constructor.name}`);
 console.log(
   `Round-trip preserved the instant: ${readBack?.input.runAt.getTime() === runAt.getTime()}`,

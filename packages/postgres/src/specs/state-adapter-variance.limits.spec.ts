@@ -33,6 +33,7 @@ describe("PostgreSQL State Adapter Variance - Limits", () => {
   });
 
   conformanceTestSuite({
+    mode: "async",
     it,
     groups: [...pgStateAdapterConformanceGroups, ...stateAdapterCountCapGroups],
   });

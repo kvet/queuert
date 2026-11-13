@@ -1,3 +1,6 @@
+import { caseBody, resource } from "@queuert/helpers/case-body";
+import { step } from "@queuert/helpers/steps";
+
 import type { ConformanceGroup } from "../../conformance/runner.ts";
 import type { StateAdapterConformanceContext } from "../types.ts";
 
@@ -7,12 +10,12 @@ export const closeGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   cases: [
     {
       name: "close is idempotent",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        await stateAdapter.close();
-        await stateAdapter.close();
-      },
+        yield* step(stateAdapter.close());
+        yield* step(stateAdapter.close());
+      }),
     },
   ],
 };

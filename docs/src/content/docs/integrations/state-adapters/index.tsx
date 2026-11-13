@@ -61,6 +61,17 @@ const adapters: OptionCard[] = [
     action: { label: "Redis state adapter", href: "/integrations/state-adapters/redis/" },
   },
   {
+    name: "In-process",
+    status: { label: "built-in", tone: "default" },
+    pick: "All state is held in memory and lost on process exit. For tests and single-process apps.",
+    facts: [
+      { label: "Package", value: "queuert" },
+      { label: "Clients", value: "none" },
+      { label: "Scope", value: "one process" },
+    ],
+    action: { label: "In-process state adapter", href: "/integrations/state-adapters/in-process/" },
+  },
+  {
     name: "Custom",
     pick: "A StateAdapter of your own, for another database engine.",
     facts: [
@@ -195,6 +206,18 @@ const Page = () => (
       proseNames
       items={members()}
     />
+    <p>
+      <code>SyncStateAdapter</code> is its synchronous variant, for drivers that run statements
+      synchronously: the same members, each returning its result directly, a{" "}
+      <code>withTransaction</code> that runs a synchronous callback, and <code>sync: true</code>,
+      which tells Queuert the adapter's mode. <code>createClient</code> and{" "}
+      <code>createWorkerRunner</code> follow the adapter's mode, so a client over it returns plain
+      values; SQLite ships one, see{" "}
+      <A href="/integrations/state-adapters/sqlite/#synchronous-providers">
+        SQLite synchronous providers
+      </A>
+      .
+    </p>
 
     <h2>How adapters behave</h2>
     <ul>

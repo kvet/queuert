@@ -3,12 +3,12 @@ import type {
   AttemptMiddleware,
   MergedAttemptHandlerCtx,
 } from "../attempt-middleware/attempt-middleware.ts";
-import type { Client } from "../client.ts";
+import type { Client } from "../client/client.ts";
 import type { BackoffConfig } from "../entities/backoff.ts";
 import type { BaseJobTypeDefinitions } from "../job-types/job-type.ts";
 import type { JobTypeNames } from "../job-types/job-types.resolvers.ts";
 import type { JobTypes } from "../job-types/job-types.ts";
-import type { StateAdapter } from "../state-adapter/state-adapter.ts";
+import type { AnyStateAdapter } from "../state-adapter/state-adapter.ts";
 import {
   type Processor,
   type Processors,
@@ -34,6 +34,9 @@ type MergedDefs<
  * A registry-level `backoffConfig` cascades onto every processor in this
  * registry unless that processor overrides it.
  *
+ * Handlers follow the client's mode: over a client of a {@link SyncStateAdapter}, their
+ * `complete` and `fence` return their results directly and throw synchronously.
+ *
  * @example
  * const orderProcessors = createProcessors({
  *   client,
@@ -51,7 +54,7 @@ type MergedDefs<
  */
 export const createProcessors = <
   TClientJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends AnyStateAdapter,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TExternalJobTypeDefinitions extends BaseJobTypeDefinitions,
   TProcessors extends keyof TJobTypeDefinitions & string,
@@ -65,7 +68,8 @@ export const createProcessors = <
     ? Client<TClientJobTypeDefinitions, TStateAdapter>
     : `Error: client is missing required job types: ${Exclude<keyof TJobTypeDefinitions & string, keyof TClientJobTypeDefinitions & string>}`;
   jobTypes: JobTypes<TJobTypeDefinitions, TExternalJobTypeDefinitions>;
-  attemptMiddleware?: TAttemptMiddleware & readonly AttemptMiddleware<TStateAdapter, any>[];
+  attemptMiddleware?: TAttemptMiddleware &
+    readonly AttemptMiddleware<NoInfer<TStateAdapter>, any>[];
   backoffConfig?: BackoffConfig;
   processors: {
     [K in TProcessors]: Processor<

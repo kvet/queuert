@@ -1,3 +1,4 @@
+import type { AdapterMode } from "../adapter-mode.ts";
 import type { ConformanceGroup } from "./runner.ts";
 
 /**
@@ -23,21 +24,30 @@ export type ConformanceTestCase<TContext> = {
   run: (context: TContext) => Promise<void>;
 };
 
+/**
+ * Turns groups into test cases. With `mode`, leaves out the cases that run only in the other
+ * mode.
+ */
 export const toConformanceTestCases = <TContext>(
   groups: ConformanceGroup<TContext>[],
+  mode?: AdapterMode,
 ): ConformanceTestCase<TContext>[] =>
   groups.flatMap((group) =>
-    group.cases.map<ConformanceTestCase<TContext>>((testCase) => ({
-      group: group.name,
-      name: testCase.name,
-      title: `${group.name} > ${testCase.name}`,
-      run: async (context) => {
-        if (context === undefined) {
-          throw new Error(
-            `No conformance context for "${group.name} > ${testCase.name}": the hook that creates it did not run or failed`,
-          );
-        }
-        await testCase.run(context);
-      },
-    })),
+    group.cases
+      .filter(
+        (testCase) => mode === undefined || testCase.mode === undefined || testCase.mode === mode,
+      )
+      .map<ConformanceTestCase<TContext>>((testCase) => ({
+        group: group.name,
+        name: testCase.name,
+        title: `${group.name} > ${testCase.name}`,
+        run: async (context) => {
+          if (context === undefined) {
+            throw new Error(
+              `No conformance context for "${group.name} > ${testCase.name}": the hook that creates it did not run or failed`,
+            );
+          }
+          await testCase.run(context);
+        },
+      })),
   );

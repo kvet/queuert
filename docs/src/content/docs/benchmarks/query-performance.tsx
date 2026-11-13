@@ -18,7 +18,7 @@ import {
 export const meta = {
   title: "Query Performance",
   description:
-    "Median latency of every state-adapter query on PostgreSQL, SQLite, MySQL, MariaDB and Redis.",
+    "Median latency of every state-adapter query on PostgreSQL, SQLite, MySQL, MariaDB, Redis and the synchronous in-process adapter.",
 };
 
 const series = [
@@ -27,6 +27,7 @@ const series = [
   { label: "MySQL", backend: "mysql" },
   { label: "MariaDB", backend: "mariadb" },
   { label: "Redis", backend: "redis" },
+  { label: "In-process (sync)", backend: "in-process" },
 ] as const;
 
 /** One group per query, the backends as its rows, each query on its own scale. */
@@ -76,15 +77,20 @@ const setup = [
     note: "1 GB InnoDB buffer pool.",
   },
   { label: "Redis", value: "ioredis driver" },
+  {
+    label: "In-process",
+    value: "Sync in-process state adapter",
+    note: "Seeded through the adapter itself with seedAllStates, the same dataset the SQL seeders write.",
+  },
 ] satisfies KeyValueItem[];
 
 const Page = () => (
   <>
     <p>
       Every state-adapter method runs against the same seeded dataset on PostgreSQL, SQLite, MySQL,
-      MariaDB and Redis.
+      MariaDB, Redis and the synchronous in-process adapter.
     </p>
-    <StackFilter backends={["postgres", "sqlite", "mysql", "mariadb", "redis"]} />
+    <StackFilter backends={["postgres", "sqlite", "mysql", "mariadb", "redis", "in-process"]} />
     <KeyValueList title="Test setup" items={setup} />
     <h2 id="operational-queries">Operational queries</h2>
     <p>
@@ -116,6 +122,7 @@ const Page = () => (
       pnpm --filter benchmark-query-performance start:mysql
       pnpm --filter benchmark-query-performance start:mariadb
       pnpm --filter benchmark-query-performance start:redis
+      pnpm --filter benchmark-query-performance start:in-process-sync
     `}</Code>
   </>
 );

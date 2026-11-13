@@ -24,8 +24,22 @@ import type { NotifyAdapterConformanceContext } from "./types.ts";
  * ```
  */
 export const notifyAdapterConformanceCases: ConformanceTestCase<NotifyAdapterConformanceContext>[] =
-  toConformanceTestCases(notifyAdapterBaseGroups);
+  toConformanceTestCases(notifyAdapterBaseGroups, "async");
+
+/**
+ * The notify adapter conformance cases for a {@link SyncNotifyAdapter}. The cases call the adapter
+ * synchronously, fail when a call returns a promise, and wait only for delivery.
+ */
+export const syncNotifyAdapterConformanceCases: ConformanceTestCase<NotifyAdapterConformanceContext>[] =
+  toConformanceTestCases(notifyAdapterBaseGroups, "sync");
 
 /** End-to-end cases that build a client and worker runners over the adapter and in-memory state. */
 export const notifyAdapterEndToEndConformanceCases: ConformanceTestCase<NotifyAdapterConformanceContext>[] =
-  toConformanceTestCases(notifyAdapterEndToEndGroups);
+  toConformanceTestCases(notifyAdapterEndToEndGroups, "async");
+
+/**
+ * End-to-end cases for a {@link SyncNotifyAdapter}: they build a client over the sync in-process
+ * state adapter and the adapter under test.
+ */
+export const syncNotifyAdapterEndToEndConformanceCases: ConformanceTestCase<NotifyAdapterConformanceContext>[] =
+  toConformanceTestCases(notifyAdapterEndToEndGroups, "sync");

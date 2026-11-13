@@ -1,4 +1,4 @@
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 import { createClient, createWorkerRunner, createProcessors } from "queuert";
@@ -25,37 +25,36 @@ const buildJobTypes = () =>
     },
   });
 
-const createStateAdapter = async () => {
+const createStateAdapter = () => {
   const stateAdapter = createSqliteStateAdapter({
     stateProvider: createBetterSqlite3StateProvider({
       db: new Database(":memory:"),
-      lock: createAsyncRwLock(),
     }),
   });
-  await stateAdapter.migrateToLatest();
+  stateAdapter.migrateToLatest();
   return stateAdapter;
 };
 
-test("stores the encoded form and hands the runtime form to readers", async () => {
+test("stores the encoded form and hands the runtime form to readers", () => {
   const jobTypes = buildJobTypes();
-  await using stateAdapter = await createStateAdapter();
+  using stateAdapter = createStateAdapter();
   const client = createClient({ stateAdapter, jobTypes });
 
   const sendAt = new Date("2024-06-01T09:00:00.000Z");
-  const chain = await stateAdapter.withTransaction(async (ctx) =>
+  const chain = stateAdapter.withTransaction((ctx) =>
     client.createChain({ ...ctx, typeName: "remind", input: { sendAt } }),
   );
 
-  const [stored] = await stateAdapter.getJobs({ jobIds: [chain.id] });
+  const [stored] = stateAdapter.getJobs({ jobIds: [chain.id] });
   expect(stored?.input).toEqual({ sendAt: "2024-06-01T09:00:00.000Z" });
 
-  const job = await client.getJob({ id: chain.id, typeName: "remind" });
+  const job = client.getJob({ id: chain.id, typeName: "remind" });
   expect(job?.input.sendAt).toBeInstanceOf(Date);
 });
 
 test("round-trips a Date through the worker and back out of a client read", async () => {
   const jobTypes = buildJobTypes();
-  await using stateAdapter = await createStateAdapter();
+  using stateAdapter = createStateAdapter();
   const client = createClient({ stateAdapter, jobTypes });
 
   const sentAt = new Date("2024-07-04T12:00:00.000Z");
@@ -69,16 +68,14 @@ test("round-trips a Date through the worker and back out of a client read", asyn
         remind: {
           attemptHandler: async ({ job, complete }) => {
             expect(job.input.sendAt).toBeInstanceOf(Date);
-            return stateAdapter.withTransaction(async (ctx) =>
-              complete({ ...ctx, output: { sentAt } }),
-            );
+            return stateAdapter.withTransaction((ctx) => complete({ ...ctx, output: { sentAt } }));
           },
         },
       },
     }),
   });
 
-  const chain = await stateAdapter.withTransaction(async (ctx) =>
+  const chain = stateAdapter.withTransaction((ctx) =>
     client.createChain({
       ...ctx,
       typeName: "remind",
@@ -91,7 +88,7 @@ test("round-trips a Date through the worker and back out of a client read", asyn
 
   expect(result.output.sentAt).toEqual(sentAt);
 
-  const [stored] = await stateAdapter.getJobs({ jobIds: [chain.id] });
+  const [stored] = stateAdapter.getJobs({ jobIds: [chain.id] });
   expect(stored?.output).toEqual({ sentAt: "2024-07-04T12:00:00.000Z" });
 });
 
@@ -108,7 +105,7 @@ test("rejects a schema whose encoded form is not JSON-serializable", () => {
   );
 });
 
-test("validates structural blockers against the runtime form", async () => {
+test("validates structural blockers against the runtime form", () => {
   const jobTypes = createZodCodecJobTypes({
     remind: {
       entry: true,
@@ -122,11 +119,11 @@ test("validates structural blockers against the runtime form", async () => {
       blockers: z.array(z.object({ input: z.object({ sendAt: z.date() }) })),
     },
   });
-  await using stateAdapter = await createStateAdapter();
+  using stateAdapter = createStateAdapter();
   const client = createClient({ stateAdapter, jobTypes });
 
-  const digest = await stateAdapter.withTransaction(async (ctx) => {
-    const remind = await client.createChain({
+  const digest = stateAdapter.withTransaction((ctx) => {
+    const remind = client.createChain({
       ...ctx,
       typeName: "remind",
       input: { sendAt: new Date("2024-06-01T09:00:00.000Z") },

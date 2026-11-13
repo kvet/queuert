@@ -39,13 +39,13 @@ const customPrefixIt = it.extend(
 baseIt("index");
 
 describe("NATS Notify Adapter Conformance - Default Subject Prefix", () => {
-  conformanceTestSuite({ it: defaultPrefixIt, groups: notifyAdapterBaseGroups });
+  conformanceTestSuite({ mode: "async", it: defaultPrefixIt, groups: notifyAdapterBaseGroups });
 });
 
 describe("NATS Notify Adapter Conformance - Custom Subject Prefix", () => {
-  conformanceTestSuite({ it: customPrefixIt, groups: notifyAdapterBaseGroups });
+  conformanceTestSuite({ mode: "async", it: customPrefixIt, groups: notifyAdapterBaseGroups });
 });
 
 describe("NATS Notify Adapter End-to-End Conformance", () => {
-  conformanceTestSuite({ it: defaultPrefixIt, groups: notifyAdapterEndToEndGroups });
+  conformanceTestSuite({ mode: "async", it: defaultPrefixIt, groups: notifyAdapterEndToEndGroups });
 });

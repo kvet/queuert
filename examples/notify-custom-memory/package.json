@@ -20,7 +20,8 @@
     "@queuert/tsconfig": "workspace:*",
     "@types/better-sqlite3": "9.6.0",
     "better-sqlite3": "13.0.3",
-    "example-state-sqlite-better-sqlite3": "workspace:*",
+    "example-state-sqlite-kysely": "workspace:*",
+    "kysely": "0.29.8",
     "queuert": "workspace:*"
   }
 }

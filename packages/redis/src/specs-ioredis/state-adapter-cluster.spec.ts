@@ -32,6 +32,7 @@ baseIt("index");
 
 describe("Redis Cluster State Provider Conformance (ioredis)", () => {
   conformanceTestSuite({
+    mode: "async",
     it,
     groups: [
       ...redisStateProviderConformanceGroups,
@@ -41,5 +42,5 @@ describe("Redis Cluster State Provider Conformance (ioredis)", () => {
 });
 
 describe("Redis Cluster End-to-End Conformance (ioredis)", () => {
-  conformanceTestSuite({ it, groups: withoutLockWaitCases(endToEndBaseGroups) });
+  conformanceTestSuite({ mode: "async", it, groups: withoutLockWaitCases(endToEndBaseGroups) });
 });

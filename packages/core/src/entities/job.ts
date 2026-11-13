@@ -1,3 +1,4 @@
+import { JobTypeMismatchError } from "../errors.ts";
 import type { JobTypes } from "../job-types/job-types.ts";
 import type { StateJob, StateJobInfo } from "../state-adapter/state-adapter.ts";
 import type { AnyJob } from "./job.types.ts";
@@ -56,4 +57,18 @@ export const mapStateJobToJob = (
     case "pending":
       return { ...base, status: "pending" };
   }
+};
+
+export const assertJobTypeName = (
+  stateJob: StateJob | undefined,
+  { jobId, typeName }: { jobId: string; typeName: string | undefined },
+): void => {
+  if (!typeName || stateJob === undefined || stateJob.typeName === typeName) return;
+  throw new JobTypeMismatchError(
+    `Expected job ${jobId} to have type "${typeName}" but found "${stateJob.typeName}"`,
+    {
+      expectedTypeName: typeName,
+      actualTypeName: stateJob.typeName,
+    },
+  );
 };

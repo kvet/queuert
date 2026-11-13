@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { BaseTxContext } from "queuert";
 import { type SeedSentinels, seedConfig } from "queuert/conformance-internal";
 
-import type { SqliteStateProvider } from "../state-provider/state-provider.sqlite.ts";
+import type { AnySqliteStateProvider } from "../state-provider/state-provider.sqlite.ts";
 
 const CHUNK = 200;
 
@@ -13,7 +13,7 @@ const futureTs = (ms: number) => `datetime('now', 'subsec', '+${ms / 1000} secon
 const pastTs = (seconds: number) => `datetime('now', 'subsec', '-${seconds} seconds')`;
 
 export const fastSeedAllStates = async <TTxContext extends BaseTxContext>(
-  stateProvider: SqliteStateProvider<TTxContext>,
+  stateProvider: AnySqliteStateProvider<TTxContext>,
   { scale = 1, tablePrefix = "queuert_" }: { scale?: number; tablePrefix?: string } = {},
 ): Promise<SeedSentinels> => {
   const job = `${tablePrefix}job`;

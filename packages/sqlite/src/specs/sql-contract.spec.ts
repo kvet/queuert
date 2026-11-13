@@ -1,7 +1,9 @@
 // oxlint-disable no-empty-pattern -- vitest fixtures must destructure their context
 import { conformanceTestSuite } from "@queuert/helpers/conformance";
-import type { RuntimeType } from "@queuert/typed-sql";
+import { andThen } from "@queuert/helpers/maybe-promise";
+import type { RuntimeType } from "@queuert/typed-sql/sql";
 import Database from "better-sqlite3";
+import type { AdapterMode } from "queuert";
 import type { StateAdapterConformanceContext } from "queuert/conformance";
 import { stateAdapterBaseGroups } from "queuert/conformance-internal";
 import { describe, expect, it } from "vitest";
@@ -11,7 +13,10 @@ import {
   type BetterSqlite3Context,
   createBetterSqlite3Provider,
 } from "../state-provider/state-provider.better-sqlite3.ts";
-import type { SqliteStateProvider } from "../state-provider/state-provider.sqlite.ts";
+import type {
+  AnySqliteStateProvider,
+  ModeSqliteStateProvider,
+} from "../state-provider/state-provider.sqlite.ts";
 
 const sqliteTypeMatchesRuntime = (sqliteType: string, runtime: RuntimeType): boolean => {
   const normalized = sqliteType.toUpperCase();
@@ -161,50 +166,55 @@ const validateAfterExecute = (stmt: Database.Statement, args: SqlArgs, rows: unk
 
 const createValidatingProvider = (
   db: Database.Database,
-): SqliteStateProvider<BetterSqlite3Context> => {
-  const inner = createBetterSqlite3Provider({ db });
+  mode: AdapterMode,
+): AnySqliteStateProvider<BetterSqlite3Context> => {
+  const inner: ModeSqliteStateProvider<BetterSqlite3Context> = createBetterSqlite3Provider({
+    db,
+    mode,
+  });
   return {
-    withTransaction: inner.withTransaction,
-    isTransaction: inner.isTransaction,
-    onTransactionCommit: inner.onTransactionCommit,
-    onTransactionRollback: inner.onTransactionRollback,
-    classifyError: inner.classifyError,
-    executeSql: async (args) => {
+    ...inner,
+    executeSql: (args: Parameters<typeof inner.executeSql>[0]) => {
       const stmt = validateBeforeExecute(db, args);
-      const rows = await inner.executeSql(args);
-      if (stmt) validateAfterExecute(stmt, args, rows);
-      return rows;
+      return andThen(inner.executeSql(args), (rows) => {
+        if (stmt) validateAfterExecute(stmt, args, rows);
+        return rows;
+      });
     },
-    close: inner.close,
-  };
+  } as AnySqliteStateProvider<BetterSqlite3Context>;
 };
 
-const contractIt = it.extend(
-  "conformance",
-  { scope: "file" },
-  async ({}, { onCleanup }): Promise<StateAdapterConformanceContext> => {
-    const db = new Database(":memory:");
-    onCleanup(async () => {
-      db.close();
-    });
-    await createSqliteStateAdapter({
-      stateProvider: createBetterSqlite3Provider({ db }),
-    }).migrateToLatest();
-    return {
-      createStateAdapter: async () => {
-        db.exec(
-          "DELETE FROM queuert_job_blocker; DELETE FROM queuert_job; DELETE FROM queuert_worker;",
-        );
-        return createSqliteStateAdapter({ stateProvider: createValidatingProvider(db) });
-      },
-      withNonTransactionContext: async (fn) => fn({ db }),
-    };
-  },
-);
+const contractIt = (mode: AdapterMode) =>
+  it.extend(
+    "conformance",
+    { scope: "file" },
+    async ({}, { onCleanup }): Promise<StateAdapterConformanceContext> => {
+      const db = new Database(":memory:");
+      onCleanup(async () => {
+        db.close();
+      });
+      await createSqliteStateAdapter({
+        stateProvider: createBetterSqlite3Provider({ db, mode }),
+      }).migrateToLatest();
+      return {
+        createStateAdapter: () => {
+          db.exec(
+            "DELETE FROM queuert_job_blocker; DELETE FROM queuert_job; DELETE FROM queuert_worker;",
+          );
+          return createSqliteStateAdapter({ stateProvider: createValidatingProvider(db, mode) });
+        },
+        withNonTransactionContext: (fn) => fn({ db }),
+      };
+    },
+  );
+
+const asyncContractIt = contractIt("async");
+const syncContractIt = contractIt("sync");
 
 describe("SQLite SQL contract", () => {
-  conformanceTestSuite({
-    it: contractIt,
-    groups: stateAdapterBaseGroups,
-  });
+  conformanceTestSuite({ it: asyncContractIt, groups: stateAdapterBaseGroups, mode: "async" });
+});
+
+describe("Sync SQLite SQL contract", () => {
+  conformanceTestSuite({ it: syncContractIt, groups: stateAdapterBaseGroups, mode: "sync" });
 });

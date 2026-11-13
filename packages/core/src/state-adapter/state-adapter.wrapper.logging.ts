@@ -1,45 +1,33 @@
-import type { ObservabilityHelper } from "../observability-adapter/observability-helper.ts";
-import type { BaseTxContext, StateAdapter } from "./state-adapter.ts";
+import { reportErrors } from "@queuert/helpers/report-errors";
 
-export const wrapStateAdapterWithLogging = <
-  TTxContext extends BaseTxContext,
-  TJobId extends string,
-  TWorkerId extends string,
->({
+import { isSyncAdapter } from "../adapter-mode.ts";
+import type { ObservabilityHelper } from "../observability-adapter/observability-helper.ts";
+import type { AnyStateAdapter } from "./state-adapter.ts";
+
+export const wrapStateAdapterWithLogging = <TStateAdapter extends AnyStateAdapter>({
   stateAdapter,
   observabilityHelper,
 }: {
-  stateAdapter: StateAdapter<TTxContext, TJobId, TWorkerId>;
+  stateAdapter: TStateAdapter;
   observabilityHelper: ObservabilityHelper;
-}): StateAdapter<TTxContext, TJobId, TWorkerId> => {
-  const wrap = <T extends (...args: never[]) => Promise<unknown>>(
-    operationName: keyof StateAdapter<any, any, any>,
+}): TStateAdapter => {
+  // An async adapter's callers expect a promise, so a synchronous throw from it becomes a rejection.
+  const rejectSyncThrows = !isSyncAdapter(stateAdapter);
+  const wrap = <T extends (...args: never[]) => unknown>(
+    operationName: Extract<keyof AnyStateAdapter, string>,
     fn: T,
-  ): T => {
-    const onError = (error: unknown): never => {
-      observabilityHelper.stateAdapterError(operationName, error);
-      throw error;
-    };
-    // oxlint-disable-next-line typescript/promise-function-async -- an async wrapper would add a promise per adapter call
-    return ((...args) => {
-      try {
-        return fn(...args).catch(onError);
-      } catch (error) {
-        // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- re-rejecting a caught error
-        return Promise.reject(error).catch(onError);
-      }
-    }) as T;
-  };
+  ): T =>
+    reportErrors(
+      fn,
+      (error) => {
+        observabilityHelper.stateAdapterError(operationName, error);
+      },
+      { rejectSyncThrows },
+    );
 
   return {
-    // Infrastructure methods - pass through without wrapping
-    config: stateAdapter.config,
-    withTransaction: stateAdapter.withTransaction,
-    isTransaction: stateAdapter.isTransaction,
-    onTransactionCommit: stateAdapter.onTransactionCommit,
-    onTransactionRollback: stateAdapter.onTransactionRollback,
+    ...stateAdapter,
 
-    // Operation methods - wrap with error logging
     getChains: wrap("getChains", stateAdapter.getChains),
     getJobs: wrap("getJobs", stateAdapter.getJobs),
     getWorkers: wrap("getWorkers", stateAdapter.getWorkers),
@@ -72,8 +60,5 @@ export const wrapStateAdapterWithLogging = <
     listBlockedJobs: wrap("listBlockedJobs", stateAdapter.listBlockedJobs),
     listWorkers: wrap("listWorkers", stateAdapter.listWorkers),
     listWorkerJobs: wrap("listWorkerJobs", stateAdapter.listWorkerJobs),
-
-    close: stateAdapter.close,
-    [Symbol.asyncDispose]: stateAdapter.close,
   };
 };

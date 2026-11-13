@@ -1,11 +1,11 @@
 import { describe, expectTypeOf, it } from "vitest";
 
 import type { AttemptMiddleware } from "../attempt-middleware/attempt-middleware.ts";
-import type { createClient } from "../client.ts";
+import type { createClient } from "../client/client.ts";
 import type { CompletedChain } from "../entities/chain.ts";
 import { defineJobTypes } from "../job-types/define-job-types.ts";
 import type { JobTypes } from "../job-types/job-types.ts";
-import type { InProcessStateAdapter } from "../state-adapter/state-adapter.in-process.ts";
+import type { InProcessStateAdapter } from "../state-adapter.in-process/state-adapter.in-process.ts";
 import type { GetStateAdapterTxContext } from "../state-adapter/state-adapter.ts";
 import { createProcessors } from "./create-job-type-processors.ts";
 

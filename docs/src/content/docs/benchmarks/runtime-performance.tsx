@@ -88,7 +88,7 @@ const Page = () => (
       allocations while the jobs are created and processed.
     </p>
     <StackFilter
-      backends={["postgres", "sqlite", "mysql", "mariadb", "redis", "nats", "in-process"]}
+      backends={["postgres", "sqlite", "mysql", "mariadb", "redis", "nats", "ipc", "in-process"]}
     />
     <KeyValueList title="Test setup" items={setup} />
     <h2 id="memory">Memory</h2>
@@ -112,10 +112,10 @@ const Page = () => (
     </For>
     <h2 id="reading-the-results">Reading the results</h2>
     <p>
-      Live JS retained stays at about 5-30 KB for every package: V8 hidden classes and shape
-      descriptors left by method calls, not Queuert state. JIT code retained grows with the code
-      paths a package exercises, so packages that run more queries keep more. Neither grows per job
-      or per lifecycle.
+      Live JS retained is a one-time amount: about 5-20 KB for every package. Running three
+      lifecycles instead of one leaves the same amount. JIT code retained grows with the code paths
+      a package exercises, so packages that run more queries keep more. Neither grows per job or per
+      lifecycle.
     </p>
     <p>
       Driver and connection cost (a node-redis client, a postgres.js or mysql2 pool, a NATS

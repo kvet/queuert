@@ -1,7 +1,11 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import {
+  createAsyncRwLock,
+  createSqliteStateAdapter,
+  type SqliteStateProvider,
+} from "@queuert/sqlite";
 import { fastSeedAllStates } from "@queuert/sqlite/conformance-internal";
 import Database from "better-sqlite3";
 import {
@@ -44,33 +48,56 @@ type CapturedQuery = { id: string | undefined; sql: string; plan: string[] };
 console.log("\nSetting up SQLite (in-memory)...");
 const db = new Database(":memory:");
 
-const baseProvider = createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() });
+const syncProvider = createBetterSqlite3StateProvider({ db });
+const lock = createAsyncRwLock();
+const baseProvider: SqliteStateProvider<BetterSqlite3Context> = {
+  withTransaction: async (fn) => {
+    using _h = await lock.acquireWrite();
+    db.exec("BEGIN");
+    try {
+      const result = await fn({ db });
+      db.exec("COMMIT");
+      return result;
+    } catch (error) {
+      if (db.inTransaction) db.exec("ROLLBACK");
+      throw error;
+    }
+  },
+  isTransaction: syncProvider.isTransaction,
+  executeSql: async (args) => {
+    if (args.txCtx) return syncProvider.executeSql(args);
+    using _h = args.readOnly ? await lock.acquireRead() : await lock.acquireWrite();
+    return syncProvider.executeSql(args);
+  },
+};
 
+let capturing = false;
 const captured: CapturedQuery[] = [];
 const stateProvider = {
   ...baseProvider,
   executeSql: async (args: Parameters<typeof baseProvider.executeSql>[0]) => {
-    try {
-      const stmt = db.prepare(`EXPLAIN QUERY PLAN ${args.sql}`);
-      const rows = args.params && args.params.length > 0 ? stmt.all(...args.params) : stmt.all();
-      const plan = (rows as { detail: string }[]).map((r) => r.detail);
-      if (plan.length > 0) {
-        captured.push({ id: args.id, sql: args.sql, plan });
+    if (capturing) {
+      try {
+        const stmt = db.prepare(`EXPLAIN QUERY PLAN ${args.sql}`);
+        const rows = args.params && args.params.length > 0 ? stmt.all(...args.params) : stmt.all();
+        const plan = (rows as { detail: string }[]).map((r) => r.detail);
+        if (plan.length > 0) {
+          captured.push({ id: args.id, sql: args.sql, plan });
+        }
+      } catch {
+        // DDL etc.
       }
-    } catch {
-      // DDL etc.
     }
     return baseProvider.executeSql(args);
   },
 };
 
-const stateAdapter = createSqliteStateAdapter<BetterSqlite3Context, string>({
+const stateAdapter = createSqliteStateAdapter<BetterSqlite3Context, string, string>({
   stateProvider,
 });
 await stateAdapter.migrateToLatest();
 
 console.log(`Seeding data (scale=${scale})...`);
-captured.length = 0;
 const sentinels = await fastSeedAllStates(baseProvider, { scale });
 
 db.exec("ANALYZE");
@@ -143,15 +170,19 @@ report("════════════════════════
 for (const group of [...operationalCoverageGroups, ...observabilityCoverageGroups]) {
   report(`  ${group.name}`);
   for (const testCase of group.cases) {
+    const captureAct = await testCase.run(stateAdapter, sentinels);
+    captured.length = 0;
+    capturing = true;
+    await captureAct(stateAdapter, sentinels);
+    capturing = false;
+    const planCapture = [...captured];
+
     const times: number[] = [];
-    let planCapture: CapturedQuery[] = [];
     for (let i = 0; i < ITERATIONS; i++) {
       const act = await testCase.run(stateAdapter, sentinels);
-      captured.length = 0;
       const start = performance.now();
       await act(stateAdapter, sentinels);
       times.push(performance.now() - start);
-      if (i === 0) planCapture = [...captured];
     }
     times.sort((a, b) => a - b);
     const s = stats(times);

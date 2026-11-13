@@ -1,7 +1,7 @@
 import { createRedisNotifyAdapter } from "@queuert/redis";
 import { createIoredisNotifyProvider } from "example-notify-redis-ioredis/provider";
 import { Redis } from "ioredis";
-import { createInProcessStateAdapter } from "queuert/internal";
+import { createInProcessStateAdapter } from "queuert";
 
 import { benchmarkNamespace, requireEnv, runBenchmark } from "./utils.ts";
 

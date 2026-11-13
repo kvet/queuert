@@ -1,5 +1,5 @@
 import { createLatch } from "@queuert/helpers/latch";
-import { type MigrationResult, createMigrator } from "@queuert/typed-sql";
+import { type MigrationResult, createMigrator } from "@queuert/typed-sql/migrator";
 import {
   type Page,
   type ScheduleOptions,

@@ -24,5 +24,5 @@ const it = baseIt.extend("conformance", { scope: "file" }, async ({}, { onCleanu
 baseIt("index");
 
 describe("PostgreSQL Migrator Conformance", () => {
-  conformanceTestSuite({ it, groups: pgMigratorConformanceGroups });
+  conformanceTestSuite({ mode: "async", it, groups: pgMigratorConformanceGroups });
 });

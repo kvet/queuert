@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
 
+import { assertRejects } from "@queuert/helpers/assert-rejects";
+import { caseBody, resource, wait } from "@queuert/helpers/case-body";
+import { all } from "@queuert/helpers/maybe-promise";
 import { raceWithSleep, sleep } from "@queuert/helpers/sleep";
+import { step } from "@queuert/helpers/steps";
 
 import { retryUntilPasses } from "../conformance/retry-until-passes.ts";
 import type { ConformanceGroup } from "../conformance/runner.ts";
 import type { NotifyAdapterConformanceContext } from "./types.ts";
 
 const NEGATIVE_ASSERTION_DELAY_MS = 200;
+
 const DELIVERY_TIMEOUT_MS = 2000;
 
 /**
@@ -33,138 +38,152 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
     cases: [
       {
         name: "listener receives a notification for each type name in the batch",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
           const received: string[] = [];
-          const unsubscribe = await notifyAdapter.listenJobScheduled(
-            ["type-a", "type-b", "type-c"],
-            (typeName) => {
+          const unsubscribe = yield* step(
+            notifyAdapter.listenJobScheduled(["type-a", "type-b", "type-c"], (typeName) => {
               received.push(typeName);
-            },
+            }),
           );
 
-          await notifyAdapter.notifyJobsScheduled(["type-a", "type-b", "type-c"]);
+          yield* step(notifyAdapter.notifyJobsScheduled(["type-a", "type-b", "type-c"]));
 
-          await retryUntilPasses(
-            async () => {
-              assert.deepEqual([...received].sort(), ["type-a", "type-b", "type-c"]);
-            },
-            { timeoutMs: DELIVERY_TIMEOUT_MS },
+          yield* wait(
+            retryUntilPasses(
+              async () => {
+                assert.deepEqual([...received].sort(), ["type-a", "type-b", "type-c"]);
+              },
+              { timeoutMs: DELIVERY_TIMEOUT_MS },
+            ),
           );
-          await unsubscribe();
-        },
+          yield* step(unsubscribe());
+        }),
       },
       {
         name: "multiple notifications all reach the listener",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
           let count = 0;
-          const unsubscribe = await notifyAdapter.listenJobScheduled(["type-a"], () => {
-            count++;
-          });
-
-          await notifyAdapter.notifyJobsScheduled(["type-a"]);
-          await notifyAdapter.notifyJobsScheduled(["type-a"]);
-          await notifyAdapter.notifyJobsScheduled(["type-a"]);
-
-          await retryUntilPasses(
-            async () => {
-              assert.equal(count, 3);
-            },
-            { timeoutMs: DELIVERY_TIMEOUT_MS },
+          const unsubscribe = yield* step(
+            notifyAdapter.listenJobScheduled(["type-a"], () => {
+              count++;
+            }),
           );
-          await unsubscribe();
-        },
+
+          yield* step(notifyAdapter.notifyJobsScheduled(["type-a"]));
+          yield* step(notifyAdapter.notifyJobsScheduled(["type-a"]));
+          yield* step(notifyAdapter.notifyJobsScheduled(["type-a"]));
+
+          yield* wait(
+            retryUntilPasses(
+              async () => {
+                assert.equal(count, 3);
+              },
+              { timeoutMs: DELIVERY_TIMEOUT_MS },
+            ),
+          );
+          yield* step(unsubscribe());
+        }),
       },
       {
         name: "listener does not receive notification for non-matching type name",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
           let callCount = 0;
-          const unsubscribe = await notifyAdapter.listenJobScheduled(["type-a"], () => {
-            callCount++;
-          });
+          const unsubscribe = yield* step(
+            notifyAdapter.listenJobScheduled(["type-a"], () => {
+              callCount++;
+            }),
+          );
 
-          await notifyAdapter.notifyJobsScheduled(["type-b"]);
-          await sleep(NEGATIVE_ASSERTION_DELAY_MS);
+          yield* step(notifyAdapter.notifyJobsScheduled(["type-b"]));
+          yield* wait(sleep(NEGATIVE_ASSERTION_DELAY_MS));
 
           assert.equal(callCount, 0);
-          await unsubscribe();
-        },
+          yield* step(unsubscribe());
+        }),
       },
       {
         name: "multi-type listener receives matching types",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
           const received = Promise.withResolvers<string>();
-          const unsubscribe = await notifyAdapter.listenJobScheduled(
-            ["type-a", "type-b"],
-            (typeName) => {
+          const unsubscribe = yield* step(
+            notifyAdapter.listenJobScheduled(["type-a", "type-b"], (typeName) => {
               received.resolve(typeName);
-            },
+            }),
           );
 
-          await notifyAdapter.notifyJobsScheduled(["type-b"]);
+          yield* step(notifyAdapter.notifyJobsScheduled(["type-b"]));
 
-          const result = await waitFor(received.promise, "notification");
+          const result = yield* wait(waitFor(received.promise, "notification"));
 
           assert.equal(result, "type-b");
-          await unsubscribe();
-        },
+          yield* step(unsubscribe());
+        }),
       },
       {
         name: "every listener for a type receives each notification",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
           const received1 = Promise.withResolvers<void>();
           const received2 = Promise.withResolvers<void>();
 
-          const unsubscribe1 = await notifyAdapter.listenJobScheduled(["type-multi"], () => {
-            received1.resolve();
-          });
-          const unsubscribe2 = await notifyAdapter.listenJobScheduled(["type-multi"], () => {
-            received2.resolve();
-          });
+          const unsubscribe1 = yield* step(
+            notifyAdapter.listenJobScheduled(["type-multi"], () => {
+              received1.resolve();
+            }),
+          );
+          const unsubscribe2 = yield* step(
+            notifyAdapter.listenJobScheduled(["type-multi"], () => {
+              received2.resolve();
+            }),
+          );
 
-          await notifyAdapter.notifyJobsScheduled(["type-multi"]);
+          yield* step(notifyAdapter.notifyJobsScheduled(["type-multi"]));
 
-          await waitFor(Promise.all([received1.promise, received2.promise]), "notifications");
+          yield* wait(
+            waitFor(Promise.all([received1.promise, received2.promise]), "notifications"),
+          );
 
-          await unsubscribe1();
-          await unsubscribe2();
-        },
+          yield* step(unsubscribe1());
+          yield* step(unsubscribe2());
+        }),
       },
       {
         name: "unsubscribe stops job scheduled notifications",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
           let callCount = 0;
-          const unsubscribe = await notifyAdapter.listenJobScheduled(["type-a"], () => {
-            callCount++;
-          });
+          const unsubscribe = yield* step(
+            notifyAdapter.listenJobScheduled(["type-a"], () => {
+              callCount++;
+            }),
+          );
 
-          await unsubscribe();
-          await notifyAdapter.notifyJobsScheduled(["type-a"]);
-          await sleep(NEGATIVE_ASSERTION_DELAY_MS);
+          yield* step(unsubscribe());
+          yield* step(notifyAdapter.notifyJobsScheduled(["type-a"]));
+          yield* wait(sleep(NEGATIVE_ASSERTION_DELAY_MS));
 
           assert.equal(callCount, 0);
-        },
+        }),
       },
       {
         name: "publish without listeners does not error",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
-          await notifyAdapter.notifyJobsScheduled(["unheard-type"]);
-          await notifyAdapter.notifyChainsCompleted(["unheard-chain"]);
-          await notifyAdapter.notifyJobAttemptsLost(["unheard-job"]);
-        },
+          yield* step(notifyAdapter.notifyJobsScheduled(["unheard-type"]));
+          yield* step(notifyAdapter.notifyChainsCompleted(["unheard-chain"]));
+          yield* step(notifyAdapter.notifyJobAttemptsLost(["unheard-job"]));
+        }),
       },
     ],
   },
@@ -173,86 +192,100 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
     cases: [
       {
         name: "listener receives chain completion for each chain ID in the batch",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
           const chainIds = ["chain-1", "chain-2", "chain-3"];
           const received: string[] = [];
-          const unsubscribes = await Promise.all(
-            chainIds.map(async (chainId) =>
-              notifyAdapter.listenChainCompleted(chainId, () => {
-                received.push(chainId);
-              }),
+          const unsubscribes = yield* step(
+            all(
+              chainIds.map((chainId) =>
+                notifyAdapter.listenChainCompleted(chainId, () => {
+                  received.push(chainId);
+                }),
+              ),
             ),
           );
 
-          await notifyAdapter.notifyChainsCompleted(chainIds);
+          yield* step(notifyAdapter.notifyChainsCompleted(chainIds));
 
-          await retryUntilPasses(
-            async () => {
-              assert.deepEqual([...received].sort(), chainIds);
-            },
-            { timeoutMs: DELIVERY_TIMEOUT_MS },
+          yield* wait(
+            retryUntilPasses(
+              async () => {
+                assert.deepEqual([...received].sort(), chainIds);
+              },
+              { timeoutMs: DELIVERY_TIMEOUT_MS },
+            ),
           );
-          await Promise.all(unsubscribes.map(async (unsubscribe) => unsubscribe()));
-        },
+          yield* step(all(unsubscribes.map((unsubscribe) => unsubscribe())));
+        }),
       },
       {
         name: "listener does not receive chain completion for different chain ID",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
           let callCount = 0;
-          const unsubscribe = await notifyAdapter.listenChainCompleted("chain-123", () => {
-            callCount++;
-          });
+          const unsubscribe = yield* step(
+            notifyAdapter.listenChainCompleted("chain-123", () => {
+              callCount++;
+            }),
+          );
 
-          await notifyAdapter.notifyChainsCompleted(["chain-456"]);
-          await sleep(NEGATIVE_ASSERTION_DELAY_MS);
+          yield* step(notifyAdapter.notifyChainsCompleted(["chain-456"]));
+          yield* wait(sleep(NEGATIVE_ASSERTION_DELAY_MS));
 
           assert.equal(callCount, 0);
-          await unsubscribe();
-        },
+          yield* step(unsubscribe());
+        }),
       },
       {
         name: "multiple listeners for same chain ID both receive notification",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
           const received1 = Promise.withResolvers<void>();
           const received2 = Promise.withResolvers<void>();
 
-          const unsubscribe1 = await notifyAdapter.listenChainCompleted("chain-multi", () => {
-            received1.resolve();
-          });
-          const unsubscribe2 = await notifyAdapter.listenChainCompleted("chain-multi", () => {
-            received2.resolve();
-          });
+          const unsubscribe1 = yield* step(
+            notifyAdapter.listenChainCompleted("chain-multi", () => {
+              received1.resolve();
+            }),
+          );
+          const unsubscribe2 = yield* step(
+            notifyAdapter.listenChainCompleted("chain-multi", () => {
+              received2.resolve();
+            }),
+          );
 
-          await notifyAdapter.notifyChainsCompleted(["chain-multi"]);
+          yield* step(notifyAdapter.notifyChainsCompleted(["chain-multi"]));
 
-          await waitFor(Promise.all([received1.promise, received2.promise]), "notifications");
+          yield* wait(
+            waitFor(Promise.all([received1.promise, received2.promise]), "notifications"),
+          );
 
-          await unsubscribe1();
-          await unsubscribe2();
-        },
+          yield* step(unsubscribe1());
+          yield* step(unsubscribe2());
+        }),
       },
       {
         name: "unsubscribe stops chain completion notifications",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
           let callCount = 0;
-          const unsubscribe = await notifyAdapter.listenChainCompleted("chain-unsubscribe", () => {
-            callCount++;
-          });
+          const unsubscribe = yield* step(
+            notifyAdapter.listenChainCompleted("chain-unsubscribe", () => {
+              callCount++;
+            }),
+          );
 
-          await unsubscribe();
-          await notifyAdapter.notifyChainsCompleted(["chain-unsubscribe"]);
-          await sleep(NEGATIVE_ASSERTION_DELAY_MS);
+          yield* step(unsubscribe());
+          yield* step(notifyAdapter.notifyChainsCompleted(["chain-unsubscribe"]));
+          yield* wait(sleep(NEGATIVE_ASSERTION_DELAY_MS));
 
           assert.equal(callCount, 0);
-        },
+        }),
       },
     ],
   },
@@ -261,86 +294,100 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
     cases: [
       {
         name: "listener receives attempt lost for each job ID in the batch",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
           const jobIds = ["job-1", "job-2", "job-3"];
           const received: string[] = [];
-          const unsubscribes = await Promise.all(
-            jobIds.map(async (jobId) =>
-              notifyAdapter.listenJobAttemptLost(jobId, () => {
-                received.push(jobId);
-              }),
+          const unsubscribes = yield* step(
+            all(
+              jobIds.map((jobId) =>
+                notifyAdapter.listenJobAttemptLost(jobId, () => {
+                  received.push(jobId);
+                }),
+              ),
             ),
           );
 
-          await notifyAdapter.notifyJobAttemptsLost(jobIds);
+          yield* step(notifyAdapter.notifyJobAttemptsLost(jobIds));
 
-          await retryUntilPasses(
-            async () => {
-              assert.deepEqual([...received].sort(), jobIds);
-            },
-            { timeoutMs: DELIVERY_TIMEOUT_MS },
+          yield* wait(
+            retryUntilPasses(
+              async () => {
+                assert.deepEqual([...received].sort(), jobIds);
+              },
+              { timeoutMs: DELIVERY_TIMEOUT_MS },
+            ),
           );
-          await Promise.all(unsubscribes.map(async (unsubscribe) => unsubscribe()));
-        },
+          yield* step(all(unsubscribes.map((unsubscribe) => unsubscribe())));
+        }),
       },
       {
         name: "listener does not receive attempt lost for different job ID",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
           let callCount = 0;
-          const unsubscribe = await notifyAdapter.listenJobAttemptLost("job-123", () => {
-            callCount++;
-          });
+          const unsubscribe = yield* step(
+            notifyAdapter.listenJobAttemptLost("job-123", () => {
+              callCount++;
+            }),
+          );
 
-          await notifyAdapter.notifyJobAttemptsLost(["job-456"]);
-          await sleep(NEGATIVE_ASSERTION_DELAY_MS);
+          yield* step(notifyAdapter.notifyJobAttemptsLost(["job-456"]));
+          yield* wait(sleep(NEGATIVE_ASSERTION_DELAY_MS));
 
           assert.equal(callCount, 0);
-          await unsubscribe();
-        },
+          yield* step(unsubscribe());
+        }),
       },
       {
         name: "multiple listeners for same job ID both receive attempt lost",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
           const received1 = Promise.withResolvers<void>();
           const received2 = Promise.withResolvers<void>();
 
-          const unsubscribe1 = await notifyAdapter.listenJobAttemptLost("job-multi", () => {
-            received1.resolve();
-          });
-          const unsubscribe2 = await notifyAdapter.listenJobAttemptLost("job-multi", () => {
-            received2.resolve();
-          });
+          const unsubscribe1 = yield* step(
+            notifyAdapter.listenJobAttemptLost("job-multi", () => {
+              received1.resolve();
+            }),
+          );
+          const unsubscribe2 = yield* step(
+            notifyAdapter.listenJobAttemptLost("job-multi", () => {
+              received2.resolve();
+            }),
+          );
 
-          await notifyAdapter.notifyJobAttemptsLost(["job-multi"]);
+          yield* step(notifyAdapter.notifyJobAttemptsLost(["job-multi"]));
 
-          await waitFor(Promise.all([received1.promise, received2.promise]), "notifications");
+          yield* wait(
+            waitFor(Promise.all([received1.promise, received2.promise]), "notifications"),
+          );
 
-          await unsubscribe1();
-          await unsubscribe2();
-        },
+          yield* step(unsubscribe1());
+          yield* step(unsubscribe2());
+        }),
       },
       {
         name: "unsubscribe stops attempt lost notifications",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
           let callCount = 0;
-          const unsubscribe = await notifyAdapter.listenJobAttemptLost("job-unsubscribe", () => {
-            callCount++;
-          });
+          const unsubscribe = yield* step(
+            notifyAdapter.listenJobAttemptLost("job-unsubscribe", () => {
+              callCount++;
+            }),
+          );
 
-          await unsubscribe();
-          await notifyAdapter.notifyJobAttemptsLost(["job-unsubscribe"]);
-          await sleep(NEGATIVE_ASSERTION_DELAY_MS);
+          yield* step(unsubscribe());
+          yield* step(notifyAdapter.notifyJobAttemptsLost(["job-unsubscribe"]));
+          yield* wait(sleep(NEGATIVE_ASSERTION_DELAY_MS));
 
           assert.equal(callCount, 0);
-        },
+        }),
       },
     ],
   },
@@ -349,44 +396,48 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
     cases: [
       {
         name: "notifications dispatch during publish loop, not batched at end",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
           const count = 50;
           const half = count / 2;
           let received = 0;
           const chainIds = Array.from({ length: count }, (_, i) => `chain-flush-${i}`);
 
-          const unsubscribes = await Promise.all(
-            chainIds.map(async (id) =>
-              notifyAdapter.listenChainCompleted(id, () => {
-                received++;
-              }),
+          const unsubscribes = yield* step(
+            all(
+              chainIds.map((id) =>
+                notifyAdapter.listenChainCompleted(id, () => {
+                  received++;
+                }),
+              ),
             ),
           );
 
           for (let i = 0; i < half; i++) {
-            await notifyAdapter.notifyChainsCompleted([chainIds[i]]);
+            yield* step(notifyAdapter.notifyChainsCompleted([chainIds[i]]));
           }
           // Let fire-and-forget transports drain already-published messages.
           // A batch-at-end impl would show 0 here; an incremental impl makes progress.
-          await sleep(100);
+          yield* wait(sleep(100));
           const receivedMidLoop = received;
 
           for (let i = half; i < count; i++) {
-            await notifyAdapter.notifyChainsCompleted([chainIds[i]]);
+            yield* step(notifyAdapter.notifyChainsCompleted([chainIds[i]]));
           }
 
-          await retryUntilPasses(
-            async () => {
-              assert.equal(received, count);
-            },
-            { timeoutMs: 2000 },
+          yield* wait(
+            retryUntilPasses(
+              async () => {
+                assert.equal(received, count);
+              },
+              { timeoutMs: 2000 },
+            ),
           );
           assert.ok(receivedMidLoop > 0);
 
-          await Promise.all(unsubscribes.map(async (u) => u()));
-        },
+          yield* step(all(unsubscribes.map((unsubscribe) => unsubscribe())));
+        }),
       },
     ],
   },
@@ -395,121 +446,131 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
     cases: [
       {
         name: "a notification reaches only the listeners of its own kind",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
           const sharedId = "shared-id";
           const received: string[] = [];
-          const unsubscribeScheduled = await notifyAdapter.listenJobScheduled([sharedId], () => {
-            received.push("scheduled");
-          });
-          const unsubscribeCompleted = await notifyAdapter.listenChainCompleted(sharedId, () => {
-            received.push("completed");
-          });
-          const unsubscribeLost = await notifyAdapter.listenJobAttemptLost(sharedId, () => {
-            received.push("lost");
-          });
+          const unsubscribeScheduled = yield* step(
+            notifyAdapter.listenJobScheduled([sharedId], () => {
+              received.push("scheduled");
+            }),
+          );
+          const unsubscribeCompleted = yield* step(
+            notifyAdapter.listenChainCompleted(sharedId, () => {
+              received.push("completed");
+            }),
+          );
+          const unsubscribeLost = yield* step(
+            notifyAdapter.listenJobAttemptLost(sharedId, () => {
+              received.push("lost");
+            }),
+          );
 
-          await notifyAdapter.notifyJobsScheduled([sharedId]);
-          await retryUntilPasses(
-            async () => {
-              assert.deepEqual(received, ["scheduled"]);
-            },
-            { timeoutMs: DELIVERY_TIMEOUT_MS },
+          yield* step(notifyAdapter.notifyJobsScheduled([sharedId]));
+          yield* wait(
+            retryUntilPasses(
+              async () => {
+                assert.deepEqual(received, ["scheduled"]);
+              },
+              { timeoutMs: DELIVERY_TIMEOUT_MS },
+            ),
           );
-          await notifyAdapter.notifyChainsCompleted([sharedId]);
-          await retryUntilPasses(
-            async () => {
-              assert.deepEqual(received, ["scheduled", "completed"]);
-            },
-            { timeoutMs: DELIVERY_TIMEOUT_MS },
+          yield* step(notifyAdapter.notifyChainsCompleted([sharedId]));
+          yield* wait(
+            retryUntilPasses(
+              async () => {
+                assert.deepEqual(received, ["scheduled", "completed"]);
+              },
+              { timeoutMs: DELIVERY_TIMEOUT_MS },
+            ),
           );
-          await notifyAdapter.notifyJobAttemptsLost([sharedId]);
-          await retryUntilPasses(
-            async () => {
-              assert.deepEqual(received, ["scheduled", "completed", "lost"]);
-            },
-            { timeoutMs: DELIVERY_TIMEOUT_MS },
+          yield* step(notifyAdapter.notifyJobAttemptsLost([sharedId]));
+          yield* wait(
+            retryUntilPasses(
+              async () => {
+                assert.deepEqual(received, ["scheduled", "completed", "lost"]);
+              },
+              { timeoutMs: DELIVERY_TIMEOUT_MS },
+            ),
           );
-          await sleep(NEGATIVE_ASSERTION_DELAY_MS);
+          yield* wait(sleep(NEGATIVE_ASSERTION_DELAY_MS));
           assert.deepEqual(received, ["scheduled", "completed", "lost"]);
 
-          await unsubscribeScheduled();
-          await unsubscribeCompleted();
-          await unsubscribeLost();
-        },
+          yield* step(unsubscribeScheduled());
+          yield* step(unsubscribeCompleted());
+          yield* step(unsubscribeLost());
+        }),
       },
       {
-        name: "listen methods return async unsubscribe functions",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        name: "listen methods return unsubscribe functions",
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
-          const unsubscribe1 = await notifyAdapter.listenJobScheduled(["type-a"], () => {});
-          const unsubscribe2 = await notifyAdapter.listenChainCompleted("chain-1", () => {});
-          const unsubscribe3 = await notifyAdapter.listenJobAttemptLost("job-1", () => {});
+          const unsubscribe1 = yield* step(notifyAdapter.listenJobScheduled(["type-a"], () => {}));
+          const unsubscribe2 = yield* step(notifyAdapter.listenChainCompleted("chain-1", () => {}));
+          const unsubscribe3 = yield* step(notifyAdapter.listenJobAttemptLost("job-1", () => {}));
 
           assert.equal(typeof unsubscribe1, "function");
           assert.equal(typeof unsubscribe2, "function");
           assert.equal(typeof unsubscribe3, "function");
 
-          const result1 = unsubscribe1();
-          const result2 = unsubscribe2();
-          const result3 = unsubscribe3();
-
-          assert.ok(result1 instanceof Promise);
-          assert.ok(result2 instanceof Promise);
-          assert.ok(result3 instanceof Promise);
-
-          await result1;
-          await result2;
-          await result3;
-        },
+          assert.equal(yield* step(unsubscribe1()), undefined);
+          assert.equal(yield* step(unsubscribe2()), undefined);
+          assert.equal(yield* step(unsubscribe3()), undefined);
+        }),
       },
       {
         name: "can resubscribe after unsubscribe",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
-          const unsubscribe1 = await notifyAdapter.listenJobScheduled(["type-a"], () => {});
-          await unsubscribe1();
+          const unsubscribe1 = yield* step(notifyAdapter.listenJobScheduled(["type-a"], () => {}));
+          yield* step(unsubscribe1());
 
           const received = Promise.withResolvers<string>();
-          const unsubscribe2 = await notifyAdapter.listenJobScheduled(["type-a"], (typeName) => {
-            received.resolve(typeName);
-          });
+          const unsubscribe2 = yield* step(
+            notifyAdapter.listenJobScheduled(["type-a"], (typeName) => {
+              received.resolve(typeName);
+            }),
+          );
 
-          await notifyAdapter.notifyJobsScheduled(["type-a"]);
+          yield* step(notifyAdapter.notifyJobsScheduled(["type-a"]));
 
-          const result = await waitFor(received.promise, "notification");
+          const result = yield* wait(waitFor(received.promise, "notification"));
 
           assert.equal(result, "type-a");
-          await unsubscribe2();
-        },
+          yield* step(unsubscribe2());
+        }),
       },
       {
         name: "unsubscribe one of two listeners, remaining still receives",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
           let count1 = 0;
           const received2 = Promise.withResolvers<void>();
 
-          const unsubscribe1 = await notifyAdapter.listenChainCompleted("chain-partial", () => {
-            count1++;
-          });
-          const unsubscribe2 = await notifyAdapter.listenChainCompleted("chain-partial", () => {
-            received2.resolve();
-          });
+          const unsubscribe1 = yield* step(
+            notifyAdapter.listenChainCompleted("chain-partial", () => {
+              count1++;
+            }),
+          );
+          const unsubscribe2 = yield* step(
+            notifyAdapter.listenChainCompleted("chain-partial", () => {
+              received2.resolve();
+            }),
+          );
 
-          await unsubscribe1();
+          yield* step(unsubscribe1());
 
-          await notifyAdapter.notifyChainsCompleted(["chain-partial"]);
+          yield* step(notifyAdapter.notifyChainsCompleted(["chain-partial"]));
 
-          await waitFor(received2.promise, "notification");
+          yield* wait(waitFor(received2.promise, "notification"));
 
           assert.equal(count1, 0);
-          await unsubscribe2();
-        },
+          yield* step(unsubscribe2());
+        }),
       },
     ],
   },
@@ -518,23 +579,27 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
     cases: [
       {
         name: "throwing callback does not break peer callback or surface to publisher",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
           const peerCalled = Promise.withResolvers<void>();
-          const unsubBad = await notifyAdapter.listenChainCompleted("chain-throw", () => {
-            throw new Error("bad listener");
-          });
-          const unsubGood = await notifyAdapter.listenChainCompleted("chain-throw", () => {
-            peerCalled.resolve();
-          });
+          const unsubBad = yield* step(
+            notifyAdapter.listenChainCompleted("chain-throw", () => {
+              throw new Error("bad listener");
+            }),
+          );
+          const unsubGood = yield* step(
+            notifyAdapter.listenChainCompleted("chain-throw", () => {
+              peerCalled.resolve();
+            }),
+          );
 
-          await notifyAdapter.notifyChainsCompleted(["chain-throw"]);
-          await waitFor(peerCalled.promise, "peer notification");
+          yield* step(notifyAdapter.notifyChainsCompleted(["chain-throw"]));
+          yield* wait(waitFor(peerCalled.promise, "peer notification"));
 
-          await unsubBad();
-          await unsubGood();
-        },
+          yield* step(unsubBad());
+          yield* step(unsubGood());
+        }),
       },
     ],
   },
@@ -543,8 +608,8 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
     cases: [
       {
         name: "normal subscribe/notify/unsubscribe cycle does not produce unhandled rejections",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
           const unhandled: unknown[] = [];
           const handler = (reason: unknown): void => {
@@ -552,27 +617,27 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
           };
           process.on("unhandledRejection", handler);
           try {
-            const u1 = await notifyAdapter.listenJobScheduled(["type-a"], () => {});
-            const u2 = await notifyAdapter.listenChainCompleted("chain-1", () => {});
-            const u3 = await notifyAdapter.listenJobAttemptLost("job-1", () => {});
+            const u1 = yield* step(notifyAdapter.listenJobScheduled(["type-a"], () => {}));
+            const u2 = yield* step(notifyAdapter.listenChainCompleted("chain-1", () => {}));
+            const u3 = yield* step(notifyAdapter.listenJobAttemptLost("job-1", () => {}));
 
-            await notifyAdapter.notifyJobsScheduled(["type-a"]);
-            await notifyAdapter.notifyChainsCompleted(["chain-1"]);
-            await notifyAdapter.notifyJobAttemptsLost(["job-1"]);
+            yield* step(notifyAdapter.notifyJobsScheduled(["type-a"]));
+            yield* step(notifyAdapter.notifyChainsCompleted(["chain-1"]));
+            yield* step(notifyAdapter.notifyJobAttemptsLost(["job-1"]));
 
-            await sleep(NEGATIVE_ASSERTION_DELAY_MS);
+            yield* wait(sleep(NEGATIVE_ASSERTION_DELAY_MS));
 
-            await u1();
-            await u2();
-            await u3();
+            yield* step(u1());
+            yield* step(u2());
+            yield* step(u3());
 
-            await sleep(NEGATIVE_ASSERTION_DELAY_MS);
+            yield* wait(sleep(NEGATIVE_ASSERTION_DELAY_MS));
 
             assert.deepEqual(unhandled, []);
           } finally {
             process.off("unhandledRejection", handler);
           }
-        },
+        }),
       },
     ],
   },
@@ -581,23 +646,23 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
     cases: [
       {
         name: "close is idempotent, rejects subsequent calls, and previously returned unsubscribes remain safe",
-        run: async ({ createNotifyAdapter }) => {
-          await using notifyAdapter = await createNotifyAdapter();
+        run: caseBody(function* ({ createNotifyAdapter }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
 
-          const unsubscribe = await notifyAdapter.listenChainCompleted("chain-1", () => {});
+          const unsubscribe = yield* step(notifyAdapter.listenChainCompleted("chain-1", () => {}));
 
-          await notifyAdapter.close();
-          await notifyAdapter.close();
+          yield* step(notifyAdapter.close());
+          yield* step(notifyAdapter.close());
 
-          await unsubscribe();
+          yield* step(unsubscribe());
 
-          await assert.rejects(notifyAdapter.notifyJobsScheduled(["type-a"]));
-          await assert.rejects(notifyAdapter.listenJobScheduled(["type-a"], () => {}));
-          await assert.rejects(notifyAdapter.notifyChainsCompleted(["chain-1"]));
-          await assert.rejects(notifyAdapter.listenChainCompleted("chain-1", () => {}));
-          await assert.rejects(notifyAdapter.notifyJobAttemptsLost(["job-1"]));
-          await assert.rejects(notifyAdapter.listenJobAttemptLost("job-1", () => {}));
-        },
+          yield* step(assertRejects(() => notifyAdapter.notifyJobsScheduled(["type-a"])));
+          yield* step(assertRejects(() => notifyAdapter.listenJobScheduled(["type-a"], () => {})));
+          yield* step(assertRejects(() => notifyAdapter.notifyChainsCompleted(["chain-1"])));
+          yield* step(assertRejects(() => notifyAdapter.listenChainCompleted("chain-1", () => {})));
+          yield* step(assertRejects(() => notifyAdapter.notifyJobAttemptsLost(["job-1"])));
+          yield* step(assertRejects(() => notifyAdapter.listenJobAttemptLost("job-1", () => {})));
+        }),
       },
     ],
   },

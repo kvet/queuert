@@ -1,4 +1,4 @@
-import type { RuntimeType } from "@queuert/typed-sql";
+import type { RuntimeType } from "@queuert/typed-sql/sql";
 import type { BaseTxContext } from "queuert";
 
 /**

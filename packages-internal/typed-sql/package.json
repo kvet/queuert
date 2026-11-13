@@ -10,16 +10,13 @@
     "url": "git+https://github.com/kvet/queuert.git"
   },
   "type": "module",
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
   "exports": {
-    ".": "./src/index.ts",
+    "./*": "./src/*.ts",
     "./package.json": "./package.json"
   },
   "publishConfig": {
     "exports": {
-      ".": "./dist/index.mjs",
+      "./*": "./dist/*.mjs",
       "./package.json": "./package.json"
     }
   },

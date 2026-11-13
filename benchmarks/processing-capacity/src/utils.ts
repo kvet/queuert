@@ -4,6 +4,8 @@ import {
   type Client,
   type NotifyAdapter,
   type StateAdapter,
+  type SyncNotifyAdapter,
+  type SyncStateAdapter,
   createClient,
   createWorkerRunner,
   createProcessors,
@@ -25,6 +27,20 @@ export const noopNotifyAdapter: NotifyAdapter = {
   [Symbol.asyncDispose]: noopAsync,
 };
 
+const noop = (): void => {};
+
+export const noopSyncNotifyAdapter: SyncNotifyAdapter = {
+  sync: true,
+  notifyJobsScheduled: noop,
+  listenJobScheduled: () => noop,
+  notifyChainsCompleted: noop,
+  listenChainCompleted: () => noop,
+  notifyJobAttemptsLost: noop,
+  listenJobAttemptLost: () => noop,
+  close: noop,
+  [Symbol.dispose]: noop,
+};
+
 const WINDOW_MS = 2_000;
 const CREATE_BATCH_SIZE = 100;
 const SEED_COUNT = 40_000;
@@ -40,7 +56,9 @@ const jobTypes = defineJobTypes<{
 
 type BenchmarkContext = {
   client: Client<any, any>;
-  withTransaction: StateAdapter<any, any, any>["withTransaction"];
+  createProcessors: typeof createProcessors;
+  createWorkerRunner: typeof createWorkerRunner;
+  transaction: <T>(fn: (txCtx: any, txHooks: any) => T | Promise<T>) => Promise<T>;
   onWindowStart: () => Promise<void>;
 };
 
@@ -53,64 +71,62 @@ export type ServerStats = {
 
 const createChainsForWindow =
   (batchSize: number) =>
-  async ({ client, withTransaction, onWindowStart }: BenchmarkContext): Promise<Measurement> => {
+  async ({ client, transaction, onWindowStart }: BenchmarkContext): Promise<Measurement> => {
     await onWindowStart();
     const begin = performance.now();
     let count = 0;
     while (performance.now() - begin < WINDOW_MS) {
       const start = count;
-      await withTxHooks(async (txHooks) =>
-        withTransaction(async (txCtx) =>
-          batchSize === 1
-            ? client.createChain({
-                ...txCtx,
-                txHooks,
-                typeName: "test-job",
-                input: { index: start },
-              })
-            : client.createChains({
-                ...txCtx,
-                txHooks,
-                items: Array.from({ length: batchSize }, (_, offset) => ({
-                  typeName: "test-job" as const,
-                  input: { index: start + offset },
-                })),
-              }),
-        ),
+      // oxlint-disable-next-line typescript/promise-function-async -- a sync client's transaction rejects a promise
+      await transaction<unknown>((txCtx, txHooks) =>
+        batchSize === 1
+          ? client.createChain({
+              ...txCtx,
+              txHooks,
+              typeName: "test-job",
+              input: { index: start },
+            })
+          : client.createChains({
+              ...txCtx,
+              txHooks,
+              items: Array.from({ length: batchSize }, (_, offset) => ({
+                typeName: "test-job" as const,
+                input: { index: start + offset },
+              })),
+            }),
       );
       count += batchSize;
     }
     return { count, durationMs: performance.now() - begin, drained: false };
   };
 
-const seedChains = async ({ client, withTransaction }: BenchmarkContext): Promise<void> => {
+const seedChains = async ({ client, transaction }: BenchmarkContext): Promise<void> => {
   for (let start = 0; start < SEED_COUNT; start += SEED_BATCH_SIZE) {
     const items = Array.from({ length: Math.min(SEED_BATCH_SIZE, SEED_COUNT - start) }, (_, i) => ({
       typeName: "test-job" as const,
       input: { index: start + i },
     }));
-    await withTxHooks(async (txHooks) =>
-      withTransaction(async (txCtx) => client.createChains({ ...txCtx, txHooks, items })),
-    );
+    // oxlint-disable-next-line typescript/promise-function-async -- a sync client's transaction rejects a promise
+    await transaction((txCtx, txHooks) => client.createChains({ ...txCtx, txHooks, items }));
   }
 };
 
 const completeChainsForWindow =
   (concurrency: number) =>
   async (context: BenchmarkContext): Promise<Measurement> => {
-    const { client, withTransaction, onWindowStart } = context;
+    const { client, createProcessors, createWorkerRunner, transaction, onWindowStart } = context;
     await seedChains(context);
     await onWindowStart();
 
     let completed = 0;
-    let begin = 0;
+    let begin: number | undefined;
     let measurement: Measurement | undefined;
     const measured = Promise.withResolvers<void>();
     const finish = (now: number) => {
       if (measurement) return;
       measurement = {
         count: completed,
-        durationMs: now - begin,
+        durationMs: now - (begin ?? now),
         drained: completed === SEED_COUNT,
       };
       measured.resolve();
@@ -125,14 +141,14 @@ const completeChainsForWindow =
         processors: {
           "test-job": {
             attemptHandler: async ({ complete }) => {
-              const result = await withTxHooks(async (txHooks) =>
-                withTransaction(async (txCtx) =>
-                  complete({ ...txCtx, txHooks, output: { done: true } }),
-                ),
+              const startedAt = (begin ??= performance.now());
+              // oxlint-disable-next-line typescript/promise-function-async -- a sync client's complete returns a plain value
+              const result = await transaction((txCtx, txHooks) =>
+                complete({ ...txCtx, txHooks, output: { done: true } }),
               );
               completed++;
               const now = performance.now();
-              if (completed === SEED_COUNT || now - begin >= WINDOW_MS) finish(now);
+              if (completed === SEED_COUNT || now - startedAt >= WINDOW_MS) finish(now);
               return result;
             },
           },
@@ -140,7 +156,6 @@ const completeChainsForWindow =
       }),
     });
 
-    begin = performance.now();
     await workerRunner.start();
     const windowTimer = setTimeout(() => {
       finish(performance.now());
@@ -247,7 +262,7 @@ const runScenario = async ({
   const { count, durationMs, drained } = await run(spec, async () => serverStats?.reset());
   const serverUsec = serverStats ? await serverStats.usec() : undefined;
   const drainedSuffix = drained
-    ? ` — queue of ${formatNumber(SEED_COUNT)} drained before the ${formatDuration(WINDOW_MS)} window ended`
+    ? ` — queue of ${formatNumber(SEED_COUNT)} drained before the ${formatDuration(WINDOW_MS)} window ended; timed from its first job`
     : "";
   console.log(
     `  Result: ${formatNumber(count)} ${spec.unit} in ${formatDuration(durationMs)} — ${formatRate(count, durationMs)} ${spec.unit}/s${drainedSuffix}`,
@@ -282,10 +297,43 @@ export const runBenchmark = async ({
     run: async (spec, onWindowStart) =>
       runQueuertScenario(spec, {
         client,
-        withTransaction: stateAdapter.withTransaction,
+        createProcessors,
+        createWorkerRunner,
+        transaction: async (fn) =>
+          withTxHooks(async (txHooks) =>
+            stateAdapter.withTransaction(async (txCtx) => fn(txCtx, txHooks)),
+          ),
         onWindowStart,
       }),
   });
   await notifyAdapter?.close();
   await stateAdapter.close();
+};
+
+export const runSyncBenchmark = async ({
+  title,
+  stateAdapter,
+  notifyAdapter,
+}: {
+  title: string;
+  stateAdapter: SyncStateAdapter<any, any, any>;
+  notifyAdapter?: SyncNotifyAdapter;
+}): Promise<void> => {
+  const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+  await runScenario({
+    title,
+    run: async (spec, onWindowStart) =>
+      runQueuertScenario(spec, {
+        client,
+        createProcessors,
+        createWorkerRunner,
+        transaction: async (fn) =>
+          withTxHooks((txHooks) =>
+            stateAdapter.withTransaction((txCtx) => fn(txCtx, txHooks) as never),
+          ),
+        onWindowStart,
+      }),
+  });
+  notifyAdapter?.close();
+  stateAdapter.close();
 };

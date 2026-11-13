@@ -28,7 +28,7 @@ const defineMysqlMigratorConformanceSuite = async ({
   });
 
   describe(`${image} Migrator Conformance`, () => {
-    conformanceTestSuite({ it, groups: mysqlMigratorConformanceGroups });
+    conformanceTestSuite({ mode: "async", it, groups: mysqlMigratorConformanceGroups });
   });
 };
 

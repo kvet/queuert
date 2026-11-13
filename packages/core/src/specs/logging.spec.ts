@@ -10,11 +10,11 @@ import {
   createProcessors,
   defineJobTypes,
 } from "../index.ts";
-import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.ts";
+import { createInProcessNotifyAdapter } from "../notify-adapter.in-process/notify-adapter.in-process.ts";
 import { createConsoleLog } from "../observability-adapter/log.console.ts";
 import type { Log } from "../observability-adapter/log.ts";
 import { createNoopObservabilityAdapter } from "../observability-adapter/observability-adapter.noop.ts";
-import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.ts";
+import { createInProcessStateAdapter } from "../state-adapter.in-process/state-adapter.in-process.ts";
 import type { StateAdapter } from "../state-adapter/state-adapter.ts";
 import type { TxHooks } from "../tx-hooks/tx-hooks.ts";
 

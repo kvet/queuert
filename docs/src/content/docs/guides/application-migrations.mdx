@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::caution[Experimental]
-The migrator API (`createPgMigrator`, `createSqliteMigrator`, `createMysqlMigrator`, `Migration` and `Migrator`) is experimental: it may change in a minor release.
+The migrator API (`createPgMigrator`, `createSqliteMigrator`, `createMysqlMigrator`, `Migration`, `MigrationScript`, `Migrator` and their `Sync` variants) is experimental: it may change in a minor release.
 :::
 
 ## Overview
@@ -80,7 +80,7 @@ A `non-transactional` migration's `up` and `down` run outside a transaction with
 On MySQL and MariaDB, DDL commits implicitly, so a transactional migration that changes the schema is not atomic: a failure after its DDL leaves the change applied and the migration unrecorded. Put DDL in `non-transactional` migrations written to be rerunnable (`CREATE TABLE IF NOT EXISTS`, `IF [NOT] EXISTS` on MariaDB), and keep row changes in transactional ones. Call `assertLockHeld()` between steps of long work: it throws once the lease is lost, so the migration stops before another process starts migrating.
 
 :::caution
-Inside a `transactional` migration, run queries only through the `txCtx` that `up` and `down` receive. A query through your outer client waits for a connection the migration holds when the pool has one connection (Knex and Kysely over SQLite), and the SQLite providers hold their write lock for the whole transaction, so taking that lock again never returns. Prisma's interactive transactions time out after 5 seconds by default; raise `transactionOptions.timeout` on the client for long transactional migrations.
+Inside a `transactional` migration, run queries only through the `txCtx` that `up` and `down` receive. A query through your outer client waits for a connection the migration holds when the pool has one connection (Knex and Kysely over SQLite), and the async SQLite providers hold their write lock for the whole transaction, so taking that lock again never returns. Prisma's interactive transactions time out after 5 seconds by default; raise `transactionOptions.timeout` on the client for long transactional migrations.
 :::
 
 When a migration fails, the migrator rejects with `Migration "<name>" failed: <message>` (or `Reverting migration "<name>" failed: …`), with the original error as `cause`.
@@ -104,6 +104,10 @@ createPgMigrator({
 ```
 
 With SQLite, claiming and extending the lease write to the database, so they wait for SQLite's write lock while another process runs a migration transaction. Set the driver's busy timeout longer than your longest migration transaction; otherwise a waiting process fails with `SQLITE_BUSY` instead of waiting its turn.
+
+## Synchronous SQLite Drivers
+
+With a [synchronous provider](/queuert/integrations/state-adapters/sqlite/#synchronous-providers) (better-sqlite3, node:sqlite, bun:sqlite), `createSqliteMigrator` returns a `Migrator<"sync">`. It takes the same options except `lock`, and its migrations, `before` and `after` are synchronous: `up` and `down` return nothing, and `migrateToLatest` and `migrateTo` return their result directly. It takes no lease. Each transactional migration still writes to the lock table first, so processes migrating at once apply it once, but a non-transactional migration can run in two of them; migrate from one process when you have those.
 
 ## Revert
 
@@ -151,7 +155,7 @@ The copied migrations count as applied when their names match, and the copy is a
 
 ## Testing a Provider
 
-`@queuert/postgres/conformance` exports `pgMigratorConformanceCases` and `createPgMigratorConformanceContext`, and `@queuert/sqlite/conformance` and `@queuert/mysql/conformance` the SQLite and MySQL equivalents. They run the migrator over your state provider: history, transactional and non-transactional migrations, reverts and the lease. Register one test per case with any test runner:
+`@queuert/postgres/conformance` exports `pgMigratorConformanceCases` and `createPgMigratorConformanceContext`, and `@queuert/sqlite/conformance` and `@queuert/mysql/conformance` the SQLite and MySQL equivalents. They run the migrator over your state provider: history, transactional and non-transactional migrations, reverts and the lease. `syncSqliteMigratorConformanceCases` run the same cases, without the lease, over a synchronous provider, against a context `createSqliteMigratorConformanceContext` builds from it. Register one test per case with any test runner:
 
 ```ts
 const context = createPgMigratorConformanceContext({ stateProvider });

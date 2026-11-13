@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 
+import { caseBody, resource, wait } from "@queuert/helpers/case-body";
 import { sleep } from "@queuert/helpers/sleep";
+import { step } from "@queuert/helpers/steps";
 
+import { inTransaction } from "../../conformance/adapters.ts";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
 import type { StateAdapterConformanceContext } from "../types.ts";
 
@@ -10,127 +13,165 @@ export const listBlockedJobsGroup: ConformanceGroup<StateAdapterConformanceConte
   cases: [
     {
       name: "listBlockedJobs returns jobs blocked by a chain",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "blocker-type", input: null },
-            ],
-          }),
+        const [blockerChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "blocker-type", input: null },
+              ],
+            }),
+          ),
         );
-        const [blockedChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "blocked-type", input: null },
-            ],
-          }),
+        const [blockedChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "blocked-type", input: null },
+              ],
+            }),
+          ),
         );
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "unrelated-type", input: null },
-            ],
-          }),
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "unrelated-type",
+                  input: null,
+                },
+              ],
+            }),
+          ),
         );
 
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.addJobsBlockers({
-            txCtx,
-            jobBlockers: [
-              { jobId: blockedChain.head.id, blockedByChainIds: [blockerChain.head.chainId] },
-            ],
-          }),
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [
+                { jobId: blockedChain.head.id, blockedByChainIds: [blockerChain.head.chainId] },
+              ],
+            }),
+          ),
         );
 
-        const result = await stateAdapter.listBlockedJobs({
-          chainId: blockerChain.head.chainId,
-          orderDirection: "desc",
-          page: { limit: 10 },
-        });
+        const result = yield* step(
+          stateAdapter.listBlockedJobs({
+            chainId: blockerChain.head.chainId,
+            orderDirection: "desc",
+            page: { limit: 10 },
+          }),
+        );
 
         assert.equal(result.items.length, 1);
         assert.equal(result.items[0].id, blockedChain.head.id);
-      },
+      }),
     },
     {
       name: "listBlockedJobs returns empty page when no jobs are blocked",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "test-type", input: null }],
+        const [stateChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "test-type", input: null },
+              ],
+            }),
+          ),
+        );
+        const result = yield* step(
+          stateAdapter.listBlockedJobs({
+            chainId: stateChain.head.chainId,
+            orderDirection: "desc",
+            page: { limit: 10 },
           }),
         );
-        const result = await stateAdapter.listBlockedJobs({
-          chainId: stateChain.head.chainId,
-          orderDirection: "desc",
-          page: { limit: 10 },
-        });
         assert.deepEqual(result.items, []);
         assert.equal(result.nextCursor, null);
-      },
+      }),
     },
     {
       name: "listBlockedJobs sorts asc when orderDirection is asc",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "blocker-type", input: null },
-            ],
-          }),
+        const [blockerChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "blocker-type", input: null },
+              ],
+            }),
+          ),
         );
-        const [blockedChain1] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "blocked-a", input: null }],
-          }),
+        const [blockedChain1] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "blocked-a", input: null },
+              ],
+            }),
+          ),
         );
-        await sleep(5);
-        const [blockedChain2] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [{ id: stateAdapter.config.generateJobId(), typeName: "blocked-b", input: null }],
-          }),
-        );
-
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.addJobsBlockers({
-            txCtx,
-            jobBlockers: [
-              { jobId: blockedChain1.head.id, blockedByChainIds: [blockerChain.head.chainId] },
-            ],
-          }),
-        );
-        await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.addJobsBlockers({
-            txCtx,
-            jobBlockers: [
-              { jobId: blockedChain2.head.id, blockedByChainIds: [blockerChain.head.chainId] },
-            ],
-          }),
+        yield* wait(sleep(5));
+        const [blockedChain2] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "blocked-b", input: null },
+              ],
+            }),
+          ),
         );
 
-        const desc = await stateAdapter.listBlockedJobs({
-          chainId: blockerChain.head.chainId,
-          orderDirection: "desc",
-          page: { limit: 10 },
-        });
-        const asc = await stateAdapter.listBlockedJobs({
-          chainId: blockerChain.head.chainId,
-          orderDirection: "asc",
-          page: { limit: 10 },
-        });
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [
+                { jobId: blockedChain1.head.id, blockedByChainIds: [blockerChain.head.chainId] },
+              ],
+            }),
+          ),
+        );
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [
+                { jobId: blockedChain2.head.id, blockedByChainIds: [blockerChain.head.chainId] },
+              ],
+            }),
+          ),
+        );
+
+        const desc = yield* step(
+          stateAdapter.listBlockedJobs({
+            chainId: blockerChain.head.chainId,
+            orderDirection: "desc",
+            page: { limit: 10 },
+          }),
+        );
+        const asc = yield* step(
+          stateAdapter.listBlockedJobs({
+            chainId: blockerChain.head.chainId,
+            orderDirection: "asc",
+            page: { limit: 10 },
+          }),
+        );
 
         assert.equal(desc.items.length, 2);
         assert.equal(asc.items.length, 2);
@@ -138,55 +179,69 @@ export const listBlockedJobsGroup: ConformanceGroup<StateAdapterConformanceConte
         assert.equal(desc.items[1].id, blockedChain1.head.id);
         assert.equal(asc.items[0].id, blockedChain1.head.id);
         assert.equal(asc.items[1].id, blockedChain2.head.id);
-      },
+      }),
     },
     {
       name: "listBlockedJobs paginates with cursor",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "blocker-type", input: null },
-            ],
-          }),
-        );
-        const blockedChains = [];
-        for (let i = 0; i < 4; i++) {
-          const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [blockerChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
             stateAdapter.createJobs({
               txCtx,
               jobs: [
-                { id: stateAdapter.config.generateJobId(), typeName: `blocked-${i}`, input: null },
+                { id: stateAdapter.config.generateJobId(), typeName: "blocker-type", input: null },
               ],
             }),
+          ),
+        );
+        const blockedChains = [];
+        for (let i = 0; i < 4; i++) {
+          const [stateChain] = yield* step(
+            stateAdapter.withTransaction((txCtx) =>
+              stateAdapter.createJobs({
+                txCtx,
+                jobs: [
+                  {
+                    id: stateAdapter.config.generateJobId(),
+                    typeName: `blocked-${i}`,
+                    input: null,
+                  },
+                ],
+              }),
+            ),
           );
           blockedChains.push(stateChain);
-          await stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.addJobsBlockers({
-              txCtx,
-              jobBlockers: [
-                { jobId: stateChain.head.id, blockedByChainIds: [blockerChain.head.chainId] },
-              ],
-            }),
+          yield* step(
+            stateAdapter.withTransaction((txCtx) =>
+              stateAdapter.addJobsBlockers({
+                txCtx,
+                jobBlockers: [
+                  { jobId: stateChain.head.id, blockedByChainIds: [blockerChain.head.chainId] },
+                ],
+              }),
+            ),
           );
         }
 
-        const page1 = await stateAdapter.listBlockedJobs({
-          chainId: blockerChain.head.chainId,
-          orderDirection: "desc",
-          page: { limit: 2 },
-        });
+        const page1 = yield* step(
+          stateAdapter.listBlockedJobs({
+            chainId: blockerChain.head.chainId,
+            orderDirection: "desc",
+            page: { limit: 2 },
+          }),
+        );
         assert.equal(page1.items.length, 2);
         assert.notEqual(page1.nextCursor, null);
 
-        const page2 = await stateAdapter.listBlockedJobs({
-          chainId: blockerChain.head.chainId,
-          orderDirection: "desc",
-          page: { limit: 2, cursor: page1.nextCursor! },
-        });
+        const page2 = yield* step(
+          stateAdapter.listBlockedJobs({
+            chainId: blockerChain.head.chainId,
+            orderDirection: "desc",
+            page: { limit: 2, cursor: page1.nextCursor! },
+          }),
+        );
         assert.equal(page2.items.length, 2);
         assert.equal(page2.nextCursor, null);
 
@@ -195,67 +250,79 @@ export const listBlockedJobsGroup: ConformanceGroup<StateAdapterConformanceConte
           ...page2.items.map((item) => item.id),
         ];
         assert.equal(new Set(allIds).size, 4);
-      },
+      }),
     },
     {
       name: "listBlockedJobs paginates jobs created at the same time by id in both directions",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: caseBody(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "blocker-type", input: null },
-            ],
+        const [blockerChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "blocker-type", input: null },
+              ],
+            }),
+          ),
+        );
+        const created = yield* step(
+          inTransaction(stateAdapter, function* (txCtx) {
+            const chains = yield* step(
+              stateAdapter.createJobs({
+                txCtx,
+                jobs: [0, 1, 2].map(() => ({
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "same-time-blocked",
+                  input: null,
+                })),
+              }),
+            );
+            yield* step(
+              stateAdapter.addJobsBlockers({
+                txCtx,
+                jobBlockers: chains.map((chain) => ({
+                  jobId: chain.head.id,
+                  blockedByChainIds: [blockerChain.head.chainId],
+                })),
+              }),
+            );
+            return chains;
           }),
         );
-        const created = await stateAdapter.withTransaction(async (txCtx) => {
-          const chains = await stateAdapter.createJobs({
-            txCtx,
-            jobs: [0, 1, 2].map(() => ({
-              id: stateAdapter.config.generateJobId(),
-              typeName: "same-time-blocked",
-              input: null,
-            })),
-          });
-          await stateAdapter.addJobsBlockers({
-            txCtx,
-            jobBlockers: chains.map((chain) => ({
-              jobId: chain.head.id,
-              blockedByChainIds: [blockerChain.head.chainId],
-            })),
-          });
-          return chains;
-        });
         const [firstId, secondId, thirdId] = created.map((chain) => chain.head.id).toSorted();
-        const listSameTimeBlockedJobs = async (orderDirection: "asc" | "desc", cursor?: string) =>
+        const listSameTimeBlockedJobs = (orderDirection: "asc" | "desc", cursor?: string) =>
           stateAdapter.listBlockedJobs({
             chainId: blockerChain.head.chainId,
             orderDirection,
             page: { limit: 2, cursor },
           });
 
-        const ascPage = await listSameTimeBlockedJobs("asc");
+        const ascPage = yield* step(listSameTimeBlockedJobs("asc"));
         assert.deepEqual(
           ascPage.items.map((job) => job.id),
           [firstId, secondId],
         );
         assert.deepEqual(
-          (await listSameTimeBlockedJobs("asc", ascPage.nextCursor!)).items.map((job) => job.id),
+          (yield* step(listSameTimeBlockedJobs("asc", ascPage.nextCursor!))).items.map(
+            (job) => job.id,
+          ),
           [thirdId],
         );
 
-        const descPage = await listSameTimeBlockedJobs("desc");
+        const descPage = yield* step(listSameTimeBlockedJobs("desc"));
         assert.deepEqual(
           descPage.items.map((job) => job.id),
           [thirdId, secondId],
         );
         assert.deepEqual(
-          (await listSameTimeBlockedJobs("desc", descPage.nextCursor!)).items.map((job) => job.id),
+          (yield* step(listSameTimeBlockedJobs("desc", descPage.nextCursor!))).items.map(
+            (job) => job.id,
+          ),
           [firstId],
         );
-      },
+      }),
     },
   ],
 };
@@ -269,7 +336,7 @@ export const listBlockedJobsConcurrentTransactionsGroup: ConformanceGroup<StateA
         run: async ({ createStateAdapter }) => {
           await using stateAdapter = await createStateAdapter();
 
-          const [blockerChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          const [blockerChain] = await stateAdapter.withTransaction((txCtx) =>
             stateAdapter.createJobs({
               txCtx,
               jobs: [
@@ -281,7 +348,7 @@ export const listBlockedJobsConcurrentTransactionsGroup: ConformanceGroup<StateA
               ],
             }),
           );
-          const [targetChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          const [targetChain] = await stateAdapter.withTransaction((txCtx) =>
             stateAdapter.createJobs({
               txCtx,
               jobs: [

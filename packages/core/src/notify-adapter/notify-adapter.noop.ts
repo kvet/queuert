@@ -1,16 +1,32 @@
-import { noopAsync } from "@queuert/helpers/noop";
+import type { NotifyAdapter, SyncNotifyAdapter } from "./notify-adapter.ts";
 
-import type { NotifyAdapter } from "./notify-adapter.ts";
+const notifyNothingAsync = async (): Promise<void> => {};
 
-const listenNothing = async (): Promise<() => Promise<void>> => noopAsync;
+const listenNothingAsync = async (): Promise<() => Promise<void>> => notifyNothingAsync;
 
 export const noopNotifyAdapter: NotifyAdapter = Object.freeze({
-  notifyJobsScheduled: noopAsync,
+  notifyJobsScheduled: notifyNothingAsync,
+  listenJobScheduled: listenNothingAsync,
+  notifyChainsCompleted: notifyNothingAsync,
+  listenChainCompleted: listenNothingAsync,
+  notifyJobAttemptsLost: notifyNothingAsync,
+  listenJobAttemptLost: listenNothingAsync,
+  close: notifyNothingAsync,
+  [Symbol.asyncDispose]: notifyNothingAsync,
+});
+
+const notifyNothing = (): void => {};
+
+const listenNothing = (): (() => void) => notifyNothing;
+
+export const syncNoopNotifyAdapter: SyncNotifyAdapter = Object.freeze({
+  sync: true,
+  notifyJobsScheduled: notifyNothing,
   listenJobScheduled: listenNothing,
-  notifyChainsCompleted: noopAsync,
+  notifyChainsCompleted: notifyNothing,
   listenChainCompleted: listenNothing,
-  notifyJobAttemptsLost: noopAsync,
+  notifyJobAttemptsLost: notifyNothing,
   listenJobAttemptLost: listenNothing,
-  close: noopAsync,
-  [Symbol.asyncDispose]: noopAsync,
+  close: notifyNothing,
+  [Symbol.dispose]: notifyNothing,
 });

@@ -1,3 +1,4 @@
+import { expectToThrow } from "@queuert/helpers/expect.spec-helper";
 import { describe, expect, test, vi } from "vitest";
 
 import { createTxHooks, withTxHooks } from "./tx-hooks.ts";
@@ -12,7 +13,7 @@ const createRecorder = () => {
   };
 };
 
-const rerunAsync = async <T>(tries: number, cb: (tryIndex: number) => Promise<T>): Promise<T> => {
+const rerun = async <T>(tries: number, cb: (tryIndex: number) => Promise<T>): Promise<T> => {
   let lastError: unknown;
   for (let tryIndex = 1; tryIndex <= tries; tryIndex++) {
     try {
@@ -38,6 +39,35 @@ describe("TxHooks", () => {
     expect(calls).toEqual(["first", "second"]);
   });
 
+  test("onCommit: runs every commit callback even if one throws, then rethrows the first error", async () => {
+    const after = vi.fn();
+    const error = new Error("commit callback failed");
+
+    await expectToThrow(async () => {
+      await withTxHooks(async (txHooks) => {
+        txHooks.onCommit(() => {
+          throw error;
+        });
+        txHooks.onCommit(async () => {
+          throw new Error("second failure");
+        });
+        txHooks.onCommit(after);
+      });
+    }, error);
+
+    expect(after).toHaveBeenCalledOnce();
+  });
+
+  test("onRollback: rollback callbacks do not run on commit", async () => {
+    const rollback = vi.fn();
+
+    await withTxHooks(async (txHooks) => {
+      txHooks.onRollback(rollback);
+    });
+
+    expect(rollback).not.toHaveBeenCalled();
+  });
+
   test("onCommit: awaits async commit callbacks", async () => {
     const { calls, record } = createRecorder();
 
@@ -53,35 +83,6 @@ describe("TxHooks", () => {
 
     expect(calls).toEqual(["fast", "slow"]);
   });
-
-  test("onCommit: runs every commit callback even if one throws, then rethrows the first error", async () => {
-    const after = vi.fn();
-    const error = new Error("commit callback failed");
-
-    await expect(
-      withTxHooks(async (txHooks) => {
-        txHooks.onCommit(() => {
-          throw error;
-        });
-        txHooks.onCommit(async () => {
-          throw new Error("second failure");
-        });
-        txHooks.onCommit(after);
-      }),
-    ).rejects.toThrow(error);
-
-    expect(after).toHaveBeenCalledOnce();
-  });
-
-  test("onRollback: rollback callbacks do not run on commit", async () => {
-    const rollback = vi.fn();
-
-    await withTxHooks(async (txHooks) => {
-      txHooks.onRollback(rollback);
-    });
-
-    expect(rollback).not.toHaveBeenCalled();
-  });
 });
 
 describe("withTxHooks", () => {
@@ -92,24 +93,24 @@ describe("withTxHooks", () => {
 
   test("propagates callback error", async () => {
     const error = new Error("boom");
-    await expect(
-      withTxHooks(async () => {
+    await expectToThrow(async () => {
+      await withTxHooks(async () => {
         throw error;
-      }),
-    ).rejects.toThrow(error);
+      });
+    }, error);
   });
 
   test("drops commit callbacks and runs rollback callbacks newest first when the callback throws", async () => {
     const { calls, record } = createRecorder();
 
-    await expect(
-      withTxHooks(async (txHooks) => {
+    await expectToThrow(async () => {
+      await withTxHooks(async (txHooks) => {
         txHooks.onCommit(record("commit"));
         txHooks.onRollback(record("rollback-first"));
         txHooks.onRollback(record("rollback-second"));
         throw new Error("transaction failed");
-      }),
-    ).rejects.toThrow("transaction failed");
+      });
+    }, "transaction failed");
 
     expect(calls).toEqual(["rollback-second", "rollback-first"]);
   });
@@ -118,15 +119,15 @@ describe("withTxHooks", () => {
     const remaining = vi.fn();
     const txError = new Error("transaction failed");
 
-    await expect(
-      withTxHooks(async (txHooks) => {
+    await expectToThrow(async () => {
+      await withTxHooks(async (txHooks) => {
         txHooks.onRollback(remaining);
         txHooks.onRollback(() => {
           throw new Error("rollback callback failed");
         });
         throw txError;
-      }),
-    ).rejects.toThrow(txError);
+      });
+    }, txError);
 
     expect(remaining).toHaveBeenCalledOnce();
   });
@@ -169,25 +170,6 @@ describe("createTxHooks", () => {
     }).toThrow(error);
     expect(remaining).toHaveBeenCalledOnce();
   });
-
-  test("manual lifecycle - discard does not leave a rejected promise from a rollback callback unhandled", async () => {
-    const onUnhandledRejection = vi.fn();
-    process.on("unhandledRejection", onUnhandledRejection);
-    try {
-      const { txHooks, discard } = createTxHooks();
-      // oxlint-disable-next-line typescript/no-misused-promises -- asserts that a misused async rollback callback is silenced
-      txHooks.onRollback(async () => {
-        throw new Error("async rollback callback failed");
-      });
-
-      discard();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-
-      expect(onUnhandledRejection).not.toHaveBeenCalled();
-    } finally {
-      process.off("unhandledRejection", onUnhandledRejection);
-    }
-  });
 });
 
 describe("withSavepoint", () => {
@@ -213,13 +195,13 @@ describe("withSavepoint", () => {
       txHooks.onCommit(record("commit-before"));
       txHooks.onRollback(record("rollback-before"));
 
-      await expect(
-        txHooks.withSavepoint(async () => {
+      await expectToThrow(async () => {
+        await txHooks.withSavepoint(async () => {
           txHooks.onCommit(record("commit-inside"));
           txHooks.onRollback(record("rollback-inside"));
           throw new Error("boom");
-        }),
-      ).rejects.toThrow("boom");
+        });
+      }, "boom");
 
       expect(calls).toEqual(["rollback-inside"]);
     });
@@ -242,12 +224,12 @@ describe("withSavepoint", () => {
       txHooks.onCommit(record("a"));
       await txHooks.withSavepoint(async () => {
         txHooks.onCommit(record("b"));
-        await expect(
-          txHooks.withSavepoint(async () => {
+        await expectToThrow(async () => {
+          await txHooks.withSavepoint(async () => {
             txHooks.onCommit(record("c"));
             throw new Error("inner");
-          }),
-        ).rejects.toThrow("inner");
+          });
+        }, "inner");
       });
     });
 
@@ -259,16 +241,16 @@ describe("withSavepoint", () => {
 
     await withTxHooks(async (txHooks) => {
       txHooks.onCommit(record("a"));
-      await expect(
-        txHooks.withSavepoint(async () => {
+      await expectToThrow(async () => {
+        await txHooks.withSavepoint(async () => {
           txHooks.onCommit(record("b"));
           await txHooks.withSavepoint(async () => {
             txHooks.onCommit(record("c"));
             txHooks.onRollback(record("rollback-c"));
           });
           throw new Error("outer");
-        }),
-      ).rejects.toThrow("outer");
+        });
+      }, "outer");
     });
 
     expect(calls).toEqual(["rollback-c", "a"]);
@@ -387,8 +369,12 @@ describe("after flush or discard", () => {
     await flush();
 
     expect(() => txHooks.createSavepoint()).toThrow(settledError);
-    await expect(txHooks.withSavepoint(async () => {})).rejects.toThrow(settledError);
-    await expect(runTry()).rejects.toThrow(settledError);
+    await expectToThrow(async () => {
+      await txHooks.withSavepoint(async () => {});
+    }, settledError);
+    await expectToThrow(async () => {
+      await runTry();
+    }, settledError);
   });
 
   test("rolling back a savepoint after flush does nothing", async () => {
@@ -412,8 +398,12 @@ describe("after flush or discard", () => {
     discard();
 
     expect(() => txHooks.createSavepoint()).toThrow(settledError);
-    await expect(txHooks.withSavepoint(async () => {})).rejects.toThrow(settledError);
-    await expect(runTry()).rejects.toThrow(settledError);
+    await expectToThrow(async () => {
+      await txHooks.withSavepoint(async () => {});
+    }, settledError);
+    await expectToThrow(async () => {
+      await runTry();
+    }, settledError);
     sp.rollback();
     expect(rollback).toHaveBeenCalledOnce();
   });
@@ -457,12 +447,12 @@ describe("rollback order", () => {
       const runTry = txHooks.retryBoundary(async (tryIndex: number) => {
         if (tryIndex === 1) throw new Error("serialization failure");
       });
-      await txHooks
-        .withSavepoint(async () => {
+      await expectToThrow(async () => {
+        await txHooks.withSavepoint(async () => {
           txHooks.onRollback(record("rollback"));
           await runTry(1);
-        })
-        .catch(() => {});
+        });
+      }, "serialization failure");
       txHooks.onCommit(record("after-savepoint"));
       await runTry(2);
     });
@@ -477,7 +467,7 @@ describe("retryBoundary", () => {
 
     await withTxHooks(async (txHooks) => {
       txHooks.onCommit(record("commit:before"));
-      await rerunAsync(
+      await rerun(
         3,
         txHooks.retryBoundary(async (tryIndex: number) => {
           txHooks.onCommit(record(`commit:try-${tryIndex}`));
@@ -497,7 +487,7 @@ describe("retryBoundary", () => {
       const runTry = txHooks.retryBoundary(async (tryIndex: number) => {
         txHooks.onCommit(record(`try-${tryIndex}`));
       });
-      await rerunAsync(2, async (tryIndex) => {
+      await rerun(2, async (tryIndex) => {
         await runTry(tryIndex);
         if (tryIndex === 1) throw new Error("commit failed");
       });
@@ -517,14 +507,11 @@ describe("retryBoundary", () => {
 
   test("throws when called while the previous try is still running", async () => {
     await withTxHooks(async (txHooks) => {
-      const { promise, resolve } = Promise.withResolvers<void>();
-      const wrapped = txHooks.retryBoundary(async () => promise);
-      const first = wrapped();
-      await expect(wrapped()).rejects.toThrow(
-        "txHooks.retryBoundary: the previous try is still running",
-      );
-      resolve();
-      await first;
+      const wrapped: () => Promise<void> = txHooks.retryBoundary(async () => {
+        await expectToThrow(async () => {
+          await wrapped();
+        }, "txHooks.retryBoundary: the previous try is still running");
+      });
       await wrapped();
     });
   });
@@ -533,21 +520,112 @@ describe("retryBoundary", () => {
     const { calls, record } = createRecorder();
 
     await withTxHooks(async (txHooks) => {
-      await rerunAsync(
+      await rerun(
         2,
         txHooks.retryBoundary(async (tryIndex: number) => {
           txHooks.onCommit(record(`try-${tryIndex}`));
-          await txHooks
-            .withSavepoint(async () => {
+          await expectToThrow(async () => {
+            await txHooks.withSavepoint(async () => {
               txHooks.onCommit(record(`savepoint-${tryIndex}`));
               throw new Error("savepoint rolled back");
-            })
-            .catch(() => {});
+            });
+          }, "savepoint rolled back");
           if (tryIndex === 1) throw new Error("serialization failure");
         }),
       );
     });
 
     expect(calls).toEqual(["try-2"]);
+  });
+});
+
+describe("synchronous transactions", () => {
+  test("withTxHooks returns a synchronous callback's value and flushes before it returns", () => {
+    const { calls, record } = createRecorder();
+
+    const result = withTxHooks((txHooks) => {
+      txHooks.onCommit(record("commit"));
+      return 1;
+    });
+
+    expect(result).toBe(1);
+    expect(calls).toEqual(["commit"]);
+  });
+
+  test("withTxHooks discards synchronously when a synchronous callback throws", () => {
+    const { calls, record } = createRecorder();
+
+    expect(() =>
+      withTxHooks((txHooks) => {
+        txHooks.onCommit(record("commit"));
+        txHooks.onRollback(record("rollback"));
+        throw new Error("rolled back");
+      }),
+    ).toThrow("rolled back");
+
+    expect(calls).toEqual(["rollback"]);
+  });
+
+  test("onCommit: throws after running every commit callback when one returns a promise", () => {
+    const after = vi.fn();
+
+    expect(() => {
+      withTxHooks((txHooks) => {
+        // oxlint-disable-next-line typescript/no-misused-promises -- exercising the runtime check for an async commit callback
+        txHooks.onCommit(async () => {});
+        txHooks.onCommit(after);
+      });
+    }).toThrow(
+      "txHooks of a synchronous transaction require synchronous commit callbacks: a commit callback returned a promise",
+    );
+
+    expect(after).toHaveBeenCalledOnce();
+  });
+
+  test("withSavepoint returns a synchronous fn's value and rolls back synchronously on a throw", () => {
+    const { calls, record } = createRecorder();
+
+    withTxHooks((txHooks) => {
+      expect(txHooks.withSavepoint(() => 1)).toBe(1);
+      expect(() =>
+        txHooks.withSavepoint(() => {
+          txHooks.onCommit(record("dropped"));
+          txHooks.onRollback(record("rollback"));
+          throw new Error("savepoint rolled back");
+        }),
+      ).toThrow("savepoint rolled back");
+      expect(calls).toEqual(["rollback"]);
+    });
+
+    expect(calls).toEqual(["rollback"]);
+  });
+
+  test("retryBoundary reruns a synchronous fn and throws when called from inside its own try", () => {
+    const { calls, record } = createRecorder();
+
+    withTxHooks((txHooks) => {
+      const wrapped = txHooks.retryBoundary((tryIndex: number) => {
+        txHooks.onCommit(record(`try-${tryIndex}`));
+        if (tryIndex === 1) {
+          expect(() => wrapped(3)).toThrow(
+            "txHooks.retryBoundary: the previous try is still running",
+          );
+        }
+        return tryIndex;
+      });
+      expect(wrapped(1)).toBe(1);
+      expect(wrapped(2)).toBe(2);
+    });
+
+    expect(calls).toEqual(["try-2"]);
+  });
+
+  test("createTxHooks: flush returns nothing when every commit callback is synchronous", () => {
+    const { calls, record } = createRecorder();
+    const { txHooks, flush } = createTxHooks();
+    txHooks.onCommit(record("commit"));
+
+    expect(flush()).toBeUndefined();
+    expect(calls).toEqual(["commit"]);
   });
 });

@@ -1,20 +1,24 @@
 import type { DatabaseSync, SQLInputValue, StatementSync } from "node:sqlite";
 
-import type { AsyncRwLock, SqliteStateProvider } from "@queuert/sqlite";
+import type { SyncSqliteStateProvider } from "@queuert/sqlite";
 import { type TxHooks, withTxHooks } from "queuert";
 
 export type NodeSqliteContext = { db: DatabaseSync; txHooks: TxHooks };
 
+const requireTxHooks = (txCtx: Partial<NodeSqliteContext>): TxHooks => {
+  if (txCtx.txHooks === undefined) {
+    throw new Error(
+      "The transaction context has no txHooks: open the transaction with withTransaction, or create txHooks with withTxHooks and pass them in the context",
+    );
+  }
+  return txCtx.txHooks;
+};
+
 export const createNodeSqliteStateProvider = ({
   db,
-  lock,
 }: {
   db: DatabaseSync;
-  lock: AsyncRwLock;
-}): SqliteStateProvider<NodeSqliteContext> => {
-  // The adapter folds template variants (e.g. table prefix) into `id`, so
-  // it uniquely identifies the resolved SQL within this provider — keying
-  // the prepared-statement cache by `id` is sufficient.
+}): SyncSqliteStateProvider<NodeSqliteContext> => {
   const stmtCache = new Map<string, StatementSync>();
   const prepareCached = (id: string, sql: string): StatementSync => {
     let stmt = stmtCache.get(id);
@@ -26,31 +30,28 @@ export const createNodeSqliteStateProvider = ({
   };
 
   return {
-    withTransaction: async (fn) =>
-      withTxHooks(async (txHooks) => {
-        using _h = await lock.acquireWrite();
+    sync: true,
+    withTransaction: (fn) =>
+      withTxHooks((txHooks) => {
         db.exec("BEGIN");
         try {
-          const result = await fn({ db, txHooks });
+          const result = fn({ db, txHooks });
+          if (result instanceof Promise) {
+            throw new TypeError("withTransaction callback must not return a promise");
+          }
           db.exec("COMMIT");
           return result;
         } catch (error) {
-          if (db.isTransaction) {
-            try {
-              db.exec("ROLLBACK");
-            } catch {
-              // ignore rollback errors
-            }
-          }
+          if (db.isTransaction) db.exec("ROLLBACK");
           throw error;
         }
       }),
     isTransaction: (txCtx) => txCtx.db.isTransaction,
     onTransactionCommit: (txCtx, callback) => {
-      txCtx.txHooks.onCommit(callback);
+      requireTxHooks(txCtx).onCommit(callback);
     },
     onTransactionRollback: (txCtx, callback) => {
-      txCtx.txHooks.onRollback(callback);
+      requireTxHooks(txCtx).onRollback(callback);
     },
     classifyError: ({ error }) => {
       const tableName = /no such table: (\S+)/.exec(
@@ -58,17 +59,14 @@ export const createNodeSqliteStateProvider = ({
       )?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
     },
-    executeSql: async ({ txCtx, id, sql, params, readOnly }) => {
-      const run = (): unknown[] => {
-        const database = txCtx?.db ?? db;
-        const statement = id !== undefined ? prepareCached(id, sql) : database.prepare(sql);
-        return statement.all(...(params as SQLInputValue[]));
-      };
-      if (txCtx) return run();
-      using _h = readOnly ? await lock.acquireRead() : await lock.acquireWrite();
-      return run();
+    executeSql: ({ txCtx, id, sql, params }) => {
+      if (!txCtx && db.isTransaction) {
+        throw new Error("executeSql without txCtx ran inside an open transaction");
+      }
+      const statement = id !== undefined ? prepareCached(id, sql) : db.prepare(sql);
+      return statement.all(...(params as SQLInputValue[]));
     },
-    close: async () => {
+    close: () => {
       stmtCache.clear();
     },
   };

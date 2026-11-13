@@ -1,8 +1,8 @@
 # SQLite State Adapter (Drizzle ORM)
 
-SQLite state storage via `@queuert/sqlite` with Drizzle ORM — job creation and completion inside application transactions, with `createAsyncRwLock()` for write serialization: the handler holds the same lock around the transaction it passes to `complete`.
+SQLite state storage via `@queuert/sqlite` with Drizzle ORM through a synchronous provider (marked with `sync: true`), so `createSqliteStateAdapter` returns a sync adapter and `createClient` returns plain values — job creation and completion inside Drizzle's synchronous transaction over better-sqlite3, with no lock.
 
-It also runs the application's own migrations (`src/migrations.ts`) with the experimental `createSqliteMigrator`: a transactional table creation and index, then non-transactional migrations for a backfill in batches and a row-by-row rewrite, through Drizzle. The non-transactional migrations take the same `createAsyncRwLock()` write lock as the rest of the app around each write.
+It also runs the application's own migrations (`src/migrations.ts`) with the experimental `createSqliteMigrator`: a transactional table creation and index, then non-transactional migrations for a backfill in batches and a row-by-row rewrite, through Drizzle. They run through the same synchronous provider; the sync migrator takes no lease, so a non-transactional migration is not protected against two processes running it at once.
 
 ## Running
 

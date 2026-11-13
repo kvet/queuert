@@ -1,17 +1,19 @@
-import { type Migration, type TypedSqlTemplate, sql } from "@queuert/typed-sql";
+import { type MaybePromise, type Mode, andThen, mapSeries } from "@queuert/helpers/maybe-promise";
+import type { Migration } from "@queuert/typed-sql/migrator";
+import { type TypedSqlTemplate, sql } from "@queuert/typed-sql/sql";
 
 const transactional = <TTxContext>(
   name: string,
   statements: TypedSqlTemplate<readonly []>[],
-  execute: (txCtx: TTxContext, statement: TypedSqlTemplate<readonly []>) => Promise<void>,
-): Migration<TTxContext> => ({
+  execute: (txCtx: TTxContext, statement: TypedSqlTemplate<readonly []>) => MaybePromise<void>,
+): Migration<TTxContext, Mode> => ({
   name,
-  up: async (txCtx) => {
-    for (const statement of statements) {
-      await execute(txCtx, statement);
-    }
-  },
-  down: async () => {
+  up: (txCtx) =>
+    andThen(
+      mapSeries(statements, (statement) => execute(txCtx, statement)),
+      () => undefined,
+    ),
+  down: () => {
     throw new Error(`${name} cannot be reverted.`);
   },
 });
@@ -142,7 +144,9 @@ WHERE status = 'running'`),
   },
 ];
 
-export const createV017Migrations = <TTxContext>(
-  execute: (txCtx: TTxContext, statement: TypedSqlTemplate<readonly []>) => Promise<void>,
-): Migration<TTxContext>[] =>
-  v017Statements.map(({ name, statements }) => transactional(name, statements, execute));
+export const createV017Migrations = <TTxContext, TResult extends MaybePromise<void>>(
+  execute: (txCtx: TTxContext, statement: TypedSqlTemplate<readonly []>) => TResult,
+): (TResult extends Promise<void> ? Migration<TTxContext> : Migration<TTxContext, "sync">)[] =>
+  v017Statements.map(({ name, statements }) =>
+    transactional(name, statements, execute),
+  ) as (TResult extends Promise<void> ? Migration<TTxContext> : Migration<TTxContext, "sync">)[];

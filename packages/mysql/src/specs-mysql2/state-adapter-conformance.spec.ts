@@ -37,7 +37,7 @@ const defineMysqlStateAdapterConformanceSuite = async ({
   });
 
   describe(`${image} State Provider Conformance`, () => {
-    conformanceTestSuite({ it, groups: mysqlStateProviderConformanceGroups });
+    conformanceTestSuite({ mode: "async", it, groups: mysqlStateProviderConformanceGroups });
   });
 };
 

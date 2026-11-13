@@ -1,6 +1,6 @@
 import { createRedisNotifyAdapter } from "@queuert/redis";
 import { createNodeRedisNotifyProvider } from "example-notify-redis-redis/provider";
-import { createInProcessStateAdapter } from "queuert/internal";
+import { createInProcessStateAdapter } from "queuert";
 import { type RedisClientType, createClient as createRedisClient } from "redis";
 
 import { benchmarkNamespace, requireEnv, runBenchmark } from "./utils.ts";

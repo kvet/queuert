@@ -81,7 +81,7 @@ server.listen(PORT, () => {
 process.on("SIGINT", () => {
   void (async () => {
     server.close();
-    await stateAdapter.close();
+    stateAdapter.close();
     db.close();
     process.exit(0);
   })();

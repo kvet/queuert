@@ -169,6 +169,10 @@ const MEMORY_JOB_COUNT = 100;
  * leak — so the *non-code* delta is the meaningful "what queuert holds onto"
  * number.
  *
+ * Native nodes (ArrayBuffer backing stores) are left out of both: they are not
+ * JS objects, and the heap snapshot stream's own 64 KB read buffer shows up in
+ * one snapshot or the other at random, swinging the delta by ±64 KB.
+ *
  * The snapshot is streamed in-memory via `v8.getHeapSnapshot()` and parsed
  * directly — no disk I/O unless `HEAP_DUMPS=1` is set, in which case a copy is
  * also written to `heap-dumps/` for inspection in Chrome DevTools.
@@ -206,11 +210,14 @@ const liveSizeFromSnapshotJson = (json: string): { code: number; nonCode: number
   const typeFieldIdx = fields.indexOf("type");
   const nodeTypes = snap.snapshot.meta.node_types[typeFieldIdx] as string[];
   const codeTypeIdx = nodeTypes.indexOf("code");
+  const nativeTypeIdx = nodeTypes.indexOf("native");
   let code = 0;
   let nonCode = 0;
   for (let i = 0; i < snap.nodes.length; i += stride) {
     const size = snap.nodes[i + selfSizeIdx];
-    if (snap.nodes[i + typeFieldIdx] === codeTypeIdx) code += size;
+    const type = snap.nodes[i + typeFieldIdx];
+    if (type === nativeTypeIdx) continue;
+    if (type === codeTypeIdx) code += size;
     else nonCode += size;
   }
   return { code, nonCode };
@@ -295,6 +302,7 @@ async function runMemory<TInfra>({
   }
 
   // ─── Phase 4: infrastructure baseline established (post-warmup) ───
+  await forceGC();
   const infraBaselineLive = await captureSnapshot(name, "infra-baseline");
   await forceGC();
   const infraBaseline = getMemorySnapshot();

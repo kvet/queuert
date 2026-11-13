@@ -5,16 +5,18 @@ import { ExampleRows } from "../../../components/ExampleList.tsx";
 export const meta = {
   title: "Notify Adapters",
   description:
-    "Runnable examples for the Redis, PostgreSQL and NATS notify adapters, and a custom adapter.",
+    "Runnable examples for the Redis, PostgreSQL, NATS and IPC notify adapters, and a custom adapter.",
 };
 
 const Page = () => (
   <>
     <p>
-      Each example starts its broker in Docker, keeps job state in PostgreSQL, and lets the notify
-      adapter wake the worker as soon as a chain is created. The custom adapter runs in a single
-      process on in-memory SQLite. Most implement the notify provider for one client in{" "}
-      <code>src/provider.ts</code>; the NATS adapter takes the connection directly.
+      Each broker example starts its broker in Docker, keeps job state in PostgreSQL, and lets the
+      notify adapter wake the worker as soon as a chain is created. Most implement the notify
+      provider for one client in <code>src/provider.ts</code>; the NATS adapter takes the connection
+      directly. The IPC example needs no broker: its two processes share a SQLite file and reach
+      each other over a Unix socket. The custom adapter runs in a single process on in-memory
+      SQLite.
     </p>
     <h2 id="redis">Redis</h2>
     <ExampleRows
@@ -34,6 +36,8 @@ const Page = () => (
     />
     <h2 id="nats">NATS</h2>
     <ExampleRows title="@queuert/nats" names={["notify-nats-transport-node"]} />
+    <h2 id="ipc">IPC</h2>
+    <ExampleRows title="@queuert/ipc" names={["notify-ipc"]} />
     <h2 id="custom">Custom</h2>
     <p>
       The example implements the <code>NotifyAdapter</code> interface from scratch, delivering

@@ -89,7 +89,7 @@ describe("llmsTxt", () => {
       "## Docs: Guides\n- [Scheduling](https://kvet.github.io/queuert/guides/scheduling/): Deferred start.\n\n",
     );
     expect(text).toContain(
-      "- [queuert](https://kvet.github.io/queuert/api/core/readme/): Client, worker runner and job types.",
+      "- [queuert](https://kvet.github.io/queuert/api/core/readme/): Client, worker, job types and the in-process adapters.",
     );
   });
 });

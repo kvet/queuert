@@ -3,8 +3,12 @@
  */
 
 import { createDashboard } from "@queuert/dashboard";
-import { createClient, createWorkerRunner, createProcessors } from "queuert";
-import { createInProcessStateAdapter } from "queuert/internal";
+import {
+  createClient,
+  createWorkerRunner,
+  createProcessors,
+  createInProcessStateAdapter,
+} from "queuert";
 
 import { createCompletionCounter, jobTypes, printHeader, runDoubleRunBenchmark } from "./utils.ts";
 

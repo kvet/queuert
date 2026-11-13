@@ -30,5 +30,5 @@ const it = baseIt.extend("conformance", { scope: "file" }, async ({}, { onCleanu
 baseIt("index");
 
 describe("PostgreSQL State Provider Conformance", () => {
-  conformanceTestSuite({ it, groups: pgStateProviderConformanceGroups });
+  conformanceTestSuite({ mode: "async", it, groups: pgStateProviderConformanceGroups });
 });

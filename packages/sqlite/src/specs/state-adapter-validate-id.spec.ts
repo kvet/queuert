@@ -18,23 +18,26 @@ const options = {
   validateWorkerId: (id: string) => id.startsWith("worker-"),
 };
 
-const it = baseIt
-  .extend("db", { scope: "file" }, varianceDb)
-  .extend("conformance", { scope: "file" }, varianceConformance(options))
-  .extend("tableNames", { scope: "file" }, varianceTableNames(options));
-
 baseIt("index");
 
-describe("SQLite State Adapter Variance - With validateJobId", () => {
-  it("creates tables with correct prefix", ({ tableNames }) => {
-    expect(tableNames).toContain(`${tablePrefix}job`);
-    expect(tableNames).toContain(`${tablePrefix}job_blocker`);
-    expect(tableNames).toContain(`${tablePrefix}migration`);
-    expect(tableNames).toContain(`${tablePrefix}worker`);
-  });
+for (const mode of ["async", "sync"] as const) {
+  const it = baseIt
+    .extend("db", { scope: "file" }, varianceDb)
+    .extend("conformance", { scope: "file" }, varianceConformance(options, mode))
+    .extend("tableNames", { scope: "file" }, varianceTableNames(options));
 
-  conformanceTestSuite({
-    it,
-    groups: sqliteStateAdapterConformanceGroups,
+  describe(`SQLite State Adapter Variance - With validateJobId (${mode})`, () => {
+    it("creates tables with correct prefix", ({ tableNames }) => {
+      expect(tableNames).toContain(`${tablePrefix}job`);
+      expect(tableNames).toContain(`${tablePrefix}job_blocker`);
+      expect(tableNames).toContain(`${tablePrefix}migration`);
+      expect(tableNames).toContain(`${tablePrefix}worker`);
+    });
+
+    conformanceTestSuite({
+      it,
+      mode,
+      groups: sqliteStateAdapterConformanceGroups,
+    });
   });
-});
+}
