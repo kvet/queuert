@@ -21,27 +21,27 @@ A worker runner processes jobs in parallel using slots. See `createWorkerRunner`
 
 <Diagram label="A worker runner with concurrency 3: the main loop acquires jobs for its idle slots in one batched call and spawns a slot per job, and each slot completes its own job in the database">
   <Flow direction="column">
-    <Group title="worker runner · concurrency = 3">
+    <Group title="worker runner · concurrency 3">
       <Flow>
-        <Node tone="green" sub={"acquires a batch for idle slots\nwaits for completions"}>Main loop</Node>
+        <Node sub="acquires a batch">main loop</Node>
         <Rows spine>
           <Flow>
-            <Arrow label="spawn" tone="green" />
-            <Node tone="purple" variant="solid" sub="job A · running">Slot 0</Node>
+            <Arrow label="spawn" />
+            <Node status="running" sub="slot 0">capture-payment</Node>
           </Flow>
           <Flow>
-            <Arrow label="spawn" tone="green" />
-            <Node tone="purple" variant="solid" sub="job B · running">Slot 1</Node>
+            <Arrow label="spawn" />
+            <Node status="running" sub="slot 1">reserve-stock</Node>
           </Flow>
           <Flow>
-            <Arrow label="spawn" tone="green" />
-            <Node tone="purple" variant="solid" sub="job C · running">Slot 2</Node>
+            <Arrow label="spawn" />
+            <Node status="running" sub="slot 2">render-invoice-pdf</Node>
           </Flow>
         </Rows>
       </Flow>
     </Group>
-    <Arrow label="main loop: acquire batch · each slot: complete" />
-    <Node sub="FOR UPDATE SKIP LOCKED: concurrent batches claim different jobs">Your database</Node>
+    <Arrow label="acquire · complete" />
+    <Node sub="FOR UPDATE SKIP LOCKED">your database</Node>
   </Flow>
 </Diagram>
 

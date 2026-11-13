@@ -62,14 +62,14 @@ For the head job in a chain: `job.id === job.chainId`
 
 This isn't redundant—it's a meaningful signal that identifies the chain starter. Continuation jobs have `job.id !== job.chainId` but share the same `chainId` as all other jobs in the chain. Each job also carries its position as `job.chainIndex`: `0` for the head job, incrementing by one for each continuation.
 
-<Diagram label="A chain: the head job's id equals the chainId; each continuation has its own id, shares the chainId, and has the next chainIndex">
-  <Group title="chain · id = X">
-    <Flow>
-      <Node tone="purple" variant="solid" sub={"id = X\nchainId = X\nchainIndex = 0"}>head job</Node>
-      <Arrow label="then" tone="blue" />
-      <Node tone="purple" sub={"id = Y\nchainId = X\nchainIndex = 1"}>continuation</Node>
-      <Arrow label="then" tone="blue" />
-      <Node tone="purple" sub={"id = Z\nchainId = X\nchainIndex = 2"}>terminal</Node>
+<Diagram label="A chain of three jobs: the head job's id equals the chainId; each continuation has its own id, shares the chainId, and has the next chainIndex">
+  <Group title="chain 7f3a">
+    <Flow align="stretch">
+      <Node status="completed" sub={"head\nid = 7f3a\nchainId = 7f3a\nchainIndex = 0"}>provision-account</Node>
+      <Arrow label="continueWith" />
+      <Node status="completed" sub={"id = c91e\nchainId = 7f3a\nchainIndex = 1"}>send-welcome-email</Node>
+      <Arrow label="continueWith" />
+      <Node status="running" sub={"tail\nid = 4d08\nchainId = 7f3a\nchainIndex = 2"}>sync-to-crm</Node>
     </Flow>
   </Group>
 </Diagram>

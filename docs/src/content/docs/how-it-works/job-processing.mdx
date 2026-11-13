@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/diagram";
+import { Arrow, Diagram, Flow, Group, Node, Rows, Transition } from "../../../components/diagram";
 
 ## Overview
 
@@ -62,27 +62,27 @@ attemptHandler: async ({ job, complete }) => {
 
 <Diagram label="An attempt: acquire is one atomic write gated on the worker's lease; the handler's work runs outside any transaction; complete() commits inside the handler's own transaction; afterwards the worker trusts the result complete() returned or runs one reschedule under the attempt token">
   <Flow direction="column">
-    <Node tone="blue" sub="atomic · while the worker's lease is live">acquire</Node>
+    <Node sub={<Transition from="pending" to="running" />}>acquire</Node>
     <Arrow />
-    <Group title="attempt handler · held while the worker's lease is live">
+    <Group title="attempt handler">
       <Flow direction="column">
-        <Node variant="ghost" sub="no transaction held">your work</Node>
+        <Node variant="ghost" sub="no transaction">your work</Node>
         <Arrow />
         <Group title="your transaction" dashed>
-          <Node tone="green" sub={"your domain writes\ncomplete({ ...txCtx, outcome })"}>commit</Node>
+          <Node sub={"domain writes\ncomplete({ ...txCtx, outcome })"}>commit</Node>
         </Group>
       </Flow>
     </Group>
     <Arrow />
-    <Node sub="complete() commit callbacks ran · else one reschedule under the attempt token">commit detection</Node>
+    <Node>commit detection</Node>
     <Rows spine columns="minmax(5.5rem, auto) auto">
       <Flow>
-        <Arrow label="complete() committed" tone="green" />
-        <Node tone="green" variant="solid">attempt completed</Node>
+        <Arrow label="committed" />
+        <Node>attempt completed</Node>
       </Flow>
       <Flow>
-        <Arrow label="no committed complete() call" tone="red" />
-        <Node tone="red" sub="exponential backoff">reschedule</Node>
+        <Arrow label="not committed" failure />
+        <Node sub={<Transition from="running" to="pending" />}>reschedule</Node>
       </Flow>
     </Rows>
   </Flow>

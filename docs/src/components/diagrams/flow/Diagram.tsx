@@ -1,8 +1,8 @@
-import { type JSX, Show, onCleanup, onMount } from "solid-js";
+import { StatusPill } from "@queuert/ui/components";
+import type { AnyStatus } from "@queuert/ui/lib";
+import { type JSX, Show, children, onCleanup, onMount } from "solid-js";
 
 import "./diagram.css";
-
-type Tone = "neutral" | "purple" | "blue" | "green" | "amber" | "red";
 
 const flag = (value: boolean | undefined) => (value ? "" : undefined);
 
@@ -64,27 +64,49 @@ export const Flow = (props: {
 );
 
 export const Node = (props: {
-  tone?: Tone;
-  variant?: "outline" | "solid" | "ghost";
-  sub?: string;
+  variant?: "outline" | "ghost";
+  status?: AnyStatus;
+  sub?: JSX.Element;
   children: JSX.Element;
-}) => (
-  <div
-    class="q-d-node"
-    data-tone={props.tone ?? "neutral"}
-    data-variant={props.variant ?? "outline"}
-  >
-    <span class="q-d-node__title">{props.children}</span>
-    <Show when={props.sub}>
-      <span class="q-d-node__sub">{props.sub}</span>
+}) => {
+  const sub = children(() => props.sub);
+  return (
+    <div class="q-d-node" data-variant={props.variant ?? "outline"}>
+      <span class="q-d-node__title">{props.children}</span>
+      <Show when={props.status}>
+        {(status) => (
+          <span class="q-d-node__status">
+            <StatusPill status={status()} />
+          </span>
+        )}
+      </Show>
+      <Show when={sub()}>
+        <span class="q-d-node__sub">{sub()}</span>
+      </Show>
+    </div>
+  );
+};
+
+export const Transition = (props: { from: AnyStatus; via?: AnyStatus; to: AnyStatus }) => (
+  <span class="q-d-transition">
+    <StatusPill status={props.from} />
+    <Show when={props.via}>
+      {(via) => (
+        <>
+          <span aria-label="to">→</span>
+          <StatusPill status={via()} />
+        </>
+      )}
     </Show>
-  </div>
+    <span aria-label="to">→</span>
+    <StatusPill status={props.to} />
+  </span>
 );
 
 export const Arrow = (props: {
   label?: string;
   sub?: string;
-  tone?: Tone;
+  failure?: boolean;
   dashed?: boolean;
   reverse?: boolean;
   direction?: "auto" | "down";
@@ -92,7 +114,7 @@ export const Arrow = (props: {
 }) => (
   <div
     class="q-d-arrow"
-    data-tone={props.tone}
+    data-failure={flag(props.failure)}
     data-dashed={flag(props.dashed)}
     data-reverse={flag(props.reverse)}
     data-direction={props.direction ?? "auto"}
@@ -104,20 +126,15 @@ export const Arrow = (props: {
   </div>
 );
 
-export const Group = (props: {
-  title: string;
-  tone?: Tone;
-  dashed?: boolean;
-  children: JSX.Element;
-}) => (
-  <div class="q-d-group" data-tone={props.tone} data-dashed={flag(props.dashed)}>
+export const Group = (props: { title: string; dashed?: boolean; children: JSX.Element }) => (
+  <div class="q-d-group" data-dashed={flag(props.dashed)}>
     <span class="q-d-group__title">{props.title}</span>
     {props.children}
   </div>
 );
 
-export const Loop = (props: { label: string; tone?: Tone; children: JSX.Element }) => (
-  <div class="q-d-loop" data-tone={props.tone ?? "amber"}>
+export const Loop = (props: { label: string; children: JSX.Element }) => (
+  <div class="q-d-loop">
     {props.children}
     <div class="q-d-loop__back">
       <span class="q-d-loop__bracket" aria-hidden="true" />

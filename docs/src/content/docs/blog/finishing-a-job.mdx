@@ -58,12 +58,12 @@ There is no second write to lose. If the handler throws, everything rolls back a
     <Group title="two commits">
       <Flow>
         <Node sub="commit 1">domain writes</Node>
-        <Arrow label="crash here" tone="red" dashed />
-        <Node tone="amber" sub="commit 2">mark completed</Node>
+        <Arrow label="crash here" failure dashed />
+        <Node sub="commit 2">mark completed</Node>
       </Flow>
     </Group>
     <Group title="one commit">
-      <Node tone="green" sub={"domain writes\nmark completed\nnext job"}>commit</Node>
+      <Node sub={"domain writes\nmark completed\nnext job"}>commit</Node>
     </Group>
   </Rows>
 </Diagram>

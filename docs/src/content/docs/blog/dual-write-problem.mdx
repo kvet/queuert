@@ -33,13 +33,13 @@ Every ordering of those two writes has a window where one lands and the other do
       <Flow>
         <Arrow label="INSERT user" />
         <Group title="database">
-          <Node tone="green" sub="commit 1">users</Node>
+          <Node sub="commit 1">users</Node>
         </Group>
       </Flow>
       <Flow>
         <Arrow label="add job" />
         <Group title="queue">
-          <Node tone="amber" sub="commit 2">send-welcome-email</Node>
+          <Node status="pending" sub="commit 2">send-welcome-email</Node>
         </Group>
       </Flow>
     </Rows>

@@ -105,11 +105,11 @@ A transaction opened through `stateProvider.withTransaction` already carries its
     </Group>
     <Rows spine columns="minmax(6rem, auto) auto">
       <Flow>
-        <Arrow label="COMMIT" tone="green" />
-        <Node tone="green" variant="solid" sub="side effects fire">flush()</Node>
+        <Arrow label="COMMIT" />
+        <Node sub="side effects fire">flush()</Node>
       </Flow>
       <Flow>
-        <Arrow label="ROLLBACK" tone="red" />
+        <Arrow label="ROLLBACK" failure />
         <Node variant="ghost" sub="nothing leaks">discard()</Node>
       </Flow>
     </Rows>
@@ -210,15 +210,15 @@ Rolling back by throwing, or with `trx.rollback(error)` and an `Error`, rejects 
       <Flow>
         <Node sub="kept">buffer A</Node>
         <Arrow />
-        <Group title="savepoint" tone="red" dashed>
-          <Node variant="ghost" sub="rolled back">buffer B</Node>
+        <Group title="savepoint · rolled back" dashed>
+          <Node variant="ghost" sub="dropped">buffer B</Node>
         </Group>
         <Arrow />
         <Node sub="kept">buffer C</Node>
       </Flow>
     </Group>
-    <Arrow label="COMMIT" tone="green" />
-    <Node tone="green" variant="solid" sub="only A and C fire">flush()</Node>
+    <Arrow label="COMMIT" />
+    <Node sub="only A and C fire">flush()</Node>
   </Flow>
 </Diagram>
 

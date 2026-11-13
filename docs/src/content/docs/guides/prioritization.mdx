@@ -18,21 +18,21 @@ Queuert has no built-in `priority` field. Prioritization is a consequence of **p
       <Flow>
         <Group title="transactional · concurrency 3">
           <Flow>
-            <Node tone="green">slot</Node>
-            <Node tone="green">slot</Node>
-            <Node tone="green">slot</Node>
+            <Node>slot</Node>
+            <Node>slot</Node>
+            <Node>slot</Node>
           </Flow>
         </Group>
-        <Arrow label="email.transactional" tone="green" />
+        <Arrow label="email.transactional" />
       </Flow>
       <Flow>
         <Group title="marketing · concurrency 1">
-          <Node tone="green">slot</Node>
+          <Node>slot</Node>
         </Group>
         <Arrow label="email.marketing" />
       </Flow>
     </Rows>
-    <Node sub="filtered by typeName">Your database</Node>
+    <Node sub="filtered by typeName">your database</Node>
   </Flow>
 </Diagram>
 

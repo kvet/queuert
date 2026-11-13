@@ -31,7 +31,7 @@ This document is the source of truth for writing and structuring the docs site i
 `docs/plugins/mdx.ts` and `docs/plugins/content.ts` compile the markdown pages to Solid components. What a page can use:
 
 - **Components** are imported from `@astrojs/starlight/components`, which resolves to the shim `docs/src/components/mdx/starlight.ts`. It exports `Aside`, `Badge`, `Card`, `CardGrid`, `LinkCard`, `FileTree`, `Steps`, `Tabs` and `TabItem`. Nothing else from Starlight exists.
-- **Flow diagrams** are imported from `../../../components/diagram`, which resolves to the Solid port in `docs/src/components/diagrams/flow/Diagram.tsx`: `Diagram`, `Flow`, `Node`, `Arrow`, `Group`, `Loop` and `Rows`.
+- **Flow diagrams** are imported from `../../../components/diagram`, which resolves to the Solid port in `docs/src/components/diagrams/flow/Diagram.tsx`: `Diagram`, `Flow`, `Node`, `Arrow`, `Group`, `Loop`, `Rows` and `Transition`. Figures have no colour of their own: a job in a status gets `status` on its `Node` (a `StatusPill`), a status change goes in a `sub` as `<Transition from="pending" to="running" />` (`via` adds a middle status), and an `Arrow` on a failure path takes `failure`. Everything else stays neutral.
 - **Asides**: `:::note`, `:::tip`, `:::caution` and `:::danger` blocks (with an optional `[Title]`, e.g. `:::tip[Heads up]`) become `Aside`.
 - **Code blocks**: fenced blocks are highlighted with Shiki at build time and render as the site's `Code` component; `title="jobs.ts"` in the fence meta sets the box title.
 - **Tables**: markdown tables are converted to row lists (`TableRows`), never rendered as `<table>`. The first column is the name, the last the description.

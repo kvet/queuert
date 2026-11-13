@@ -5,7 +5,7 @@ sidebar:
   order: 6
 ---
 
-import { Arrow, Diagram, Flow, Node, Rows } from "../../../components/diagram";
+import { Arrow, Diagram, Flow, Node, Rows, Transition } from "../../../components/diagram";
 
 Jobs can depend on other chains to complete before they start. A job with incomplete blockers starts as `blocked` and transitions to `pending` when all blockers complete.
 
@@ -13,19 +13,19 @@ Jobs can depend on other chains to complete before they start. A job with incomp
   <Flow>
     <Rows spine="end" columns="auto minmax(2.5rem, auto)">
       <Flow>
-        <Node tone="green" sub="completed">fetch-data #1</Node>
+        <Node status="completed">fetch-data #1</Node>
         <Arrow head="none" />
       </Flow>
       <Flow>
-        <Node tone="green" sub="completed">fetch-data #2</Node>
+        <Node status="completed">fetch-data #2</Node>
         <Arrow head="none" />
       </Flow>
       <Flow>
-        <Node tone="green" sub="completed">fetch-data #3</Node>
+        <Node status="completed">fetch-data #3</Node>
         <Arrow head="none" />
       </Flow>
     </Rows>
-    <Node tone="purple" variant="solid" sub="blocked → pending">process-all</Node>
+    <Node sub={<Transition from="blocked" to="pending" />}>process-all</Node>
   </Flow>
 </Diagram>
 

@@ -9,7 +9,14 @@ import enqueueSnippet from "../../../examples/showcase-onboarding/src/index.ts?r
 // oxlint-disable-next-line import/default, import/no-duplicates -- a region of examples/showcase-onboarding, served by the queuert:highlight plugin in plugins/content.ts
 import processSnippet from "../../../examples/showcase-onboarding/src/index.ts?region=process&highlight";
 import { CopyButton } from "../components/CopyButton.tsx";
-import { Arrow, Diagram, Flow, Node, Rows } from "../components/diagrams/flow/Diagram.tsx";
+import {
+  Arrow,
+  Diagram,
+  Flow,
+  Node,
+  Rows,
+  Transition,
+} from "../components/diagrams/flow/Diagram.tsx";
 import {
   ArrowRightIcon,
   BoltIcon,
@@ -237,26 +244,31 @@ const Home = () => (
         stack="none"
       >
         <Flow align="stretch">
-          <Node tone="blue" sub="app process">
-            Client
-          </Node>
-          <Rows columns="minmax(7rem, auto) minmax(13rem, 16rem) minmax(7rem, auto)">
+          <Node sub="app process">client</Node>
+          <Rows columns="minmax(7rem, auto) auto minmax(7rem, auto)">
             <Flow>
               <Arrow label="enqueue" sub="state adapter" />
-              <Node sub="Postgres · MySQL · SQLite · your own">Your database</Node>
+              <Node
+                sub={
+                  <>
+                    Postgres · MySQL · SQLite · your own
+                    <Transition from="pending" via="running" to="completed" />
+                  </>
+                }
+              >
+                your database
+              </Node>
               <Arrow label="acquire · complete" sub="state adapter" reverse />
             </Flow>
             <Flow>
-              <Arrow label="notify" tone="amber" dashed />
-              <Node tone="amber" variant="ghost" sub="Postgres LISTEN · Redis · NATS · in-process">
-                Your pub/sub (optional)
+              <Arrow label="notify" dashed />
+              <Node variant="ghost" sub="Postgres · Redis · NATS · in-process">
+                your pub/sub (optional)
               </Node>
-              <Arrow label="wake" tone="amber" dashed />
+              <Arrow label="wake" dashed />
             </Flow>
           </Rows>
-          <Node tone="green" sub="worker process">
-            Worker
-          </Node>
+          <Node sub="worker process">worker</Node>
         </Flow>
       </Diagram>
       <A

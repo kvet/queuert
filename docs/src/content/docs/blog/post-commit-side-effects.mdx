@@ -93,11 +93,11 @@ Now the effect is declared where the decision is made, and it fires only after `
     </Group>
     <Rows spine columns="minmax(6rem, auto) auto">
       <Flow>
-        <Arrow label="COMMIT" tone="green" />
-        <Node tone="green" variant="solid" sub="effects fire">run callbacks</Node>
+        <Arrow label="COMMIT" />
+        <Node sub="effects fire">run callbacks</Node>
       </Flow>
       <Flow>
-        <Arrow label="ROLLBACK" tone="red" />
+        <Arrow label="ROLLBACK" failure />
         <Node variant="ghost" sub="nothing leaks">discard</Node>
       </Flow>
     </Rows>

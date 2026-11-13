@@ -18,9 +18,9 @@ Chains support various execution patterns via `continueWith`:
 
 <Diagram label="Linear chain: create-subscription continues with activate-trial">
   <Flow>
-    <Node tone="purple">create-subscription</Node>
-    <Arrow label="continueWith" tone="blue" />
-    <Node tone="purple">activate-trial</Node>
+    <Node>create-subscription</Node>
+    <Arrow label="continueWith" />
+    <Node>activate-trial</Node>
   </Flow>
 </Diagram>
 
@@ -57,15 +57,15 @@ const jobTypes = defineJobTypes<{
 
 <Diagram label="Branched chain: trial-decision continues with either convert-to-paid or expire-trial">
   <Flow>
-    <Node tone="purple">trial-decision</Node>
+    <Node>trial-decision</Node>
     <Rows spine>
       <Flow>
-        <Arrow tone="blue" />
-        <Node tone="purple">convert-to-paid</Node>
+        <Arrow />
+        <Node>convert-to-paid</Node>
       </Flow>
       <Flow>
-        <Arrow tone="blue" />
-        <Node tone="purple">expire-trial</Node>
+        <Arrow />
+        <Node>expire-trial</Node>
       </Flow>
     </Rows>
   </Flow>
@@ -98,10 +98,10 @@ Jobs conditionally continue to different types: `trial-decision -> convert-to-pa
 <Diagram label="Loop: charge-billing continues with itself until it returns an output">
   <Flow>
     <Loop label="continueWith itself">
-      <Node tone="purple">charge-billing</Node>
+      <Node>charge-billing</Node>
     </Loop>
-    <Arrow label="output" tone="green" />
-    <Node tone="green" variant="solid">chain completed</Node>
+    <Arrow label="output" />
+    <Node status="completed">chain</Node>
   </Flow>
 </Diagram>
 
@@ -138,10 +138,10 @@ const jobTypes = defineJobTypes<{
 <Diagram label="Go-to: charge-billing loops on itself, then jumps to cancel-subscription">
   <Flow>
     <Loop label="loop">
-      <Node tone="purple">charge-billing</Node>
+      <Node>charge-billing</Node>
     </Loop>
-    <Arrow label="jump" tone="red" />
-    <Node tone="purple">cancel-subscription</Node>
+    <Arrow label="jump" />
+    <Node>cancel-subscription</Node>
   </Flow>
 </Diagram>
 

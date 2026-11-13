@@ -14,25 +14,25 @@ Deploy multiple worker processes sharing the same database for horizontal scalin
   stack="none"
 >
   <Flow align="stretch">
-    <Node tone="amber" sub="Postgres LISTEN · Redis · NATS · in-process">Your pub/sub</Node>
+    <Node sub="Postgres LISTEN · Redis · NATS · in-process">your pub/sub</Node>
     <Rows spine columns="minmax(4rem, auto) auto minmax(7rem, auto)">
       <Flow>
-        <Arrow label="1 · wake" tone="amber" dashed />
-        <Node tone="green">Worker A</Node>
-        <Arrow label="2 · claim" sub="wins" tone="green" />
+        <Arrow label="1 · wake" dashed />
+        <Node>worker A</Node>
+        <Arrow label="2 · claim" sub="wins" />
       </Flow>
       <Flow>
-        <Arrow label="1 · wake" tone="amber" dashed />
-        <Node tone="green">Worker B</Node>
+        <Arrow label="1 · wake" dashed />
+        <Node>worker B</Node>
         <Arrow label="2 · claim" sub="skipped" dashed />
       </Flow>
       <Flow>
-        <Arrow label="1 · wake" tone="amber" dashed />
-        <Node tone="green">Worker C</Node>
+        <Arrow label="1 · wake" dashed />
+        <Node>worker C</Node>
         <Arrow label="2 · claim" sub="skipped" dashed />
       </Flow>
     </Rows>
-    <Node sub="FOR UPDATE SKIP LOCKED">Your database</Node>
+    <Node sub="FOR UPDATE SKIP LOCKED">your database</Node>
   </Flow>
 </Diagram>
 

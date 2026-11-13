@@ -39,16 +39,16 @@ For workflows that need rollback, continue to a compensation job that undoes pre
 >
   <Rows gap="none" columns="auto minmax(6rem, auto) auto">
     <Flow>
-      <Node tone="purple">charge-card</Node>
-      <Arrow label="success" tone="green" />
-      <Node tone="purple">ship-order</Node>
+      <Node>charge-card</Node>
+      <Arrow label="success" />
+      <Node>ship-order</Node>
     </Flow>
     <Flow>
-      <Arrow label="decline" tone="red" direction="down" />
+      <Arrow label="decline" failure direction="down" />
       <span></span>
-      <Arrow label="ship failed" tone="red" direction="down" />
+      <Arrow label="ship failed" failure direction="down" />
     </Flow>
-    <Node tone="red" sub="compensates the charge">refund-charge</Node>
+    <Node sub="compensates the charge">refund-charge</Node>
   </Rows>
 </Diagram>
 

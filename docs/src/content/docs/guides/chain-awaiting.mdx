@@ -40,20 +40,20 @@ try {
 
 <Diagram label="awaitChain polls the database and listens for a completion notification at the same time; it returns the output when the chain completes, or throws on timeout or abort">
   <Flow>
-    <Node tone="blue">awaitChain()</Node>
+    <Node>awaitChain()</Node>
     <Arrow />
     <Group title="wait loop">
       <Node sub="every pollIntervalMs">poll the DB</Node>
-      <Node tone="amber" sub="wakes the loop early">listen</Node>
+      <Node sub="wakes the loop early">listen</Node>
     </Group>
     <Rows spine>
       <Flow>
-        <Arrow tone="green" />
-        <Node tone="green" variant="solid" sub="returns the output">completed</Node>
+        <Arrow />
+        <Node status="completed" sub="returns the output">chain</Node>
       </Flow>
       <Flow>
-        <Arrow tone="red" />
-        <Node tone="red" sub="throws">timeout / abort</Node>
+        <Arrow failure />
+        <Node sub="throws">timeout / abort</Node>
       </Flow>
     </Rows>
   </Flow>

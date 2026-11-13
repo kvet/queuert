@@ -12,17 +12,17 @@ Deduplication prevents duplicate chains from being created. When you start a cha
 <Diagram label="Three createChain calls with the same key: the first creates chain abc-123; the others match it and return the same chain with deduplicated: true">
   <Rows columns="auto minmax(5rem, auto) auto">
     <Flow>
-      <Node tone="blue" sub="key: sync:123">createChain #1</Node>
-      <Arrow label="creates" tone="green" />
-      <Node tone="green" variant="solid" sub="deduplicated: false">chain abc-123</Node>
+      <Node sub="key: sync:123">createChain #1</Node>
+      <Arrow label="creates" />
+      <Node sub="deduplicated: false">chain abc-123</Node>
     </Flow>
     <Flow>
-      <Node tone="blue" sub="key: sync:123">createChain #2</Node>
+      <Node sub="key: sync:123">createChain #2</Node>
       <Arrow label="matches" dashed />
       <Node variant="ghost" sub="deduplicated: true">chain abc-123</Node>
     </Flow>
     <Flow>
-      <Node tone="blue" sub="key: sync:123">createChain #3</Node>
+      <Node sub="key: sync:123">createChain #3</Node>
       <Arrow label="matches" dashed />
       <Node variant="ghost" sub="deduplicated: true">chain abc-123</Node>
     </Flow>
