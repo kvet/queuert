@@ -5,26 +5,26 @@ export const creationGroups = [
   {
     label: "State adapter (noop notify)",
     rows: [
-      { label: "In-process", values: [153616, 272621] },
-      { label: "SQLite (better-sqlite3)", values: [36376, 92712] },
-      { label: "SQLite (node:sqlite)", values: [33090, 78886] },
-      { label: "PostgreSQL (postgres-js)", values: [992, 26705] },
-      { label: "PostgreSQL (pg)", values: [891, 25693] },
-      { label: "MySQL (mysql2)", values: [484, 11558] },
-      { label: "MariaDB (mysql2)", values: [434, 13974] },
-      { label: "Redis (redis)", values: [2945, 24985] },
-      { label: "Redis (ioredis)", values: [2895, 24132] },
+      { label: "In-process", backend: "in-process", values: [153616, 272621] },
+      { label: "SQLite (better-sqlite3)", backend: "sqlite", values: [36376, 92712] },
+      { label: "SQLite (node:sqlite)", backend: "sqlite", values: [33090, 78886] },
+      { label: "PostgreSQL (postgres-js)", backend: "postgres", values: [992, 26705] },
+      { label: "PostgreSQL (pg)", backend: "postgres", values: [891, 25693] },
+      { label: "MySQL (mysql2)", backend: "mysql", values: [484, 11558] },
+      { label: "MariaDB (mysql2)", backend: "mariadb", values: [434, 13974] },
+      { label: "Redis (redis)", backend: "redis", values: [2945, 24985] },
+      { label: "Redis (ioredis)", backend: "redis", values: [2895, 24132] },
     ],
   },
   {
     label: "Notify adapter (in-process state)",
     rows: [
-      { label: "In-process", values: [150888, 277786] },
-      { label: "Redis (redis)", values: [4756, 138729] },
-      { label: "Redis (ioredis)", values: [4300, 131519] },
-      { label: "PostgreSQL (pg)", values: [3035, 127833] },
-      { label: "PostgreSQL (postgres-js)", values: [4064, 129686] },
-      { label: "NATS", values: [4204, 123552] },
+      { label: "In-process", backend: "in-process", values: [150888, 277786] },
+      { label: "Redis (redis)", backend: "redis", values: [4756, 138729] },
+      { label: "Redis (ioredis)", backend: "redis", values: [4300, 131519] },
+      { label: "PostgreSQL (pg)", backend: "postgres", values: [3035, 127833] },
+      { label: "PostgreSQL (postgres-js)", backend: "postgres", values: [4064, 129686] },
+      { label: "NATS", backend: "nats", values: [4204, 123552] },
     ],
   },
 ] satisfies BenchGroup[];
@@ -33,26 +33,26 @@ export const completionGroups = [
   {
     label: "State adapter (noop notify)",
     rows: [
-      { label: "In-process", values: [5472, 5828, 6060] },
-      { label: "SQLite (better-sqlite3)", values: [12801, 12802, 15780] },
-      { label: "SQLite (node:sqlite)", values: [11127, 11076, 13295] },
-      { label: "PostgreSQL (postgres-js)", values: [481, 1274, 2280] },
-      { label: "PostgreSQL (pg)", values: [464, 1333, 2666] },
-      { label: "MySQL (mysql2)", values: [177, 490, 1293] },
-      { label: "MariaDB (mysql2)", values: [182, 459, 1289] },
-      { label: "Redis (redis)", values: [940, 2436, 4576] },
-      { label: "Redis (ioredis)", values: [1151, 2891, 6873] },
+      { label: "In-process", backend: "in-process", values: [5472, 5828, 6060] },
+      { label: "SQLite (better-sqlite3)", backend: "sqlite", values: [12801, 12802, 15780] },
+      { label: "SQLite (node:sqlite)", backend: "sqlite", values: [11127, 11076, 13295] },
+      { label: "PostgreSQL (postgres-js)", backend: "postgres", values: [481, 1274, 2280] },
+      { label: "PostgreSQL (pg)", backend: "postgres", values: [464, 1333, 2666] },
+      { label: "MySQL (mysql2)", backend: "mysql", values: [177, 490, 1293] },
+      { label: "MariaDB (mysql2)", backend: "mariadb", values: [182, 459, 1289] },
+      { label: "Redis (redis)", backend: "redis", values: [940, 2436, 4576] },
+      { label: "Redis (ioredis)", backend: "redis", values: [1151, 2891, 6873] },
     ],
   },
   {
     label: "Notify adapter (in-process state)",
     rows: [
-      { label: "In-process", values: [5839, 5927, 5964] },
-      { label: "Redis (redis)", values: [941, 2056, 3624] },
-      { label: "Redis (ioredis)", values: [1098, 4742, 4572] },
-      { label: "PostgreSQL (pg)", values: [689, 3447, 4005] },
-      { label: "PostgreSQL (postgres-js)", values: [835, 4067, 4046] },
-      { label: "NATS", values: [1988, 4737, 4507] },
+      { label: "In-process", backend: "in-process", values: [5839, 5927, 5964] },
+      { label: "Redis (redis)", backend: "redis", values: [941, 2056, 3624] },
+      { label: "Redis (ioredis)", backend: "redis", values: [1098, 4742, 4572] },
+      { label: "PostgreSQL (pg)", backend: "postgres", values: [689, 3447, 4005] },
+      { label: "PostgreSQL (postgres-js)", backend: "postgres", values: [835, 4067, 4046] },
+      { label: "NATS", backend: "nats", values: [1988, 4737, 4507] },
     ],
   },
 ] satisfies BenchGroup[];
@@ -60,14 +60,14 @@ export const completionGroups = [
 export const memoryGroups = [
   {
     rows: [
-      { label: "notify-redis", values: [65, 280, 20, 125] },
-      { label: "notify-postgres", values: [75, 280, 15, 115] },
-      { label: "notify-nats", values: [75, 250, 0, 80] },
-      { label: "state-sqlite", values: [110, 165, 0, 95] },
-      { label: "state-postgres", values: [55, 105, 15, 15] },
-      { label: "state-mysql", values: [70, 185, 20, 75] },
-      { label: "state-mariadb", values: [70, 180, 20, 75] },
-      { label: "state-redis", values: [105, 240, 15, 160] },
+      { label: "notify-redis", backend: "redis", values: [65, 280, 20, 125] },
+      { label: "notify-postgres", backend: "postgres", values: [75, 280, 15, 115] },
+      { label: "notify-nats", backend: "nats", values: [75, 250, 0, 80] },
+      { label: "state-sqlite", backend: "sqlite", values: [110, 165, 0, 95] },
+      { label: "state-postgres", backend: "postgres", values: [55, 105, 15, 15] },
+      { label: "state-mysql", backend: "mysql", values: [70, 185, 20, 75] },
+      { label: "state-mariadb", backend: "mariadb", values: [70, 180, 20, 75] },
+      { label: "state-redis", backend: "redis", values: [105, 240, 15, 160] },
       { label: "dashboard", values: [100, 255, 30, 115] },
       { label: "otel", values: [90, 255, 25, 95] },
     ],
@@ -77,14 +77,14 @@ export const memoryGroups = [
 export const cpuGroups = [
   {
     rows: [
-      { label: "notify-redis", values: [123, 12, 44, 146] },
-      { label: "notify-postgres", values: [107, 12, 76, 138] },
-      { label: "notify-nats", values: [88, 9, 26, 91] },
-      { label: "state-sqlite", values: [29, 17, 2, 99] },
-      { label: "state-postgres", values: [100, 40, 208, 254] },
-      { label: "state-mysql", values: [92, 122, 367, 440] },
-      { label: "state-mariadb", values: [93, 113, 346, 436] },
-      { label: "state-redis", values: [66, 211, 47, 165] },
+      { label: "notify-redis", backend: "redis", values: [123, 12, 44, 146] },
+      { label: "notify-postgres", backend: "postgres", values: [107, 12, 76, 138] },
+      { label: "notify-nats", backend: "nats", values: [88, 9, 26, 91] },
+      { label: "state-sqlite", backend: "sqlite", values: [29, 17, 2, 99] },
+      { label: "state-postgres", backend: "postgres", values: [100, 40, 208, 254] },
+      { label: "state-mysql", backend: "mysql", values: [92, 122, 367, 440] },
+      { label: "state-mariadb", backend: "mariadb", values: [93, 113, 346, 436] },
+      { label: "state-redis", backend: "redis", values: [66, 211, 47, 165] },
       { label: "dashboard", values: [46, 0, 0, 16] },
       { label: "otel", values: [61, 0, 12, 25] },
     ],
@@ -94,14 +94,14 @@ export const cpuGroups = [
 export const allocationGroups = [
   {
     rows: [
-      { label: "notify-redis", values: [84.5] },
-      { label: "notify-postgres", values: [86.7] },
-      { label: "notify-nats", values: [73.7] },
-      { label: "state-sqlite", values: [62.5] },
-      { label: "state-postgres", values: [135.3] },
-      { label: "state-mysql", values: [243.3] },
-      { label: "state-mariadb", values: [241.8] },
-      { label: "state-redis", values: [226.1] },
+      { label: "notify-redis", backend: "redis", values: [84.5] },
+      { label: "notify-postgres", backend: "postgres", values: [86.7] },
+      { label: "notify-nats", backend: "nats", values: [73.7] },
+      { label: "state-sqlite", backend: "sqlite", values: [62.5] },
+      { label: "state-postgres", backend: "postgres", values: [135.3] },
+      { label: "state-mysql", backend: "mysql", values: [243.3] },
+      { label: "state-mariadb", backend: "mariadb", values: [241.8] },
+      { label: "state-redis", backend: "redis", values: [226.1] },
       { label: "dashboard", values: [54.4] },
       { label: "otel", values: [68.2] },
     ],
@@ -136,106 +136,43 @@ export const validationAllocationGroups = [
   },
 ] satisfies BenchGroup[];
 
-export const typeGroups = [
+/** Type-check time in ms per compiler (TS 6, TS 7, tsrs) and TS 7's instantiation count. */
+const typeScenarios = [
+  { label: "Linear: 1 type", types: 1, instantiations: 20_015, values: [560, 115, 72] },
+  { label: "Linear: 10 types", types: 10, instantiations: 25_019, values: [583, 118, 71] },
+  { label: "Linear: 50 types", types: 50, instantiations: 47_219, values: [687, 137, 78] },
+  { label: "Linear: 100 types", types: 100, instantiations: 74_969, values: [837, 158, 85] },
+  { label: "Branched: 4w x 3d", types: 85, instantiations: 66_980, values: [792, 148, 80] },
+  { label: "Branched: 2w x 6d", types: 127, instantiations: 90_458, values: [918, 165, 88] },
+  { label: "Blockers: 8 steps", types: 30, instantiations: 44_150, values: [664, 134, 75] },
+  { label: "Blockers: 25 steps", types: 98, instantiations: 129_643, values: [904, 182, 87] },
+  { label: "Loop: 20 steps", types: 21, instantiations: 31_706, values: [618, 122, 69] },
+  { label: "Loop: 50 steps", types: 51, instantiations: 48_806, values: [689, 139, 75] },
+  { label: "Merge: 2 x 50", types: 100, instantiations: 79_234, values: [812, 187, 77] },
+  { label: "Merge: 5 x 50", types: 250, instantiations: 161_203, values: [1093, 217, 94] },
+  { label: "Merge: 10 x 50", types: 500, instantiations: 298_630, values: [1537, 328, 124] },
+  { label: "Merge: 20 x 50", types: 1_000, instantiations: 574_112, values: [2425, 540, 180] },
+  { label: "Merge: 50 x 50", types: 2_500, instantiations: 1_413_540, values: [5246, 1419, 426] },
   {
-    rows: [
-      {
-        label: "Linear: 1 type",
-        chips: ["1 type", "20,015 instantiations"],
-        meta: "1.0x baseline",
-        values: [560, 115, 72],
-      },
-      {
-        label: "Linear: 10 types",
-        chips: ["10 types", "25,019 instantiations"],
-        meta: "1.3x baseline",
-        values: [583, 118, 71],
-      },
-      {
-        label: "Linear: 50 types",
-        chips: ["50 types", "47,219 instantiations"],
-        meta: "2.4x baseline",
-        values: [687, 137, 78],
-      },
-      {
-        label: "Linear: 100 types",
-        chips: ["100 types", "74,969 instantiations"],
-        meta: "3.7x baseline",
-        values: [837, 158, 85],
-      },
-      {
-        label: "Branched: 4w x 3d",
-        chips: ["85 types", "66,980 instantiations"],
-        meta: "3.3x baseline",
-        values: [792, 148, 80],
-      },
-      {
-        label: "Branched: 2w x 6d",
-        chips: ["127 types", "90,458 instantiations"],
-        meta: "4.5x baseline",
-        values: [918, 165, 88],
-      },
-      {
-        label: "Blockers: 8 steps",
-        chips: ["30 types", "44,150 instantiations"],
-        meta: "2.2x baseline",
-        values: [664, 134, 75],
-      },
-      {
-        label: "Blockers: 25 steps",
-        chips: ["98 types", "129,643 instantiations"],
-        meta: "6.5x baseline",
-        values: [904, 182, 87],
-      },
-      {
-        label: "Loop: 20 steps",
-        chips: ["21 types", "31,706 instantiations"],
-        meta: "1.6x baseline",
-        values: [618, 122, 69],
-      },
-      {
-        label: "Loop: 50 steps",
-        chips: ["51 types", "48,806 instantiations"],
-        meta: "2.4x baseline",
-        values: [689, 139, 75],
-      },
-      {
-        label: "Merge: 2 x 50",
-        chips: ["100 types", "79,234 instantiations"],
-        meta: "4.0x baseline",
-        values: [812, 187, 77],
-      },
-      {
-        label: "Merge: 5 x 50",
-        chips: ["250 types", "161,203 instantiations"],
-        meta: "8.1x baseline",
-        values: [1093, 217, 94],
-      },
-      {
-        label: "Merge: 10 x 50",
-        chips: ["500 types", "298,630 instantiations"],
-        meta: "14.9x baseline",
-        values: [1537, 328, 124],
-      },
-      {
-        label: "Merge: 20 x 50",
-        chips: ["1,000 types", "574,112 instantiations"],
-        meta: "28.7x baseline",
-        values: [2425, 540, 180],
-      },
-      {
-        label: "Merge: 50 x 50",
-        chips: ["2,500 types", "1,413,540 instantiations"],
-        meta: "70.6x baseline",
-        values: [5246, 1419, 426],
-      },
-      {
-        label: "Middleware: 10 on linear-100",
-        chips: ["100 types", "77,084 instantiations"],
-        meta: "3.9x baseline",
-        values: [854, 173, 86],
-      },
-    ],
+    label: "Middleware: 10 on linear-100",
+    types: 100,
+    instantiations: 77_084,
+    values: [854, 173, 86],
+  },
+];
+
+export const typeGroups = [
+  { rows: typeScenarios.map((scenario) => ({ label: scenario.label, values: scenario.values })) },
+] satisfies BenchGroup[];
+
+/** Instantiations, with each scenario's type count and its scaling against the one-type baseline. */
+export const instantiationGroups = [
+  {
+    rows: typeScenarios.map((scenario) => ({
+      label: scenario.label,
+      meta: `${scenario.types.toLocaleString("en-US")} ${scenario.types === 1 ? "type" : "types"} · ${(scenario.instantiations / typeScenarios[0].instantiations).toFixed(1)}x baseline`,
+      values: [scenario.instantiations],
+    })),
   },
 ] satisfies BenchGroup[];
 
@@ -414,45 +351,12 @@ export const benchmarkServers = {
   value: "PostgreSQL 18, SQLite 3.53, MySQL 26, MariaDB 13, Redis 8, NATS 2",
 } satisfies KeyValueItem;
 
+/** One series of every row, so a chart compares the rows on a single scenario. */
+export const seriesOf = (groups: BenchGroup[], index: number): BenchGroup[] =>
+  groups.map((group) => ({
+    ...group,
+    rows: group.rows.map((row) => ({ ...row, values: [row.values[index]] })),
+  }));
+
 export const benchmarkSourceUrl = (suite: string) =>
   `https://github.com/kvet/queuert/tree/main/benchmarks/${suite}`;
-
-const rowValues = (groups: BenchGroup[], groupLabel: string | undefined, rowLabel: string) =>
-  groups.find((group) => group.label === groupLabel)!.rows.find((row) => row.label === rowLabel)!
-    .values;
-
-const allValues = (groups: BenchGroup[], series: number) =>
-  groups.flatMap((group) => group.rows.map((row) => row.values[series]));
-
-export const benchmarkHeadlines = {
-  postgresCompletion: rowValues(
-    completionGroups,
-    "State adapter (noop notify)",
-    "PostgreSQL (pg)",
-  )[2],
-  sqliteCompletion: Math.max(
-    ...completionGroups[0].rows
-      .filter((row) => row.label.startsWith("SQLite"))
-      .map((row) => row.values[2]),
-  ),
-  postgresBatchedCreation: Math.max(
-    ...creationGroups[0].rows
-      .filter((row) => row.label.startsWith("PostgreSQL"))
-      .map((row) => row.values[1]),
-  ),
-  retainedAfterClose: {
-    min: Math.min(...allValues(memoryGroups, 2)),
-    max: Math.max(...allValues(memoryGroups, 2)),
-  },
-  coreCpuPerJob: {
-    min: Math.min(...allValues(cpuGroups, 0)),
-    max: Math.max(...allValues(cpuGroups, 0)),
-  },
-  postgresOperational: {
-    min: Math.min(...allValues(operationalGroups, 0)),
-    max: Math.max(...allValues(operationalGroups, 0)),
-  },
-  sqliteOperationalMax: Math.max(...allValues(operationalGroups, 1)),
-  typeCheck100: rowValues(typeGroups, undefined, "Linear: 100 types"),
-  typeCheck2500: rowValues(typeGroups, undefined, "Merge: 50 x 50"),
-};

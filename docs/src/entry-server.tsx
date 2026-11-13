@@ -2,6 +2,7 @@
 import { faviconDataUri } from "@queuert/ui/logo";
 import { StartServer, createHandler } from "@solidjs/start/server";
 
+import { stackScript, stackStyle } from "./stack.ts";
 import { themeScript } from "./theme.ts";
 
 export default createHandler(() => (
@@ -13,6 +14,8 @@ export default createHandler(() => (
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <link rel="icon" type="image/svg+xml" href={faviconDataUri} />
           <script innerHTML={themeScript} />
+          <script innerHTML={stackScript} />
+          <style innerHTML={stackStyle} />
           {assets}
         </head>
         <body>

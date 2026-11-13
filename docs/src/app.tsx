@@ -7,10 +7,14 @@ import { SearchDialog } from "./components/Search.tsx";
 import { TopBar } from "./components/TopBar.tsx";
 
 import "./styles/app.css";
+import { initStack } from "./stack.ts";
 import { theme } from "./theme.ts";
 
 const App = () => {
-  onMount(theme.init);
+  onMount(() => {
+    theme.init();
+    initStack();
+  });
 
   return (
     <Router

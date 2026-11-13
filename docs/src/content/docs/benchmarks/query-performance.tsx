@@ -1,6 +1,7 @@
-import { BenchChart } from "../../../components/BenchChart.tsx";
+import { BenchChart, type BenchGroup } from "../../../components/BenchChart.tsx";
 import { type KeyValueItem, KeyValueList } from "../../../components/KeyValueList.tsx";
 import { Code } from "../../../components/mdx/Code.tsx";
+import { StackFilter } from "../../../components/StackFilter.tsx";
 import {
   benchmarkContainers,
   benchmarkServers,
@@ -20,7 +21,37 @@ export const meta = {
     "Median latency of every state-adapter query on PostgreSQL, SQLite, MySQL, MariaDB and Redis.",
 };
 
-const series = ["PostgreSQL", "SQLite", "MySQL", "MariaDB", "Redis"];
+const series = [
+  { label: "PostgreSQL", backend: "postgres" },
+  { label: "SQLite", backend: "sqlite" },
+  { label: "MySQL", backend: "mysql" },
+  { label: "MariaDB", backend: "mariadb" },
+  { label: "Redis", backend: "redis" },
+] as const;
+
+/** One group per query, the backends as its rows, each query on its own scale. */
+const queryGroups = (groups: BenchGroup[]): BenchGroup[] =>
+  groups.flatMap((group) =>
+    group.rows.map((query) => ({
+      label: <span class="normal-case">{query.label}</span>,
+      rows: series.map((backend, index) => ({
+        label: backend.label,
+        backend: backend.backend,
+        values: [query.values[index]],
+      })),
+    })),
+  );
+
+const QueryChart = (props: { title: string; groups: BenchGroup[] }) => (
+  <BenchChart
+    title={props.title}
+    unit="p50 ms"
+    decimals={2}
+    scalePerGroup
+    series={["p50"]}
+    groups={queryGroups(props.groups)}
+  />
+);
 
 const setup = [
   ...benchmarkMachine,
@@ -53,6 +84,7 @@ const Page = () => (
       Every state-adapter method runs against the same seeded dataset on PostgreSQL, SQLite, MySQL,
       MariaDB and Redis.
     </p>
+    <StackFilter backends={["postgres", "sqlite", "mysql", "mariadb", "redis"]} />
     <KeyValueList title="Test setup" items={setup} />
     <h2 id="operational-queries">Operational queries</h2>
     <p>
@@ -60,54 +92,18 @@ const Page = () => (
       or reclaim ten jobs in one statement, as the worker does when it fills or frees several idle
       slots at once.
     </p>
-    <BenchChart
-      title="Operational queries"
-      unit="p50 ms"
-      decimals={2}
-      series={series}
-      groups={operationalGroups}
-    />
+    <QueryChart title="Operational queries" groups={operationalGroups} />
     <h2 id="listing-queries">Listing queries</h2>
     <p>
       The list, filter and paginate path behind the dashboard, cleanup jobs and the query API. The{" "}
       <code>blocked</code> listing has its own partial index (<code>job_blocked_idx</code>) for its
       filter and scheduled-at ordering, so it lands in the same range as <code>pending</code>.
     </p>
-    <BenchChart
-      title="Type discovery & counts"
-      unit="p50 ms"
-      decimals={2}
-      series={series}
-      groups={discoveryGroups}
-    />
-    <BenchChart
-      title="List chains"
-      unit="p50 ms"
-      decimals={2}
-      series={series}
-      groups={listChainsGroups}
-    />
-    <BenchChart
-      title="List jobs"
-      unit="p50 ms"
-      decimals={2}
-      series={series}
-      groups={listJobsGroups}
-    />
-    <BenchChart
-      title="List chain jobs & blocked jobs"
-      unit="p50 ms"
-      decimals={2}
-      series={series}
-      groups={chainJobsGroups}
-    />
-    <BenchChart
-      title="List workers & worker jobs"
-      unit="p50 ms"
-      decimals={2}
-      series={series}
-      groups={workerGroups}
-    />
+    <QueryChart title="Type discovery & counts" groups={discoveryGroups} />
+    <QueryChart title="List chains" groups={listChainsGroups} />
+    <QueryChart title="List jobs" groups={listJobsGroups} />
+    <QueryChart title="List chain jobs & blocked jobs" groups={chainJobsGroups} />
+    <QueryChart title="List workers & worker jobs" groups={workerGroups} />
     <h2 id="reproduce">Reproduce</h2>
     <p>
       From <a href={benchmarkSourceUrl("query-performance")}>benchmarks/query-performance</a>, with

@@ -1,8 +1,16 @@
+import { For } from "solid-js";
+
 import { BenchChart } from "../../../components/BenchChart.tsx";
 import { type FieldItem, FieldList } from "../../../components/FieldList.tsx";
 import { type KeyValueItem, KeyValueList } from "../../../components/KeyValueList.tsx";
 import { Code } from "../../../components/mdx/Code.tsx";
-import { benchmarkMachine, benchmarkSourceUrl, typeGroups } from "../../../data/benchmarks.ts";
+import {
+  benchmarkMachine,
+  benchmarkSourceUrl,
+  instantiationGroups,
+  seriesOf,
+  typeGroups,
+} from "../../../data/benchmarks.ts";
 
 export const meta = {
   title: "Type Complexity",
@@ -31,6 +39,8 @@ const families = [
   },
 ] satisfies FieldItem[];
 
+const compilers = ["TS 6", "TS 7", "tsrs"];
+
 const setup = [
   ...benchmarkMachine,
   {
@@ -53,15 +63,28 @@ const Page = () => (
     <h2 id="results">Results</h2>
     <p>
       Beyond a fixed baseline, cost grows roughly linearly with the number of job types whatever the
-      chain's shape. Each row shows the job type count, the TypeScript 7 instantiation count, and
-      the scaling against the one-type baseline.
+      chain's shape.
+    </p>
+    <For each={compilers}>
+      {(compiler, index) => (
+        <BenchChart
+          title={`Type-check time, ${compiler}`}
+          unit="ms"
+          approximate
+          series={[compiler]}
+          groups={seriesOf(typeGroups, index())}
+        />
+      )}
+    </For>
+    <p>
+      The TypeScript 7 instantiation count of each scenario, with its job type count and the scaling
+      against the one-type baseline.
     </p>
     <BenchChart
-      title="Type-check time"
-      unit="ms"
-      approximate
-      series={["TS 6", "TS 7", "tsrs"]}
-      groups={typeGroups}
+      title="Instantiations, TS 7"
+      unit="instantiations"
+      series={["Instantiations"]}
+      groups={instantiationGroups}
     />
     <h2 id="reproduce">Reproduce</h2>
     <p>

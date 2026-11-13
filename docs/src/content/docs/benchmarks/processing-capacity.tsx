@@ -1,6 +1,9 @@
+import { For } from "solid-js";
+
 import { BenchChart } from "../../../components/BenchChart.tsx";
 import { type KeyValueItem, KeyValueList } from "../../../components/KeyValueList.tsx";
 import { Code } from "../../../components/mdx/Code.tsx";
+import { StackFilter } from "../../../components/StackFilter.tsx";
 import {
   benchmarkContainers,
   benchmarkServers,
@@ -8,6 +11,7 @@ import {
   benchmarkSourceUrl,
   completionGroups,
   creationGroups,
+  seriesOf,
 } from "../../../data/benchmarks.ts";
 
 export const meta = {
@@ -35,10 +39,14 @@ const Page = () => (
   <>
     <p>
       Throughput along two separate axes. When the state adapter varies, notify is a no-op, so only
-      the state adapter is measured; when the notify adapter varies, state stays in-process. A
+      the state adapter is measured; when the notify adapter varies, state stays in-process. Each
+      chart is one scenario, with the two axes as separate groups on their own scales. A
       deployment's steady-state throughput is bounded by the lower of its creation and completion
       rates.
     </p>
+    <StackFilter
+      backends={["postgres", "sqlite", "mysql", "mariadb", "redis", "nats", "in-process"]}
+    />
     <KeyValueList title="Test setup" items={setup} />
     <h2 id="creation">Creation</h2>
     <p>
@@ -47,13 +55,18 @@ const Page = () => (
       <code>client.createChains</code> in one transaction, the shape of a bulk enqueue, and
       amortizes the transaction and the notification over them.
     </p>
-    <BenchChart
-      title="Creation"
-      unit="chains/s"
-      approximate
-      series={["Single", "Batched (100)"]}
-      groups={creationGroups}
-    />
+    <For each={["Single", "Batched (100)"]}>
+      {(scenario, index) => (
+        <BenchChart
+          title={`Creation, ${scenario.toLowerCase()}`}
+          unit="chains/s"
+          approximate
+          scalePerGroup
+          series={[scenario]}
+          groups={seriesOf(creationGroups, index())}
+        />
+      )}
+    </For>
     <h2 id="completion">Completion, no-op handler</h2>
     <p>
       One worker drains the seeded queue. Each handler only opens its own transaction and calls{" "}
@@ -66,13 +79,18 @@ const Page = () => (
       with queue depth. At 40,000 queued jobs that cost, not the worker, bounds every row that uses
       in-process state, including the whole notify axis.
     </p>
-    <BenchChart
-      title="Completion, no-op handler"
-      unit="jobs/s"
-      approximate
-      series={["1 slot", "4 slots", "16 slots"]}
-      groups={completionGroups}
-    />
+    <For each={["1 slot", "4 slots", "16 slots"]}>
+      {(scenario, index) => (
+        <BenchChart
+          title={`Completion, ${scenario}`}
+          unit="jobs/s"
+          approximate
+          scalePerGroup
+          series={[scenario]}
+          groups={seriesOf(completionGroups, index())}
+        />
+      )}
+    </For>
     <h2 id="reproduce">Reproduce</h2>
     <p>
       From <a href={benchmarkSourceUrl("processing-capacity")}>benchmarks/processing-capacity</a>,

@@ -1,7 +1,10 @@
+import { For } from "solid-js";
+
 import { BenchChart } from "../../../components/BenchChart.tsx";
 import { type FieldItem, FieldList } from "../../../components/FieldList.tsx";
 import { type KeyValueItem, KeyValueList } from "../../../components/KeyValueList.tsx";
 import { Code } from "../../../components/mdx/Code.tsx";
+import { StackFilter } from "../../../components/StackFilter.tsx";
 import {
   benchmarkContainers,
   benchmarkServers,
@@ -11,6 +14,7 @@ import {
   allocationGroups,
   memoryGroups,
   validationAllocationGroups,
+  seriesOf,
   validationCpuGroups,
 } from "../../../data/benchmarks.ts";
 
@@ -20,7 +24,7 @@ export const meta = {
     "Heap held by each package across a full lifecycle, and the CPU time and allocations each job costs.",
 };
 
-const memoryColumns = [
+const memoryMeasurements = [
   {
     name: "Setup",
     description:
@@ -83,6 +87,9 @@ const Page = () => (
       The memory phase measures the heap the lifecycle holds; the profile phase samples CPU time and
       allocations while the jobs are created and processed.
     </p>
+    <StackFilter
+      backends={["postgres", "sqlite", "mysql", "mariadb", "redis", "nats", "in-process"]}
+    />
     <KeyValueList title="Test setup" items={setup} />
     <h2 id="memory">Memory</h2>
     <p>
@@ -91,14 +98,18 @@ const Page = () => (
       <code>process.memoryUsage().heapUsed</code>, which counts V8 fragmentation and free pages as
       retention.
     </p>
-    <FieldList title="Columns" items={memoryColumns} proseNames />
-    <BenchChart
-      title="Memory per lifecycle"
-      unit="KB"
-      approximate
-      series={["Setup", "In-flight peak", "Live JS retained", "JIT code retained"]}
-      groups={memoryGroups}
-    />
+    <FieldList title="Measurements" items={memoryMeasurements} proseNames />
+    <For each={memoryMeasurements}>
+      {(column, index) => (
+        <BenchChart
+          title={column.name}
+          unit="KB"
+          approximate
+          series={[column.name]}
+          groups={seriesOf(memoryGroups, index())}
+        />
+      )}
+    </For>
     <h2 id="reading-the-results">Reading the results</h2>
     <p>
       Live JS retained stays at about 5-30 KB for every package: V8 hidden classes and shape
@@ -118,13 +129,17 @@ const Page = () => (
       file of the function it lands in. Time spent waiting on a database or broker is left out.
     </p>
     <FieldList title="Categories" items={cpuCategories} proseNames />
-    <BenchChart
-      title="CPU per job"
-      unit="µs"
-      approximate
-      series={["Queuert core", "Adapter", "Dependencies", "Runtime"]}
-      groups={cpuGroups}
-    />
+    <For each={cpuCategories}>
+      {(category, index) => (
+        <BenchChart
+          title={`CPU per job, ${category.name}`}
+          unit="µs"
+          approximate
+          series={[category.name]}
+          groups={seriesOf(cpuGroups, index())}
+        />
+      )}
+    </For>
     <BenchChart
       title="Allocated per job"
       unit="KB"
