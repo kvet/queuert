@@ -35,10 +35,11 @@ const Page = () => (
     <p>
       For an entirely different database engine, implement the <code>StateAdapter</code> interface
       yourself. The conformance suite validates that your implementation behaves correctly. To use
-      another client with PostgreSQL or SQLite, write a provider instead: see{" "}
-      <A href="/integrations/state-adapters/postgres/#state-provider">PostgreSQL</A> or{" "}
-      <A href="/integrations/state-adapters/sqlite/#state-provider">SQLite</A>, each of which has
-      its own conformance cases for providers.
+      another client with PostgreSQL, SQLite or MySQL / MariaDB, write a provider instead: see{" "}
+      <A href="/integrations/state-adapters/postgres/#state-provider">PostgreSQL</A>,{" "}
+      <A href="/integrations/state-adapters/sqlite/#state-provider">SQLite</A> or{" "}
+      <A href="/integrations/state-adapters/mysql/#state-provider">MySQL / MariaDB</A>, each of
+      which has its own conformance cases for providers.
     </p>
 
     <h2>Write a state adapter</h2>

@@ -91,7 +91,10 @@ const Page = () => (
 
     <h2>Install</h2>
     <Code lang="bash">{`npm install @queuert/sqlite`}</Code>
-    <p>Requires SQLite 3.42 or later.</p>
+    <p>
+      Requires SQLite 3.42 or later, which <code>migrateToLatest()</code> checks against the version
+      the driver bundles.
+    </p>
 
     <h2>Setup</h2>
     <p>

@@ -113,19 +113,17 @@ export const migrationStoreBaseGroups: Group<MigratorConformanceContext>[] = [
           }),
       },
       {
-        name: "rolls back a failing transactional migration's work and record",
+        name: "rolls back a failing transactional migration's row writes and record",
         run: async (context) =>
           withTables(context, async ({ store, item }) => {
+            await context.executeSql(`CREATE TABLE ${item} (id INTEGER PRIMARY KEY)`);
             await assert.rejects(
               createMigrator({
                 migrations: [
                   {
-                    name: "create_items",
+                    name: "seed_items",
                     up: async (txCtx) => {
-                      await context.executeSql(
-                        `CREATE TABLE ${item} (id INTEGER PRIMARY KEY)`,
-                        txCtx,
-                      );
+                      await context.executeSql(`INSERT INTO ${item} (id) VALUES (1)`, txCtx);
                       await context.executeSql(
                         `INSERT INTO ${item}_missing (id) VALUES (1)`,
                         txCtx,
@@ -138,7 +136,7 @@ export const migrationStoreBaseGroups: Group<MigratorConformanceContext>[] = [
               }).migrateToLatest(),
             );
 
-            await assert.rejects(context.countRows(item));
+            assert.equal(await context.countRows(item), 0);
             assert.deepEqual(await appliedNames(store), []);
           }),
       },
@@ -198,6 +196,50 @@ export const migrationStoreBaseGroups: Group<MigratorConformanceContext>[] = [
             assert.match(failure.message, /^Migration "create_items" failed: /);
             assert.ok(failure.cause instanceof Error);
             assert.ok(failure.message.endsWith(failure.cause.message));
+          }),
+      },
+    ],
+  },
+];
+
+/**
+ * Cases for stores whose transactions roll back DDL, which PostgreSQL and SQLite do and MySQL and
+ * MariaDB, where DDL commits implicitly, do not.
+ *
+ * @experimental
+ */
+export const migrationStoreTransactionalDdlGroups: Group<MigratorConformanceContext>[] = [
+  {
+    name: "migrationStoreTransactionalDdl",
+    cases: [
+      {
+        name: "rolls back a failing transactional migration's work and record",
+        run: async (context) =>
+          withTables(context, async ({ store, item }) => {
+            await assert.rejects(
+              createMigrator({
+                migrations: [
+                  {
+                    name: "create_items",
+                    up: async (txCtx) => {
+                      await context.executeSql(
+                        `CREATE TABLE ${item} (id INTEGER PRIMARY KEY)`,
+                        txCtx,
+                      );
+                      await context.executeSql(
+                        `INSERT INTO ${item}_missing (id) VALUES (1)`,
+                        txCtx,
+                      );
+                    },
+                    down: async () => {},
+                  },
+                ],
+                store,
+              }).migrateToLatest(),
+            );
+
+            await assert.rejects(context.countRows(item));
+            assert.deepEqual(await appliedNames(store), []);
           }),
       },
     ],

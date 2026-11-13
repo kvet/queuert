@@ -19,11 +19,14 @@ yarn add queuert
 
 You also need a **state adapter** to store jobs:
 
-- [`@queuert/postgres`](https://github.com/kvet/queuert/tree/main/packages/postgres) — PostgreSQL (recommended for production)
+- [`@queuert/postgres`](https://github.com/kvet/queuert/tree/main/packages/postgres) — PostgreSQL
 - [`@queuert/sqlite`](https://github.com/kvet/queuert/tree/main/packages/sqlite) — SQLite
+- [`@queuert/mysql`](https://github.com/kvet/queuert/tree/main/packages/mysql) — MySQL / MariaDB _(experimental)_
+- [`@queuert/redis`](https://github.com/kvet/queuert/tree/main/packages/redis) — Redis _(experimental)_
 
 Optional adapters:
 
+- [`@queuert/postgres`](https://github.com/kvet/queuert/tree/main/packages/postgres) — PostgreSQL LISTEN/NOTIFY notify adapter
 - [`@queuert/redis`](https://github.com/kvet/queuert/tree/main/packages/redis) — Redis notify adapter
 - [`@queuert/nats`](https://github.com/kvet/queuert/tree/main/packages/nats) — NATS notify adapter _(experimental)_
 - [`@queuert/otel`](https://github.com/kvet/queuert/tree/main/packages/otel) — OpenTelemetry observability (metrics and tracing)

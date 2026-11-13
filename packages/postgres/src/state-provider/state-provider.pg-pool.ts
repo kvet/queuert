@@ -41,7 +41,7 @@ export const createPgPoolProvider = ({ pool }: { pool: Pool }): PgPoolProvider =
       withTxHooks(async (txHooks) => {
         const poolClient = await pool.connect();
         try {
-          await poolClient.query("BEGIN");
+          await poolClient.query("BEGIN ISOLATION LEVEL READ COMMITTED");
           const result = await fn({ poolClient, txHooks });
           await poolClient.query("COMMIT");
           return result;

@@ -191,29 +191,27 @@ const validateInline = async (
   }
 
   const declaredColumnNames = Object.keys(columnTypes);
-  if (declaredColumnNames.length > 0) {
+  expect(
+    execFields.length,
+    `PG returned ${execFields.length} columns (${execFields.map((f) => f.name).join(", ")}), declared ${declaredColumnNames.length}${ctx}`,
+  ).toBe(declaredColumnNames.length);
+
+  const seen = new Set<string>();
+  for (const f of execFields) {
+    expect(seen.has(f.name), `duplicate column name '${f.name}' in result${ctx}`).toBe(false);
+    seen.add(f.name);
+  }
+
+  const actual = new Map(
+    execFields.map((f) => [f.name, formatType(f.dataTypeID) ?? `oid:${f.dataTypeID}`]),
+  );
+  for (const [name, runtime] of Object.entries(columnTypes)) {
+    const pgType = actual.get(name);
+    expect(pgType, `column '${name}': not found in PG result${ctx}`).toBeDefined();
     expect(
-      execFields.length,
-      `PG returned ${execFields.length} columns (${execFields.map((f) => f.name).join(", ")}), declared ${declaredColumnNames.length}${ctx}`,
-    ).toBe(declaredColumnNames.length);
-
-    const seen = new Set<string>();
-    for (const f of execFields) {
-      expect(seen.has(f.name), `duplicate column name '${f.name}' in result${ctx}`).toBe(false);
-      seen.add(f.name);
-    }
-
-    const actual = new Map(
-      execFields.map((f) => [f.name, formatType(f.dataTypeID) ?? `oid:${f.dataTypeID}`]),
-    );
-    for (const [name, runtime] of Object.entries(columnTypes)) {
-      const pgType = actual.get(name);
-      expect(pgType, `column '${name}': not found in PG result${ctx}`).toBeDefined();
-      expect(
-        pgTypeMatchesRuntime(pgType!, runtime, enumTypes),
-        `column '${name}': PG reports '${pgType}', declared runtime '${runtime}'${ctx}`,
-      ).toBe(true);
-    }
+      pgTypeMatchesRuntime(pgType!, runtime, enumTypes),
+      `column '${name}': PG reports '${pgType}', declared runtime '${runtime}'${ctx}`,
+    ).toBe(true);
   }
 
   await client.query("BEGIN TRANSACTION READ ONLY");

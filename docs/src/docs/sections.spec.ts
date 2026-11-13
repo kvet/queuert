@@ -64,10 +64,13 @@ describe("siteSections", () => {
   });
 
   it.each([
+    ["Building Blocks", "guides"],
     ["Guides", "guides"],
     ["How It Works", "how-it-works"],
   ])("orders the %s group by sidebar.order, then title", async (label, directory) => {
-    expect(docsGroup(label)).toEqual(await sidebarOrder(directory));
+    const group = docsGroup(label);
+
+    expect(group).toEqual((await sidebarOrder(directory)).filter((slug) => group.includes(slug)));
   });
 });
 

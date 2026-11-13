@@ -235,7 +235,7 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
   const pendingJobs: StateJobInfo[] = [];
   for (const typeName of seedConfig.pendingTypes) {
     const jobs = await createChains(typeName, seedConfig.pendingPerType * scale);
-    pendingJobs.push(...jobs);
+    for (const job of jobs) pendingJobs.push(job);
   }
 
   // --- Block: Scheduled ---
@@ -247,14 +247,14 @@ export const seedAllStates = async <TTxContext extends BaseTxContext>(
   const runningJobs: StateJob[] = [];
   for (const typeName of seedConfig.runningTypes) {
     const jobs = await createProcessed(typeName, seedConfig.runningPerType * scale, "running");
-    runningJobs.push(...jobs);
+    for (const job of jobs) runningJobs.push(job);
   }
 
   // --- Block: Completed (non-continued, created before continued ones) ---
   const completedJobs: StateJob[] = [];
   for (const typeName of seedConfig.completedTypes) {
     const jobs = await createProcessed(typeName, seedConfig.completedPerType * scale, "completed");
-    completedJobs.push(...jobs);
+    for (const job of jobs) completedJobs.push(job);
   }
 
   // --- Block: Retried ---

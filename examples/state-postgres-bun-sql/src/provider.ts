@@ -42,7 +42,9 @@ export const createBunSqlStateProvider = ({
 
   return {
     withTransaction: async (cb) =>
-      withTxHooks(async (txHooks) => sql.begin(async (txSql) => cb({ txSql, txHooks }))),
+      withTxHooks(async (txHooks) =>
+        sql.begin("isolation level read committed", async (txSql) => cb({ txSql, txHooks })),
+      ),
     isTransaction: (txCtx) => typeof txCtx.txSql.savepoint === "function",
     onTransactionCommit: (txCtx, callback) => {
       txCtx.txHooks.onCommit(callback);

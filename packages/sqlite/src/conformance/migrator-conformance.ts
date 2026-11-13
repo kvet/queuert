@@ -2,6 +2,7 @@ import {
   type MigratorConformanceContext,
   migrationStoreBaseGroups,
   migrationStoreLeaseGroups,
+  migrationStoreTransactionalDdlGroups,
 } from "@queuert/typed-sql";
 import type { ConformanceTestCase } from "queuert/conformance";
 import { type ConformanceGroup, toConformanceTestCases } from "queuert/conformance-internal";
@@ -18,7 +19,11 @@ import type { SqliteStateProvider } from "../state-provider/state-provider.sqlit
 export type SqliteMigratorConformanceContext = MigratorConformanceContext;
 
 export const sqliteMigratorConformanceGroups: ConformanceGroup<SqliteMigratorConformanceContext>[] =
-  [...migrationStoreBaseGroups, ...migrationStoreLeaseGroups];
+  [
+    ...migrationStoreBaseGroups,
+    ...migrationStoreTransactionalDdlGroups,
+    ...migrationStoreLeaseGroups,
+  ];
 
 /**
  * Prepares the context the {@link sqliteMigratorConformanceCases} run against, with

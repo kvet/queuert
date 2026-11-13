@@ -1,17 +1,17 @@
 ---
 title: Application Migrations
-description: Run your application's own schema migrations with the migrator from @queuert/postgres and @queuert/sqlite.
+description: Run your application's own schema migrations with the migrator from @queuert/postgres, @queuert/sqlite and @queuert/mysql.
 sidebar:
   order: 21
 ---
 
 :::caution[Experimental]
-The migrator API (`createPgMigrator`, `createSqliteMigrator`, `Migration` and `Migrator`) is experimental: it may change in a minor release.
+The migrator API (`createPgMigrator`, `createSqliteMigrator`, `createMysqlMigrator`, `Migration` and `Migrator`) is experimental: it may change in a minor release.
 :::
 
 ## Overview
 
-`@queuert/postgres` and `@queuert/sqlite` export the migrator they run Queuert's own schema with, so your application can run its migrations the same way. It is built for migrating on boot from many processes at once: one process migrates while the others wait, then find nothing left to do. Migrations run in the order of their list, can be reverted, and are functions that use your own query builder.
+`@queuert/postgres`, `@queuert/sqlite` and `@queuert/mysql` export the migrator they run Queuert's own schema with, so your application can run its migrations the same way. It is built for migrating on boot from many processes at once: one process migrates while the others wait, then find nothing left to do. Migrations run in the order of their list, can be reverted, and are functions that use your own query builder.
 
 ## Create a Migrator
 
@@ -25,7 +25,7 @@ const migrator = createPgMigrator({ stateProvider, migrations });
 await migrator.migrateToLatest();
 ```
 
-It creates its tables on the first run, if they are missing: `migration` for the history and `migration_lock` for the lease, in the `public` schema. `schema` (created if missing), `migrationTableName` and `lockTableName` rename them. With SQLite, `createSqliteMigrator` takes the same options without `schema`.
+It creates its tables on the first run, if they are missing: `migration` for the history and `migration_lock` for the lease, in the `public` schema. `schema` (created if missing), `migrationTableName` and `lockTableName` rename them. With SQLite, `createSqliteMigrator` takes the same options without `schema`. With MySQL or MariaDB, `createMysqlMigrator` puts them in the connection's database, and `schema` names another database, which must exist.
 
 ## Define Migrations
 
@@ -75,7 +75,9 @@ const migrations: Migration<TxContext>[] = [
 
 A migration is `transactional` unless it sets `type`. Its `up` and `down` receive the transaction context and run inside one transaction together with the history record, so your query builder works on the migration's connection.
 
-A `non-transactional` migration's `up` and `down` run outside a transaction with their own database access, as `CREATE INDEX CONCURRENTLY` or a backfill in batches needs. The record is written after the function resolves, so it must be safe to run again. Call `assertLockHeld()` between steps of long work: it throws once the lease is lost, so the migration stops before another process starts migrating.
+A `non-transactional` migration's `up` and `down` run outside a transaction with their own database access, as `CREATE INDEX CONCURRENTLY` or a backfill in batches needs. The record is written after the function resolves, so it must be safe to run again.
+
+On MySQL and MariaDB, DDL commits implicitly, so a transactional migration that changes the schema is not atomic: a failure after its DDL leaves the change applied and the migration unrecorded. Put DDL in `non-transactional` migrations written to be rerunnable (`CREATE TABLE IF NOT EXISTS`, `IF [NOT] EXISTS` on MariaDB), and keep row changes in transactional ones. Call `assertLockHeld()` between steps of long work: it throws once the lease is lost, so the migration stops before another process starts migrating.
 
 :::caution
 Inside a `transactional` migration, run queries only through the `txCtx` that `up` and `down` receive. A query through your outer client waits for a connection the migration holds when the pool has one connection (Knex and Kysely over SQLite), and the SQLite providers hold their write lock for the whole transaction, so taking that lock again never returns. Prisma's interactive transactions time out after 5 seconds by default; raise `transactionOptions.timeout` on the client for long transactional migrations.
@@ -149,7 +151,7 @@ The copied migrations count as applied when their names match, and the copy is a
 
 ## Testing a Provider
 
-`@queuert/postgres/conformance` exports `pgMigratorConformanceCases` and `createPgMigratorConformanceContext`, and `@queuert/sqlite/conformance` the SQLite equivalents. They run the migrator over your state provider: history, transactional and non-transactional migrations, reverts and the lease. Register one test per case with any test runner:
+`@queuert/postgres/conformance` exports `pgMigratorConformanceCases` and `createPgMigratorConformanceContext`, and `@queuert/sqlite/conformance` and `@queuert/mysql/conformance` the SQLite and MySQL equivalents. They run the migrator over your state provider: history, transactional and non-transactional migrations, reverts and the lease. Register one test per case with any test runner:
 
 ```ts
 const context = createPgMigratorConformanceContext({ stateProvider });

@@ -7,6 +7,8 @@
     "start": "node src/index.ts --all",
     "start:state-postgres": "node src/index.ts --state-postgres",
     "start:state-sqlite": "node src/index.ts --state-sqlite",
+    "start:state-mysql": "node src/index.ts --state-mysql",
+    "start:state-mariadb": "node src/index.ts --state-mariadb",
     "start:state-redis": "node src/index.ts --state-redis",
     "start:notify-redis": "node src/index.ts --notify-redis",
     "start:notify-postgres": "node src/index.ts --notify-postgres",
@@ -21,6 +23,7 @@
     "@opentelemetry/api": "1.10.0",
     "@opentelemetry/sdk-metrics": "3.0.0",
     "@queuert/dashboard": "workspace:*",
+    "@queuert/mysql": "workspace:*",
     "@queuert/nats": "workspace:*",
     "@queuert/otel": "workspace:*",
     "@queuert/postgres": "workspace:*",
@@ -33,6 +36,7 @@
     "example-codec-zod": "workspace:*",
     "example-notify-postgres-postgres-js": "workspace:*",
     "example-notify-redis-redis": "workspace:*",
+    "example-state-mysql-mysql2": "workspace:*",
     "example-state-postgres-postgres-js": "workspace:*",
     "example-state-redis-redis": "workspace:*",
     "example-state-sqlite-better-sqlite3": "workspace:*",
@@ -40,6 +44,7 @@
     "example-validation-typebox": "workspace:*",
     "example-validation-valibot": "workspace:*",
     "example-validation-zod": "workspace:*",
+    "mysql2": "3.24.6",
     "pg": "8.23.1",
     "postgres": "3.4.9",
     "queuert": "workspace:*",
@@ -54,6 +59,7 @@
     "@testcontainers/postgresql": "12.2.1",
     "@testcontainers/redis": "12.2.1",
     "@types/better-sqlite3": "9.6.0",
-    "@types/pg": "8.23.1"
+    "@types/pg": "8.23.1",
+    "testcontainers": "12.2.1"
   }
 }

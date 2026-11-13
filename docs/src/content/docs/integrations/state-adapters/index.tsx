@@ -13,7 +13,7 @@ const adapters: OptionCard[] = [
   {
     name: "PostgreSQL",
     status: { label: "recommended", tone: "accent" },
-    pick: "Recommended for production. Supports horizontal scaling and all Queuert features.",
+    pick: "Supports horizontal scaling and all Queuert features.",
     facts: [
       { label: "Package", value: "@queuert/postgres" },
       {
@@ -37,6 +37,17 @@ const adapters: OptionCard[] = [
       { label: "Locking", value: "single writer, writes serialized" },
     ],
     action: { label: "SQLite state adapter", href: "/integrations/state-adapters/sqlite/" },
+  },
+  {
+    name: "MySQL / MariaDB",
+    status: { label: "experimental", tone: "caution" },
+    pick: "For applications whose data already lives in MySQL or MariaDB.",
+    facts: [
+      { label: "Package", value: "@queuert/mysql" },
+      { label: "Clients", value: "mysql2" },
+      { label: "Locking", value: "FOR UPDATE SKIP LOCKED" },
+    ],
+    action: { label: "MySQL / MariaDB state adapter", href: "/integrations/state-adapters/mysql/" },
   },
   {
     name: "Redis",

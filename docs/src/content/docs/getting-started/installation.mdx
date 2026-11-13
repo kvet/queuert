@@ -40,7 +40,7 @@ import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
 
    <Tabs>
      <TabItem label="PostgreSQL">
-       Recommended for production. Supports horizontal scaling and all Queuert features.
+       Supports horizontal scaling and all Queuert features.
        Requires PostgreSQL 14+. See [PostgreSQL State Adapter](/queuert/integrations/state-adapters/postgres/).
 
        <Tabs syncKey="pkg">
@@ -83,12 +83,38 @@ import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
          </TabItem>
        </Tabs>
      </TabItem>
+     <TabItem label="MySQL / MariaDB">
+       <Aside type="caution" title="Experimental">
+         `@queuert/mysql` is experimental: its API may change in a minor release.
+       </Aside>
+
+       For applications whose data lives in MySQL or MariaDB. Requires MySQL 8.4+ or MariaDB 11.4+ (InnoDB).
+       See [MySQL / MariaDB State Adapter](/queuert/integrations/state-adapters/mysql/).
+
+       <Tabs syncKey="pkg">
+         <TabItem label="npm">
+           ```bash
+           npm install @queuert/mysql
+           ```
+         </TabItem>
+         <TabItem label="pnpm">
+           ```bash
+           pnpm add @queuert/mysql
+           ```
+         </TabItem>
+         <TabItem label="yarn">
+           ```bash
+           yarn add @queuert/mysql
+           ```
+         </TabItem>
+       </Tabs>
+     </TabItem>
      <TabItem label="Redis">
        <Aside type="caution" title="Experimental">
          The Redis state adapter in `@queuert/redis` is experimental: its API may change in a minor release.
        </Aside>
 
-       Queuert's state on Redis or Redis Cluster, kept apart from your application database.
+       Queuert's state on Redis or Redis Cluster, kept apart from your application database. Requires Redis 6+.
        See [Redis State Adapter](/queuert/integrations/state-adapters/redis/).
 
        <Tabs syncKey="pkg">
@@ -114,8 +140,31 @@ import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
 3. (Optional) Install a notify adapter for reduced latency:
 
    <Tabs>
+     <TabItem label="PostgreSQL LISTEN/NOTIFY">
+       Uses PostgreSQL's built-in `LISTEN`/`NOTIFY`. No additional infrastructure beyond your
+       existing PostgreSQL database — already included in `@queuert/postgres`. See
+       [PostgreSQL Notify Adapter](/queuert/integrations/notify-adapters/postgres/).
+
+       <Tabs syncKey="pkg">
+         <TabItem label="npm">
+           ```bash
+           npm install @queuert/postgres
+           ```
+         </TabItem>
+         <TabItem label="pnpm">
+           ```bash
+           pnpm add @queuert/postgres
+           ```
+         </TabItem>
+         <TabItem label="yarn">
+           ```bash
+           yarn add @queuert/postgres
+           ```
+         </TabItem>
+       </Tabs>
+     </TabItem>
      <TabItem label="Redis">
-       Recommended for production. Uses Redis pub/sub. Requires Redis 6+. See
+       Uses Redis pub/sub. Requires Redis 6+. See
        [Redis Notify Adapter](/queuert/integrations/notify-adapters/redis/).
 
        <Tabs syncKey="pkg">
@@ -158,29 +207,6 @@ import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
          <TabItem label="yarn">
            ```bash
            yarn add @queuert/nats @nats-io/nats-core @nats-io/transport-node
-           ```
-         </TabItem>
-       </Tabs>
-     </TabItem>
-     <TabItem label="PostgreSQL LISTEN/NOTIFY">
-       Uses PostgreSQL's built-in `LISTEN`/`NOTIFY`. No additional infrastructure beyond your
-       existing PostgreSQL database — already included in `@queuert/postgres`. See
-       [PostgreSQL Notify Adapter](/queuert/integrations/notify-adapters/postgres/).
-
-       <Tabs syncKey="pkg">
-         <TabItem label="npm">
-           ```bash
-           npm install @queuert/postgres
-           ```
-         </TabItem>
-         <TabItem label="pnpm">
-           ```bash
-           pnpm add @queuert/postgres
-           ```
-         </TabItem>
-         <TabItem label="yarn">
-           ```bash
-           yarn add @queuert/postgres
            ```
          </TabItem>
        </Tabs>

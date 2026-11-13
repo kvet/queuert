@@ -123,12 +123,12 @@ const validateBeforeExecute = (
     `stmt.readonly is ${stmt.readonly}, declared readOnly is ${readOnly}${ctx}`,
   ).toBe(readOnly);
 
-  return Object.keys(args.columnTypes).length > 0 ? stmt : undefined;
+  return stmt;
 };
 
 const validateAfterExecute = (stmt: Database.Statement, args: SqlArgs, rows: unknown[]): void => {
   const ctx = `\n  SQL: ${args.sql.slice(0, 160).replace(/\s+/g, " ")}${args.sql.length > 160 ? "..." : ""}`;
-  const stmtColumns = stmt.columns();
+  const stmtColumns = stmt.reader ? stmt.columns() : [];
   const actualNames = stmtColumns.map((c) => c.name);
   expect([...actualNames].sort(), `column names mismatch${ctx}`).toEqual(
     Object.keys(args.columnTypes).sort(),

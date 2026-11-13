@@ -126,6 +126,32 @@ export const classifyErrorGroup: ConformanceGroup<PgStateProviderConformanceCont
   ],
 };
 
+export const isolationLevelGroup: ConformanceGroup<PgStateProviderConformanceContext> = {
+  name: "isolationLevel",
+  cases: [
+    {
+      name: "withTransaction opens transactions at READ COMMITTED",
+      run: async ({ createStateProvider }) => {
+        const stateProvider = await createStateProvider();
+
+        try {
+          const rows = await stateProvider.withTransaction(async (txCtx) =>
+            executeSql(
+              stateProvider,
+              "SELECT current_setting('transaction_isolation') AS level",
+              txCtx,
+            ),
+          );
+          assert.equal(rows.length, 1);
+          assert.equal((rows[0] as { level: unknown }).level, "read committed");
+        } finally {
+          await stateProvider.close?.();
+        }
+      },
+    },
+  ],
+};
+
 export const pgStateAdapterConformanceGroups: ConformanceGroup<SchemaFenceConformanceContext>[] = [
   ...stateAdapterBaseGroups,
   ...stateAdapterSchemaFenceGroups,
@@ -134,7 +160,12 @@ export const pgStateAdapterConformanceGroups: ConformanceGroup<SchemaFenceConfor
 ];
 
 export const pgStateProviderConformanceGroups: ConformanceGroup<PgStateProviderConformanceContext>[] =
-  [...pgStateAdapterConformanceGroups, ...stateAdapterSavepointGroups, classifyErrorGroup];
+  [
+    ...pgStateAdapterConformanceGroups,
+    ...stateAdapterSavepointGroups,
+    classifyErrorGroup,
+    isolationLevelGroup,
+  ];
 
 /**
  * Prepares the context the {@link pgStateProviderConformanceCases} run against: migrates the

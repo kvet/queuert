@@ -22,7 +22,7 @@ await orm.em.transactional(async (em) =>
 );
 ```
 
-**A client without them** (pg, postgres.js, Bun SQL, Drizzle, Prisma, Knex, the SQLite drivers) gets a `TxHooks` instance, which buffers callbacks for one transaction. The provider's transaction context carries it as a `txHooks` field next to the transaction handle, its `withTransaction` creates it with `withTxHooks`, and its `onTransactionCommit` and `onTransactionRollback` register callbacks on it:
+**A client without them** (pg, postgres.js, Bun SQL, Drizzle, Prisma, Knex, the SQLite drivers, mysql2) gets a `TxHooks` instance, which buffers callbacks for one transaction. The provider's transaction context carries it as a `txHooks` field next to the transaction handle, its `withTransaction` creates it with `withTxHooks`, and its `onTransactionCommit` and `onTransactionRollback` register callbacks on it:
 
 ```ts title="provider.ts"
 export type PostgresJsContext = { txSql: postgres.TransactionSql; txHooks: TxHooks };

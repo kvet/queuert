@@ -39,7 +39,7 @@ export const SchemaTables = (props: { dialect: SchemaDialect }) => (
                       <Label>head rows only</Label>
                     </Show>
                   </span>
-                  <span class="font-mono text-xs text-fg-subtle">{column.type}</span>
+                  <span class="font-mono text-xs wrap-anywhere text-fg-subtle">{column.type}</span>
                   <span class="col-span-2 text-[13px] leading-5 text-fg-muted sm:col-span-1">
                     {column.description}
                   </span>

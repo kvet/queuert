@@ -2,8 +2,8 @@ import { A } from "@solidjs/router";
 
 import type { FieldItem } from "../../FieldList.tsx";
 
-/** Members of `PgStateProvider` / `SqliteStateProvider`, listed on each backend's page. */
-export const stateProviderMembers = (dialect: "postgres" | "sqlite"): FieldItem[] => [
+/** Members of `PgStateProvider` / `SqliteStateProvider` / `MysqlStateProvider`, listed on each backend's page. */
+export const stateProviderMembers = (dialect: "postgres" | "sqlite" | "mysql"): FieldItem[] => [
   {
     name: "withTransaction",
     description: (
@@ -12,6 +12,22 @@ export const stateProviderMembers = (dialect: "postgres" | "sqlite"): FieldItem[
         transaction context representing an active transaction. A provider that carries{" "}
         <code>txHooks</code> in its context creates them here with <code>withTxHooks</code>, around
         the transaction, so they flush after COMMIT.
+        {dialect === "mysql" ? (
+          <>
+            {" "}
+            It runs <code>SET TRANSACTION ISOLATION LEVEL READ COMMITTED</code> and then{" "}
+            <code>START TRANSACTION</code> on the same connection, with nothing between them; see{" "}
+            <a href="#isolation-level">Isolation level</a>.
+          </>
+        ) : dialect === "postgres" ? (
+          <>
+            {" "}
+            It states READ COMMITTED explicitly (<code>BEGIN ISOLATION LEVEL READ COMMITTED</code>,
+            or the client's isolation-level option), so a higher{" "}
+            <code>default_transaction_isolation</code> cannot apply; see{" "}
+            <a href="#isolation-level">Isolation level</a>.
+          </>
+        ) : null}
       </>
     ),
   },
@@ -55,7 +71,13 @@ export const stateProviderMembers = (dialect: "postgres" | "sqlite"): FieldItem[
       <>
         Executes SQL statements. When a transaction context is provided, uses that connection; when
         omitted, acquires and releases its own connection.{" "}
-        {dialect === "postgres" ? (
+        {dialect === "mysql" ? (
+          <>
+            With an <code>id</code>, run the statement as a server-side prepared statement (mysql2's{" "}
+            <code>execute</code>); without one, the text protocol (<code>query</code>) is fine.
+            Placeholders are <code>?</code>. Never enable <code>multipleStatements</code>.
+          </>
+        ) : dialect === "postgres" ? (
           <>
             <code>readOnly</code> marks a statement that only reads; a provider may route it to a
             read replica or a separate reader pool.
@@ -74,7 +96,13 @@ export const stateProviderMembers = (dialect: "postgres" | "sqlite"): FieldItem[
     description: (
       <>
         Returns <code>{'{ kind: "undefined_table", tableName }'}</code> for a{" "}
-        {dialect === "postgres" ? (
+        {dialect === "mysql" ? (
+          <>
+            missing-table error (<code>errno</code> 1146), with <code>tableName</code> set to the
+            qualified <code>{"<database>.<table>"}</code> from the{" "}
+            <code>{"Table '<database>.<table>' doesn't exist"}</code> message
+          </>
+        ) : dialect === "postgres" ? (
           <>
             missing-table error (SQLSTATE <code>42P01</code>; most drivers expose it as{" "}
             <code>code</code>), with <code>table</code> read from the{" "}

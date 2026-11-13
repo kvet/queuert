@@ -19,7 +19,7 @@ Defines a named job type with its input/output types. Job types are registered w
 
 ### State Adapter
 
-Abstracts database operations for job persistence. The adapter handles job creation, status transitions, attempt tracking, and queries. Database-backed adapters run through a state provider you implement for your database client (Kysely, Drizzle, Prisma, raw pg, etc.), providing transaction handling, commit and rollback callbacks, and SQL execution. See [State Adapters](/queuert/integrations/state-adapters/) for the available backends, and the state provider for [PostgreSQL](/queuert/integrations/state-adapters/postgres/#state-provider) or [SQLite](/queuert/integrations/state-adapters/sqlite/#state-provider), or the single `eval` a [Redis](/queuert/integrations/state-adapters/redis/#state-provider) provider implements.
+Abstracts database operations for job persistence. The adapter handles job creation, status transitions, attempt tracking, and queries. Database-backed adapters run through a state provider you implement for your database client (Kysely, Drizzle, Prisma, raw pg, etc.), providing transaction handling, commit and rollback callbacks, and SQL execution. See [State Adapters](/queuert/integrations/state-adapters/) for the available backends, and the state provider for [PostgreSQL](/queuert/integrations/state-adapters/postgres/#state-provider), [SQLite](/queuert/integrations/state-adapters/sqlite/#state-provider) or [MySQL / MariaDB](/queuert/integrations/state-adapters/mysql/#state-provider), or the single `eval` a [Redis](/queuert/integrations/state-adapters/redis/#state-provider) provider implements.
 
 ### Notify Adapter
 

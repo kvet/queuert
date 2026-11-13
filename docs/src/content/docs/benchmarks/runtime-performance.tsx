@@ -4,6 +4,7 @@ import { type KeyValueItem, KeyValueList } from "../../../components/KeyValueLis
 import { Code } from "../../../components/mdx/Code.tsx";
 import {
   benchmarkContainers,
+  benchmarkServers,
   benchmarkMachine,
   benchmarkSourceUrl,
   cpuGroups,
@@ -67,6 +68,7 @@ const cpuCategories = [
 const setup = [
   ...benchmarkMachine,
   benchmarkContainers,
+  benchmarkServers,
   {
     label: "Work step",
     value: "100 jobs for memory, 2,000 for profiles",
@@ -99,15 +101,15 @@ const Page = () => (
     />
     <h2 id="reading-the-results">Reading the results</h2>
     <p>
-      Live JS retained stays at about 10-20 KB for every package: V8 hidden classes and shape
+      Live JS retained stays at about 5-30 KB for every package: V8 hidden classes and shape
       descriptors left by method calls, not Queuert state. JIT code retained grows with the code
       paths a package exercises, so packages that run more queries keep more. Neither grows per job
       or per lifecycle.
     </p>
     <p>
-      Driver and connection cost (a node-redis client, a postgres.js pool, a NATS connection) lives
-      outside Queuert's lifecycle. The benchmark prints it per run but leaves it out of these
-      numbers.
+      Driver and connection cost (a node-redis client, a postgres.js or mysql2 pool, a NATS
+      connection) lives outside Queuert's lifecycle. The benchmark prints it per run but leaves it
+      out of these numbers.
     </p>
     <h2 id="cpu-and-allocations">CPU and allocations</h2>
     <p>

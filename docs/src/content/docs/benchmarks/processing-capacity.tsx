@@ -3,6 +3,7 @@ import { type KeyValueItem, KeyValueList } from "../../../components/KeyValueLis
 import { Code } from "../../../components/mdx/Code.tsx";
 import {
   benchmarkContainers,
+  benchmarkServers,
   benchmarkMachine,
   benchmarkSourceUrl,
   completionGroups,
@@ -17,6 +18,7 @@ export const meta = {
 const setup = [
   ...benchmarkMachine,
   benchmarkContainers,
+  benchmarkServers,
   {
     label: "Window",
     value: "2 s per scenario",

@@ -106,7 +106,7 @@ For one-on-one comparisons see the [comparison docs](/queuert/comparison/).
 
 - **Transactional, both ends.** Enqueue commits inside your DB transaction; handler completion + next-step `continueWith` commit in the same transaction as your domain writes. For DB-bound work, no outbox at enqueue and no idempotency-key ritual at processing — both halves are structural.
 - **Typed job chains.** Inputs, outputs, continuations, and blockers infer end-to-end via `defineJobTypes`. Renames and refactors are compiler-checked.
-- **Lives in your database.** Postgres or SQLite. No Redis required, no workflow server, no separate persistence tier to operate.
+- **Lives in your database.** Postgres, SQLite, MySQL/MariaDB or Redis. No workflow server, no separate persistence tier to operate.
 - **Sub-second wakeup latency.** `LISTEN/NOTIFY` (or Redis pub/sub, or NATS) wakes workers when a row commits — not on a polling timer.
 - **Fan-in via blockers.** "Wait for these N independent chains to finish, then run X" is a typed primitive backed by a `job_blocker` table.
 - **Schedule for later.** Delay a chain to a specific time or duration. Schedule retries with backoff. Future work, no extra infrastructure.

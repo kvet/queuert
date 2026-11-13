@@ -2,6 +2,7 @@ import { BenchSummary } from "../../../components/BenchSummary.tsx";
 import { KeyValueList } from "../../../components/KeyValueList.tsx";
 import {
   benchmarkContainers,
+  benchmarkServers,
   benchmarkHeadlines as headlines,
   benchmarkMachine,
 } from "../../../data/benchmarks.ts";
@@ -67,7 +68,10 @@ const Page = () => (
       Every suite ran on the same machine. Each suite page lists its own method and the command that
       reproduces it.
     </p>
-    <KeyValueList title="Test setup" items={[...benchmarkMachine, benchmarkContainers]} />
+    <KeyValueList
+      title="Test setup"
+      items={[...benchmarkMachine, benchmarkContainers, benchmarkServers]}
+    />
   </>
 );
 

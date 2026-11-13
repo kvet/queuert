@@ -118,7 +118,8 @@ const Page = () => (
       </li>
       <li>
         <strong>Operational simplicity.</strong> No cluster to run, no separate persistence tier, no
-        bundling step. Your application's database (Postgres or SQLite) is the entire backing store.
+        bundling step. Your application's database (Postgres, SQLite or MySQL/MariaDB) is the entire
+        backing store.
       </li>
       <li>
         <strong>Database as the system of record.</strong> Chain state lives next to your domain

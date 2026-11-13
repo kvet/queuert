@@ -52,6 +52,18 @@ const benchmarkModules: Record<
     axis: "state",
     service: "postgres",
   },
+  "state-mysql-mysql2": {
+    modulePath: "state-mysql-mysql2.ts",
+    label: "MySQL (mysql2)",
+    axis: "state",
+    service: "mysql",
+  },
+  "state-mariadb-mysql2": {
+    modulePath: "state-mariadb-mysql2.ts",
+    label: "MariaDB (mysql2)",
+    axis: "state",
+    service: "mariadb",
+  },
   "state-redis-redis": {
     modulePath: "state-redis-redis.ts",
     label: "Redis (redis)",

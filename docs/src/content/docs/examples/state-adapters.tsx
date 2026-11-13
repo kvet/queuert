@@ -5,7 +5,7 @@ import { ExampleRows } from "../../../components/ExampleList.tsx";
 export const meta = {
   title: "State Adapters",
   description:
-    "One runnable example per PostgreSQL, SQLite and Redis driver or ORM, and a custom adapter.",
+    "One runnable example per PostgreSQL, SQLite, MySQL / MariaDB and Redis driver or ORM, and a custom adapter.",
 };
 
 const Page = () => (
@@ -60,6 +60,12 @@ const Page = () => (
         "state-sqlite-bun-sql",
       ]}
     />
+    <h2 id="mysql">MySQL / MariaDB</h2>
+    <p>
+      The provider opens every transaction at READ COMMITTED, and the example connects with a
+      default database selected, which the adapter requires.
+    </p>
+    <ExampleRows title="@queuert/mysql" names={["state-mysql-mysql2"]} />
     <h2 id="redis">Redis</h2>
     <p>
       The Redis state adapter is experimental. Its transactions are optimistic and may run their

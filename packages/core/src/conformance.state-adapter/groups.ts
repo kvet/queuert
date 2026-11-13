@@ -17,7 +17,10 @@ import {
   deleteChainsGroup,
   deleteChainsConcurrentTransactionsGroup,
 } from "./cases/delete-chains.ts";
-import { extendWorkerLeaseGroup } from "./cases/extend-worker-lease.ts";
+import {
+  extendWorkerLeaseGroup,
+  extendWorkerLeaseConcurrentTransactionsGroup,
+} from "./cases/extend-worker-lease.ts";
 import { getChainTypeNamesGroup } from "./cases/get-chain-type-names.ts";
 import { getChainsGroup, getChainsConcurrentTransactionsGroup } from "./cases/get-chains.ts";
 import {
@@ -108,6 +111,7 @@ export const stateAdapterConcurrentTransactionGroups: ConformanceGroup<StateAdap
     addJobsBlockersConcurrentTransactionsGroup,
     getJobBlockersConcurrentTransactionsGroup,
     unblockJobsConcurrentTransactionsGroup,
+    extendWorkerLeaseConcurrentTransactionsGroup,
     startJobAttemptConcurrentTransactionsGroup,
     getStartAttemptDelayMsConcurrentTransactionsGroup,
     deleteChainsConcurrentTransactionsGroup,

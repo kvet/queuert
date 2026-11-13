@@ -4,19 +4,24 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node src/postgres.ts && node src/sqlite.ts && node src/redis.ts",
+    "start": "node src/postgres.ts && node src/sqlite.ts && node src/mysql.ts && node src/mysql.ts --mariadb && node src/redis.ts",
     "start:postgres": "node src/postgres.ts",
     "start:sqlite": "node src/sqlite.ts",
+    "start:mysql": "node src/mysql.ts",
+    "start:mariadb": "node src/mysql.ts --mariadb",
     "start:redis": "node src/redis.ts"
   },
   "dependencies": {
+    "@queuert/mysql": "workspace:*",
     "@queuert/postgres": "workspace:*",
     "@queuert/redis": "workspace:*",
     "@queuert/sqlite": "workspace:*",
     "better-sqlite3": "13.0.3",
+    "example-state-mysql-mysql2": "workspace:*",
     "example-state-postgres-pg": "workspace:*",
     "example-state-sqlite-better-sqlite3": "workspace:*",
     "ioredis": "6.0.0",
+    "mysql2": "3.24.6",
     "pg": "8.23.1",
     "queuert": "workspace:*"
   },
@@ -25,6 +30,7 @@
     "@testcontainers/postgresql": "12.2.1",
     "@testcontainers/redis": "12.2.1",
     "@types/better-sqlite3": "9.6.0",
-    "@types/pg": "8.23.1"
+    "@types/pg": "8.23.1",
+    "testcontainers": "12.2.1"
   }
 }

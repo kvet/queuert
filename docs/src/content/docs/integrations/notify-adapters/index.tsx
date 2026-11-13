@@ -24,7 +24,7 @@ const adapters: OptionCard[] = [
   {
     name: "Redis",
     status: { label: "recommended", tone: "accent" },
-    pick: "Recommended for production. Uses Redis pub/sub, publishing each batch from one Lua script.",
+    pick: "Uses Redis pub/sub, publishing each batch from one Lua script.",
     facts: [
       { label: "Package", value: "@queuert/redis" },
       { label: "Transport", value: "pub/sub" },

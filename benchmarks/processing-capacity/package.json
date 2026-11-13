@@ -9,6 +9,8 @@
     "start:state-postgres-pg": "node src/index.ts --state-postgres-pg",
     "start:state-sqlite-better-sqlite3": "node src/index.ts --state-sqlite-better-sqlite3",
     "start:state-sqlite-node-sqlite": "node src/index.ts --state-sqlite-node-sqlite",
+    "start:state-mysql-mysql2": "node src/index.ts --state-mysql-mysql2",
+    "start:state-mariadb-mysql2": "node src/index.ts --state-mariadb-mysql2",
     "start:state-in-process": "node src/index.ts --state-in-process",
     "start:state-redis-redis": "node src/index.ts --state-redis-redis",
     "start:state-redis-ioredis": "node src/index.ts --state-redis-ioredis",
@@ -22,6 +24,7 @@
   },
   "dependencies": {
     "@nats-io/transport-node": "3.4.0",
+    "@queuert/mysql": "workspace:*",
     "@queuert/nats": "workspace:*",
     "@queuert/postgres": "workspace:*",
     "@queuert/redis": "workspace:*",
@@ -31,6 +34,7 @@
     "example-notify-postgres-postgres-js": "workspace:*",
     "example-notify-redis-ioredis": "workspace:*",
     "example-notify-redis-redis": "workspace:*",
+    "example-state-mysql-mysql2": "workspace:*",
     "example-state-postgres-pg": "workspace:*",
     "example-state-postgres-postgres-js": "workspace:*",
     "example-state-redis-ioredis": "workspace:*",
@@ -38,6 +42,7 @@
     "example-state-sqlite-better-sqlite3": "workspace:*",
     "example-state-sqlite-node-sqlite": "workspace:*",
     "ioredis": "6.0.0",
+    "mysql2": "3.24.6",
     "pg": "8.23.1",
     "postgres": "3.4.9",
     "queuert": "workspace:*",
@@ -49,6 +54,7 @@
     "@testcontainers/postgresql": "12.2.1",
     "@testcontainers/redis": "12.2.1",
     "@types/better-sqlite3": "9.6.0",
-    "@types/pg": "8.23.1"
+    "@types/pg": "8.23.1",
+    "testcontainers": "12.2.1"
   }
 }

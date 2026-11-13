@@ -66,7 +66,7 @@ const releaseMigrationLockStatement = sql(
   /* sql */ `DELETE FROM {{write_lock_table}} WHERE id = 1 AND locked_by = ?`,
   { id: "releaseMigrationLock", params: [t.string()], columns: {} },
 );
-export const takeWriteLockStatement: TypedSqlTemplate<readonly [], {}> = sql(
+export const takeWriteLockStatement: TypedSqlTemplate<readonly [], Record<string, never>> = sql(
   /* sql */ `UPDATE {{write_lock_table}} SET id = id WHERE 0`,
   {
     id: "takeWriteLock",

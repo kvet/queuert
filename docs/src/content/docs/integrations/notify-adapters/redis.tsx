@@ -16,9 +16,9 @@ const Page = () => (
   <>
     <p>
       <code>createRedisNotifyAdapter</code> uses Redis pub/sub for broadcasting job notifications to
-      workers, publishing each batch from one Lua script. Recommended for production. The notify
-      adapter stores no job state; job storage is handled by a separate{" "}
-      <A href="/integrations/state-adapters/">state adapter</A>, which can also be the experimental{" "}
+      workers, publishing each batch from one Lua script. The notify adapter stores no job state;
+      job storage is handled by a separate <A href="/integrations/state-adapters/">state adapter</A>
+      , which can also be the experimental{" "}
       <A href="/integrations/state-adapters/redis/">Redis state adapter</A>.
     </p>
 

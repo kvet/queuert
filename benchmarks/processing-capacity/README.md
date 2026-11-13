@@ -8,7 +8,7 @@ Job throughput along two independent axes: state adapter (with a noop notify ada
 
 Every completion scenario starts from the same 40,000-job queue, so only concurrency varies between them. A result prefixed with `>` drained the queue before the window ended and is a lower bound. Redis state runs also print the Redis main-thread CPU time spent per chain or job during the window.
 
-Containers (PostgreSQL, Redis, NATS) start once per run and are shared: each scenario child gets its own PostgreSQL schema, channel prefix or subject prefix. After all runs finish, the tool prints one markdown table per scenario family (creation, no-op completion), with adapters as rows grouped by axis; the docs take these numbers in `docs/src/data/benchmarks.ts`.
+Containers (PostgreSQL, MySQL, MariaDB, Redis, NATS) start once per run and are shared: each scenario child gets its own PostgreSQL schema, MySQL database, channel prefix or subject prefix. After all runs finish, the tool prints one markdown table per scenario family (creation, no-op completion), with adapters as rows grouped by axis; the docs take these numbers in `docs/src/data/benchmarks.ts`.
 
 ## Running
 
@@ -23,6 +23,8 @@ pnpm start:state-sqlite-better-sqlite3    # SQLite state via better-sqlite3
 pnpm start:state-sqlite-node-sqlite       # SQLite state via node:sqlite
 pnpm start:state-postgres-postgres-js     # PostgreSQL state via postgres-js
 pnpm start:state-postgres-pg              # PostgreSQL state via pg
+pnpm start:state-mysql-mysql2             # MySQL state via mysql2
+pnpm start:state-mariadb-mysql2           # MariaDB state via mysql2
 pnpm start:state-redis-redis              # Redis state via node-redis
 pnpm start:state-redis-ioredis            # Redis state via ioredis
 

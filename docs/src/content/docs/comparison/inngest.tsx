@@ -111,7 +111,7 @@ const Page = () => (
       </li>
       <li>
         <strong>Operational simplicity.</strong> No platform to depend on, no service to operate.
-        Your existing Postgres (or SQLite) is the entire backing store.
+        Your existing Postgres (or SQLite, or MySQL/MariaDB) is the entire backing store.
       </li>
       <li>
         <strong>Database as the system of record.</strong> Chain state lives next to your domain

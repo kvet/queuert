@@ -1,0 +1,28 @@
+{
+  "name": "example-state-mysql-mysql2",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating the MySQL state adapter with the mysql2 driver.",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "exports": {
+    "./provider": "./src/provider.ts"
+  },
+  "scripts": {
+    "start": "node src/index.ts",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/mysql": "workspace:*",
+    "@queuert/testcontainers": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
+    "mysql2": "3.24.6",
+    "queuert": "workspace:*"
+  }
+}

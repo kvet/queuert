@@ -143,3 +143,152 @@ export const extendWorkerLeaseGroup: ConformanceGroup<StateAdapterConformanceCon
     },
   ],
 };
+
+export const extendWorkerLeaseConcurrentTransactionsGroup: ConformanceGroup<StateAdapterConformanceContext> =
+  {
+    name: "extendWorkerLease",
+    cases: [
+      {
+        name: "a renewal issued while a claim of the same worker is open completes once the claim commits",
+        run: async ({ createStateAdapter }) => {
+          await using stateAdapter = await createStateAdapter();
+
+          const worker = await stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["lease-open-claim"],
+            concurrency: 1,
+            leaseMs: 60_000,
+          });
+          const [chain] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "lease-open-claim",
+                  input: null,
+                },
+              ],
+            }),
+          );
+
+          const claimed = Promise.withResolvers<void>();
+          const releaseClaim = Promise.withResolvers<void>();
+          const claimTx = stateAdapter.withTransaction(async (txCtx) => {
+            const jobs = await stateAdapter.startJobAttempts({
+              txCtx,
+              workerId: worker.id,
+              workerToken: worker.token,
+              typeNames: ["lease-open-claim"],
+              limit: 1,
+            });
+            claimed.resolve();
+            await releaseClaim.promise;
+            return jobs;
+          });
+          await claimed.promise;
+
+          const renewal = stateAdapter.extendWorkerLease({
+            workerId: worker.id,
+            workerToken: worker.token,
+            leaseMs: 120_000,
+          });
+          await sleep(100);
+          releaseClaim.resolve();
+
+          assert.deepEqual(
+            (await claimTx).map((job) => job.id),
+            [chain.head.id],
+          );
+          const renewed = await renewal;
+          assert.ok(renewed!.leaseUntil.getTime() > worker.leaseUntil.getTime());
+          const [stored] = await stateAdapter.getJobs({ jobIds: [chain.head.id] });
+          assert.equal(stored!.status, "running");
+          assert.equal(stored!.attemptBy, worker.id);
+        },
+      },
+      {
+        name: "concurrent claims, renewals and a reclaim of one worker settle without deadlock",
+        run: async ({ createStateAdapter }) => {
+          await using stateAdapter = await createStateAdapter();
+
+          const worker = await stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["lease-contention"],
+            concurrency: 1,
+            leaseMs: 60_000,
+          });
+          const chains = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: Array.from({ length: 40 }, () => ({
+                id: stateAdapter.config.generateJobId(),
+                typeName: "lease-contention",
+                input: null,
+              })),
+            }),
+          );
+          await stateAdapter.startJobAttempts({
+            workerId: worker.id,
+            workerToken: worker.token,
+            typeNames: ["lease-contention"],
+            limit: 4,
+          });
+
+          const results = await Promise.allSettled([
+            ...Array.from({ length: 8 }, async () =>
+              stateAdapter.startJobAttempts({
+                workerId: worker.id,
+                workerToken: worker.token,
+                typeNames: ["lease-contention"],
+                limit: 2,
+              }),
+            ),
+            ...Array.from({ length: 8 }, async () =>
+              stateAdapter.extendWorkerLease({
+                workerId: worker.id,
+                workerToken: worker.token,
+                leaseMs: 60_000,
+              }),
+            ),
+            stateAdapter.withTransaction(async (txCtx) => {
+              await stateAdapter.getWorkers({ txCtx, workerIds: [worker.id], lock: "exclusive" });
+              const { items } = await stateAdapter.listWorkerJobs({
+                txCtx,
+                workerId: worker.id,
+                orderDirection: "asc",
+                page: { limit: 100 },
+              });
+              const running = items.filter(
+                (job) => job.status === "running" && job.attemptBy === worker.id,
+              );
+              if (running.length === 0) return;
+              await stateAdapter.rescheduleJobs({
+                txCtx,
+                jobs: running.map((job) => ({ jobId: job.id, attemptToken: job.attemptToken! })),
+              });
+            }),
+          ]);
+          assert.deepEqual(
+            results.filter((result) => result.status === "rejected"),
+            [],
+          );
+
+          const renewed = await stateAdapter.extendWorkerLease({
+            workerId: worker.id,
+            workerToken: worker.token,
+            leaseMs: 60_000,
+          });
+          assert.ok(renewed!.leaseUntil.getTime() > worker.leaseUntil.getTime());
+          const stored = await stateAdapter.getJobs({ jobIds: chains.map((chain) => chain.id) });
+          assert.ok(
+            stored.every(
+              (job) =>
+                job!.status === "pending" ||
+                (job!.status === "running" && job!.attemptBy === worker.id),
+            ),
+          );
+        },
+      },
+    ],
+  };

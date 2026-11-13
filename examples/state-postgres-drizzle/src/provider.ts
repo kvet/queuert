@@ -28,7 +28,9 @@ export const createDrizzlePgStateProvider = <TSchema extends Record<string, unkn
 }): PgStateProvider<DrizzlePgContext<TSchema>> => {
   return {
     withTransaction: async (cb) =>
-      withTxHooks(async (txHooks) => db.transaction(async (tx) => cb({ tx, txHooks }))),
+      withTxHooks(async (txHooks) =>
+        db.transaction(async (tx) => cb({ tx, txHooks }), { isolationLevel: "read committed" }),
+      ),
     isTransaction: (txCtx) => txCtx.tx instanceof PgTransaction,
     onTransactionCommit: (txCtx, callback) => {
       txCtx.txHooks.onCommit(callback);

@@ -101,7 +101,9 @@ export const compareTools: CompareTool[] = [
     name: "Queuert",
     category: "job-chain library",
     cells: {
-      storage: { text: "Your database — PostgreSQL, SQLite, or Redis (experimental)" },
+      storage: {
+        text: "Your database — PostgreSQL, SQLite, or MySQL/MariaDB and Redis (both experimental)",
+      },
       operate: { text: "None — your existing database" },
       enqueue: { mark: "yes", text: "createChain writes in your transaction" },
       completion: { mark: "yes", text: "complete commits with your domain writes" },

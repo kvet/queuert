@@ -205,6 +205,9 @@ importers:
       '@nats-io/transport-node':
         specifier: 3.4.0
         version: 3.4.0
+      '@queuert/mysql':
+        specifier: workspace:*
+        version: link:../../packages/mysql
       '@queuert/nats':
         specifier: workspace:*
         version: link:../../packages/nats
@@ -232,6 +235,9 @@ importers:
       example-notify-redis-redis:
         specifier: workspace:*
         version: link:../../examples/notify-redis-redis
+      example-state-mysql-mysql2:
+        specifier: workspace:*
+        version: link:../../examples/state-mysql-mysql2
       example-state-postgres-pg:
         specifier: workspace:*
         version: link:../../examples/state-postgres-pg
@@ -253,6 +259,9 @@ importers:
       ioredis:
         specifier: 6.0.0
         version: 6.0.0
+      mysql2:
+        specifier: 3.24.6
+        version: 3.24.6(@types/node@24.19.1)
       pg:
         specifier: 8.23.1
         version: 8.23.1
@@ -284,9 +293,15 @@ importers:
       '@types/pg':
         specifier: 8.23.1
         version: 8.23.1
+      testcontainers:
+        specifier: 12.2.1
+        version: 12.2.1
 
   benchmarks/query-performance:
     dependencies:
+      '@queuert/mysql':
+        specifier: workspace:*
+        version: link:../../packages/mysql
       '@queuert/postgres':
         specifier: workspace:*
         version: link:../../packages/postgres
@@ -299,6 +314,9 @@ importers:
       better-sqlite3:
         specifier: 13.0.3
         version: 13.0.3
+      example-state-mysql-mysql2:
+        specifier: workspace:*
+        version: link:../../examples/state-mysql-mysql2
       example-state-postgres-pg:
         specifier: workspace:*
         version: link:../../examples/state-postgres-pg
@@ -308,6 +326,9 @@ importers:
       ioredis:
         specifier: 6.0.0
         version: 6.0.0
+      mysql2:
+        specifier: 3.24.6
+        version: 3.24.6(@types/node@24.19.1)
       pg:
         specifier: 8.23.1
         version: 8.23.1
@@ -330,6 +351,9 @@ importers:
       '@types/pg':
         specifier: 8.23.1
         version: 8.23.1
+      testcontainers:
+        specifier: 12.2.1
+        version: 12.2.1
 
   benchmarks/runtime-performance:
     dependencies:
@@ -345,6 +369,9 @@ importers:
       '@queuert/dashboard':
         specifier: workspace:*
         version: link:../../packages/dashboard
+      '@queuert/mysql':
+        specifier: workspace:*
+        version: link:../../packages/mysql
       '@queuert/nats':
         specifier: workspace:*
         version: link:../../packages/nats
@@ -381,6 +408,9 @@ importers:
       example-notify-redis-redis:
         specifier: workspace:*
         version: link:../../examples/notify-redis-redis
+      example-state-mysql-mysql2:
+        specifier: workspace:*
+        version: link:../../examples/state-mysql-mysql2
       example-state-postgres-postgres-js:
         specifier: workspace:*
         version: link:../../examples/state-postgres-postgres-js
@@ -402,6 +432,9 @@ importers:
       example-validation-zod:
         specifier: workspace:*
         version: link:../../examples/validation-zod
+      mysql2:
+        specifier: 3.24.6
+        version: 3.24.6(@types/node@24.19.1)
       pg:
         specifier: 8.23.1
         version: 8.23.1
@@ -442,6 +475,9 @@ importers:
       '@types/pg':
         specifier: 8.23.1
         version: 8.23.1
+      testcontainers:
+        specifier: 12.2.1
+        version: 12.2.1
 
   benchmarks/type-complexity:
     dependencies:
@@ -1508,6 +1544,24 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
+  examples/state-mysql-mysql2:
+    devDependencies:
+      '@queuert/mysql':
+        specifier: workspace:*
+        version: link:../../packages/mysql
+      '@queuert/testcontainers':
+        specifier: workspace:*
+        version: link:../../packages-internal/testcontainers
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages-internal/tsconfig
+      mysql2:
+        specifier: 3.24.6
+        version: 3.24.6(@types/node@24.19.1)
+      queuert:
+        specifier: workspace:*
+        version: link:../../packages/core
+
   examples/state-postgres-bun-sql:
     devDependencies:
       '@queuert/postgres':
@@ -2058,6 +2112,9 @@ importers:
       dockerode:
         specifier: 5.0.1
         version: 5.0.1
+      mysql2:
+        specifier: 3.24.6
+        version: 3.24.6(@types/node@24.19.1)
       pg:
         specifier: 8.23.1
         version: 8.23.1
@@ -2148,6 +2205,27 @@ importers:
       vite-plugin-solid:
         specifier: 2.11.15
         version: 2.11.15(solid-js@1.9.18)(vite@8.3.5(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+
+  packages/mysql:
+    devDependencies:
+      '@queuert/helpers':
+        specifier: workspace:*
+        version: link:../../packages-internal/helpers
+      '@queuert/testcontainers':
+        specifier: workspace:*
+        version: link:../../packages-internal/testcontainers
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages-internal/tsconfig
+      '@queuert/typed-sql':
+        specifier: workspace:*
+        version: link:../../packages-internal/typed-sql
+      mysql2:
+        specifier: 3.24.6
+        version: 3.24.6(@types/node@24.19.1)
+      queuert:
+        specifier: workspace:*
+        version: link:../core
 
   packages/nats:
     devDependencies:
@@ -5817,6 +5895,12 @@ packages:
     resolution: {integrity: sha512-FBrGau0IXmuqg4haEZRBfHNWB5mUARw6hNwPDXXGg0XzVJ50mr/9hb267lvpVMnhZ1FON3qNd4Xfcez1rbFwSg==}
     engines: {node: '>= 8.0'}
 
+  mysql2@3.24.6:
+    resolution: {integrity: sha512-enu73KhbAua2L3dIxjc6qg6ZJ7H3pt1BImZASWNWY5xSsmJ1ZuUPULTDGXgmJbI61vb+nJAG19IZclIq19UidQ==}
+    engines: {node: '>= 8.0'}
+    peerDependencies:
+      '@types/node': '>= 8'
+
   named-placeholders@1.1.6:
     resolution: {integrity: sha512-Tz09sEL2EEuv5fFowm419c1+a/jSMiBjI9gHxVLrVdbUkkNUUfjsVYs9pVZu5oCon/kmRh9TfLEObFtkVxmY0w==}
     engines: {node: '>=8.0.0'}
@@ -6427,6 +6511,10 @@ packages:
   split2@4.2.0:
     resolution: {integrity: sha512-UcjcJOWknrNkF6PLX83qcHM6KHgVKNkV62Y8a5uYDVv9ydGQVwAHMKqHdJje1VTWpljG0WYpCDhrCdAOYH4TWg==}
     engines: {node: '>= 10.x'}
+
+  sql-escaper@1.5.2:
+    resolution: {integrity: sha512-6CKD38c31SENivxOADeMNLdukOnUxUcflKtzVWzace7Riv1v7cAEym5Cx9Q7gYZ3ezIJI7ZpqecQq8cqNeSSFg==}
+    engines: {bun: '>=1.0.0', deno: '>=2.0.0', node: '>=12.0.0'}
 
   sqlstring@2.3.3:
     resolution: {integrity: sha512-qC9iz2FlN7DQl3+wjwn3802RTyjCx7sDvfQEXchwa6CWOx07/WVfh91gBmQ9fahw8snwGEWU3xGzOt4tFyHLxg==}
@@ -10299,6 +10387,17 @@ snapshots:
       seq-queue: 0.0.5
       sqlstring: 2.3.3
 
+  mysql2@3.24.6(@types/node@24.19.1):
+    dependencies:
+      '@types/node': 24.19.1
+      aws-ssl-profiles: 1.1.2
+      generate-function: 2.3.1
+      iconv-lite: 0.7.3
+      long: 5.3.2
+      lru.min: 1.1.5
+      named-placeholders: 1.1.6
+      sql-escaper: 1.5.2
+
   named-placeholders@1.1.6:
     dependencies:
       lru.min: 1.1.5
@@ -11067,6 +11166,8 @@ snapshots:
   split-ca@1.0.1: {}
 
   split2@4.2.0: {}
+
+  sql-escaper@1.5.2: {}
 
   sqlstring@2.3.3: {}
 

@@ -1,4 +1,9 @@
-import type { EntityManager, MikroORM, Transaction } from "@mikro-orm/postgresql";
+import {
+  type EntityManager,
+  IsolationLevel,
+  type MikroORM,
+  type Transaction,
+} from "@mikro-orm/postgresql";
 import type { PgStateProvider } from "@queuert/postgres";
 import { CompiledQuery, type Kysely } from "kysely";
 import { type TxHooks, createTxHooks } from "queuert";
@@ -70,10 +75,13 @@ export const createMikroOrmPgStateProvider = ({
     withTransaction: async (fn) => {
       let transaction: Transaction = undefined;
       try {
-        return await orm.em.transactional(async (em) => {
-          transaction = em.getTransactionContext();
-          return fn({ em });
-        });
+        return await orm.em.transactional(
+          async (em) => {
+            transaction = em.getTransactionContext();
+            return fn({ em });
+          },
+          { isolationLevel: IsolationLevel.READ_COMMITTED },
+        );
       } catch (error) {
         if (transaction !== undefined) takeSettler(transaction)?.rollback();
         throw error;

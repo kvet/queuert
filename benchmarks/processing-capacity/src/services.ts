@@ -1,8 +1,11 @@
 import { NatsContainer } from "@testcontainers/nats";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { RedisContainer } from "@testcontainers/redis";
+import { GenericContainer, Wait } from "testcontainers";
 
-export type ServiceKind = "postgres" | "redis" | "nats";
+export type ServiceKind = "postgres" | "redis" | "nats" | "mysql" | "mariadb";
+
+const MYSQL_IMAGES = { mysql: "mysql:26", mariadb: "mariadb:13" } as const;
 
 export const startService = async (
   kind: ServiceKind,
@@ -22,6 +25,29 @@ export const startService = async (
       const container = await new RedisContainer("redis:8").withExposedPorts(6379).start();
       return {
         env: { BENCHMARK_REDIS_URL: container.getConnectionUrl() },
+        stop: async () => {
+          await container.stop();
+        },
+      };
+    }
+    case "mysql":
+    case "mariadb": {
+      const container = await new GenericContainer(MYSQL_IMAGES[kind])
+        .withEnvironment({ MYSQL_ROOT_PASSWORD: "bench", MARIADB_ROOT_PASSWORD: "bench" })
+        .withCommand(["--log-bin=binlog", "--sync-binlog=1"])
+        .withExposedPorts(3306)
+        .withWaitStrategy(Wait.forLogMessage(/port: 3306/))
+        .withStartupTimeout(180_000)
+        .start();
+      return {
+        env: {
+          BENCHMARK_MYSQL_OPTIONS: JSON.stringify({
+            host: container.getHost(),
+            port: container.getMappedPort(3306),
+            user: "root",
+            password: "bench",
+          }),
+        },
         stop: async () => {
           await container.stop();
         },

@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 
-import { sleep } from "@queuert/helpers/sleep";
+import { raceWithSleep, sleep } from "@queuert/helpers/sleep";
 
 import type { ConformanceGroup } from "../../conformance/runner.ts";
 import type { StateAdapterConformanceContext } from "../types.ts";
 
 const LOCK_BLOCK_OBSERVATION_MS = 100;
+const SETTLE_BOUND_MS = 2_000;
 
 export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "startJobAttempts",
@@ -915,6 +916,141 @@ export const startJobAttemptConcurrentTransactionsGroup: ConformanceGroup<StateA
             limit: count,
           });
           assert.equal(acquiredIds.length + remaining.length, count);
+        },
+      },
+      {
+        name: "a claim in an open transaction leaves the other due jobs to a concurrent claim",
+        run: async ({ createStateAdapter }) => {
+          await using stateAdapter = await createStateAdapter();
+
+          const firstWorker = await stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["claim-footprint"],
+            concurrency: 1,
+            leaseMs: 60_000,
+          });
+          const secondWorker = await stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["claim-footprint"],
+            concurrency: 1,
+            leaseMs: 60_000,
+          });
+          const count = 10;
+          const firstLimit = 3;
+          await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: Array.from({ length: count }, (_, index) => ({
+                id: stateAdapter.config.generateJobId(),
+                typeName: "claim-footprint",
+                input: { index },
+              })),
+            }),
+          );
+
+          const firstClaimed = Promise.withResolvers<void>();
+          const releaseFirst = Promise.withResolvers<void>();
+          const firstTx = stateAdapter.withTransaction(async (txCtx) => {
+            const jobs = await stateAdapter.startJobAttempts({
+              txCtx,
+              workerId: firstWorker.id,
+              workerToken: firstWorker.token,
+              typeNames: ["claim-footprint"],
+              limit: firstLimit,
+            });
+            firstClaimed.resolve();
+            await releaseFirst.promise;
+            return jobs;
+          });
+          await firstClaimed.promise;
+
+          const secondClaim = stateAdapter.startJobAttempts({
+            workerId: secondWorker.id,
+            workerToken: secondWorker.token,
+            typeNames: ["claim-footprint"],
+            limit: count - firstLimit,
+          });
+          try {
+            assert.equal(
+              await raceWithSleep(
+                secondClaim.then(() => "settled"),
+                SETTLE_BOUND_MS,
+              ),
+              "settled",
+            );
+          } finally {
+            releaseFirst.resolve();
+          }
+
+          const firstJobs = await firstTx;
+          const secondJobs = await secondClaim;
+          assert.equal(firstJobs.length, firstLimit);
+          assert.equal(secondJobs.length, count - firstLimit);
+          const claimedIds = [...firstJobs, ...secondJobs].map((job) => job.id);
+          assert.equal(new Set(claimedIds).size, count);
+        },
+      },
+      {
+        name: "a producer does not wait on an open claim that drained the queue",
+        run: async ({ createStateAdapter }) => {
+          await using stateAdapter = await createStateAdapter();
+
+          const worker = await stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["claim-drained"],
+            concurrency: 1,
+            leaseMs: 60_000,
+          });
+          const [lastChain] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "claim-drained", input: null },
+              ],
+            }),
+          );
+
+          const claimed = Promise.withResolvers<void>();
+          const releaseClaim = Promise.withResolvers<void>();
+          const claimTx = stateAdapter.withTransaction(async (txCtx) => {
+            const jobs = await stateAdapter.startJobAttempts({
+              txCtx,
+              workerId: worker.id,
+              workerToken: worker.token,
+              typeNames: ["claim-drained"],
+              limit: 5,
+            });
+            claimed.resolve();
+            await releaseClaim.promise;
+            return jobs;
+          });
+          await claimed.promise;
+
+          const producedId = stateAdapter.config.generateJobId();
+          const produce = stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [{ id: producedId, typeName: "claim-drained", input: null }],
+            }),
+          );
+          try {
+            assert.equal(
+              await raceWithSleep(
+                produce.then(() => "settled"),
+                SETTLE_BOUND_MS,
+              ),
+              "settled",
+            );
+          } finally {
+            releaseClaim.resolve();
+          }
+
+          const [produced] = await produce;
+          const claimedIds = (await claimTx).map((job) => job.id);
+          assert.ok(claimedIds.includes(lastChain.head.id));
+          assert.equal(produced.head.id, producedId);
+          const [stored] = await stateAdapter.getJobs({ jobIds: [producedId] });
+          assert.equal(stored!.typeName, "claim-drained");
         },
       },
       {

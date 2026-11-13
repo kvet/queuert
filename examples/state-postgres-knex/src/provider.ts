@@ -32,7 +32,10 @@ export const createKnexPgStateProvider = ({
   return {
     withTransaction: async (cb) =>
       withTxHooks(async (txHooks) =>
-        knex.transaction(async (trx) => cb({ trx, txHooks }), { doNotRejectOnRollback: false }),
+        knex.transaction(async (trx) => cb({ trx, txHooks }), {
+          isolationLevel: "read committed",
+          doNotRejectOnRollback: false,
+        }),
       ),
     isTransaction: (txCtx) => txCtx.trx.isTransaction === true,
     onTransactionCommit: (txCtx, callback) => {

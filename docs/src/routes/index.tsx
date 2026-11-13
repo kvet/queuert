@@ -49,7 +49,7 @@ const features: {
   },
   {
     title: "Lives in your database",
-    body: "Postgres or SQLite. No Redis required, no workflow server, no separate persistence tier to operate.",
+    body: "Postgres, SQLite, MySQL/MariaDB or Redis. No workflow server, no separate persistence tier to operate.",
     icon: DatabaseIcon,
   },
   {
@@ -88,45 +88,54 @@ const integrations: {
   title: string;
   items: (string | { label: string; href: string })[];
   href: string;
-  customAdapter: boolean;
+  custom?: "adapter" | "provider";
 }[] = [
   {
     title: "Databases",
     items: [
       { label: "PostgreSQL", href: "/integrations/state-adapters/postgres/" },
       { label: "SQLite", href: "/integrations/state-adapters/sqlite/" },
+      { label: "MySQL / MariaDB", href: "/integrations/state-adapters/mysql/" },
       { label: "Redis", href: "/integrations/state-adapters/redis/" },
     ],
     href: "/integrations/state-adapters/",
-    customAdapter: true,
+    custom: "adapter",
   },
   {
     title: "ORMs",
     items: ["Kysely", "Drizzle", "Prisma", "Knex", "MikroORM"],
     href: "/integrations/state-adapters/",
-    customAdapter: false,
+    custom: "provider",
   },
   {
     title: "Drivers",
-    items: ["pg", "postgres.js", "node:sqlite", "better-sqlite3", "Bun.SQL", "bun:sqlite"],
+    items: [
+      "pg",
+      "postgres.js",
+      "Bun.SQL",
+      "better-sqlite3",
+      "node:sqlite",
+      "bun:sqlite",
+      "mysql2",
+    ],
     href: "/integrations/state-adapters/",
-    customAdapter: false,
+    custom: "provider",
   },
   {
     title: "Notifications",
     items: [
-      { label: "Redis", href: "/integrations/notify-adapters/redis/" },
       { label: "LISTEN/NOTIFY", href: "/integrations/notify-adapters/postgres/" },
+      { label: "Redis", href: "/integrations/notify-adapters/redis/" },
       { label: "NATS", href: "/integrations/notify-adapters/nats/" },
     ],
     href: "/integrations/notify-adapters/",
-    customAdapter: true,
+    custom: "adapter",
   },
   {
     title: "Validation",
     items: ["Zod", "ArkType", "Valibot", "TypeBox"],
     href: "/integrations/validation/",
-    customAdapter: true,
+    custom: "adapter",
   },
   {
     title: "Observability",
@@ -136,7 +145,7 @@ const integrations: {
       { label: "Dashboard", href: "/integrations/dashboard/" },
     ],
     href: "/integrations/observability/",
-    customAdapter: true,
+    custom: "adapter",
   },
 ];
 
@@ -181,14 +190,14 @@ const Home = () => (
         <div>
           <p class="font-mono inline-flex items-center gap-2 rounded-xs border border-border bg-surface px-2 py-1 text-xs text-fg-muted">
             <span class="inline-block size-2 rounded-xs bg-brand" />
-            Postgres · SQLite · zero runtime deps
+            Postgres · MySQL · SQLite · zero runtime deps
           </p>
           <h1 class="mt-6 text-3xl leading-tight font-semibold tracking-tight sm:text-4xl">
             Durable job chains that commit with your <span class="text-brand">transactions</span>.
           </h1>
           <p class="mt-5 max-w-xl text-base leading-7 text-fg-muted">
             A job-chain library that lives in your database. Chains compose like Promises, but
-            persist. No Redis required, no separate server.
+            persist. No separate server.
           </p>
           <div class="mt-8 flex flex-wrap items-center gap-3">
             <A
@@ -234,7 +243,7 @@ const Home = () => (
           <Rows columns="minmax(7rem, auto) minmax(13rem, 16rem) minmax(7rem, auto)">
             <Flow>
               <Arrow label="enqueue" sub="state adapter" />
-              <Node sub="Postgres · SQLite · your own">Your database</Node>
+              <Node sub="Postgres · MySQL · SQLite · your own">Your database</Node>
               <Arrow label="acquire · complete" sub="state adapter" reverse />
             </Flow>
             <Flow>
@@ -325,9 +334,9 @@ const Home = () => (
                   )
                 }
               </For>
-              <Show when={group.customAdapter}>
+              <Show when={group.custom}>
                 <span class="font-mono rounded-xs border border-dashed border-border-strong px-2 py-0.5 text-xs text-fg-subtle">
-                  + custom adapter
+                  + custom {group.custom}
                 </span>
               </Show>
             </Box>

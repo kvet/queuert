@@ -16,6 +16,7 @@ const sourceOf = (name: string): string =>
 
 const containerHelpers: Record<ExampleService, RegExp> = {
   PostgreSQL: /\bacquirePostgres\(/,
+  MySQL: /\bacquireMysql\(/,
   Redis: /\bacquireRedis\(/,
   "Redis Cluster": /\bacquireRedisCluster\(/,
   NATS: /\bacquireNats\(/,

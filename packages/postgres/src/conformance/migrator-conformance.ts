@@ -2,6 +2,7 @@ import {
   type MigratorConformanceContext,
   migrationStoreBaseGroups,
   migrationStoreLeaseGroups,
+  migrationStoreTransactionalDdlGroups,
 } from "@queuert/typed-sql";
 import type { ConformanceTestCase } from "queuert/conformance";
 import { type ConformanceGroup, toConformanceTestCases } from "queuert/conformance-internal";
@@ -19,6 +20,7 @@ export type PgMigratorConformanceContext = MigratorConformanceContext;
 
 export const pgMigratorConformanceGroups: ConformanceGroup<PgMigratorConformanceContext>[] = [
   ...migrationStoreBaseGroups,
+  ...migrationStoreTransactionalDdlGroups,
   ...migrationStoreLeaseGroups,
 ];
 

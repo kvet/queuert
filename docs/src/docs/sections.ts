@@ -51,6 +51,19 @@ export const apiPackages = [
     summary: "Conformance cases for SQLite providers.",
   },
   {
+    label: "@queuert/mysql",
+    dir: "mysql",
+    slug: "mysql",
+    summary: "MySQL and MariaDB state adapter.",
+  },
+  {
+    label: "@queuert/mysql/conformance",
+    dir: "mysql",
+    slug: "mysql-conformance",
+    entry: "src/conformance.ts",
+    summary: "Conformance cases for MySQL and MariaDB providers.",
+  },
+  {
     label: "@queuert/redis",
     dir: "redis",
     slug: "redis",
@@ -93,9 +106,12 @@ export const siteSections: SiteSection[] = [
         ],
       },
       {
+        label: "Building Blocks",
+        slugs: ["guides/tx-hooks", "guides/application-migrations"],
+      },
+      {
         label: "Guides",
         slugs: [
-          "guides/tx-hooks",
           "guides/chain-patterns",
           "guides/job-blockers",
           "guides/error-handling",
@@ -112,7 +128,6 @@ export const siteSections: SiteSection[] = [
           "guides/prioritization",
           "guides/middleware",
           "guides/runtime-validation",
-          "guides/application-migrations",
         ],
       },
       {
@@ -139,6 +154,7 @@ export const siteSections: SiteSection[] = [
           "integrations/state-adapters",
           "integrations/state-adapters/postgres",
           "integrations/state-adapters/sqlite",
+          "integrations/state-adapters/mysql",
           "integrations/state-adapters/redis",
           "integrations/state-adapters/custom",
         ],

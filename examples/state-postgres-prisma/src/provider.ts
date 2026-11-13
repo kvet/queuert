@@ -11,7 +11,10 @@ type PrismaDriverAdapterError = {
 };
 
 export type PrismaLikeClient = {
-  $transaction: <T>(fn: (prisma: any) => Promise<T>) => Promise<T>;
+  $transaction: <T>(
+    fn: (prisma: any) => Promise<T>,
+    options: { isolationLevel: "ReadCommitted" },
+  ) => Promise<T>;
   $queryRawUnsafe: (sql: string, ...params: unknown[]) => Promise<unknown[]>;
   $executeRawUnsafe: (sql: string, ...params: unknown[]) => Promise<unknown>;
 };
@@ -26,7 +29,9 @@ export const createPrismaPgStateProvider = <TPrisma extends PrismaLikeClient>({
   return {
     withTransaction: async (cb) =>
       withTxHooks(async (txHooks) =>
-        prisma.$transaction(async (prisma: TPrisma) => cb({ prisma, txHooks })),
+        prisma.$transaction(async (prisma: TPrisma) => cb({ prisma, txHooks }), {
+          isolationLevel: "ReadCommitted",
+        }),
       ),
     // Prisma hides `$connect` on the interactive transaction client.
     isTransaction: (txCtx) => !("$connect" in txCtx.prisma),

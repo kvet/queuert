@@ -3,6 +3,7 @@ import { type KeyValueItem, KeyValueList } from "../../../components/KeyValueLis
 import { Code } from "../../../components/mdx/Code.tsx";
 import {
   benchmarkContainers,
+  benchmarkServers,
   benchmarkMachine,
   benchmarkSourceUrl,
   chainJobsGroups,
@@ -15,14 +16,16 @@ import {
 
 export const meta = {
   title: "Query Performance",
-  description: "Median latency of every state-adapter query on PostgreSQL and SQLite.",
+  description:
+    "Median latency of every state-adapter query on PostgreSQL, SQLite, MySQL, MariaDB and Redis.",
 };
 
-const series = ["PostgreSQL", "SQLite"];
+const series = ["PostgreSQL", "SQLite", "MySQL", "MariaDB", "Redis"];
 
 const setup = [
   ...benchmarkMachine,
   benchmarkContainers,
+  benchmarkServers,
   { label: "Runs", value: "10 per method", note: "The charts show the median (p50)." },
   {
     label: "Dataset",
@@ -31,11 +34,25 @@ const setup = [
   },
   { label: "PostgreSQL", value: "pg driver, after ANALYZE" },
   { label: "SQLite", value: "In memory through better-sqlite3, after ANALYZE" },
+  {
+    label: "MySQL",
+    value: "mysql2 driver, after ANALYZE TABLE",
+    note: "1 GB InnoDB buffer pool: InnoDB reads with O_DIRECT, so it has no OS page cache to fall back on.",
+  },
+  {
+    label: "MariaDB",
+    value: "mysql2 driver, after ANALYZE TABLE",
+    note: "1 GB InnoDB buffer pool.",
+  },
+  { label: "Redis", value: "ioredis driver" },
 ] satisfies KeyValueItem[];
 
 const Page = () => (
   <>
-    <p>Every state-adapter method runs against the same seeded dataset on PostgreSQL and SQLite.</p>
+    <p>
+      Every state-adapter method runs against the same seeded dataset on PostgreSQL, SQLite, MySQL,
+      MariaDB and Redis.
+    </p>
     <KeyValueList title="Test setup" items={setup} />
     <h2 id="operational-queries">Operational queries</h2>
     <p>
@@ -94,12 +111,15 @@ const Page = () => (
     <h2 id="reproduce">Reproduce</h2>
     <p>
       From <a href={benchmarkSourceUrl("query-performance")}>benchmarks/query-performance</a>, with
-      Docker running for PostgreSQL. Each run also writes the query plans to{" "}
-      <code>explanations/</code>.
+      Docker running for PostgreSQL, MySQL, MariaDB and Redis. Each run also writes the query plans
+      to <code>explanations/</code>.
     </p>
     <Code lang="bash">{`
       pnpm --filter benchmark-query-performance start:postgres
       pnpm --filter benchmark-query-performance start:sqlite
+      pnpm --filter benchmark-query-performance start:mysql
+      pnpm --filter benchmark-query-performance start:mariadb
+      pnpm --filter benchmark-query-performance start:redis
     `}</Code>
   </>
 );

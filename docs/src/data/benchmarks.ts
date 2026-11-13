@@ -5,24 +5,26 @@ export const creationGroups = [
   {
     label: "State adapter (noop notify)",
     rows: [
-      { label: "In-process", values: [96052, 208109] },
-      { label: "SQLite (better-sqlite3)", values: [27343, 89788] },
-      { label: "SQLite (node:sqlite)", values: [24464, 74792] },
-      { label: "PostgreSQL (postgres-js)", values: [983, 31323] },
-      { label: "PostgreSQL (pg)", values: [970, 27032] },
-      { label: "Redis (redis)", values: [3193, 26070] },
-      { label: "Redis (ioredis)", values: [3381, 24766] },
+      { label: "In-process", values: [153616, 272621] },
+      { label: "SQLite (better-sqlite3)", values: [36376, 92712] },
+      { label: "SQLite (node:sqlite)", values: [33090, 78886] },
+      { label: "PostgreSQL (postgres-js)", values: [992, 26705] },
+      { label: "PostgreSQL (pg)", values: [891, 25693] },
+      { label: "MySQL (mysql2)", values: [484, 11558] },
+      { label: "MariaDB (mysql2)", values: [434, 13974] },
+      { label: "Redis (redis)", values: [2945, 24985] },
+      { label: "Redis (ioredis)", values: [2895, 24132] },
     ],
   },
   {
     label: "Notify adapter (in-process state)",
     rows: [
-      { label: "In-process", values: [94345, 212810] },
-      { label: "Redis (redis)", values: [4805, 131614] },
-      { label: "Redis (ioredis)", values: [4911, 140549] },
-      { label: "PostgreSQL (pg)", values: [4074, 122811] },
-      { label: "PostgreSQL (postgres-js)", values: [2955, 111980] },
-      { label: "NATS", values: [3597, 124628] },
+      { label: "In-process", values: [150888, 277786] },
+      { label: "Redis (redis)", values: [4756, 138729] },
+      { label: "Redis (ioredis)", values: [4300, 131519] },
+      { label: "PostgreSQL (pg)", values: [3035, 127833] },
+      { label: "PostgreSQL (postgres-js)", values: [4064, 129686] },
+      { label: "NATS", values: [4204, 123552] },
     ],
   },
 ] satisfies BenchGroup[];
@@ -31,24 +33,26 @@ export const completionGroups = [
   {
     label: "State adapter (noop notify)",
     rows: [
-      { label: "In-process", values: [5469, 5640, 5986] },
-      { label: "SQLite (better-sqlite3)", values: [4787, 6191, 9312] },
-      { label: "SQLite (node:sqlite)", values: [4555, 5711, 8986] },
-      { label: "PostgreSQL (postgres-js)", values: [367, 1256, 2090] },
-      { label: "PostgreSQL (pg)", values: [383, 1350, 2416] },
-      { label: "Redis (redis)", values: [903, 2684, 5144] },
-      { label: "Redis (ioredis)", values: [1076, 2644, 6310] },
+      { label: "In-process", values: [5472, 5828, 6060] },
+      { label: "SQLite (better-sqlite3)", values: [12801, 12802, 15780] },
+      { label: "SQLite (node:sqlite)", values: [11127, 11076, 13295] },
+      { label: "PostgreSQL (postgres-js)", values: [481, 1274, 2280] },
+      { label: "PostgreSQL (pg)", values: [464, 1333, 2666] },
+      { label: "MySQL (mysql2)", values: [177, 490, 1293] },
+      { label: "MariaDB (mysql2)", values: [182, 459, 1289] },
+      { label: "Redis (redis)", values: [940, 2436, 4576] },
+      { label: "Redis (ioredis)", values: [1151, 2891, 6873] },
     ],
   },
   {
     label: "Notify adapter (in-process state)",
     rows: [
-      { label: "In-process", values: [5387, 5649, 5988] },
-      { label: "Redis (redis)", values: [1074, 2274, 3855] },
-      { label: "Redis (ioredis)", values: [1168, 4405, 4580] },
-      { label: "PostgreSQL (pg)", values: [978, 4004, 4090] },
-      { label: "PostgreSQL (postgres-js)", values: [879, 3713, 3514] },
-      { label: "NATS", values: [1856, 3629, 4352] },
+      { label: "In-process", values: [5839, 5927, 5964] },
+      { label: "Redis (redis)", values: [941, 2056, 3624] },
+      { label: "Redis (ioredis)", values: [1098, 4742, 4572] },
+      { label: "PostgreSQL (pg)", values: [689, 3447, 4005] },
+      { label: "PostgreSQL (postgres-js)", values: [835, 4067, 4046] },
+      { label: "NATS", values: [1988, 4737, 4507] },
     ],
   },
 ] satisfies BenchGroup[];
@@ -56,13 +60,16 @@ export const completionGroups = [
 export const memoryGroups = [
   {
     rows: [
-      { label: "notify-redis", values: [80, 255, 10, 60] },
-      { label: "notify-postgres", values: [505, 710, 10, 80] },
-      { label: "notify-nats", values: [455, 590, 10, 40] },
-      { label: "state-sqlite", values: [455, 540, 10, 80] },
-      { label: "state-postgres", values: [490, 640, 20, 80] },
-      { label: "dashboard", values: [640, 820, 10, 65] },
-      { label: "otel", values: [250, 435, 10, 85] },
+      { label: "notify-redis", values: [65, 280, 20, 125] },
+      { label: "notify-postgres", values: [75, 280, 15, 115] },
+      { label: "notify-nats", values: [75, 250, 0, 80] },
+      { label: "state-sqlite", values: [110, 165, 0, 95] },
+      { label: "state-postgres", values: [55, 105, 15, 15] },
+      { label: "state-mysql", values: [70, 185, 20, 75] },
+      { label: "state-mariadb", values: [70, 180, 20, 75] },
+      { label: "state-redis", values: [105, 240, 15, 160] },
+      { label: "dashboard", values: [100, 255, 30, 115] },
+      { label: "otel", values: [90, 255, 25, 95] },
     ],
   },
 ] satisfies BenchGroup[];
@@ -70,14 +77,16 @@ export const memoryGroups = [
 export const cpuGroups = [
   {
     rows: [
-      { label: "notify-redis", values: [202, 5, 52, 292] },
-      { label: "notify-postgres", values: [252, 5, 149, 356] },
-      { label: "notify-nats", values: [188, 4, 39, 226] },
-      { label: "state-sqlite", values: [97, 56, 23, 361] },
-      { label: "state-postgres", values: [419, 214, 752, 1375] },
-      { label: "state-redis", values: [99, 259, 80, 260] },
-      { label: "dashboard", values: [96, 0, 0, 64] },
-      { label: "otel", values: [115, 1, 15, 72] },
+      { label: "notify-redis", values: [123, 12, 44, 146] },
+      { label: "notify-postgres", values: [107, 12, 76, 138] },
+      { label: "notify-nats", values: [88, 9, 26, 91] },
+      { label: "state-sqlite", values: [29, 17, 2, 99] },
+      { label: "state-postgres", values: [100, 40, 208, 254] },
+      { label: "state-mysql", values: [92, 122, 367, 440] },
+      { label: "state-mariadb", values: [93, 113, 346, 436] },
+      { label: "state-redis", values: [66, 211, 47, 165] },
+      { label: "dashboard", values: [46, 0, 0, 16] },
+      { label: "otel", values: [61, 0, 12, 25] },
     ],
   },
 ] satisfies BenchGroup[];
@@ -85,14 +94,16 @@ export const cpuGroups = [
 export const allocationGroups = [
   {
     rows: [
-      { label: "notify-redis", values: [120.3] },
-      { label: "notify-postgres", values: [122.7] },
-      { label: "notify-nats", values: [110.0] },
-      { label: "state-sqlite", values: [134.8] },
-      { label: "state-postgres", values: [183.8] },
-      { label: "state-redis", values: [208.0] },
-      { label: "dashboard", values: [87.0] },
-      { label: "otel", values: [99.2] },
+      { label: "notify-redis", values: [84.5] },
+      { label: "notify-postgres", values: [86.7] },
+      { label: "notify-nats", values: [73.7] },
+      { label: "state-sqlite", values: [62.5] },
+      { label: "state-postgres", values: [135.3] },
+      { label: "state-mysql", values: [243.3] },
+      { label: "state-mariadb", values: [241.8] },
+      { label: "state-redis", values: [226.1] },
+      { label: "dashboard", values: [54.4] },
+      { label: "otel", values: [68.2] },
     ],
   },
 ] satisfies BenchGroup[];
@@ -101,12 +112,12 @@ export const validationCpuGroups = [
   {
     rows: [
       { label: "defineJobTypes", values: [0] },
-      { label: "Zod", values: [0.2] },
-      { label: "Valibot", values: [10.5] },
-      { label: "TypeBox", values: [0.1] },
-      { label: "ArkType", values: [0.4] },
+      { label: "Zod", values: [0.1] },
+      { label: "Valibot", values: [9.2] },
+      { label: "TypeBox", values: [0] },
+      { label: "ArkType", values: [0.1] },
       { label: "Zod codec", values: [3.9] },
-      { label: "superjson codec", values: [37.7] },
+      { label: "superjson codec", values: [38.5] },
     ],
   },
 ] satisfies BenchGroup[];
@@ -114,13 +125,13 @@ export const validationCpuGroups = [
 export const validationAllocationGroups = [
   {
     rows: [
-      { label: "defineJobTypes", values: [51.4] },
-      { label: "Zod", values: [53.4] },
-      { label: "Valibot", values: [59.7] },
-      { label: "TypeBox", values: [52.2] },
-      { label: "ArkType", values: [52.6] },
-      { label: "Zod codec", values: [57.3] },
-      { label: "superjson codec", values: [85.8] },
+      { label: "defineJobTypes", values: [54.3] },
+      { label: "Zod", values: [55.8] },
+      { label: "Valibot", values: [63.0] },
+      { label: "TypeBox", values: [55.4] },
+      { label: "ArkType", values: [55.5] },
+      { label: "Zod codec", values: [60.6] },
+      { label: "superjson codec", values: [88.3] },
     ],
   },
 ] satisfies BenchGroup[];
@@ -231,28 +242,28 @@ export const typeGroups = [
 export const operationalGroups = [
   {
     rows: [
-      { label: "getChains/default", values: [0.84, 0.18] },
-      { label: "getChains/lock", values: [1.76, 0.13] },
-      { label: "getJobs/default", values: [0.79, 0.06] },
-      { label: "getJobs/lock", values: [1.58, 0.09] },
-      { label: "getWorkers/default", values: [0.51, 0.05] },
-      { label: "getWorkers/lock", values: [1.38, 0.06] },
-      { label: "createJobs/default", values: [2.72, 0.13] },
-      { label: "createJobs/deduplication", values: [2.02, 0.05] },
-      { label: "continueJobs/default", values: [2.19, 0.26] },
-      { label: "addJobsBlockers/default", values: [4.45, 0.2] },
-      { label: "getJobBlockers/default", values: [1.37, 0.19] },
-      { label: "unblockJobs/default", values: [4.1, 0.29] },
-      { label: "startWorker/default", values: [0.63, 0.03] },
-      { label: "extendWorkerLease/default", values: [0.63, 0.04] },
-      { label: "stopWorker/default", values: [0.58, 0.03] },
-      { label: "startJobAttempts/default", values: [1.32, 0.28] },
-      { label: "startJobAttempts/limit10", values: [2.15, 0.5] },
-      { label: "completeJobs/default", values: [2.46, 0.36] },
-      { label: "getStartAttemptDelayMs/default", values: [2.41, 0.04] },
-      { label: "rescheduleJobs/default", values: [2.59, 0.14] },
-      { label: "deleteChains/default", values: [5.4, 0.25] },
-      { label: "deleteChains/multiJob", values: [3.8, 0.27] },
+      { label: "getChains/default", values: [3.16, 0.12, 1.75, 0.6, 0.92] },
+      { label: "getChains/lock", values: [7.28, 0.1, 2.28, 1.52, 0.86] },
+      { label: "getJobs/default", values: [2.58, 0.06, 0.38, 0.42, 0.35] },
+      { label: "getJobs/lock", values: [7.12, 0.06, 1.02, 0.99, 0.41] },
+      { label: "getWorkers/default", values: [0.85, 0.04, 0.33, 0.29, 0.23] },
+      { label: "getWorkers/lock", values: [2.1, 0.05, 1.15, 0.92, 0.29] },
+      { label: "createJobs/default", values: [5.39, 0.13, 2.18, 2.49, 0.55] },
+      { label: "createJobs/deduplication", values: [3.19, 0.1, 1.09, 1.55, 1.08] },
+      { label: "continueJobs/default", values: [4.33, 0.28, 14.66, 3.01, 1.02] },
+      { label: "addJobsBlockers/default", values: [6.52, 0.26, 2.79, 2.89, 0.89] },
+      { label: "getJobBlockers/default", values: [1.58, 0.17, 0.32, 0.42, 0.86] },
+      { label: "unblockJobs/default", values: [4.69, 0.27, 1.44, 3.07, 0.7] },
+      { label: "startWorker/default", values: [1.5, 0.04, 1.31, 1.85, 0.43] },
+      { label: "extendWorkerLease/default", values: [1.17, 0.04, 2.09, 2.06, 0.51] },
+      { label: "stopWorker/default", values: [1.6, 0.03, 2.46, 1.76, 0.5] },
+      { label: "startJobAttempts/default", values: [3.36, 0.14, 3.74, 2.49, 0.29] },
+      { label: "startJobAttempts/limit10", values: [3.96, 0.25, 3.98, 3.04, 0.66] },
+      { label: "completeJobs/default", values: [3.13, 0.37, 2.57, 2.6, 0.69] },
+      { label: "getStartAttemptDelayMs/default", values: [1.86, 0.04, 1.02, 1.81, 0.91] },
+      { label: "rescheduleJobs/default", values: [3.36, 0.13, 2.47, 3, 0.48] },
+      { label: "deleteChains/default", values: [5.62, 0.26, 3.89, 3.63, 1.13] },
+      { label: "deleteChains/multiJob", values: [3.53, 0.27, 7.04, 3.43, 1.58] },
     ],
   },
 ] satisfies BenchGroup[];
@@ -260,13 +271,13 @@ export const operationalGroups = [
 export const discoveryGroups = [
   {
     rows: [
-      { label: "getChainTypeNames/default", values: [0.82, 0.06] },
-      { label: "getJobTypeNames/default", values: [0.7, 0.05] },
-      { label: "countChainsByTypeName/default", values: [3.14, 1.35] },
-      { label: "countJobsByTypeName/default", values: [4.3, 1.38] },
-      { label: "countWorkers/default", values: [0.87, 0.03] },
-      { label: "countWorkersByTypeName/default", values: [1.1, 0.06] },
-      { label: "countRunningJobsByWorkerId/default", values: [1.68, 0.03] },
+      { label: "getChainTypeNames/default", values: [1.29, 0.06, 0.8, 0.38, 0.31] },
+      { label: "getJobTypeNames/default", values: [0.95, 0.05, 0.45, 0.3, 0.25] },
+      { label: "countChainsByTypeName/default", values: [2.86, 1.26, 7.95, 9.41, 0.23] },
+      { label: "countJobsByTypeName/default", values: [3.49, 1.28, 7.88, 9.22, 0.23] },
+      { label: "countWorkers/default", values: [0.75, 0.03, 0.33, 0.37, 0.27] },
+      { label: "countWorkersByTypeName/default", values: [0.68, 0.06, 0.5, 0.41, 0.29] },
+      { label: "countRunningJobsByWorkerId/default", values: [1.02, 0.04, 0.56, 0.27, 0.21] },
     ],
   },
 ] satisfies BenchGroup[];
@@ -275,33 +286,45 @@ export const listChainsGroups = [
   {
     label: "No status filter",
     rows: [
-      { label: "listChains/noStatus/default", values: [46.64, 0.44] },
-      { label: "listChains/noStatus/independent", values: [63.68, 0.53] },
-      { label: "listChains/noStatus/nonIndependent", values: [92.45, 94.12] },
-      { label: "listChains/noStatus/fromTo", values: [46.63, 0.45] },
-      { label: "listChains/noStatus/cursor", values: [96.43, 0.84] },
+      { label: "listChains/noStatus/default", values: [24.09, 0.48, 1.07, 1.3, 1.09] },
+      { label: "listChains/noStatus/independent", values: [85.15, 0.53, 1.23, 1.19, 2.41] },
+      {
+        label: "listChains/noStatus/nonIndependent",
+        values: [101.65, 114.71, 160.34, 156.3, 49.42],
+      },
+      { label: "listChains/noStatus/fromTo", values: [23.04, 0.52, 1.42, 1.02, 1.44] },
+      { label: "listChains/noStatus/cursor", values: [50.81, 0.84, 2.83, 1.73, 2.73] },
     ],
   },
   {
     label: "Running",
     rows: [
-      { label: "listChains/running/default", values: [8.95, 0.43] },
-      { label: "listChains/running/independent", values: [119.45, 0.54] },
-      { label: "listChains/running/nonIndependent", values: [23.78, 16.78] },
-      { label: "listChains/running/cursor", values: [18.58, 0.88] },
+      { label: "listChains/running/default", values: [4.91, 0.47, 1.74, 0.92, 1.31] },
+      { label: "listChains/running/independent", values: [117.67, 0.78, 2.09, 1.13, 2.54] },
+      { label: "listChains/running/nonIndependent", values: [25.02, 30.05, 72.09, 68.69, 45.65] },
+      { label: "listChains/running/cursor", values: [11.19, 0.94, 3.36, 2.49, 2.72] },
     ],
   },
   {
     label: "Completed",
     rows: [
-      { label: "listChains/completed/default", values: [21.72, 0.45] },
-      { label: "listChains/completed/independent", values: [38.89, 0.55] },
-      { label: "listChains/completed/nonIndependent", values: [62.43, 42.4] },
-      { label: "listChains/completed/orderByCreatedAt", values: [21.89, 0.68] },
-      { label: "listChains/completed/orderByCompletedAt", values: [22.26, 0.56] },
-      { label: "listChains/completed/cursor", values: [45.75, 0.9] },
-      { label: "listChains/completed/orderByCreatedAtCursor", values: [45.53, 0.96] },
-      { label: "listChains/completed/orderByCompletedAtCursor", values: [46.36, 0.86] },
+      { label: "listChains/completed/default", values: [11.95, 0.48, 1.32, 1.35, 1.14] },
+      { label: "listChains/completed/independent", values: [37.48, 0.61, 1.27, 0.98, 1.94] },
+      {
+        label: "listChains/completed/nonIndependent",
+        values: [60.25, 54.93, 159.95, 131.05, 43.86],
+      },
+      { label: "listChains/completed/orderByCreatedAt", values: [14.46, 0.51, 1.22, 1.66, 1.4] },
+      { label: "listChains/completed/orderByCompletedAt", values: [13.57, 0.51, 1.28, 1.47, 1.09] },
+      { label: "listChains/completed/cursor", values: [29.14, 0.93, 1.72, 2.7, 2.5] },
+      {
+        label: "listChains/completed/orderByCreatedAtCursor",
+        values: [29.34, 0.95, 2.42, 2.51, 2.18],
+      },
+      {
+        label: "listChains/completed/orderByCompletedAtCursor",
+        values: [28.72, 1.2, 2.55, 2.42, 2.07],
+      },
     ],
   },
 ] satisfies BenchGroup[];
@@ -310,43 +333,43 @@ export const listJobsGroups = [
   {
     label: "No status filter",
     rows: [
-      { label: "listJobs/noStatus/default", values: [54.52, 0.37] },
-      { label: "listJobs/noStatus/fromTo", values: [47.72, 0.35] },
-      { label: "listJobs/noStatus/cursor", values: [102.67, 0.68] },
+      { label: "listJobs/noStatus/default", values: [26.31, 0.4, 0.77, 0.56, 0.8] },
+      { label: "listJobs/noStatus/fromTo", values: [29.24, 0.42, 0.66, 0.61, 0.66] },
+      { label: "listJobs/noStatus/cursor", values: [59.97, 0.69, 0.99, 1.05, 1.61] },
     ],
   },
   {
     label: "Pending",
     rows: [
-      { label: "listJobs/pending/default", values: [46.13, 0.33] },
-      { label: "listJobs/pending/fromTo", values: [46.25, 0.38] },
-      { label: "listJobs/pending/orderByCreatedAt", values: [50.3, 0.35] },
-      { label: "listJobs/pending/cursor", values: [96.99, 0.66] },
+      { label: "listJobs/pending/default", values: [23.94, 0.34, 0.44, 0.45, 0.88] },
+      { label: "listJobs/pending/fromTo", values: [27.69, 0.36, 0.45, 0.44, 0.97] },
+      { label: "listJobs/pending/orderByCreatedAt", values: [36, 0.34, 0.51, 0.49, 0.85] },
+      { label: "listJobs/pending/cursor", values: [55.79, 0.65, 0.87, 1.27, 3.54] },
     ],
   },
   {
     label: "Blocked",
     rows: [
-      { label: "listJobs/blocked/default", values: [32.09, 0.35] },
-      { label: "listJobs/blocked/fromTo", values: [31.37, 0.36] },
-      { label: "listJobs/blocked/orderByCreatedAt", values: [33.11, 0.35] },
-      { label: "listJobs/blocked/cursor", values: [64.4, 0.65] },
+      { label: "listJobs/blocked/default", values: [20.15, 0.36, 0.45, 0.79, 1.4] },
+      { label: "listJobs/blocked/fromTo", values: [16.64, 0.35, 0.45, 0.84, 1.12] },
+      { label: "listJobs/blocked/orderByCreatedAt", values: [20.75, 0.36, 0.48, 0.88, 0.98] },
+      { label: "listJobs/blocked/cursor", values: [36.48, 0.67, 0.82, 1.02, 2.4] },
     ],
   },
   {
     label: "Running",
     rows: [
-      { label: "listJobs/running/default", values: [9.03, 0.34] },
-      { label: "listJobs/running/orderByCreatedAt", values: [11.14, 0.35] },
-      { label: "listJobs/running/cursor", values: [20.12, 0.68] },
+      { label: "listJobs/running/default", values: [5.89, 0.36, 0.46, 0.52, 1] },
+      { label: "listJobs/running/orderByCreatedAt", values: [6.13, 0.36, 0.53, 0.49, 0.85] },
+      { label: "listJobs/running/cursor", values: [13.42, 0.7, 1.15, 0.78, 1.85] },
     ],
   },
   {
     label: "Completed",
     rows: [
-      { label: "listJobs/completed/default", values: [23.53, 0.36] },
-      { label: "listJobs/completed/orderByCreatedAt", values: [26.56, 0.36] },
-      { label: "listJobs/completed/cursor", values: [46.96, 0.66] },
+      { label: "listJobs/completed/default", values: [12.49, 0.38, 0.93, 0.45, 0.97] },
+      { label: "listJobs/completed/orderByCreatedAt", values: [13.98, 0.38, 0.74, 0.9, 0.97] },
+      { label: "listJobs/completed/cursor", values: [28.18, 0.73, 1.23, 1.78, 2.3] },
     ],
   },
 ] satisfies BenchGroup[];
@@ -354,10 +377,10 @@ export const listJobsGroups = [
 export const chainJobsGroups = [
   {
     rows: [
-      { label: "listChainJobs/default", values: [2.64, 0.47] },
-      { label: "listChainJobs/cursor", values: [4.33, 0.92] },
-      { label: "listBlockedJobs/default", values: [213.07, 193.56] },
-      { label: "listBlockedJobs/cursor", values: [387.94, 393.46] },
+      { label: "listChainJobs/default", values: [2.02, 0.68, 0.57, 2.07, 1.81] },
+      { label: "listChainJobs/cursor", values: [4.16, 2.22, 0.82, 3.76, 1.89] },
+      { label: "listBlockedJobs/default", values: [146.45, 209.54, 204.77, 223.36, 1.55] },
+      { label: "listBlockedJobs/cursor", values: [329.1, 384, 395.7, 456.17, 2.3] },
     ],
   },
 ] satisfies BenchGroup[];
@@ -365,12 +388,12 @@ export const chainJobsGroups = [
 export const workerGroups = [
   {
     rows: [
-      { label: "listWorkers/default", values: [0.89, 0.12] },
-      { label: "listWorkers/typeName", values: [1.09, 0.08] },
-      { label: "listWorkers/status", values: [0.77, 0.08] },
-      { label: "listWorkers/cursor", values: [1.46, 0.2] },
-      { label: "listWorkerJobs/default", values: [1.52, 0.24] },
-      { label: "listWorkerJobs/cursor", values: [2.32, 0.41] },
+      { label: "listWorkers/default", values: [0.78, 0.13, 0.42, 0.73, 0.78] },
+      { label: "listWorkers/typeName", values: [0.61, 0.08, 0.34, 1.13, 0.51] },
+      { label: "listWorkers/status", values: [0.46, 0.08, 0.29, 0.66, 2.86] },
+      { label: "listWorkers/cursor", values: [1.08, 0.22, 0.72, 1.24, 1.65] },
+      { label: "listWorkerJobs/default", values: [0.98, 0.23, 0.5, 0.61, 0.52] },
+      { label: "listWorkerJobs/cursor", values: [1.83, 0.48, 0.83, 0.82, 1.08] },
     ],
   },
 ] satisfies BenchGroup[];
@@ -384,6 +407,11 @@ export const benchmarkContainers = {
   label: "Infrastructure",
   value: "Docker Desktop on macOS",
   note: "Databases and pub/sub servers run in containers, so every round trip crosses the VM bridge.",
+} satisfies KeyValueItem;
+
+export const benchmarkServers = {
+  label: "Servers",
+  value: "PostgreSQL 18, SQLite 3.53, MySQL 26, MariaDB 13, Redis 8, NATS 2",
 } satisfies KeyValueItem;
 
 export const benchmarkSourceUrl = (suite: string) =>

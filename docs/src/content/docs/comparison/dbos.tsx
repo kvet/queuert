@@ -110,8 +110,9 @@ const Page = () => (
         adapter ship as open-source packages.
       </li>
       <li>
-        <strong>More storage and wakeup options.</strong> Postgres, SQLite, or Redis (experimental),
-        and workers that wake on <code>LISTEN/NOTIFY</code>, Redis, or NATS.
+        <strong>More storage and wakeup options.</strong> Postgres, SQLite, or MySQL/MariaDB and
+        Redis (both experimental), and workers that wake on <code>LISTEN/NOTIFY</code>, Redis, or
+        NATS.
       </li>
     </ul>
     <h2>Differences worth knowing about</h2>
@@ -187,7 +188,7 @@ const Page = () => (
         application database.
       </li>
       <li>You want recovery, a dashboard, and telemetry without a paid tier.</li>
-      <li>You run on SQLite, or wake workers through Redis or NATS.</li>
+      <li>You run on MySQL, MariaDB or SQLite, or wake workers through Redis or NATS.</li>
     </ul>
   </>
 );

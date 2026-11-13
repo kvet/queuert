@@ -1,4 +1,5 @@
 export { acquireNats, type AcquiredNats, type NatsConnectionOptions } from "./nats.ts";
+export { acquireMysql, type AcquiredMysql, type MysqlConnectionOptions } from "./mysql.ts";
 export { acquirePostgres, type AcquiredPostgres } from "./postgres.ts";
 export { acquireRedis, type AcquiredRedis } from "./redis.ts";
 export {

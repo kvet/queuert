@@ -289,6 +289,10 @@ const Page = () => (
 
     <h2>Install</h2>
     <Code lang="bash">{`npm install @queuert/redis`}</Code>
+    <p>
+      Requires Redis 6 or later, standalone or Redis Cluster. <code>migrateToLatest()</code> checks
+      the version.
+    </p>
 
     <h2>Setup</h2>
     <p>

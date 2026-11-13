@@ -12,7 +12,10 @@ export const createKyselyPgStateProvider = <TDatabase>({
   return {
     withTransaction: async (cb) =>
       withTxHooks(async (txHooks) =>
-        db.transaction().execute(async (txDb) => cb({ db: txDb, txHooks })),
+        db
+          .transaction()
+          .setIsolationLevel("read committed")
+          .execute(async (txDb) => cb({ db: txDb, txHooks })),
       ),
     isTransaction: (txCtx) => txCtx.db.isTransaction,
     onTransactionCommit: (txCtx, callback) => {

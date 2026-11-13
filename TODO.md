@@ -5,13 +5,13 @@
   - [TASK] IPC notify adapter in a new `@queuert/ipc` package — sync-ready, socket per process, one registry file per process in a shared `directory`. See `design/ipc-notify.md`.
   - [TASK] No multi-worker example
   - [TASK] Get rid of `createAsyncRwLock()` in sync apis
+- [TASK] Server version checks for the notify adapters — the state adapters check their minimum in `migrateToLatest()`, but the Redis (6+) and NATS (2.2+) notify adapters have no migration step and check nothing. Check when the adapter first connects or subscribes, and throw the same `Unsupported <server> version <version>: Queuert needs <minimum> or later` error.
 
 # Medium term
 
 - [REF] PostgreSQL pipelining
 - [TASK] Multi-process SQLite conformance — the SQLite conformance suite runs every transaction on one `:memory:` connection behind the in-process `AsyncRwLock`, so the `lock: "exclusive"` cases pass without exercising SQLite's own write lock. Add a mode that contends from a second connection in a worker thread or child process against a WAL file (better-sqlite3 blocks the event loop while it waits on `busy_timeout`, so both connections cannot share one thread).
 - [TASK] Built-in cleanup. See `design/builtin-cleanup.md`.
-- [TASK] PostgreSQL REPEATABLE READ and SERIALIZABLE. See `design/pg-isolation-levels.md`.
 - [TASK] Best-effort `rescheduleJobs` — today it fails the whole batch if any job is not pending, so apps hand-roll "wake a sleeping chain" loops (`listChainJobs` + `rescheduleJob` + catch `JobNotReschedulableError`). Add an option such as `skipNotReschedulable: true` that returns a per-job outcome (`rescheduled` / `not-pending` / `completed`) instead of throwing.
 - [TASK] Reschedule reason and failure-streak backoff — persist `failure_streak` and the `complete({ reschedule, reason })` reason, compute backoff from the streak instead of `attempt`. See `design/reschedule-reason-and-backoff.md`.
 - [EPIC] Decouple chain from jobs. See `design/chain-table.md`.
@@ -25,8 +25,9 @@
 - [TASK] Unify workerless and worker tracing — workerless completion (`completeChain`) should create an attempt span like the worker path, eliminating the asymmetric `completeJobSpan` adapter method
 - [EPIC] Align `@queuert/otel` with OpenTelemetry messaging semantic conventions
 - [EPIC] Redis state adapter performance and open problems — claim cache, fewer index updates, lock-wait divergences, notify latency. See `design/redis-state-adapter-performance.md`.
+- [TASK] PostgreSQL REPEATABLE READ and SERIALIZABLE. See `design/pg-isolation-levels.md`.
+- [TASK] MySQL/MariaDB REPEATABLE READ and SERIALIZABLE. See `design/mysql-isolation-levels.md`.
 - [EPIC] MongoDB adapter. See `design/mongodb-adapter.md`.
-- [EPIC] MySQL/MariaDB adapter. See `design/mysql-adapter.md`.
 - [TASK] Support numeric job and worker IDs — `TJobId` and `TWorkerId` extend `string`, so an `INTEGER`/`bigint` `jobIdType` or `workerIdType` is accepted by the adapters but its IDs still have to round-trip as strings. Allow `number`/`bigint` ID types end to end, including making the `State*` entity types (`StateJobInfo`, `StateChainInfo`, `StateJobBlockerInfo`, `StateWorkerInfo`, …) generic over `TJobId`/`TWorkerId` instead of using `string`.
 
 # Long term

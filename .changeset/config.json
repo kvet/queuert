@@ -8,6 +8,7 @@
       "queuert",
       "@queuert/postgres",
       "@queuert/sqlite",
+      "@queuert/mysql",
       "@queuert/redis",
       "@queuert/nats",
       "@queuert/otel",

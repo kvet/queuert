@@ -17,7 +17,7 @@ export type ExamplePageSlug =
   | "app-structure"
   | "operations";
 
-export type ExampleService = "PostgreSQL" | "Redis" | "Redis Cluster" | "NATS";
+export type ExampleService = "PostgreSQL" | "MySQL" | "Redis" | "Redis Cluster" | "NATS";
 
 export type Example = {
   name: string;
@@ -38,7 +38,8 @@ export const examplePages: { slug: ExamplePageSlug; title: string; summary: stri
   {
     slug: "state-adapters",
     title: "State Adapters",
-    summary: "One example per PostgreSQL, SQLite and Redis driver or ORM, and a custom adapter.",
+    summary:
+      "One example per PostgreSQL, SQLite, MySQL / MariaDB and Redis driver or ORM, and a custom adapter.",
   },
   {
     slug: "notify-adapters",
@@ -87,6 +88,10 @@ const statePostgres = {
   href: "/integrations/state-adapters/postgres/",
 };
 const stateSqlite = { title: "SQLite State Adapter", href: "/integrations/state-adapters/sqlite/" };
+const stateMysql = {
+  title: "MySQL / MariaDB State Adapter",
+  href: "/integrations/state-adapters/mysql/",
+};
 const stateRedis = { title: "Redis State Adapter", href: "/integrations/state-adapters/redis/" };
 const notifyPostgres = {
   title: "PostgreSQL Notify Adapter",
@@ -327,6 +332,18 @@ export const examples: Example[] = [
     services: [],
     files: stateProviderFiles,
     guide: stateSqlite,
+  },
+  {
+    name: "state-mysql-mysql2",
+    category: "state",
+    page: "state-adapters",
+    label: "mysql2",
+    description:
+      "MySQL state storage via @queuert/mysql with the mysql2 driver — job creation and completion inside application transactions, with every transaction at READ COMMITTED.",
+    runtime: "Node.js",
+    services: ["MySQL"],
+    files: stateProviderFiles,
+    guide: stateMysql,
   },
   {
     name: "state-redis-ioredis",

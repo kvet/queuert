@@ -24,9 +24,11 @@ export type PgStateProviderError = { kind: "undefined_table"; tableName: string 
  */
 export type PgStateProvider<TTxContext extends BaseTxContext> = {
   /**
-   * Executes a callback within a database transaction.
-   * Acquires a connection, starts a transaction, executes the callback,
-   * commits on success, rolls back on error, and releases the connection.
+   * Executes a callback within a database transaction at READ COMMITTED, the only isolation level
+   * Queuert supports. Acquires a connection, starts the transaction with the level stated
+   * explicitly (`BEGIN ISOLATION LEVEL READ COMMITTED`), so a server or role whose
+   * `default_transaction_isolation` is higher cannot raise it, executes the callback, commits on
+   * success, rolls back on error, and releases the connection.
    */
   withTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 

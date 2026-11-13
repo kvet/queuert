@@ -208,6 +208,18 @@ const claimLockedSlack = 16;
 const claimScanCap = 1_000;
 const replayTtlMs = 60_000;
 
+const MIN_REDIS_VERSION = "6";
+
+const SERVER_VERSION_SCRIPT =
+  "return string.match(redis.call('INFO', 'server'), 'redis_version:([%d%.]+)') or false";
+
+const isVersionAtLeast = (version: string, minimum: string): boolean => {
+  const parts = version.split(".").map(Number);
+  const minimumParts = minimum.split(".").map(Number);
+  const differing = minimumParts.findIndex((part, index) => (parts[index] ?? 0) !== part);
+  return differing === -1 || (parts[differing] ?? 0) > minimumParts[differing];
+};
+
 const hasHashTag = (keyPrefix: string): boolean => {
   const open = keyPrefix.indexOf("{");
   const close = keyPrefix.indexOf("}", open + 1);
@@ -273,12 +285,14 @@ export type RedisStateAdapter = StateAdapter<RedisContext, string, string> & {
    * until it has run, every write other than deleting chains and stopping workers fails at commit
    * with `SchemaFencedError`. Processes may run it at once; one migrates and the others wait for
    * it.
+   *
+   * @throws Error if the server reports a Redis version older than 6.
    */
   migrateToLatest: () => Promise<MigrationResult>;
 };
 
 /**
- * Creates a state adapter that keeps Queuert's state in Redis.
+ * Creates a state adapter that keeps Queuert's state in Redis 6+.
  *
  * Redis has no interactive transactions, so `withTransaction` runs optimistically: reads go to
  * Redis and record the version of every record they see, writes are buffered, and the commit is
@@ -1593,6 +1607,13 @@ export const createRedisStateAdapter = ({
 
     migrateToLatest: async () => {
       closed.throwIfTripped();
+      const reply = await stateProvider.eval(SERVER_VERSION_SCRIPT, [keys.sequence], []);
+      const version = typeof reply === "string" ? reply : "unknown";
+      if (!isVersionAtLeast(version, MIN_REDIS_VERSION)) {
+        throw new Error(
+          `Unsupported Redis version ${version}: Queuert needs ${MIN_REDIS_VERSION} or later`,
+        );
+      }
       return createMigrator({
         migrations: createRedisSchemaMigrations(schema),
         store: createRedisMigrationStore({

@@ -18,6 +18,7 @@
     "@testcontainers/postgresql": "12.2.1",
     "@testcontainers/redis": "12.2.1",
     "dockerode": "5.0.1",
+    "mysql2": "3.24.6",
     "pg": "8.23.1",
     "proper-lockfile": "4.1.2",
     "testcontainers": "12.2.1"

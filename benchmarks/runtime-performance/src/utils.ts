@@ -295,6 +295,7 @@ async function runMemory<TInfra>({
   }
 
   // ─── Phase 4: infrastructure baseline established (post-warmup) ───
+  const infraBaselineLive = await captureSnapshot(name, "infra-baseline");
   await forceGC();
   const infraBaseline = getMemorySnapshot();
   console.log("\n── Infrastructure ready (post-warmup) — queuert measured from here ──");
@@ -302,7 +303,6 @@ async function runMemory<TInfra>({
     "  Infra heap above process baseline: ",
     formatBytes(infraBaseline.heapUsed - processBaseline.heapUsed),
   );
-  const infraBaselineLive = await captureSnapshot(name, "infra-baseline");
 
   // ─── Phase 5: MEASURED run ───
   console.log("\n── MEASURED run ──");

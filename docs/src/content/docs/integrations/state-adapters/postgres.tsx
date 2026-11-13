@@ -59,10 +59,10 @@ const options = (): FieldItem[] => [
 const Page = () => (
   <>
     <p>
-      <code>@queuert/postgres</code> is recommended for production. It supports horizontal scaling
-      with database-level locking (<code>FOR UPDATE SKIP LOCKED</code>), writeable CTEs for atomic
-      batch operations, and all Queuert features including concurrent multi-worker deployments that
-      share one database; see <A href="/guides/horizontal-scaling/">Horizontal Scaling</A>.
+      <code>@queuert/postgres</code> supports horizontal scaling with database-level locking (
+      <code>FOR UPDATE SKIP LOCKED</code>), writeable CTEs for atomic batch operations, and all
+      Queuert features including concurrent multi-worker deployments that share one database; see{" "}
+      <A href="/guides/horizontal-scaling/">Horizontal Scaling</A>.
     </p>
 
     <h2>Clients</h2>
@@ -94,8 +94,8 @@ const Page = () => (
     <h2>Install</h2>
     <Code lang="bash">{`npm install @queuert/postgres`}</Code>
     <p>
-      Requires PostgreSQL 14 or later. The same package includes the{" "}
-      <A href="/integrations/notify-adapters/postgres/">PostgreSQL notify adapter</A> (
+      Requires PostgreSQL 14 or later, which <code>migrateToLatest()</code> checks. The same package
+      includes the <A href="/integrations/notify-adapters/postgres/">PostgreSQL notify adapter</A> (
       <code>LISTEN</code>/<code>NOTIFY</code>).
     </p>
 
@@ -305,7 +305,9 @@ const Page = () => (
       transaction Queuert writes in, including the ones you pass to <code>complete</code> and to
       client methods. Its conditional and multi-statement writes, such as <code>unblockJobs</code>{" "}
       locking the blocked jobs and then recomputing their blockers, rely on each statement taking a
-      fresh snapshot after it waits on a row lock.
+      fresh snapshot after it waits on a row lock. Every provider above opens its transactions with
+      the level stated, so a server or role whose <code>default_transaction_isolation</code> is
+      higher cannot change it; open the transactions you pass to Queuert the same way.
     </p>
 
     <h2>Write fence</h2>
