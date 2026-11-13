@@ -5,9 +5,25 @@ type TabItemProps = { label: string; badge?: string; children: JSX.Element };
 
 const [syncedTabs, setSyncedTabs] = createStore<Record<string, string>>({});
 
-/** Selects `label` in every `Tabs` with this `syncKey`, e.g. from a card that jumps to a tab. */
+const syncedTabsStorageKey = "queuert-docs:tabs";
+
+/** Selects `label` in every `Tabs` with this `syncKey` and remembers it in this browser. */
 export const selectSyncedTab = (syncKey: string, label: string) => {
   setSyncedTabs(syncKey, label);
+  try {
+    localStorage.setItem(syncedTabsStorageKey, JSON.stringify(syncedTabs));
+  } catch {}
+};
+
+/** Restores the reader's remembered tabs; runs after hydration so the prerendered tab matches. */
+export const restoreSyncedTabs = () => {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(syncedTabsStorageKey) ?? "{}");
+    if (typeof stored !== "object" || stored === null) return;
+    for (const [syncKey, label] of Object.entries(stored)) {
+      if (typeof label === "string") setSyncedTabs(syncKey, label);
+    }
+  } catch {}
 };
 
 /** The label the reader picked for `syncKey`, or `undefined` before they pick one. */
@@ -18,7 +34,7 @@ const isTabItem = (item: unknown): item is TabItemProps =>
 
 export const TabItem = (props: TabItemProps) => props as unknown as JSX.Element;
 
-/** `syncKey` keeps every Tabs with the same key on the selected label. */
+/** `syncKey` keeps every Tabs with the same key on the selected label, across pages and visits. */
 export const Tabs = (props: { syncKey?: string; children: JSX.Element }) => {
   const resolved = children(() => props.children);
   const items = () => (resolved.toArray() as unknown[]).filter(isTabItem);
@@ -37,7 +53,7 @@ export const Tabs = (props: { syncKey?: string; children: JSX.Element }) => {
   const select = (label: string) => {
     setSwitched(true);
     setLocal(label);
-    if (props.syncKey !== undefined) setSyncedTabs(props.syncKey, label);
+    if (props.syncKey !== undefined) selectSyncedTab(props.syncKey, label);
   };
 
   return (
