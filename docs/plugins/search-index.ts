@@ -74,6 +74,7 @@ export const isSkipped = (element: Element) =>
   element.properties.dataBoxHeader !== undefined ||
   element.properties.dataCodeLang !== undefined ||
   element.properties.dataSourceLink !== undefined ||
+  element.properties.dataSearchSkip !== undefined ||
   element.properties.role === "tablist" ||
   (Array.isArray(element.properties.className) &&
     element.properties.className.includes("heading-anchor"));

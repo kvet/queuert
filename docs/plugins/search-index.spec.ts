@@ -40,6 +40,15 @@ describe("pageSections", () => {
     ]);
   });
 
+  it("leaves elements marked data-search-skip out of headings", () => {
+    const counted = `<div data-page-content><h2 id="function">Functions<span data-search-skip>3</span></h2><p>Body.</p></div>`;
+
+    expect(pageSections(counted)).toEqual([
+      { heading: "", id: "", text: "" },
+      { heading: "Functions", id: "function", text: "Body." },
+    ]);
+  });
+
   it("fails when the page content root is missing", () => {
     expect(() => pageSections("<p>no content</p>")).toThrow("data-page-content");
   });

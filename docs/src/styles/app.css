@@ -3,6 +3,7 @@
 @import "@queuert/ui/base.css";
 
 @theme {
+  --color-brand-fg: #7c3aed;
   --animate-fade-in: fade-in 160ms ease-out;
 
   @keyframes fade-in {
@@ -11,6 +12,10 @@
       transform: translateY(2px);
     }
   }
+}
+
+[data-theme="dark"] {
+  --color-brand-fg: var(--color-brand);
 }
 
 :root {

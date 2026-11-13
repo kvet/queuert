@@ -14,7 +14,7 @@ import {
 } from "solid-js";
 
 import type { SearchEntry } from "../../plugins/search-index.ts";
-import { fetchSearchEntries } from "./searchEntries.ts";
+import { createSearchIndex, fetchSearchEntries } from "./searchEntries.ts";
 
 const [open, setOpen] = createSignal(false);
 const [requested, setRequested] = createSignal(false);
@@ -29,18 +29,7 @@ const loadIndex = async (): Promise<MiniSearch<SearchEntry>> => {
     import("minisearch"),
     fetchSearchEntries(`${import.meta.env.BASE_URL}search.json`),
   ]);
-  const index = new MiniSearchClass<SearchEntry>({
-    fields: ["title", "heading", "text"],
-    storeFields: ["title", "heading", "section", "href", "text"],
-    searchOptions: {
-      boost: { title: 5, heading: 3 },
-      prefix: true,
-      fuzzy: 0.15,
-      combineWith: "AND",
-    },
-  });
-  index.addAll(entries);
-  return index;
+  return createSearchIndex(MiniSearchClass, entries);
 };
 
 const escapeHtml = (value: string) =>

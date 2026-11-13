@@ -26,7 +26,9 @@ export const ApiPackageIndex = (props: { pkg: ApiPackage }) => (
             class="flex items-baseline gap-2 text-base font-semibold"
           >
             {kindLabels[kind.kind] ?? kind.kind}
-            <span class="text-xs font-normal text-fg-subtle">{kind.pages.length}</span>
+            <span class="text-xs font-normal text-fg-subtle" data-search-skip>
+              {kind.pages.length}
+            </span>
           </h2>
           <ul class="mt-3 divide-y divide-border rounded-xs border border-border">
             <For each={kind.pages}>

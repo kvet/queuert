@@ -7,7 +7,7 @@ sidebar:
 
 import { Arrow, Diagram, Flow, Node, Rows } from "../../../components/diagram";
 
-Queuert provides only job completion — there is no built-in "failure" state. This is intentional: you control how errors are represented in your job outputs.
+Queuert provides only job completion — there is no built-in "failure" state. This is intentional: you control how errors are represented in your job outputs. There is no dead-letter queue either: a job that keeps throwing keeps being rescheduled, with its last error in [`lastAttemptError`](#lastattempterror).
 
 ## Discriminated Union
 
@@ -73,7 +73,7 @@ const jobTypes = defineJobTypes<{
 
 ## Rescheduling
 
-When a job throws an error, it's automatically rescheduled with exponential backoff:
+When a job throws an error, the failed attempt is rescheduled with exponential backoff; this is what other queues call a retry:
 
 ```ts
 const workerRunner = createWorkerRunner({
