@@ -19,14 +19,14 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@queuert/postgres": "workspace:*",
     "@queuert/redis": "workspace:*",
-    "@queuert/sqlite": "workspace:*",
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
-    "@types/better-sqlite3": "9.6.0",
-    "better-sqlite3": "13.0.3",
-    "example-state-sqlite-better-sqlite3": "workspace:*",
+    "@types/pg": "8.23.1",
+    "example-state-postgres-pg": "workspace:*",
     "ioredis": "6.0.0",
+    "pg": "8.23.1",
     "queuert": "workspace:*"
   }
 }

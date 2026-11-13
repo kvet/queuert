@@ -1,8 +1,6 @@
-import { createPgNotifyAdapter } from "@queuert/postgres";
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createPgNotifyAdapter, createPgStateAdapter } from "@queuert/postgres";
 import { acquirePostgres } from "@queuert/testcontainers";
-import Database from "better-sqlite3";
-import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
+import { createPostgresJsStateProvider } from "example-state-postgres-postgres-js/provider";
 import postgres from "postgres";
 import { createClient, createWorkerRunner, createProcessors, defineJobTypes } from "queuert";
 
@@ -25,11 +23,11 @@ const jobTypes = defineJobTypes<{
 await using drivers = new AsyncDisposableStack();
 // #hide
 // Create the state adapter
-const db = drivers.adopt(new Database(":memory:"), (db) => {
-  db.close();
-});
-await using stateAdapter = createSqliteStateAdapter({
-  stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
+const stateSql = drivers.adopt(postgres(pg.connectionString, { max: 10 }), async (sql) =>
+  sql.end(),
+);
+await using stateAdapter = createPgStateAdapter({
+  stateProvider: createPostgresJsStateProvider({ sql: stateSql }),
 });
 await stateAdapter.migrateToLatest();
 // #endhide

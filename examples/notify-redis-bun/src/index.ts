@@ -1,8 +1,8 @@
+import { createPgStateAdapter } from "@queuert/postgres";
 import { createRedisNotifyAdapter } from "@queuert/redis";
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
-import { acquireRedis } from "@queuert/testcontainers";
+import { acquirePostgres, acquireRedis } from "@queuert/testcontainers";
 import { RedisClient, SQL } from "bun";
-import { createBunSqlSqliteStateProvider } from "example-state-sqlite-bun-sql/provider";
+import { createBunSqlStateProvider } from "example-state-postgres-bun-sql/provider";
 import { createClient, createWorkerRunner, createProcessors, defineJobTypes } from "queuert";
 
 import { createBunRedisNotifyProvider } from "./provider.ts";
@@ -22,9 +22,11 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create the state adapter
-await using sqlite = new SQL("sqlite://:memory:");
-await using stateAdapter = createSqliteStateAdapter({
-  stateProvider: createBunSqlSqliteStateProvider({ sql: sqlite, lock: createAsyncRwLock() }),
+console.log("Starting PostgreSQL...");
+await using pg = await acquirePostgres("postgres:18", import.meta.url);
+await using stateSql = new SQL(pg.connectionString, { max: 10 });
+await using stateAdapter = createPgStateAdapter({
+  stateProvider: createBunSqlStateProvider({ sql: stateSql }),
 });
 await stateAdapter.migrateToLatest();
 

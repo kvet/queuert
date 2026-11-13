@@ -1,8 +1,7 @@
-import { createPgNotifyAdapter } from "@queuert/postgres";
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createPgNotifyAdapter, createPgStateAdapter } from "@queuert/postgres";
 import { acquirePostgres } from "@queuert/testcontainers";
 import { SQL } from "bun";
-import { createBunSqlSqliteStateProvider } from "example-state-sqlite-bun-sql/provider";
+import { createBunSqlStateProvider } from "example-state-postgres-bun-sql/provider";
 import { createClient, createWorkerRunner, createProcessors, defineJobTypes } from "queuert";
 
 import { createBunSqlNotifyProvider } from "./provider.ts";
@@ -21,9 +20,9 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create the state adapter
-await using sqlite = new SQL("sqlite://:memory:");
-await using stateAdapter = createSqliteStateAdapter({
-  stateProvider: createBunSqlSqliteStateProvider({ sql: sqlite, lock: createAsyncRwLock() }),
+await using stateSql = new SQL(pg.connectionString, { max: 10 });
+await using stateAdapter = createPgStateAdapter({
+  stateProvider: createBunSqlStateProvider({ sql: stateSql }),
 });
 await stateAdapter.migrateToLatest();
 

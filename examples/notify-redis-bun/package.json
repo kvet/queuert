@@ -19,12 +19,12 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@queuert/postgres": "workspace:*",
     "@queuert/redis": "workspace:*",
-    "@queuert/sqlite": "workspace:*",
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@types/bun": "1.4.4",
-    "example-state-sqlite-bun-sql": "workspace:*",
+    "example-state-postgres-bun-sql": "workspace:*",
     "queuert": "workspace:*"
   }
 }

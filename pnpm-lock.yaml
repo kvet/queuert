@@ -814,24 +814,24 @@ importers:
       '@queuert/nats':
         specifier: workspace:*
         version: link:../../packages/nats
-      '@queuert/sqlite':
+      '@queuert/postgres':
         specifier: workspace:*
-        version: link:../../packages/sqlite
+        version: link:../../packages/postgres
       '@queuert/testcontainers':
         specifier: workspace:*
         version: link:../../packages-internal/testcontainers
       '@queuert/tsconfig':
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
-      '@types/better-sqlite3':
-        specifier: 9.6.0
-        version: 9.6.0
-      better-sqlite3:
-        specifier: 13.0.3
-        version: 13.0.3
-      example-state-sqlite-better-sqlite3:
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
+      example-state-postgres-pg:
         specifier: workspace:*
-        version: link:../state-sqlite-better-sqlite3
+        version: link:../state-postgres-pg
+      pg:
+        specifier: 8.23.1
+        version: 8.23.1
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -841,9 +841,6 @@ importers:
       '@queuert/postgres':
         specifier: workspace:*
         version: link:../../packages/postgres
-      '@queuert/sqlite':
-        specifier: workspace:*
-        version: link:../../packages/sqlite
       '@queuert/testcontainers':
         specifier: workspace:*
         version: link:../../packages-internal/testcontainers
@@ -853,9 +850,9 @@ importers:
       '@types/bun':
         specifier: 1.4.4
         version: 1.4.4
-      example-state-sqlite-bun-sql:
+      example-state-postgres-bun-sql:
         specifier: workspace:*
-        version: link:../state-sqlite-bun-sql
+        version: link:../state-postgres-bun-sql
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -865,27 +862,18 @@ importers:
       '@queuert/postgres':
         specifier: workspace:*
         version: link:../../packages/postgres
-      '@queuert/sqlite':
-        specifier: workspace:*
-        version: link:../../packages/sqlite
       '@queuert/testcontainers':
         specifier: workspace:*
         version: link:../../packages-internal/testcontainers
       '@queuert/tsconfig':
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
-      '@types/better-sqlite3':
-        specifier: 9.6.0
-        version: 9.6.0
       '@types/pg':
         specifier: 8.23.1
         version: 8.23.1
-      better-sqlite3:
-        specifier: 13.0.3
-        version: 13.0.3
-      example-state-sqlite-better-sqlite3:
+      example-state-postgres-pg:
         specifier: workspace:*
-        version: link:../state-sqlite-better-sqlite3
+        version: link:../state-postgres-pg
       pg:
         specifier: 8.23.1
         version: 8.23.1
@@ -898,24 +886,15 @@ importers:
       '@queuert/postgres':
         specifier: workspace:*
         version: link:../../packages/postgres
-      '@queuert/sqlite':
-        specifier: workspace:*
-        version: link:../../packages/sqlite
       '@queuert/testcontainers':
         specifier: workspace:*
         version: link:../../packages-internal/testcontainers
       '@queuert/tsconfig':
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
-      '@types/better-sqlite3':
-        specifier: 9.6.0
-        version: 9.6.0
-      better-sqlite3:
-        specifier: 13.0.3
-        version: 13.0.3
-      example-state-sqlite-better-sqlite3:
+      example-state-postgres-postgres-js:
         specifier: workspace:*
-        version: link:../state-sqlite-better-sqlite3
+        version: link:../state-postgres-postgres-js
       postgres:
         specifier: 3.4.9
         version: 3.4.9
@@ -925,12 +904,12 @@ importers:
 
   examples/notify-redis-bun:
     devDependencies:
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
       '@queuert/redis':
         specifier: workspace:*
         version: link:../../packages/redis
-      '@queuert/sqlite':
-        specifier: workspace:*
-        version: link:../../packages/sqlite
       '@queuert/testcontainers':
         specifier: workspace:*
         version: link:../../packages-internal/testcontainers
@@ -940,66 +919,66 @@ importers:
       '@types/bun':
         specifier: 1.4.4
         version: 1.4.4
-      example-state-sqlite-bun-sql:
+      example-state-postgres-bun-sql:
         specifier: workspace:*
-        version: link:../state-sqlite-bun-sql
+        version: link:../state-postgres-bun-sql
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
 
   examples/notify-redis-cluster-ioredis:
     devDependencies:
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
       '@queuert/redis':
         specifier: workspace:*
         version: link:../../packages/redis
-      '@queuert/sqlite':
-        specifier: workspace:*
-        version: link:../../packages/sqlite
       '@queuert/testcontainers':
         specifier: workspace:*
         version: link:../../packages-internal/testcontainers
       '@queuert/tsconfig':
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
-      '@types/better-sqlite3':
-        specifier: 9.6.0
-        version: 9.6.0
-      better-sqlite3:
-        specifier: 13.0.3
-        version: 13.0.3
-      example-state-sqlite-better-sqlite3:
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
+      example-state-postgres-pg:
         specifier: workspace:*
-        version: link:../state-sqlite-better-sqlite3
+        version: link:../state-postgres-pg
       ioredis:
         specifier: 6.0.0
         version: 6.0.0
+      pg:
+        specifier: 8.23.1
+        version: 8.23.1
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
 
   examples/notify-redis-cluster-node-redis:
     devDependencies:
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
       '@queuert/redis':
         specifier: workspace:*
         version: link:../../packages/redis
-      '@queuert/sqlite':
-        specifier: workspace:*
-        version: link:../../packages/sqlite
       '@queuert/testcontainers':
         specifier: workspace:*
         version: link:../../packages-internal/testcontainers
       '@queuert/tsconfig':
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
-      '@types/better-sqlite3':
-        specifier: 9.6.0
-        version: 9.6.0
-      better-sqlite3:
-        specifier: 13.0.3
-        version: 13.0.3
-      example-state-sqlite-better-sqlite3:
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
+      example-state-postgres-pg:
         specifier: workspace:*
-        version: link:../state-sqlite-better-sqlite3
+        version: link:../state-postgres-pg
+      pg:
+        specifier: 8.23.1
+        version: 8.23.1
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -1009,57 +988,57 @@ importers:
 
   examples/notify-redis-ioredis:
     devDependencies:
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
       '@queuert/redis':
         specifier: workspace:*
         version: link:../../packages/redis
-      '@queuert/sqlite':
-        specifier: workspace:*
-        version: link:../../packages/sqlite
       '@queuert/testcontainers':
         specifier: workspace:*
         version: link:../../packages-internal/testcontainers
       '@queuert/tsconfig':
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
-      '@types/better-sqlite3':
-        specifier: 9.6.0
-        version: 9.6.0
-      better-sqlite3:
-        specifier: 13.0.3
-        version: 13.0.3
-      example-state-sqlite-better-sqlite3:
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
+      example-state-postgres-pg:
         specifier: workspace:*
-        version: link:../state-sqlite-better-sqlite3
+        version: link:../state-postgres-pg
       ioredis:
         specifier: 6.0.0
         version: 6.0.0
+      pg:
+        specifier: 8.23.1
+        version: 8.23.1
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
 
   examples/notify-redis-redis:
     devDependencies:
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
       '@queuert/redis':
         specifier: workspace:*
         version: link:../../packages/redis
-      '@queuert/sqlite':
-        specifier: workspace:*
-        version: link:../../packages/sqlite
       '@queuert/testcontainers':
         specifier: workspace:*
         version: link:../../packages-internal/testcontainers
       '@queuert/tsconfig':
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
-      '@types/better-sqlite3':
-        specifier: 9.6.0
-        version: 9.6.0
-      better-sqlite3:
-        specifier: 13.0.3
-        version: 13.0.3
-      example-state-sqlite-better-sqlite3:
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
+      example-state-postgres-pg:
         specifier: workspace:*
-        version: link:../state-sqlite-better-sqlite3
+        version: link:../state-postgres-pg
+      pg:
+        specifier: 8.23.1
+        version: 8.23.1
       queuert:
         specifier: workspace:*
         version: link:../../packages/core

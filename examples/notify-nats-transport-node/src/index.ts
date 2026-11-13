@@ -1,9 +1,9 @@
 import { connect } from "@nats-io/transport-node";
 import { createNatsNotifyAdapter } from "@queuert/nats";
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
-import { acquireNats } from "@queuert/testcontainers";
-import Database from "better-sqlite3";
-import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
+import { createPgStateAdapter } from "@queuert/postgres";
+import { acquirePostgres, acquireNats } from "@queuert/testcontainers";
+import { createPgPoolStateProvider } from "example-state-postgres-pg/provider";
+import { Pool } from "pg";
 import { createClient, createWorkerRunner, createProcessors, defineJobTypes } from "queuert";
 
 // Start NATS using testcontainers
@@ -21,12 +21,15 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create the state adapter
+console.log("Starting PostgreSQL...");
+await using pg = await acquirePostgres("postgres:18", import.meta.url);
 await using drivers = new AsyncDisposableStack();
-const db = drivers.adopt(new Database(":memory:"), (db) => {
-  db.close();
-});
-await using stateAdapter = createSqliteStateAdapter({
-  stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
+const statePool = drivers.adopt(
+  new Pool({ connectionString: pg.connectionString, max: 10 }),
+  async (pool) => pool.end(),
+);
+await using stateAdapter = createPgStateAdapter({
+  stateProvider: createPgPoolStateProvider({ pool: statePool }),
 });
 await stateAdapter.migrateToLatest();
 

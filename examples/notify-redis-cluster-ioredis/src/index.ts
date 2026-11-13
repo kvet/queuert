@@ -1,9 +1,9 @@
+import { createPgStateAdapter } from "@queuert/postgres";
 import { createRedisNotifyAdapter } from "@queuert/redis";
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
-import { acquireRedisCluster } from "@queuert/testcontainers";
-import Database from "better-sqlite3";
-import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
+import { acquirePostgres, acquireRedisCluster } from "@queuert/testcontainers";
+import { createPgPoolStateProvider } from "example-state-postgres-pg/provider";
 import { Cluster } from "ioredis";
+import { Pool } from "pg";
 import { createClient, createWorkerRunner, createProcessors, defineJobTypes } from "queuert";
 
 import { createIoredisClusterNotifyProvider } from "./provider.ts";
@@ -25,11 +25,14 @@ const jobTypes = defineJobTypes<{
 await using drivers = new AsyncDisposableStack();
 // #hide
 // Create the state adapter
-const db = drivers.adopt(new Database(":memory:"), (db) => {
-  db.close();
-});
-await using stateAdapter = createSqliteStateAdapter({
-  stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
+console.log("Starting PostgreSQL...");
+const pg = drivers.use(await acquirePostgres("postgres:18", import.meta.url));
+const statePool = drivers.adopt(
+  new Pool({ connectionString: pg.connectionString, max: 10 }),
+  async (pool) => pool.end(),
+);
+await using stateAdapter = createPgStateAdapter({
+  stateProvider: createPgPoolStateProvider({ pool: statePool }),
 });
 await stateAdapter.migrateToLatest();
 // #endhide
