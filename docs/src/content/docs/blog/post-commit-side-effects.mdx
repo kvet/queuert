@@ -1,0 +1,185 @@
+---
+title: Side effects after commit
+description: Where to put work that should follow a commit, and a small per-transaction buffer that runs it only when the transaction lands.
+date: "2026-05-26"
+---
+
+import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/diagram";
+
+Code that writes to a database almost always wants something to happen *because* of the write: a worker should wake up, a metric should tick, a cache entry should go stale, an audit event should reach an external sink. Where that code goes decides what happens when the transaction rolls back, and it is easy to put it in the wrong place.
+
+## Three kinds of side effect
+
+It helps to sort the follow-up work by what losing it would mean:
+
+- **Part of the state**, like the reservation row or the stock decrement. It belongs inside the transaction.
+- **Must happen if the commit happened**, like the receipt email or the next step of a process. It belongs in a durable record, such as a job row, inserted in the same transaction.
+- **Should happen if the commit happened, but fine to lose**, like a worker wake-up, a metric or a cache invalidation. It runs after the commit, best effort.
+
+The first two are covered by [The dual-write problem](../dual-write-problem/) and [Finishing a job](../finishing-a-job/): anything that has to happen is written down in the same commit, and a worker carries it out. This post is about the third kind.
+
+## The wrong places
+
+Take the wake-up notification. When a job is inserted, a waiting worker should hear about it at once instead of on its next poll. The obvious spot is right after the `INSERT`:
+
+```ts
+await db.transaction(async (tx) => {
+  await tx.jobs.insert({ typeName: "send-welcome-email", input });
+  await pubsub.publish("job-scheduled", "send-welcome-email");
+});
+```
+
+That is inside the transaction, which is the wrong place for it:
+
+- If the transaction rolls back, workers wake up for a job that doesn't exist.
+- If the transaction inserts a hundred jobs, it publishes a hundred notifications, almost all of them redundant.
+- If the publisher is slow, the commit waits for it, holding its locks.
+- A worker may wake before the commit is visible, find nothing, and go back to sleep.
+
+Moving the publish after `db.transaction` returns fixes the ordering, but the code that decides a notification is needed is usually deep inside a function the caller knows nothing about. The caller would have to collect intents from every function it called and replay them, by hand, at every call site.
+
+## A per-transaction buffer
+
+The clean shape is a buffer that lives as long as one transaction. Code inside the transaction registers callbacks on it; the code that owns the transaction runs them after the commit, or throws them away on rollback:
+
+```ts
+type TxHooks = {
+  onCommit: (callback: () => Promise<void> | void) => void;
+  onRollback: (callback: () => void) => void;
+};
+
+const withTxHooks = async <T>(fn: (txHooks: TxHooks) => Promise<T>): Promise<T> => {
+  const commitCallbacks: (() => Promise<void> | void)[] = [];
+  const rollbackCallbacks: (() => void)[] = [];
+  const txHooks: TxHooks = {
+    onCommit: (callback) => commitCallbacks.push(callback),
+    onRollback: (callback) => rollbackCallbacks.push(callback),
+  };
+
+  const result = await fn(txHooks).catch((error: unknown) => {
+    for (const callback of rollbackCallbacks.toReversed()) callback();
+    throw error;
+  });
+  await Promise.allSettled(commitCallbacks.map(async (callback) => callback()));
+  return result;
+};
+```
+
+The transaction runs inside it, and anything that needs a post-commit effect takes `txHooks` alongside the transaction handle:
+
+```ts
+const scheduleJob = async (tx: Tx, txHooks: TxHooks, job: NewJob) => {
+  await tx.jobs.insert(job);
+  txHooks.onCommit(() => pubsub.publish("job-scheduled", job.typeName));
+};
+
+await withTxHooks(async (txHooks) =>
+  db.transaction(async (tx) => {
+    await scheduleJob(tx, txHooks, { typeName: "send-welcome-email", input });
+  }),
+);
+```
+
+Now the effect is declared where the decision is made, and it fires only after `db.transaction` resolved, which means the commit landed.
+
+<Diagram label="During the transaction, callbacks are buffered; on commit they run, on rollback they are discarded">
+  <Flow>
+    <Group title="transaction" dashed>
+      <Flow>
+        <Node>BEGIN</Node>
+        <Arrow />
+        <Node sub="registers onCommit">scheduleJob(…)</Node>
+      </Flow>
+    </Group>
+    <Rows spine columns="minmax(6rem, auto) auto">
+      <Flow>
+        <Arrow label="COMMIT" tone="green" />
+        <Node tone="green" variant="solid" sub="effects fire">run callbacks</Node>
+      </Flow>
+      <Flow>
+        <Arrow label="ROLLBACK" tone="red" />
+        <Node variant="ghost" sub="nothing leaks">discard</Node>
+      </Flow>
+    </Rows>
+  </Flow>
+</Diagram>
+
+## Coalescing
+
+Because the buffer sees every registration in the transaction, it can merge them. A hundred scheduled `send-welcome-email` jobs need one wake-up, not a hundred. Register a single callback per transaction the first time, and let later calls add to its state:
+
+```ts
+const pendingWakeUps = new WeakMap<TxHooks, Map<string, number>>();
+
+const registerWakeUps = (txHooks: TxHooks) => {
+  const counts = new Map<string, number>();
+  pendingWakeUps.set(txHooks, counts);
+  txHooks.onCommit(async () => {
+    await Promise.all(
+      [...counts].map(async ([typeName, count]) =>
+        pubsub.publish("job-scheduled", { typeName, count }),
+      ),
+    );
+  });
+  return counts;
+};
+
+const wakeWorkersOnCommit = (txHooks: TxHooks, typeName: string) => {
+  const counts = pendingWakeUps.get(txHooks) ?? registerWakeUps(txHooks);
+  counts.set(typeName, (counts.get(typeName) ?? 0) + 1);
+};
+```
+
+One notification per job type, carrying how many jobs arrived, lets a worker claim a whole batch in one round-trip.
+
+## The details that bite
+
+The sketch above is enough for a plain `BEGIN … COMMIT`. Real database clients add three wrinkles:
+
+- **Savepoints.** A nested transaction can roll back while the outer one commits. Whatever was registered inside the savepoint has to be dropped with it, so the buffer needs its own nested scope: callbacks registered inside it merge into the parent when the savepoint is released and are discarded when it rolls back. Rollback callbacks run synchronously for the same reason — a savepoint rollback can't wait on a promise.
+- **Drivers that rerun the callback.** Some drivers retry the transaction callback on a serialization failure or a transient error. Every try shares the same buffer, so the callbacks a failed try registered must be dropped when the next try starts, or its effects flush after the try that succeeded.
+- **Rollbacks that resolve.** The buffer treats "the transaction callback resolved" as "the transaction committed". A driver whose rolled-back transaction resolves instead of rejecting breaks that assumption, and the buffer flushes for writes that never committed. Configure such drivers to reject on rollback.
+
+## What the buffer does not promise
+
+The buffer has three properties, and the third one decides when to use it:
+
+1. **Gated on commit.** If the transaction rolls back, the callbacks never run.
+2. **Can't fail the commit.** The callbacks run after the commit returns, so a failing publisher can't undo durable work.
+3. **Not guaranteed to run.** If the process dies between the commit and the flush, the callbacks are gone. They live in memory; there is no journal and no retry.
+
+For a wake-up notification, the third property is harmless: workers also poll, so a lost notification makes one job start a little later. It is a latency optimization, not a correctness requirement. A lost metric is a missing data point; a lost cache invalidation is cured by the entry's expiry.
+
+## The footgun
+
+The tempting misuse is work that must happen, like the receipt email after a payment:
+
+```ts
+await withTxHooks(async (txHooks) =>
+  db.transaction(async (tx) => {
+    await tx.orders.update(orderId, { paymentId });
+    // Lost for good if the process restarts right after the commit.
+    txHooks.onCommit(() => mailer.sendReceipt(orderId));
+  }),
+);
+```
+
+If the pod restarts in the milliseconds after the commit, the customer never gets the receipt and nothing records that it was due. Write it down instead, in the same transaction, and let a worker deliver it:
+
+```ts
+await db.transaction(async (tx) => {
+  await tx.orders.update(orderId, { paymentId });
+  await tx.jobs.insert({ typeName: "send-receipt", input: { orderId } });
+});
+```
+
+The job row commits with the payment, survives any crash, and gets retries, backoff and visibility from the worker.
+
+The rule of thumb is short:
+
+- **Must run if the commit happened?** Insert a job in the same transaction.
+- **Nice to run, fine to lose?** Register a commit callback.
+
+Both are gated on the commit. Only one is gated on the process surviving the next few milliseconds.
+
+Queuert ships this buffer as `withTxHooks` and registers its own worker notifications as commit callbacks; the [Tx Hooks](../../guides/tx-hooks/) guide covers its API, savepoints and driver retries.

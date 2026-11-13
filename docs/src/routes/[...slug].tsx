@@ -12,6 +12,7 @@ import { mdxComponents } from "../components/mdx/components.ts";
 import { NotFound } from "../components/NotFound.tsx";
 import { PageMeta } from "../components/PageMeta.tsx";
 import { Toc } from "../components/Toc.tsx";
+import { formatDate } from "../docs/dates.ts";
 import {
   type DocModule,
   type DocPage,
@@ -119,6 +120,13 @@ const Article = (props: { page: DocPage; module: DocModule }) => {
         when={isPackageIndex() ? pkg()!.summary : props.page.api ? null : props.page.description}
       >
         {(description) => <p class="mt-3 text-[15px] leading-7 text-fg-muted">{description()}</p>}
+      </Show>
+      <Show when={props.page.date}>
+        {(date) => (
+          <time class="mt-3 block text-xs text-fg-subtle" dateTime={date()}>
+            {formatDate(date())}
+          </time>
+        )}
       </Show>
       <div class="mt-8 border-t border-border pt-8" data-page-content>
         <Show

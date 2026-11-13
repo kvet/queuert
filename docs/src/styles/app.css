@@ -220,6 +220,14 @@
     }
   }
 
+  .prose ol.post-list {
+    padding-left: 0;
+    list-style: none;
+    & > li + li {
+      margin-top: 0;
+    }
+  }
+
   .prose .steps > ol {
     counter-reset: step;
     list-style: none;

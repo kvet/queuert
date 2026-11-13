@@ -1,7 +1,15 @@
 type SiteGroup = { label: string; slugs: string[] };
 
 export type SiteSection = {
-  id: "docs" | "integrations" | "examples" | "api" | "compare" | "benchmarks" | "changelog";
+  id:
+    | "docs"
+    | "integrations"
+    | "examples"
+    | "api"
+    | "compare"
+    | "benchmarks"
+    | "blog"
+    | "changelog";
   label: string;
   href: string;
   groups: SiteGroup[];
@@ -221,6 +229,23 @@ export const siteSections: SiteSection[] = [
           "benchmarks/query-performance",
           "benchmarks/type-complexity",
           "benchmarks/runtime-performance",
+        ],
+      },
+    ],
+  },
+  {
+    id: "blog",
+    label: "Blog",
+    href: "/blog/",
+    groups: [
+      { label: "Overview", slugs: ["blog"] },
+      {
+        label: "Posts",
+        slugs: [
+          "blog/post-commit-side-effects",
+          "blog/finishing-a-job",
+          "blog/typing-job-chains",
+          "blog/dual-write-problem",
         ],
       },
     ],

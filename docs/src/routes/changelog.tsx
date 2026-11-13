@@ -6,20 +6,13 @@ import { ExternalLinkIcon, TagIcon } from "../components/icons.tsx";
 import { Badge } from "../components/mdx/Badge.tsx";
 import { PageMeta } from "../components/PageMeta.tsx";
 import { Toc } from "../components/Toc.tsx";
+import { formatDate } from "../docs/dates.ts";
 
 const anchor = (tag: string) =>
   tag
     .replace(/[^a-z0-9]+/gi, "-")
     .replace(/^-|-$/g, "")
     .toLowerCase();
-
-const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
 
 const ChangelogRoute = () => {
   const releases = changelog.releases;

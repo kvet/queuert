@@ -81,6 +81,7 @@ describe("pagesFromSources", () => {
         title: "queuert",
         description: null,
         layout: "default",
+        date: null,
         api: { package: "core", kind: null, experimental: false, usedIn: [] },
       },
       {
@@ -89,9 +90,24 @@ describe("pagesFromSources", () => {
         title: "Scheduling",
         description: "Start a chain later.",
         layout: "wide",
+        date: null,
         api: null,
       },
     ]);
+  });
+
+  it("reads the publication date of a blog post from frontmatter", () => {
+    const page = pageFor(
+      [
+        {
+          file: "blog/dual-write-problem.md",
+          source: '---\ntitle: The dual-write problem\ndate: "2026-05-01"\n---\n\nBody.',
+        },
+      ],
+      "blog/dual-write-problem",
+    );
+
+    expect(page?.date).toBe("2026-05-01");
   });
 
   it("lists the guides that mention a symbol in code, in markdown and in TSX pages", () => {

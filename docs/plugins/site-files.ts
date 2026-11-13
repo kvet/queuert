@@ -121,7 +121,7 @@ export const llmsTxt = (pages: SourcePage[]): string =>
   [
     `# ${siteName}`,
     `> ${siteDescription}`,
-    `The whole documentation (Docs, Integrations, Examples, Compare and Benchmarks) as one file: ${siteUrl}llms-full.txt`,
+    `The whole documentation (Docs, Integrations, Examples, Compare, Benchmarks and Blog) as one file: ${siteUrl}llms-full.txt`,
     ...guidePages(pages).map((group) =>
       [
         `## ${group.label}`,

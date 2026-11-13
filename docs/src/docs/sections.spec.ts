@@ -71,12 +71,38 @@ describe("siteSections", () => {
   });
 });
 
+const postDates = async () => {
+  const dates = new Map<string, string>();
+  for (const file of await contentFiles()) {
+    if (!file.startsWith("blog/") || file.startsWith("blog/index.")) continue;
+    const source = await readFile(join(contentDirectory, file), "utf8");
+    const frontmatter = parseYaml(/^---\n([\s\S]*?)\n---/.exec(source)?.[1] ?? "") ?? {};
+    dates.set(pageSlug(file), String(frontmatter.date));
+  }
+  return dates;
+};
+
+describe("blog", () => {
+  it("dates every post and lists the posts newest first", async () => {
+    const dates = await postDates();
+    const posts = siteSections
+      .find((section) => section.id === "blog")!
+      .groups.find((group) => group.label === "Posts")!.slugs;
+
+    expect([...dates.values()].every((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))).toBe(true);
+    expect(posts).toEqual(
+      [...dates.keys()].sort((a, b) => dates.get(b)!.localeCompare(dates.get(a)!)),
+    );
+  });
+});
+
 describe("sectionForPath", () => {
   it("finds the section of a listed page, with or without the trailing slash", () => {
     expect(sectionForPath("/guides/scheduling/")?.id).toBe("docs");
     expect(sectionForPath("/comparison/pg-boss")?.id).toBe("compare");
     expect(sectionForPath("/integrations/state-adapters/postgres/")?.id).toBe("integrations");
     expect(sectionForPath("/benchmarks/")?.id).toBe("benchmarks");
+    expect(sectionForPath("/blog/dual-write-problem/")?.id).toBe("blog");
   });
 
   it("maps the API reference and changelog by prefix", () => {

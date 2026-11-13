@@ -1,0 +1,118 @@
+---
+title: The dual-write problem
+description: Why a business write and the job it triggers drift apart when they live in two systems, and what it takes to make them commit together.
+date: "2026-05-01"
+---
+
+import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/diagram";
+
+A signup handler inserts a user and enqueues a job that sends the welcome email:
+
+```ts
+await db.transaction(async (tx) => {
+  const user = await tx.users.insert({ name: "Alice", email: "alice@example.com" });
+
+  await queue.add("send-welcome-email", { userId: user.id });
+});
+```
+
+It reads as one unit of work, and the `transaction` wrapper suggests it is. It isn't. The transaction belongs to the database. `queue.add` writes to a different system — Redis, a message broker, a hosted queue, a workflow engine with its own persistence — and that system has never heard of the transaction. Two writes, two systems, no shared commit.
+
+## Three ways to be inconsistent
+
+Every ordering of those two writes has a window where one lands and the other doesn't:
+
+- **The job lands, the commit doesn't.** `queue.add` succeeds, then the commit fails on a constraint violation, a deadlock or a dropped connection. A worker picks up `send-welcome-email` for a user that was never saved.
+- **The commit lands, the job doesn't.** Move `queue.add` after the commit to fix the first case, and the process can now die between the two, or the queue can be unreachable for a moment. The user exists and nobody will ever email them, and nothing records that a job is missing.
+- **The job lands twice.** `queue.add` reaches the queue, but the response is lost on the way back. The caller sees an error and retries, and two jobs exist.
+
+<Diagram label="The business write commits in the database; the enqueue commits in the queue; a crash or error between the two leaves one without the other">
+  <Flow>
+    <Node>handler</Node>
+    <Rows spine columns="minmax(6rem, auto) auto">
+      <Flow>
+        <Arrow label="INSERT user" />
+        <Group title="database">
+          <Node tone="green" sub="commit 1">users</Node>
+        </Group>
+      </Flow>
+      <Flow>
+        <Arrow label="add job" />
+        <Group title="queue">
+          <Node tone="amber" sub="commit 2">send-welcome-email</Node>
+        </Group>
+      </Flow>
+    </Rows>
+  </Flow>
+</Diagram>
+
+Reordering the calls only chooses which window you live in. Retrying harder doesn't close any of them either: you can't make two independent systems commit atomically without a coordination protocol such as two-phase commit, which most queues and database drivers don't speak and which holds locks across both systems while it runs.
+
+This is the **dual-write problem**, and it isn't a flaw of any particular queue. It appears wherever the state of your jobs lives in a different system from the state of your business. A Redis-backed queue makes it obvious; a workflow engine hides it better, because everything *inside* a workflow is durable, but the moment the workflow starts from, or writes back to, your application database, the boundary between the two is a dual write again.
+
+## The transactional outbox
+
+The textbook fix is the **transactional outbox**. Instead of writing to the queue, the handler inserts a row into an `outbox` table in the same transaction as the business write. A separate relay process reads the outbox, publishes each row to the queue, and marks it sent.
+
+```sql
+BEGIN;
+INSERT INTO users (id, name, email) VALUES ($1, 'Alice', 'alice@example.com');
+INSERT INTO outbox (topic, payload) VALUES ('send-welcome-email', '{"userId": "…"}');
+COMMIT;
+```
+
+Now the user and the intent to send the email commit together or not at all. The outbox is correct, and it is also a second copy of the queue that you operate:
+
+- An `outbox` table, its migrations and its cleanup.
+- A relay process, its deployment and its supervision.
+- Duplicates: the relay can crash between publishing a row and marking it sent, so it publishes at least once and every consumer must tolerate the same message twice.
+- Lag: a stuck relay means jobs silently stop flowing, so it needs its own monitoring.
+
+At this point the queue holds nothing the outbox doesn't already hold durably. It is worth asking what the second system is still buying.
+
+## Make the queue a table
+
+If the queue *is* a table in the same database as the business data, enqueueing is just another `INSERT` in the same transaction. The outbox and the queue collapse into one table, and the relay disappears:
+
+```sql
+BEGIN;
+INSERT INTO users (id, name, email) VALUES ($1, 'Alice', 'alice@example.com');
+INSERT INTO job (type_name, input, status)
+VALUES ('send-welcome-email', '{"userId": "…"}', 'pending');
+COMMIT;
+```
+
+That closes every window. If the transaction rolls back, the job never existed; if it commits, the job exists exactly once. Workers claim jobs straight from the table. On PostgreSQL, `FOR UPDATE SKIP LOCKED` lets many workers pull from the same table without blocking on each other or claiming the same row:
+
+```sql
+UPDATE job
+SET status = 'running', attempt = attempt + 1
+WHERE id = (
+  SELECT id FROM job
+  WHERE status = 'pending' AND scheduled_at <= now()
+  ORDER BY scheduled_at
+  FOR UPDATE SKIP LOCKED
+  LIMIT 1
+)
+RETURNING *;
+```
+
+Jobs as rows bring more than consistency:
+
+- **They are queryable.** "Which welcome emails are still pending for users created in the last hour?" is a `JOIN`, not an export from another system.
+- **One set of operations.** One backup, one replication setup, one place to look when something is wrong.
+- **Tests use the real thing.** An integration test runs against the same database the code uses in production, with no queue to mock.
+- **Migrations stay together.** Changes to the job table ship with the application's own migrations.
+
+## What it costs
+
+Moving the queue into the database moves its load there too, and it is worth being honest about the trade:
+
+- **The database is the ceiling.** Every enqueue, claim and completion is a write. A well-indexed table on a single PostgreSQL instance handles a lot of jobs, but a system whose job volume justifies its own infrastructure tier is better served by dedicated queue infrastructure.
+- **Latency needs a signal.** A worker that only polls the table picks a job up on its next poll. Waking workers immediately needs a notification after the commit — a side effect that must not fire if the transaction rolls back. That is its own small problem, covered in [Side effects after commit](../post-commit-side-effects/).
+- **The table needs care.** Completed rows accumulate and hot rows churn, so the table needs cleanup and, on PostgreSQL, healthy vacuuming.
+- **Producers need the database.** A service that doesn't share the database can't enqueue in its transaction, so this fits work that starts where the data lives.
+
+None of this solves the whole problem yet. The enqueue now commits with the business write, but the job still has to *finish*, and a handler that writes to the database and then reports "done" to the queue is a dual write running in the other direction. That half is [Finishing a job](../finishing-a-job/).
+
+Queuert is built on this design; [Job Processing](../../how-it-works/job-processing/#transactional-design) describes how it applies it.

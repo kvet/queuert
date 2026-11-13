@@ -26,6 +26,7 @@ const page = (slug: string, title: string, description: string | null): SourcePa
   title,
   description,
   layout: "default",
+  date: null,
   api: null,
 });
 

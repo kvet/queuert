@@ -23,6 +23,7 @@ const page: SourcePage = {
   title: "Setup guide",
   description: "How to set up.",
   layout: "default",
+  date: null,
   api: null,
 };
 

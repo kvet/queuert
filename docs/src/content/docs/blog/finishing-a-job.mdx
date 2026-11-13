@@ -1,0 +1,125 @@
+---
+title: Finishing a job
+description: The other half of the dual-write problem — why a handler's writes and the record that its job is done drift apart, and how to commit them together.
+date: "2026-05-19"
+---
+
+import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/diagram";
+
+[The dual-write problem](../dual-write-problem/) is usually told from the producer's side: the business write and the enqueue land in two systems, so one can happen without the other. Putting the queue in the same database fixes that side. But the same hazard shows up again at the other end of the pipe, when a worker runs the job.
+
+## The mirror image
+
+Here is a typical handler. It reads an order, captures the payment, and saves the payment id:
+
+```ts
+worker.process("capture-payment", async (job) => {
+  const order = await db.orders.find(job.input.orderId);
+
+  const { paymentId } = await payments.capture(order.id, order.amount);
+
+  await db.orders.update(order.id, { paymentId });
+  // Returning tells the queue the job is done.
+});
+```
+
+Four steps that look like one. The `UPDATE` commits in the database. The "this job is done" record is a separate write that the worker library makes *after* the handler returns — to Redis, to a broker, to a workflow engine, or to the job table on its own connection. If the worker dies between the two (a deploy, an out-of-memory kill, a network partition), the database has the payment id, but the queue still thinks the job is in flight. The job runs again, and so does the payment capture.
+
+Producer side: *did the business row and the job both get created?* Consumer side: *did the handler's writes and the completion both land?* It is the same problem, mirrored.
+
+Note that a database-backed queue doesn't fix this by itself. **Same database is not the same transaction.** If the library marks the job completed in its own transaction after your handler's transaction committed, there are still two commits with a crash window between them.
+
+## "Make your handlers idempotent"
+
+The standard answer is to make every handler safe to run twice: guard the update with `WHERE payment_id IS NULL`, check whether the work was already done before doing it, keep a table of processed message ids. This is real advice and it works. It is also the dual-write problem handed back to the application: every handler author has to invent a deduplication scheme for every write, because the queue and the database can't agree on whether the work happened.
+
+For writes to your own database, there is a structural fix instead.
+
+## Complete inside the handler's transaction
+
+Give the handler the transaction in which the job is completed. The domain writes, the completion of the job and the insert of the next step all commit together:
+
+```sql
+BEGIN;
+SELECT available FROM stock WHERE sku = $1 FOR UPDATE;
+UPDATE stock SET available = available - 1 WHERE sku = $1;
+INSERT INTO reservation (order_id, sku) VALUES ($2, $1);
+
+UPDATE job SET status = 'completed' WHERE id = $3;               -- this job is done
+INSERT INTO job (type_name, input, status)                      -- and the next one exists
+VALUES ('capture-payment', '{"orderId": "…"}', 'pending');
+COMMIT;
+```
+
+There is no second write to lose. If the handler throws, everything rolls back and the job stays claimable for its next attempt. If the worker dies mid-transaction, the database rolls the transaction back when the connection drops. Either the stock was reserved *and* the job completed *and* the next step was scheduled, or none of it happened. A job whose work lives entirely in your database (state machines, counters, ledger entries) needs no idempotency scheme at all.
+
+<Diagram label="Completion in a separate write leaves a crash window; completion in the handler's transaction commits with the domain writes">
+  <Rows columns="auto">
+    <Group title="two commits">
+      <Flow>
+        <Node sub="commit 1">domain writes</Node>
+        <Arrow label="crash here" tone="red" dashed />
+        <Node tone="amber" sub="commit 2">mark completed</Node>
+      </Flow>
+    </Group>
+    <Group title="one commit">
+      <Node tone="green" sub={"domain writes\nmark completed\nnext job"}>commit</Node>
+    </Group>
+  </Rows>
+</Diagram>
+
+## When the work calls out
+
+A handler that charges a card or sends an email can't put that call inside the transaction. Holding a transaction, its locks and a pooled connection open across a network request is how databases fall over, and a rollback can't take back a request that already reached the other side.
+
+So split the handler in two: do the external work outside any transaction, then record its result in one transaction together with the completion.
+
+```ts
+worker.process("capture-payment", async (job) => {
+  const order = await db.orders.find(job.input.orderId);
+
+  // Outside any transaction. May run again on a later attempt.
+  const { paymentId } = await payments.capture(order.id, order.amount, {
+    idempotencyKey: `capture-payment-${job.id}`,
+  });
+
+  await db.transaction(async (tx) => {
+    await tx.orders.update(order.id, { paymentId });
+    await job.complete(tx, { continueWith: "ship-order", input: { orderId: order.id } });
+  });
+});
+```
+
+The external call still has to be idempotent. That isn't a limitation of any library; a request that reached the other side can't be taken back, so any handler that calls out must expect to run again after a crash. Derive the idempotency key from the job, never from the attempt: a key that changes between attempts tells the payment provider that the retry is a new payment.
+
+What changes is everything *after* the call. Recording the payment id, completing the job and scheduling `ship-order` are one commit. If the worker dies after the capture but before that commit, the next attempt repeats the capture with the same key, gets the original payment back, and records it. There is exactly one place that says whether the work was recorded.
+
+## Who still owns the job?
+
+One case is left. A worker claims a job and then stalls: a long garbage-collection pause, a frozen container, a network partition between the worker and the database. To keep jobs from being stuck forever, the queue gives each claim a lease, and a job whose lease ran out goes back to be claimed again. Now two attempts are in flight. If the first one wakes up and commits, the job is completed twice, and every domain write in that transaction lands twice.
+
+The fix is a **fencing token**. Each claim writes a new token on the job row, and the completion is conditional on it:
+
+```sql
+UPDATE job
+SET status = 'completed'
+WHERE id = $1 AND status = 'running' AND attempt_token = $2;
+```
+
+If the update matches no row, a newer attempt owns the job, and the handler throws. Because the completion runs in the same transaction as the domain writes, throwing rolls those back too: the stale attempt's whole transaction disappears, not just its completion. Folding completion into the handler's transaction is what lets one conditional write guard all of them.
+
+A handler that commits other transactions before the final one can protect them the same way: lock the job row at the start of the transaction (`SELECT … FOR UPDATE`) and check the token before writing. Any reclaim of the job then waits until that transaction finishes, so every write that commits after a successful check committed while the attempt owned the job.
+
+## The shape of the guarantee
+
+Put both halves together:
+
+- **Creating work.** The business write and the new job are one commit. No outbox, no relay.
+- **Database-only work.** Domain writes, completion and the next step are one commit, fenced by the attempt token. The effect happens once, without an idempotency scheme.
+- **Work that calls out.** The external call runs at least once and needs an idempotency key derived from the job. Recording its result is one commit with the completion and the next step.
+
+The dual-write problem was never really about queues. It is about two systems that have to agree with no way to make them. Removing the second system is the only real fix, and a relational database is very good at the one thing left to do: committing several writes together.
+
+There is one more kind of side effect that fits none of these: work that should follow a commit but is fine to lose, like a notification that wakes the next worker. That is [Side effects after commit](../post-commit-side-effects/).
+
+In Queuert, a handler calls `complete` in its own transaction; [Job Processing](../../how-it-works/job-processing/) covers the attempt lifecycle, ownership and `fence`.

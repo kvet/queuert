@@ -41,6 +41,7 @@ export type SourcePage = {
   title: string;
   description: string | null;
   layout: "default" | "wide";
+  date: string | null;
   api: { package: string; kind: string | null; experimental: boolean; usedIn: string[] } | null;
 };
 
@@ -67,7 +68,13 @@ export const pagesFromSources = (sources: { file: string; source: string }[]): S
   const guides = sources.filter(({ file }) => !file.startsWith("api/"));
   const pages = sources.map(({ file, source }): SourcePage => {
     if (file.endsWith(".tsx")) {
-      return { slug: pageSlug(file), file, ...readPageMeta(source, file), api: null };
+      return {
+        slug: pageSlug(file),
+        file,
+        ...readPageMeta(source, file),
+        date: null,
+        api: null,
+      };
     }
     const frontmatter = parseYaml(/^---\n([\s\S]*?)\n---/.exec(source)?.[1] ?? "") ?? {};
     const slug = pageSlug(file);
@@ -90,6 +97,7 @@ export const pagesFromSources = (sources: { file: string; source: string }[]): S
             : null
           : String(frontmatter.description),
       layout: frontmatter.layout === "wide" ? "wide" : "default",
+      date: frontmatter.date === undefined ? null : String(frontmatter.date),
       api: apiMatch
         ? {
             package: apiMatch[1] ?? "",
