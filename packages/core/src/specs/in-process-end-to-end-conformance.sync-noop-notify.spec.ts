@@ -15,9 +15,25 @@ const it = baseIt
     createNotifyAdapter: () => noopNotifyAdapter,
   }));
 
+const customIdsIt = baseIt
+  .extend("resourceLeakCheck", { auto: true }, detectResourceLeaks())
+  .extend("conformance", { scope: "file" }, async (): Promise<StateAdapterConformanceContext> => ({
+    createStateAdapter: () =>
+      createInProcessStateAdapter({
+        generateJobId: () => `job.${crypto.randomUUID()}`,
+        generateWorkerId: () => `worker.${crypto.randomUUID()}`,
+      }),
+    withNonTransactionContext: (fn) => fn({ outsideTransaction: true }),
+    createNotifyAdapter: () => noopNotifyAdapter,
+  }));
+
 // NOTE: hack for vitest plugin
 baseIt("index");
 
 describe("Sync In-Process End-to-End Conformance, noop notify", () => {
   conformanceTestSuite({ it, groups: endToEndBaseGroups });
+});
+
+describe("Sync In-Process End-to-End Conformance, noop notify - Custom IDs", () => {
+  conformanceTestSuite({ it: customIdsIt, groups: endToEndBaseGroups });
 });

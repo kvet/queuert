@@ -394,9 +394,11 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         }>();
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+        const workerId = stateAdapter.config.generateWorkerId();
         const workerRunner = yield* resource(
           createWorkerRunner({
             client,
+            workerId,
             concurrency: 1,
             processors: createProcessors({
               client,
@@ -423,7 +425,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                           assert.equal(completedJob.typeName, "test");
                           assert.equal(completedJob.status, "completed");
                           if (completedJob.status === "completed") {
-                            assert.match(completedJob.completedBy ?? "", /^[0-9a-f-]{36}$/);
+                            assert.equal(completedJob.completedBy, workerId);
                           }
                           return completedJob;
                         }),
@@ -455,7 +457,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         const completedJob = yield* step(client.getJob({ id: chain.id }));
         assert.equal(completedJob?.status, "completed");
         if (completedJob?.status === "completed") {
-          assert.match(completedJob.completedBy ?? "", /^[0-9a-f-]{36}$/);
+          assert.equal(completedJob.completedBy, workerId);
         }
       }),
     },

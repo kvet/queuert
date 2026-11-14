@@ -29,6 +29,19 @@ const syncIt = baseIt.extend(
   }),
 );
 
+const customIdsIt = baseIt.extend(
+  "conformance",
+  { scope: "file" },
+  async (): Promise<StateAdapterConformanceContext> => ({
+    createStateAdapter: () =>
+      createInProcessStateAdapter({
+        generateJobId: () => `job.${crypto.randomUUID()}`,
+        generateWorkerId: () => `worker.${crypto.randomUUID()}`,
+      }),
+    withNonTransactionContext: (fn) => fn({ outsideTransaction: true }),
+  }),
+);
+
 const cappedIt = baseIt.extend(
   "conformance",
   { scope: "file" },
@@ -75,6 +88,10 @@ describe("In-Process State Adapter Conformance", () => {
 
 describe("Sync In-Process State Adapter Conformance", () => {
   conformanceTestSuite({ it: syncIt, groups: stateAdapterBaseGroups });
+});
+
+describe("Sync In-Process State Adapter Conformance - Custom IDs", () => {
+  conformanceTestSuite({ it: customIdsIt, groups: stateAdapterBaseGroups });
 });
 
 describe("In-Process State Adapter Conformance - Count Cap", () => {
