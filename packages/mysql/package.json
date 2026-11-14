@@ -55,6 +55,7 @@
   },
   "devDependencies": {
     "@queuert/helpers": "workspace:*",
+    "@queuert/sync-async": "workspace:*",
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@queuert/typed-sql": "workspace:*",

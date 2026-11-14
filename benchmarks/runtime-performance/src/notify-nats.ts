@@ -5,8 +5,12 @@
 import { type NatsConnection, connect } from "@nats-io/transport-node";
 import { createNatsNotifyAdapter } from "@queuert/nats";
 import { NatsContainer } from "@testcontainers/nats";
-import { createClient, createWorkerRunner, createProcessors } from "queuert";
-import { createInProcessStateAdapter } from "queuert/internal";
+import {
+  createClient,
+  createWorkerRunner,
+  createProcessors,
+  createInProcessStateAdapter,
+} from "queuert";
 
 import {
   createCompletionCounter,
@@ -51,7 +55,7 @@ await runDoubleRunBenchmark<Infra>({
     const completions = createCompletionCounter(jobCount);
 
     const stateAdapter = await step("After creating state adapter", async () =>
-      createInProcessStateAdapter(),
+      createInProcessStateAdapter({ mode: "async" }),
     );
 
     const notifyAdapter = await step("After creating notify adapter", async () =>

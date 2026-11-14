@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { createAsyncRwLock } from "@queuert/sqlite";
 import {
+  asyncSqliteStateProviderConformanceCases,
   createSqliteMigratorConformanceContext,
   type SqliteMigratorConformanceContext,
   createSqliteStateProviderConformanceContext,
@@ -46,7 +47,10 @@ describe("state-sqlite-prisma provider conformance", () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  for (const conformanceCase of sqliteStateProviderConformanceCases) {
+  for (const conformanceCase of [
+    ...sqliteStateProviderConformanceCases,
+    ...asyncSqliteStateProviderConformanceCases,
+  ]) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run(context);
     });

@@ -1,0 +1,1 @@
+error-steps-outside-yield/input.ts:8:29: a compiled sync-async function has no `.steps`: call it only as `yield* other.steps(...)` in a sync-async body: findRow.steps

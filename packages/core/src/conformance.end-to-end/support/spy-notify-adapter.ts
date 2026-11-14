@@ -1,3 +1,6 @@
+import { type Mode, type MaybePromise, step, syncAsync } from "@queuert/sync-async";
+
+import { runInModeOf } from "../../conformance/adapters.ts";
 import type { NotifyAdapter } from "../../notify-adapter/notify-adapter.ts";
 
 export type NotifySpyCall = {
@@ -5,30 +8,32 @@ export type NotifySpyCall = {
   args: string[];
 };
 
-export type SpyNotifyAdapter = NotifyAdapter & {
+export type SpyNotifyAdapter<TNotifyAdapter extends NotifyAdapter<Mode>> = TNotifyAdapter & {
   calls: NotifySpyCall[];
 };
 
-export const createSpyNotifyAdapter = (notifyAdapter: NotifyAdapter): SpyNotifyAdapter => {
+export const createSpyNotifyAdapter = <TNotifyAdapter extends NotifyAdapter<Mode>>(
+  notifyAdapter: TNotifyAdapter,
+): SpyNotifyAdapter<TNotifyAdapter> => {
   const calls: NotifySpyCall[] = [];
 
   const wrap =
     (name: NotifySpyCall["name"]) =>
-    async (args: string[]): Promise<void> => {
+    (args: string[]): MaybePromise<void> => {
       calls.push({ name, args });
-      await notifyAdapter[name](args);
+      return runInModeOf(
+        notifyAdapter,
+        syncAsync(function* () {
+          yield* step(notifyAdapter[name](args));
+        }),
+      );
     };
 
   return {
+    ...notifyAdapter,
     calls,
-
     notifyJobsScheduled: wrap("notifyJobsScheduled"),
-    listenJobScheduled: notifyAdapter.listenJobScheduled,
     notifyChainsCompleted: wrap("notifyChainsCompleted"),
-    listenChainCompleted: notifyAdapter.listenChainCompleted,
     notifyJobAttemptsLost: wrap("notifyJobAttemptsLost"),
-    listenJobAttemptLost: notifyAdapter.listenJobAttemptLost,
-    close: notifyAdapter.close,
-    [Symbol.asyncDispose]: notifyAdapter.close,
-  };
+  } as unknown as SpyNotifyAdapter<TNotifyAdapter>;
 };

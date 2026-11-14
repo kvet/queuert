@@ -1,3 +1,5 @@
+import type { Mode } from "@queuert/sync-async";
+
 import type { JobTypeValidationError } from "../errors.ts";
 import type { NotifyAdapter } from "../notify-adapter/notify-adapter.ts";
 import type {
@@ -108,10 +110,10 @@ export type ObservabilityHelper = {
   ) => void;
 
   // notify adapter
-  notifyAdapterError: (operation: keyof NotifyAdapter, error: unknown) => void;
+  notifyAdapterError: (operation: keyof NotifyAdapter<Mode>, error: unknown) => void;
 
   // state adapter
-  stateAdapterError: (operation: keyof StateAdapter<any, any, any>, error: unknown) => void;
+  stateAdapterError: (operation: keyof StateAdapter<any, any, any, Mode>, error: unknown) => void;
 
   // job type validation
   jobTypeValidationError: (error: JobTypeValidationError) => void;

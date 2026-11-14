@@ -1,4 +1,5 @@
 import { conformanceTestSuite } from "@queuert/helpers/conformance";
+import { stateAdapterAsyncGroups } from "queuert/conformance-internal";
 import { it as baseIt, describe, expect } from "vitest";
 
 import { sqliteStateAdapterConformanceGroups } from "../conformance/state-provider-conformance.ts";
@@ -21,23 +22,28 @@ const options = {
   countCap: 3,
 };
 
-const it = baseIt
-  .extend("db", { scope: "file" }, varianceDb)
-  .extend("conformance", { scope: "file" }, varianceConformance(options))
-  .extend("tableNames", { scope: "file" }, varianceTableNames(options));
-
 baseIt("index");
 
-describe("SQLite State Adapter Variance - All Custom Options", () => {
-  it("creates tables with correct prefix", ({ tableNames }) => {
-    expect(tableNames).toContain(`${tablePrefix}job`);
-    expect(tableNames).toContain(`${tablePrefix}job_blocker`);
-    expect(tableNames).toContain(`${tablePrefix}worker`);
-    expect(tableNames).toContain(`${tablePrefix}migration`);
-  });
+for (const mode of ["async", "sync"] as const) {
+  const it = baseIt
+    .extend("db", { scope: "file" }, varianceDb)
+    .extend("conformance", { scope: "file" }, varianceConformance(options, mode))
+    .extend("tableNames", { scope: "file" }, varianceTableNames(options));
 
-  conformanceTestSuite({
-    it,
-    groups: sqliteStateAdapterConformanceGroups,
+  describe(`SQLite State Adapter Variance - All Custom Options (${mode})`, () => {
+    it("creates tables with correct prefix", ({ tableNames }) => {
+      expect(tableNames).toContain(`${tablePrefix}job`);
+      expect(tableNames).toContain(`${tablePrefix}job_blocker`);
+      expect(tableNames).toContain(`${tablePrefix}worker`);
+      expect(tableNames).toContain(`${tablePrefix}migration`);
+    });
+
+    conformanceTestSuite({
+      it,
+      groups: [
+        ...sqliteStateAdapterConformanceGroups,
+        ...(mode === "async" ? stateAdapterAsyncGroups : []),
+      ],
+    });
   });
-});
+}

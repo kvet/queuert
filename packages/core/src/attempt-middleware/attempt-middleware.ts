@@ -1,12 +1,14 @@
+import type { Mode } from "@queuert/sync-async";
+
 import type { BaseJobTypeDefinitions } from "../job-types/job-type.ts";
 import type { ResolvedRunningJob } from "../job-types/job-types.resolvers.ts";
 import type {
+  StateAdapter,
   GetStateAdapterJobId,
   GetStateAdapterWorkerId,
-  StateAdapter,
 } from "../state-adapter/state-adapter.ts";
 
-type RunningJob<TStateAdapter extends StateAdapter<any, any, any>> = ResolvedRunningJob<
+type RunningJob<TStateAdapter extends StateAdapter<any, any, any, Mode>> = ResolvedRunningJob<
   GetStateAdapterJobId<TStateAdapter>,
   GetStateAdapterWorkerId<TStateAdapter>,
   BaseJobTypeDefinitions,
@@ -26,7 +28,7 @@ type RunningJob<TStateAdapter extends StateAdapter<any, any, any>> = ResolvedRun
  * outermost. Each `next(ctx)` accumulates ctx for inner layers.
  */
 export type AttemptMiddleware<
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any, any, Mode>,
   THandlerCtx extends Record<string, unknown> = Record<string, unknown>,
 > = {
   wrapHandler: <T>(opts: {
@@ -47,7 +49,7 @@ export type AttemptMiddleware<
  * multi-element tuples to `unknown`.
  * @internal
  */
-export type AnyAttemptMiddleware = AttemptMiddleware<StateAdapter<any, any, any>, any>;
+export type AnyAttemptMiddleware = AttemptMiddleware<StateAdapter<any, any, any, Mode>, any>;
 
 /** Merge handler ctx from a tuple of {@link AttemptMiddleware}s. */
 export type MergedAttemptHandlerCtx<T extends readonly AnyAttemptMiddleware[]> =

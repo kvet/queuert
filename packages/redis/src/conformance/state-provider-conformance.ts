@@ -5,6 +5,7 @@ import type { ConformanceTestCase } from "queuert/conformance";
 import {
   type ConformanceGroup,
   type SchemaFenceConformanceContext,
+  stateAdapterAsyncGroups,
   stateAdapterBaseGroups,
   stateAdapterSchemaFenceGroups,
   toConformanceTestCases,
@@ -250,7 +251,7 @@ export const createRedisStateProviderConformanceContext = ({
 export const redisStateProviderConformanceGroups: ConformanceGroup<RedisStateProviderConformanceContext>[] =
   [
     redisStateProviderEvalGroup,
-    ...withoutLockWaitCases(stateAdapterBaseGroups),
+    ...withoutLockWaitCases([...stateAdapterBaseGroups, ...stateAdapterAsyncGroups]),
     ...stateAdapterSchemaFenceGroups,
   ];
 

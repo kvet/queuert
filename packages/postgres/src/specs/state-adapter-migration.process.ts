@@ -3,7 +3,7 @@ import {
   type Migration,
   createMigrator,
   createTemplateApplier,
-  createTemplateExecutor,
+  createTypedSqlExecutor,
 } from "@queuert/typed-sql";
 import { Pool } from "pg";
 
@@ -37,7 +37,10 @@ if (process.argv[1] === import.meta.filename) {
     worker_id_type: "text",
   });
   const store = createMigrationStore(provider, applyTemplate);
-  const migrations = createSchemaMigrations(createTemplateExecutor(provider, applyTemplate));
+  const exec = createTypedSqlExecutor(provider);
+  const migrations = createSchemaMigrations(async (txCtx: PgPoolContext, statement) =>
+    exec({ txCtx, sql: applyTemplate(statement) }),
+  );
   await runDeploymentProcess({
     migrate: async ({ version, pause }) => {
       const recordMigration = store.recordMigration;

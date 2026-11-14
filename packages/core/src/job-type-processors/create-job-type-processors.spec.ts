@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { createClient } from "../client.ts";
+import { createClient } from "../client/client.ts";
 import { defineJobTypes } from "../job-types/define-job-types.ts";
-import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.ts";
+import { createInProcessStateAdapter } from "../state-adapter.in-process/state-adapter.in-process.ts";
 import { createProcessors } from "./create-job-type-processors.ts";
 
 type Defs = {
@@ -10,7 +10,7 @@ type Defs = {
 };
 const jobTypes = defineJobTypes<Defs>();
 
-const stateAdapter = createInProcessStateAdapter();
+const stateAdapter = createInProcessStateAdapter({ mode: "async" });
 const client = createClient({ stateAdapter, jobTypes });
 
 describe("registry-level backoffConfig cascade", () => {

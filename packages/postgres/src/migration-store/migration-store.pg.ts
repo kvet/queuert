@@ -177,7 +177,7 @@ export const createPgMigrationStore = <TTxContext extends BaseTxContext>({
   };
 };
 
-export const createApplicationPgMigrationStore = <TTxContext extends BaseTxContext>({
+export const createPgMigratorStore = <TTxContext extends BaseTxContext>({
   stateProvider,
   schema = "public",
   migrationTableName = "migration",
@@ -276,7 +276,7 @@ export const createPgMigrator = <TTxContext extends BaseTxContext>({
   assertMigrationLockOptions("createPgMigrator", lock);
   return createMigrator({
     migrations,
-    store: createApplicationPgMigrationStore({ stateProvider, ...tables }),
+    store: createPgMigratorStore({ stateProvider, ...tables }),
     lock,
     before,
     after,

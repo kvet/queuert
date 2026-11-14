@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import type { Mode } from "@queuert/sync-async";
 import type { BaseTxContext } from "queuert";
 import { type SeedSentinels, seedConfig } from "queuert/conformance-internal";
 
@@ -13,7 +14,7 @@ const futureTs = (ms: number) => `datetime('now', 'subsec', '+${ms / 1000} secon
 const pastTs = (seconds: number) => `datetime('now', 'subsec', '-${seconds} seconds')`;
 
 export const fastSeedAllStates = async <TTxContext extends BaseTxContext>(
-  stateProvider: SqliteStateProvider<TTxContext>,
+  stateProvider: SqliteStateProvider<TTxContext, Mode>,
   { scale = 1, tablePrefix = "queuert_" }: { scale?: number; tablePrefix?: string } = {},
 ): Promise<SeedSentinels> => {
   const job = `${tablePrefix}job`;
@@ -153,7 +154,6 @@ export const fastSeedAllStates = async <TTxContext extends BaseTxContext>(
         `('${id}', '${tierName}', '${id}', 0, '${JSON.stringify({ index: i })}', 'blocked', 'running', ${pastTs(120)})`,
     );
 
-    // Link each blocked job to all blockers in this tier
     for (let start = 0; start < blockedIds.length; start += CHUNK) {
       const chunk = blockedIds.slice(start, start + CHUNK);
       const rows = chunk.flatMap((jobId) =>
@@ -199,7 +199,6 @@ export const fastSeedAllStates = async <TTxContext extends BaseTxContext>(
         `('${id}', '${tierBlockedName}', '${id}', 0, '${JSON.stringify({ index: i })}', 'blocked', 'running', ${pastTs(120)})`,
     );
 
-    // Each blocker blocks its own slice (round-robin assignment)
     for (let start = 0; start < blockedIds.length; start += CHUNK) {
       const chunk = blockedIds.slice(start, start + CHUNK);
       const rows = chunk.map(

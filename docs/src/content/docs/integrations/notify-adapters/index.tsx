@@ -44,6 +44,17 @@ const adapters: OptionCard[] = [
     action: { label: "NATS notify adapter", href: "/integrations/notify-adapters/nats/" },
   },
   {
+    name: "IPC",
+    status: { label: "experimental", tone: "caution" },
+    pick: "For processes on one host, such as workers sharing a SQLite file. No server: processes find each other through a shared directory.",
+    facts: [
+      { label: "Package", value: "@queuert/ipc" },
+      { label: "Transport", value: "Unix sockets · named pipes" },
+      { label: "Adapter", value: 'NotifyAdapter<"sync">' },
+    ],
+    action: { label: "IPC notify adapter", href: "/integrations/notify-adapters/ipc/" },
+  },
+  {
     name: "Custom",
     pick: "A NotifyAdapter of your own, for another message broker.",
     facts: [
@@ -88,10 +99,11 @@ const members = (): FieldItem[] => [
         <code>close</code> releases internal resources (shared subscriptions, listener registries)
         and cascades into the underlying provider, when there is one.{" "}
         <code>[Symbol.asyncDispose]</code> calls <code>close</code>, so an adapter can be held with{" "}
-        <code>await using</code>.
+        <code>await using</code>. On a <code>"sync"</code> adapter, <code>close</code> returns
+        nothing and <code>[Symbol.dispose]</code> calls it, so it is held with <code>using</code>.
       </>
     ),
-    extra: ["close", "[Symbol.asyncDispose]"],
+    extra: ["close", "[Symbol.asyncDispose]", "[Symbol.dispose]"],
   },
 ];
 
@@ -110,7 +122,11 @@ const Page = () => (
       itself: the worker runners created from it and its <code>awaitChain</code> calls wake the
       moment a transaction commits. Nothing crosses the process, or even the client: a worker runner
       in another process, or one built from a second client in the same process, polls the database
-      every <code>pollIntervalMs</code>. No additional packages or infrastructure are required.
+      every <code>pollIntervalMs</code>. No additional packages or infrastructure are required. To
+      let several clients in one process wake each other, pass them one shared{" "}
+      <code>createInProcessNotifyAdapter()</code> from <code>queuert</code>. Its default{" "}
+      <code>"sync"</code> mode works over either kind of state adapter;{" "}
+      <code>{'mode: "async"'}</code> is optional.
     </p>
     <Aside type="tip">
       A single process with one client needs no notify adapter. Once workers run in other processes,
@@ -134,6 +150,15 @@ const Page = () => (
       proseNames
       items={members()}
     />
+    <p>
+      A transport that never waits, such as in-process listeners or local sockets, can implement{" "}
+      <code>{'NotifyAdapter<"sync">'}</code> instead: the same members, each returning its result
+      directly and throwing on failure, plus <code>sync: true</code>, and a <code>close</code> that
+      returns nothing, with <code>[Symbol.dispose]</code> in place of{" "}
+      <code>[Symbol.asyncDispose]</code>, so the adapter is held with <code>using</code>.{" "}
+      <code>createClient</code> takes either kind over an async state adapter, and only a sync one
+      over a sync state adapter.
+    </p>
 
     <h2>How adapters behave</h2>
     <ul>
@@ -162,10 +187,11 @@ const Page = () => (
           <code>close</code> is idempotent.
         </strong>{" "}
         The second call is a no-op; after close, <code>notify*</code> and <code>listen*</code> calls
-        reject, while dispose functions returned before close still work. On shutdown, stop the
+        fail, while dispose functions returned before close still work. On shutdown, stop the
         workers, close the notify adapter, close the state adapter, then close the clients and pools
-        you own. Holding each with <code>await using</code>, declared in the order they are created,
-        closes them in this order.
+        you own. Holding each with <code>await using</code> (<code>using</code> for a{" "}
+        <code>"sync"</code> adapter), declared in the order they are created, closes them in this
+        order.
       </li>
     </ul>
     <p>

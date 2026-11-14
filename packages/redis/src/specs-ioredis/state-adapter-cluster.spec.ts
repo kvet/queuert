@@ -3,6 +3,7 @@ import { conformanceTestSuite } from "@queuert/helpers/conformance";
 import { acquireRedisCluster } from "@queuert/testcontainers";
 import { Cluster } from "ioredis";
 import {
+  endToEndAsyncGroups,
   endToEndBaseGroups,
   stateAdapterConcurrentTransactionGroups,
 } from "queuert/conformance-internal";
@@ -41,5 +42,8 @@ describe("Redis Cluster State Provider Conformance (ioredis)", () => {
 });
 
 describe("Redis Cluster End-to-End Conformance (ioredis)", () => {
-  conformanceTestSuite({ it, groups: withoutLockWaitCases(endToEndBaseGroups) });
+  conformanceTestSuite({
+    it,
+    groups: withoutLockWaitCases([...endToEndBaseGroups, ...endToEndAsyncGroups]),
+  });
 });

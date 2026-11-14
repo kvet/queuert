@@ -2,7 +2,7 @@ import { runDeploymentProcess } from "@queuert/helpers/testing";
 import { type Migration, createMigrator } from "@queuert/typed-sql";
 import { Pool } from "pg";
 
-import { createApplicationPgMigrationStore } from "../migration-store/migration-store.pg.ts";
+import { createPgMigratorStore } from "../migration-store/migration-store.pg.ts";
 import {
   type PgPoolContext,
   createPgPoolProvider,
@@ -105,7 +105,7 @@ export const NEWER: Migration<PgPoolContext> = {
 if (process.argv[1] === import.meta.filename) {
   const pool = new Pool({ connectionString: process.argv[2] });
   const provider = createPgPoolProvider({ pool });
-  const store = createApplicationPgMigrationStore({ stateProvider: provider });
+  const store = createPgMigratorStore({ stateProvider: provider });
   await runDeploymentProcess({
     migrate: async ({ version, pause }) => {
       const recordMigration = store.recordMigration;

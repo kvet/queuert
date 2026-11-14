@@ -1,16 +1,12 @@
+import type { Mode } from "@queuert/sync-async";
+
 import type { StateAdapter } from "./state-adapter.ts";
 
-/** The transaction context fields spread into an options object, or `undefined` when none were. */
 export const normalizeTxCtx = <T extends Record<string, unknown>>(rest: T): T | undefined =>
   Reflect.ownKeys(rest).length > 0 ? rest : undefined;
 
-/**
- * Returns the transaction context fields spread into an options object, and throws when there
- * are none or they are not inside an open transaction. The types already require the context;
- * this is the backstop for callers that bypass them.
- */
 export const requireTxCtx = <T extends Record<string, unknown>>(
-  stateAdapter: StateAdapter<any, any, any>,
+  stateAdapter: StateAdapter<any, any, any, Mode>,
   rest: T,
   caller: string,
 ): T => {

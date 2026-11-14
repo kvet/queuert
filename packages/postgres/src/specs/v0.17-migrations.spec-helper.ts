@@ -3,7 +3,7 @@ import { type Migration, type TypedSqlTemplate, sql } from "@queuert/typed-sql";
 const transactional = <TTxContext>(
   name: string,
   statements: TypedSqlTemplate<readonly []>[],
-  execute: (txCtx: TTxContext, statement: TypedSqlTemplate<readonly []>) => Promise<void>,
+  execute: (txCtx: TTxContext, statement: TypedSqlTemplate<readonly []>) => Promise<unknown>,
 ): Migration<TTxContext> => ({
   name,
   up: async (txCtx) => {
@@ -161,6 +161,6 @@ WHERE status = 'running'`),
 ];
 
 export const createV017Migrations = <TTxContext>(
-  execute: (txCtx: TTxContext, statement: TypedSqlTemplate<readonly []>) => Promise<void>,
+  execute: (txCtx: TTxContext, statement: TypedSqlTemplate<readonly []>) => Promise<unknown>,
 ): Migration<TTxContext>[] =>
   v017Statements.map(({ name, statements }) => transactional(name, statements, execute));

@@ -11,10 +11,12 @@ const Page = () => (
     <p>
       Running Queuert in production: several workers on one database, reserved capacity, and
       inspecting and pruning what the database holds, and migrating your own tables. Each example
-      runs against PostgreSQL in Docker.
+      except the SQLite one runs against PostgreSQL in Docker.
     </p>
     <h2 id="state-postgres-multi-worker">Multiple worker processes</h2>
     <ExampleDetail name="state-postgres-multi-worker" />
+    <h2 id="state-sqlite-multi-worker">Multiple worker processes on SQLite</h2>
+    <ExampleDetail name="state-sqlite-multi-worker" />
     <h2 id="showcase-multiworker-prioritization">Prioritization</h2>
     <ExampleDetail name="showcase-multiworker-prioritization" />
     <h2 id="showcase-queries">Queries</h2>

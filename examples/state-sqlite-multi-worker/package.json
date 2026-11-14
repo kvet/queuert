@@ -1,0 +1,26 @@
+{
+  "name": "example-state-sqlite-multi-worker",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating multiple worker processes sharing one SQLite database file, with notifications between them over IPC.",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/ipc": "workspace:*",
+    "@queuert/sqlite": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
+    "@types/better-sqlite3": "9.6.0",
+    "better-sqlite3": "13.0.3",
+    "example-state-sqlite-better-sqlite3": "workspace:*",
+    "queuert": "workspace:*"
+  }
+}

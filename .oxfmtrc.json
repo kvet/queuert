@@ -2,5 +2,5 @@
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
   "sortImports": true,
   "sortPackageJson": true,
-  "ignorePatterns": ["docs/**/*.mdx"]
+  "ignorePatterns": ["docs/**/*.mdx", "packages-internal/sync-async/fixtures/**"]
 }

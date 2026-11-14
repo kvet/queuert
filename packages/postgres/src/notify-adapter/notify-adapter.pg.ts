@@ -17,7 +17,7 @@ export const createPgNotifyAdapter = ({
   notifyProvider: PgNotifyProvider;
   /** Prefix for all LISTEN/NOTIFY channel names. @defaultValue `"queuert"` */
   channelPrefix?: string;
-}): NotifyAdapter => {
+}): NotifyAdapter<"async"> => {
   const jobScheduledChannel = `${channelPrefix}_sched`;
   const chainCompletedChannel = `${channelPrefix}_chainc`;
   const attemptLostChannel = `${channelPrefix}_atls`;

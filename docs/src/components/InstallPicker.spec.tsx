@@ -20,6 +20,7 @@ describe("InstallPicker", () => {
       "/queuert/integrations/notify-adapters/postgres/",
       "/queuert/integrations/notify-adapters/redis/",
       "/queuert/integrations/notify-adapters/nats/",
+      "/queuert/integrations/notify-adapters/ipc/",
     ]) {
       expect(html).toContain(`href="${link}"`);
     }

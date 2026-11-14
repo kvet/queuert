@@ -1,18 +1,21 @@
 import assert from "node:assert/strict";
 
 import { sleep } from "@queuert/helpers/sleep";
+import { dynamicSyncAsync, syncAsync, resource, step, wait } from "@queuert/sync-async";
 
-import { createClient } from "../../client.ts";
+import { createClient } from "../../client/client.ts";
 import type { StateAdapterConformanceContext } from "../../conformance.state-adapter/types.ts";
+import { runInModeOf } from "../../conformance/adapters.ts";
 import type { ConformanceCase, ConformanceGroup } from "../../conformance/runner.ts";
 import { createProcessors } from "../../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../../job-types/define-job-types.ts";
 import type { NotifyAdapter } from "../../notify-adapter/notify-adapter.ts";
-import { createWorkerRunner } from "../../worker-runner.ts";
+import type { StateAdapter } from "../../state-adapter/state-adapter.ts";
+import { createWorkerRunner } from "../../worker/worker-runner.ts";
 import { createCaseNotifyAdapter } from "../support/create-case-notify-adapter.ts";
+import { createCaseStateAdapter } from "../support/create-case-state-adapter.ts";
 import { createFlakyStateAdapter } from "../support/flaky-state-adapter.ts";
-import { withCaseTransaction } from "../support/with-case-transaction.ts";
-import type { EndToEndFlakyDbContext, EndToEndStateAdapter } from "../types.ts";
+import type { EndToEndFlakyDbContext, EndToEndTxContext } from "../types.ts";
 
 const completionOptions = { pollIntervalMs: 100, timeoutMs: 15000 };
 
@@ -42,17 +45,17 @@ const multipleWorkers: FlakyWorkerRunnerShape = {
   pollIntervalMs: 100,
 };
 
-const completesChainsOverFlakyStateAdapter = async ({
+const completesChainsOverFlakyStateAdapter = syncAsync(function* ({
   stateAdapter,
   flakyStateAdapter,
   notifyAdapter,
   shape,
 }: {
-  stateAdapter: EndToEndStateAdapter;
-  flakyStateAdapter: EndToEndStateAdapter;
-  notifyAdapter: NotifyAdapter;
+  stateAdapter: StateAdapter<EndToEndTxContext, string, string, "async">;
+  flakyStateAdapter: StateAdapter<EndToEndTxContext, string, string, "async">;
+  notifyAdapter: NotifyAdapter<"async">;
   shape: FlakyWorkerRunnerShape;
-}): Promise<void> => {
+}) {
   const jobTypes = defineJobTypes<{
     test: { entry: true; input: { value: number }; output: { result: number } };
   }>();
@@ -62,7 +65,7 @@ const completesChainsOverFlakyStateAdapter = async ({
     notifyAdapter,
     jobTypes,
   });
-  await using stack = new AsyncDisposableStack();
+  const stack = yield* resource(new AsyncDisposableStack());
   const flakyWorkerRunners = Array.from({ length: shape.workerRunners }, () =>
     stack.use(
       createWorkerRunner({
@@ -77,7 +80,7 @@ const completesChainsOverFlakyStateAdapter = async ({
           processors: {
             test: {
               attemptHandler: async ({ job, complete }) =>
-                withCaseTransaction(flakyStateAdapter, async (txCtx) =>
+                flakyStateAdapter.withTransaction((txCtx) =>
                   complete({ ...txCtx, output: { result: job.input.value * 2 } }),
                 ),
             },
@@ -87,38 +90,42 @@ const completesChainsOverFlakyStateAdapter = async ({
     ),
   );
 
-  const chains = await withCaseTransaction(stateAdapter, async (txCtx) =>
-    client.createChains({
-      ...txCtx,
-      items: Array.from({ length: 20 }, (_, i) => ({
-        typeName: "test",
-        input: { value: i },
-      })),
-    }),
+  const chains = yield* step(
+    stateAdapter.withTransaction((txCtx) =>
+      client.createChains({
+        ...txCtx,
+        items: Array.from({ length: 20 }, (_, i) => ({
+          typeName: "test",
+          input: { value: i },
+        })),
+      }),
+    ),
   );
 
   for (const workerRunner of flakyWorkerRunners) {
-    await workerRunner.start();
+    yield* wait(workerRunner.start());
   }
-  const completedChains = await Promise.all(
-    chains.map(async (chain) => client.awaitChain(chain, completionOptions)),
+  const completedChains = yield* wait(
+    Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions))),
   );
   assert.deepEqual(
     completedChains.map((chain) => chain.output),
     chains.map((_, i) => ({ result: i * 2 })),
   );
-};
+});
 
 const transientErrorsCase = (
   shape: FlakyWorkerRunnerShape,
 ): ConformanceCase<StateAdapterConformanceContext> => ({
   name: `handles transient database errors gracefully${shape.nameSuffix}`,
-  run: async ({ createStateAdapter, createNotifyAdapter }) => {
-    await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-    await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+  run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
+    const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+    const notifyAdapter = yield* resource(
+      createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+    );
     const flaky = createFlakyStateAdapter(stateAdapter);
 
-    await completesChainsOverFlakyStateAdapter({
+    yield* completesChainsOverFlakyStateAdapter.steps({
       stateAdapter,
       flakyStateAdapter: flaky.stateAdapter,
       notifyAdapter,
@@ -128,43 +135,57 @@ const transientErrorsCase = (
     if (flaky.counts.calls > 5) {
       assert.ok(flaky.counts.errors > 0);
     }
-  },
+  }),
 });
 
 const realDatabaseErrorsCase = (
   shape: FlakyWorkerRunnerShape,
 ): ConformanceCase<EndToEndFlakyDbContext> => ({
   name: `handles real database errors gracefully${shape.nameSuffix}`,
-  run: async ({ createFlakyDbStateAdapter, createStateAdapter, createNotifyAdapter }) => {
-    await using flakyStateAdapter: EndToEndStateAdapter = await createFlakyDbStateAdapter();
-    await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-    await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+  run: dynamicSyncAsync(function* ({
+    createFlakyDbStateAdapter,
+    createStateAdapter,
+    createNotifyAdapter,
+  }) {
+    const flakyStateAdapter = yield* resource(createCaseStateAdapter(createFlakyDbStateAdapter));
+    const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+    const notifyAdapter = yield* resource(
+      createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+    );
 
-    await completesChainsOverFlakyStateAdapter({
+    yield* completesChainsOverFlakyStateAdapter.steps({
       stateAdapter,
       flakyStateAdapter,
       notifyAdapter,
       shape,
     });
-  },
+  }),
 });
 
 const connectionErrorsCase = (
   shape: FlakyWorkerRunnerShape,
 ): ConformanceCase<EndToEndFlakyDbContext> => ({
   name: `handles connection errors on statements gracefully${shape.nameSuffix}`,
-  run: async ({ createFlakyConnectionStateAdapter, createStateAdapter, createNotifyAdapter }) => {
-    await using flakyStateAdapter: EndToEndStateAdapter = await createFlakyConnectionStateAdapter();
-    await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-    await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+  run: dynamicSyncAsync(function* ({
+    createFlakyConnectionStateAdapter,
+    createStateAdapter,
+    createNotifyAdapter,
+  }) {
+    const flakyStateAdapter = yield* resource(
+      createCaseStateAdapter(createFlakyConnectionStateAdapter),
+    );
+    const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+    const notifyAdapter = yield* resource(
+      createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+    );
 
-    await completesChainsOverFlakyStateAdapter({
+    yield* completesChainsOverFlakyStateAdapter.steps({
       stateAdapter,
       flakyStateAdapter,
       notifyAdapter,
       shape,
     });
-  },
+  }),
 });
 
 export const stateResilienceGroup: ConformanceGroup<StateAdapterConformanceContext> = {
@@ -173,9 +194,11 @@ export const stateResilienceGroup: ConformanceGroup<StateAdapterConformanceConte
     transientErrorsCase(singleSlot),
     {
       name: "resets the recovery backoff once the worker starts a job",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           test: { entry: true; input: null; output: null };
         }>();
@@ -185,62 +208,76 @@ export const stateResilienceGroup: ConformanceGroup<StateAdapterConformanceConte
         const workerClient = createClient({
           stateAdapter: {
             ...stateAdapter,
-            startJobAttempts: async (params) => {
-              if (failuresLeft > 0) {
-                failuresLeft--;
-                throw new Error("startJobAttempts failed");
-              }
-              return stateAdapter.startJobAttempts(params);
-            },
+            startJobAttempts: (params) =>
+              runInModeOf(
+                stateAdapter,
+                syncAsync(function* () {
+                  if (failuresLeft > 0) {
+                    failuresLeft--;
+                    throw new Error("startJobAttempts failed");
+                  }
+                  return yield* step(stateAdapter.startJobAttempts(params));
+                }),
+              ),
           },
           notifyAdapter,
           jobTypes,
         });
-        await using workerRunner = createWorkerRunner({
-          client: workerClient,
-          pollIntervalMs: 100,
-          recoveryBackoffConfig: { initialDelayMs: 1, multiplier: 100, maxDelayMs: 60_000 },
-          processors: createProcessors({
-            client,
-            jobTypes,
-            processors: {
-              test: {
-                attemptHandler: async ({ complete }) =>
-                  withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({ ...txCtx, output: null }),
-                  ),
+        const workerRunner = yield* resource(
+          createWorkerRunner({
+            client: workerClient,
+            pollIntervalMs: 100,
+            recoveryBackoffConfig: { initialDelayMs: 1, multiplier: 100, maxDelayMs: 60_000 },
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                test: {
+                  attemptHandler: async ({ complete }) =>
+                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                },
               },
-            },
+            }),
           }),
-        });
-
-        const firstChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({ ...txCtx, typeName: "test", input: null }),
         );
 
-        await workerRunner.start();
-        const completedFirstChain = await client.awaitChain(firstChain, {
-          pollIntervalMs: 100,
-          timeoutMs: 5000,
-        });
+        const firstChain = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "test", input: null }),
+          ),
+        );
+
+        yield* wait(workerRunner.start());
+        const completedFirstChain = yield* wait(
+          client.awaitChain(firstChain, {
+            pollIntervalMs: 100,
+            timeoutMs: 5000,
+          }),
+        );
         assert.equal(completedFirstChain.status, "completed");
 
         failuresLeft = 1;
-        const secondChain = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChain({ ...txCtx, typeName: "test", input: null }),
+        const secondChain = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "test", input: null }),
+          ),
         );
-        const completedSecondChain = await client.awaitChain(secondChain, {
-          pollIntervalMs: 100,
-          timeoutMs: 5000,
-        });
+        const completedSecondChain = yield* wait(
+          client.awaitChain(secondChain, {
+            pollIntervalMs: 100,
+            timeoutMs: 5000,
+          }),
+        );
         assert.equal(completedSecondChain.status, "completed");
-      },
+      }),
     },
     {
       name: "aborts the attempts of a worker that lost its lease and completes them once it registers again under the same id",
-      run: async ({ createStateAdapter, createNotifyAdapter }) => {
-        await using stateAdapter: EndToEndStateAdapter = await createStateAdapter();
-        await using notifyAdapter = await createCaseNotifyAdapter(createNotifyAdapter);
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
         const jobTypes = defineJobTypes<{
           test: { entry: true; input: null; output: null };
         }>();
@@ -249,56 +286,68 @@ export const stateResilienceGroup: ConformanceGroup<StateAdapterConformanceConte
         const workerClient = createClient({
           stateAdapter: {
             ...stateAdapter,
-            extendWorkerLease: async (params) => {
-              if (firstRenewal.signal.aborted) return stateAdapter.extendWorkerLease(params);
-              firstRenewal.abort();
-              return undefined;
-            },
+            extendWorkerLease: (params) =>
+              runInModeOf(
+                stateAdapter,
+                syncAsync(function* () {
+                  if (firstRenewal.signal.aborted) {
+                    return yield* step(stateAdapter.extendWorkerLease(params));
+                  }
+                  firstRenewal.abort();
+                  return undefined;
+                }),
+              ),
           },
           notifyAdapter,
           jobTypes,
         });
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
-        await using workerRunner = createWorkerRunner({
-          client: workerClient,
-          concurrency: 2,
-          pollIntervalMs: 50,
-          recoveryBackoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
-          leaseConfig: { durationMs: 300, heartbeatMs: 50 },
-          processors: createProcessors({
-            client,
-            jobTypes,
-            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-            processors: {
-              test: {
-                attemptHandler: async ({ job, signal, complete }) => {
-                  if (job.attempt === 1) {
-                    await sleep(Number.POSITIVE_INFINITY, { signal });
-                    throw new Error("lease lost");
-                  }
-                  return withCaseTransaction(stateAdapter, async (txCtx) =>
-                    complete({ ...txCtx, output: null }),
-                  );
+        const workerRunner = yield* resource(
+          createWorkerRunner({
+            client: workerClient,
+            concurrency: 2,
+            pollIntervalMs: 50,
+            recoveryBackoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
+            leaseConfig: { durationMs: 300, heartbeatMs: 50 },
+            processors: createProcessors({
+              client,
+              jobTypes,
+              backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
+              processors: {
+                test: {
+                  attemptHandler: async ({ job, signal, complete }) => {
+                    if (job.attempt === 1) {
+                      await sleep(Number.POSITIVE_INFINITY, { signal });
+                      throw new Error("lease lost");
+                    }
+                    return stateAdapter.withTransaction((txCtx) =>
+                      complete({ ...txCtx, output: null }),
+                    );
+                  },
                 },
               },
-            },
-          }),
-        });
-
-        const chains = await withCaseTransaction(stateAdapter, async (txCtx) =>
-          client.createChains({
-            ...txCtx,
-            items: [
-              { typeName: "test", input: null },
-              { typeName: "test", input: null },
-            ],
+            }),
           }),
         );
 
-        await workerRunner.start();
-        await Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions)));
+        const chains = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.createChains({
+              ...txCtx,
+              items: [
+                { typeName: "test", input: null },
+                { typeName: "test", input: null },
+              ],
+            }),
+          ),
+        );
 
-        const jobs = await client.getJobs({ ids: chains.map((chain) => chain.id) });
+        yield* wait(workerRunner.start());
+        yield* wait(
+          Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions))),
+        );
+
+        const jobs = yield* step(client.getJobs({ ids: chains.map((chain) => chain.id) }));
         assert.deepEqual(
           jobs.map((job) => ({ status: job?.status, attempt: job?.attempt })),
           [
@@ -306,7 +355,7 @@ export const stateResilienceGroup: ConformanceGroup<StateAdapterConformanceConte
             { status: "completed", attempt: 2 },
           ],
         );
-      },
+      }),
     },
   ],
 };

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { sleep } from "@queuert/helpers/sleep";
+import { dynamicSyncAsync, resource, step } from "@queuert/sync-async";
 
 import type { ConformanceGroup } from "../../conformance/runner.ts";
 import type { StateAdapterConformanceContext } from "../types.ts";
@@ -12,144 +13,164 @@ export const getChainsGroup: ConformanceGroup<StateAdapterConformanceContext> = 
   cases: [
     {
       name: "handles chain relationships correctly",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              {
-                id: stateAdapter.config.generateJobId(),
-                typeName: "chain-head",
-                input: { step: 1 },
-              },
-            ],
-          }),
+        const [headChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "chain-head",
+                  input: { step: 1 },
+                },
+              ],
+            }),
+          ),
         );
 
-        const [chain] = await stateAdapter.getChains({ chainIds: [headChain.head.id] });
+        const [chain] = yield* step(stateAdapter.getChains({ chainIds: [headChain.head.id] }));
 
         assert.notEqual(chain, undefined);
         assert.equal(chain!.head.id, headChain.head.id);
         assert.equal(chain!.head.chainId, headChain.head.id);
-      },
+      }),
     },
     {
       name: "returns head and tail for a multi-job chain",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "chain-head", input: null },
-            ],
-          }),
+        const [headChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "chain-head", input: null },
+              ],
+            }),
+          ),
         );
 
-        const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.continueJobs({
-            txCtx,
-            jobs: [
-              {
-                id: stateAdapter.config.generateJobId(),
-                typeName: "chain-step2",
-                continueFromId: headChain.head.id,
-                input: null,
-              },
-            ],
-          }),
+        const [continued] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.continueJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "chain-step2",
+                  continueFromId: headChain.head.id,
+                  input: null,
+                },
+              ],
+            }),
+          ),
         );
         const { continuation } = continued!;
 
-        const [chain] = await stateAdapter.getChains({ chainIds: [headChain.head.id] });
+        const [chain] = yield* step(stateAdapter.getChains({ chainIds: [headChain.head.id] }));
         assert.notEqual(chain, undefined);
         assert.equal(chain!.head.id, headChain.head.id);
         assert.notEqual(chain!.tail, undefined);
         assert.equal(chain!.tail!.id, continuation.id);
         assert.equal(chain!.status, "running");
         assert.equal(chain!.completedAt, null);
-      },
+      }),
     },
     {
       name: "returns an undefined tail for a single-job chain",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "single-head", input: null },
-            ],
-          }),
+        const [headChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "single-head", input: null },
+              ],
+            }),
+          ),
         );
 
-        const [chain] = await stateAdapter.getChains({ chainIds: [headChain.head.id] });
+        const [chain] = yield* step(stateAdapter.getChains({ chainIds: [headChain.head.id] }));
 
         assert.notEqual(chain, undefined);
         assert.equal(chain!.head.id, headChain.head.id);
         assert.equal(chain!.tail, undefined);
-      },
+      }),
     },
     {
       name: "returns an undefined tail for a single-job chain with lock: exclusive",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              {
-                id: stateAdapter.config.generateJobId(),
-                typeName: "single-head-locked",
-                input: null,
-              },
-            ],
-          }),
+        const [headChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "single-head-locked",
+                  input: null,
+                },
+              ],
+            }),
+          ),
         );
 
-        const [chain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.getChains({ txCtx, chainIds: [headChain.head.id], lock: "exclusive" }),
+        const [chain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.getChains({ txCtx, chainIds: [headChain.head.id], lock: "exclusive" }),
+          ),
         );
 
         assert.notEqual(chain, undefined);
         assert.equal(chain!.head.id, headChain.head.id);
         assert.equal(chain!.tail, undefined);
-      },
+      }),
     },
     {
       name: "returns undefined for nonexistent chain ID",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        const [realChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              {
-                id: stateAdapter.config.generateJobId(),
-                typeName: "chain-lookup-test",
-                input: null,
-              },
-            ],
-          }),
+        const [realChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "chain-lookup-test",
+                  input: null,
+                },
+              ],
+            }),
+          ),
         );
         const nonexistentId =
           realChain.head.chainId.slice(0, -1) + (realChain.head.chainId.endsWith("0") ? "1" : "0");
-        const result = await stateAdapter.getChains({ chainIds: [nonexistentId] });
+        const result = yield* step(stateAdapter.getChains({ chainIds: [nonexistentId] }));
         assert.deepEqual(result, [undefined]);
-      },
+      }),
     },
+  ],
+};
+
+export const getChainsHeldTransactionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
+  name: "getChains",
+  cases: [
     {
       name: "lock: exclusive blocks a concurrent locked read until the holding tx commits",
       run: async ({ createStateAdapter }) => {
         await using stateAdapter = await createStateAdapter();
 
-        const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [headChain] = await stateAdapter.withTransaction((txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -158,7 +179,7 @@ export const getChainsGroup: ConformanceGroup<StateAdapterConformanceContext> = 
           }),
         );
 
-        const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [continued] = await stateAdapter.withTransaction((txCtx) =>
           stateAdapter.continueJobs({
             txCtx,
             jobs: [
@@ -173,14 +194,8 @@ export const getChainsGroup: ConformanceGroup<StateAdapterConformanceContext> = 
         );
         const { continuation } = continued!;
 
-        let releaseHolder: (() => void) | undefined;
-        const holderGate = new Promise<void>((r) => {
-          releaseHolder = r;
-        });
-        let signalLockHeld: (() => void) | undefined;
-        const lockHeld = new Promise<void>((r) => {
-          signalLockHeld = r;
-        });
+        const { promise: holderGate, resolve: releaseHolder } = Promise.withResolvers<void>();
+        const { promise: lockHeld, resolve: signalLockHeld } = Promise.withResolvers<void>();
 
         const holderTx = stateAdapter.withTransaction(async (txCtx) => {
           await stateAdapter.getChains({
@@ -188,30 +203,30 @@ export const getChainsGroup: ConformanceGroup<StateAdapterConformanceContext> = 
             chainIds: [headChain.head.chainId],
             lock: "exclusive",
           });
-          signalLockHeld!();
+          signalLockHeld();
           await holderGate;
         });
 
         await lockHeld;
 
         let waiterResolved = false;
-        const waiterTx = stateAdapter
-          .withTransaction(async (txCtx) =>
+        const waiterTx = Promise.resolve(
+          stateAdapter.withTransaction((txCtx) =>
             stateAdapter.getChains({
               txCtx,
               chainIds: [headChain.head.chainId],
               lock: "exclusive",
             }),
-          )
-          .then((chain) => {
-            waiterResolved = true;
-            return chain;
-          });
+          ),
+        ).then((chain) => {
+          waiterResolved = true;
+          return chain;
+        });
 
         await sleep(LOCK_BLOCK_OBSERVATION_MS);
         assert.equal(waiterResolved, false);
 
-        releaseHolder!();
+        releaseHolder();
         await holderTx;
 
         const [observed] = await waiterTx;
@@ -233,14 +248,8 @@ export const getChainsConcurrentTransactionsGroup: ConformanceGroup<StateAdapter
         run: async ({ createStateAdapter }) => {
           await using stateAdapter = await createStateAdapter();
 
-          let release: (() => void) | undefined;
-          const gate = new Promise<void>((r) => {
-            release = r;
-          });
-          let signalTxReady: (() => void) | undefined;
-          const txReady = new Promise<void>((r) => {
-            signalTxReady = r;
-          });
+          const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+          const { promise: txReady, resolve: signalTxReady } = Promise.withResolvers<void>();
           let newChainId: string | undefined;
 
           const txPromise = stateAdapter
@@ -256,7 +265,7 @@ export const getChainsConcurrentTransactionsGroup: ConformanceGroup<StateAdapter
                 ],
               });
               newChainId = stateChain.head.chainId;
-              signalTxReady!();
+              signalTxReady();
               await gate;
               throw new Error("rollback");
             })
@@ -264,7 +273,7 @@ export const getChainsConcurrentTransactionsGroup: ConformanceGroup<StateAdapter
 
           await txReady;
           const readPromise = stateAdapter.getChains({ chainIds: [newChainId!] });
-          release!();
+          release();
           await txPromise;
 
           assert.deepEqual(await readPromise, [undefined]);
@@ -275,7 +284,7 @@ export const getChainsConcurrentTransactionsGroup: ConformanceGroup<StateAdapter
         run: async ({ createStateAdapter }) => {
           await using stateAdapter = await createStateAdapter();
 
-          const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          const [seedChain] = await stateAdapter.withTransaction((txCtx) =>
             stateAdapter.createJobs({
               txCtx,
               jobs: [
@@ -288,14 +297,8 @@ export const getChainsConcurrentTransactionsGroup: ConformanceGroup<StateAdapter
             }),
           );
 
-          let release: (() => void) | undefined;
-          const gate = new Promise<void>((r) => {
-            release = r;
-          });
-          let signalTxReady: (() => void) | undefined;
-          const txReady = new Promise<void>((r) => {
-            signalTxReady = r;
-          });
+          const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+          const { promise: txReady, resolve: signalTxReady } = Promise.withResolvers<void>();
 
           const txPromise = stateAdapter
             .withTransaction(async (txCtx) => {
@@ -310,21 +313,21 @@ export const getChainsConcurrentTransactionsGroup: ConformanceGroup<StateAdapter
                   },
                 ],
               });
-              signalTxReady!();
+              signalTxReady();
               await gate;
               throw new Error("rollback");
             })
             .catch(() => {});
 
           await txReady;
-          const readPromise = stateAdapter.withTransaction(async (readTxCtx) =>
+          const readPromise = stateAdapter.withTransaction((readTxCtx) =>
             stateAdapter.getChains({
               txCtx: readTxCtx,
               chainIds: [seedChain.head.chainId],
               lock: "exclusive",
             }),
           );
-          release!();
+          release();
           await txPromise;
 
           const [observed] = await readPromise;

@@ -5,7 +5,8 @@ import type { Element, RootContent } from "hast";
 import { fromHtml } from "hast-util-from-html";
 import { toString as hastToString } from "hast-util-to-string";
 
-import { apiPackages, siteSections } from "../src/docs/sections.ts";
+import { apiEntryPoints } from "../src/docs/api-entry-points.ts";
+import { siteSections } from "../src/docs/sections.ts";
 import { absoluteUrl, siteDescription, siteName, siteUrl } from "../src/docs/site.ts";
 import type { SourcePage } from "./content.ts";
 import { findContent, inlineTags, isSkipped, pageHref } from "./search-index.ts";
@@ -130,7 +131,9 @@ export const llmsTxt = (pages: SourcePage[]): string =>
     ),
     [
       "## API Reference",
-      ...apiPackages.map((pkg) => linkLine(pkg.label, `/api/${pkg.slug}/readme/`, pkg.summary)),
+      ...apiEntryPoints.map((entryPoint) =>
+        linkLine(entryPoint.label, `/api/${entryPoint.slug}/readme/`, entryPoint.summary),
+      ),
     ].join("\n"),
     ["## Optional", linkLine("Changelog", "/changelog/", "Release notes for every version.")].join(
       "\n",

@@ -1,4 +1,5 @@
 import {
+  asyncSqliteStateProviderConformanceCases,
   createSqliteMigratorConformanceContext,
   createSqliteStateProviderConformanceContext,
   type SqliteStateProviderConformanceContext,
@@ -30,7 +31,10 @@ describe("state-sqlite-knex provider conformance", () => {
     await knex.destroy();
   });
 
-  for (const conformanceCase of sqliteStateProviderConformanceCases) {
+  for (const conformanceCase of [
+    ...sqliteStateProviderConformanceCases,
+    ...asyncSqliteStateProviderConformanceCases,
+  ]) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run(context);
     });

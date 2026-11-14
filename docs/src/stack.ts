@@ -8,6 +8,7 @@ export const backends = [
   { id: "mariadb", label: "MariaDB" },
   { id: "redis", label: "Redis" },
   { id: "nats", label: "NATS" },
+  { id: "ipc", label: "IPC" },
   { id: "in-process", label: "In-process" },
 ] as const;
 

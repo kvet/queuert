@@ -4,11 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createDeploymentSpawner, startPaused, startTogether } from "@queuert/helpers/testing";
+import type { MaybePromise, Mode } from "@queuert/sync-async";
 import {
   type MigrationResult,
   createMigrator,
   createTemplateApplier,
-  createTemplateExecutor,
+  createTypedSqlExecutor,
 } from "@queuert/typed-sql";
 import Database from "better-sqlite3";
 import { it as baseIt, describe, expect } from "vitest";
@@ -27,13 +28,15 @@ import { MARKER } from "./state-adapter-migration.process.ts";
 import { createV017Migrations } from "./v0.17-migrations.spec-helper.ts";
 
 const INSTALL = "001_initial_schema";
-const ALL = createSchemaMigrations(async () => {}).map((migration) => migration.name);
-const spawnDeployment = createDeploymentSpawner<MigrationResult>(
-  join(import.meta.dirname, "state-adapter-migration.process.ts"),
-  join(import.meta.dirname, "..", ".."),
-);
+const ALL = createSchemaMigrations(async () => {}, "async").map((migration) => migration.name);
+const spawnerIn = (mode: Mode) =>
+  createDeploymentSpawner<MigrationResult>(
+    join(import.meta.dirname, "state-adapter-migration.process.ts"),
+    join(import.meta.dirname, "..", ".."),
+    [mode],
+  );
 
-type Provider = SqliteStateProvider<BetterSqlite3Context>;
+type Provider = SqliteStateProvider<BetterSqlite3Context, Mode>;
 
 const query = async <T>(provider: Provider, text: string): Promise<T[]> =>
   provider.executeSql({
@@ -42,7 +45,7 @@ const query = async <T>(provider: Provider, text: string): Promise<T[]> =>
     paramTypes: {},
     columnTypes: { _: "string" },
     readOnly: true,
-  }) as Promise<T[]>;
+  }) as MaybePromise<T[]>;
 
 const names = async (provider: Provider, text: string): Promise<string[]> =>
   (await query<{ name: string }>(provider, text)).map((row) => row.name);
@@ -64,6 +67,7 @@ const migrateTo017 = async (
   provider: Provider,
   { only }: { only?: string } = {},
 ): Promise<void> => {
+  const mode = provider.sync === true ? "sync" : "async";
   const applyTemplate017 = createTemplateApplier({
     table_prefix: "queuert_",
     migration_table: "queuert_migration",
@@ -71,10 +75,13 @@ const migrateTo017 = async (
     job_id_type: "TEXT",
     worker_id_type: "TEXT",
   });
+  const exec = createTypedSqlExecutor(provider);
   await createMigrator({
-    migrations: createV017Migrations(createTemplateExecutor(provider, applyTemplate017)).filter(
-      (migration) => only === undefined || migration.name === only,
-    ),
+    mode,
+    migrations: createV017Migrations(
+      (txCtx: BetterSqlite3Context, statement) => exec({ txCtx, sql: applyTemplate017(statement) }),
+      mode,
+    ).filter((migration) => only === undefined || migration.name === only),
     store: createMigrationStore(provider, applyTemplate017),
   }).migrateToLatest();
 };
@@ -118,235 +125,256 @@ const schemaShape = async (provider: Provider): Promise<unknown> => {
   );
 };
 
-// oxlint-disable-next-line no-empty-pattern -- vitest fixtures must destructure their context
-const it = baseIt.extend("database", async ({}, { onCleanup }) => {
-  const path = join(tmpdir(), `queuert-migration-${randomUUID()}.sqlite`);
-  const db = new Database(path, { timeout: 30_000 });
-  db.pragma("journal_mode = WAL");
-  onCleanup(async () => {
-    db.close();
-    for (const suffix of ["", "-wal", "-shm"]) rmSync(`${path}${suffix}`, { force: true });
+const itIn = (mode: Mode) =>
+  // oxlint-disable-next-line no-empty-pattern -- vitest fixtures must destructure their context
+  baseIt.extend("database", async ({}, { onCleanup }) => {
+    const path = join(tmpdir(), `queuert-migration-${randomUUID()}.sqlite`);
+    const db = new Database(path, { timeout: 30_000 });
+    db.pragma("journal_mode = WAL");
+    onCleanup(async () => {
+      db.close();
+      for (const suffix of ["", "-wal", "-shm"]) rmSync(`${path}${suffix}`, { force: true });
+    });
+    const provider = createBetterSqlite3Provider({ db, mode });
+    const adapter = createSqliteStateAdapter({
+      stateProvider: provider,
+      generateJobId: (): string => randomUUID(),
+    });
+    return { path, provider, adapter };
   });
-  const provider = createBetterSqlite3Provider({ db });
-  const adapter = createSqliteStateAdapter({
-    stateProvider: provider,
-    generateJobId: (): string => randomUUID(),
-  });
-  return { path, provider, adapter };
+
+baseIt("names its migrations NNN_name, in ascending order", () => {
+  for (const name of ALL) expect(name).toMatch(/^\d{3}_[a-z][a-z0-9_]*$/);
+  expect(ALL).toEqual(ALL.toSorted());
 });
 
-describe("migrateToLatest", () => {
-  it("names its migrations NNN_name, in ascending order", () => {
-    for (const name of ALL) expect(name).toMatch(/^\d{3}_[a-z][a-z0-9_]*$/);
-    expect(ALL).toEqual(ALL.toSorted());
-  });
+describe.each(["async", "sync"] as const)("in %s mode", (mode) => {
+  const it = itIn(mode);
+  const spawnDeployment = spawnerIn(mode);
 
-  it(
-    "installs the schema on an empty database",
-    { timeout: 60_000 },
-    async ({ database: { provider, adapter } }) => {
+  describe("migrateToLatest", () => {
+    it(
+      "installs the schema on an empty database",
+      { timeout: 60_000 },
+      async ({ database: { provider, adapter } }) => {
+        expect(await adapter.migrateToLatest()).toEqual({
+          applied: ALL,
+          skipped: [],
+          reverted: [],
+          unrecognized: [],
+        });
+        expect(await names(provider, "SELECT name FROM sqlite_master ORDER BY name")).toEqual([
+          "queuert_chain_completed_idx",
+          "queuert_chain_deduplication_idx",
+          "queuert_chain_idx",
+          "queuert_chain_index_idx",
+          "queuert_chain_running_idx",
+          "queuert_job",
+          "queuert_job_attempt_by_idx",
+          "queuert_job_blocked_idx",
+          "queuert_job_blocker",
+          "queuert_job_blocker_chain_idx",
+          "queuert_job_completed_idx",
+          "queuert_job_idx",
+          "queuert_job_pending_idx",
+          "queuert_job_running_idx",
+          "queuert_migration",
+          "queuert_schema_fence_v1",
+          "queuert_worker",
+          "queuert_worker_idx",
+          "queuert_write_lock",
+          "sqlite_autoindex_queuert_job_1",
+          "sqlite_autoindex_queuert_job_blocker_1",
+          "sqlite_autoindex_queuert_migration_1",
+          "sqlite_autoindex_queuert_worker_1",
+        ]);
+        expect(await workerColumns(provider)).toEqual([
+          "concurrency INTEGER NOT NULL",
+          "id TEXT",
+          "lease_until TEXT NOT NULL",
+          "started_at TEXT NOT NULL",
+          "token TEXT NOT NULL",
+          "type_names TEXT NOT NULL",
+        ]);
+        expect(await jobColumnNames(provider)).toContain("attempt_token");
+      },
+    );
+
+    it("is a no-op on a second run", { timeout: 60_000 }, async ({ database: { adapter } }) => {
+      await adapter.migrateToLatest();
       expect(await adapter.migrateToLatest()).toEqual({
-        applied: ALL,
-        skipped: [],
+        applied: [],
+        skipped: ALL,
         reverted: [],
         unrecognized: [],
       });
-      expect(await names(provider, "SELECT name FROM sqlite_master ORDER BY name")).toEqual([
-        "queuert_chain_completed_idx",
-        "queuert_chain_deduplication_idx",
-        "queuert_chain_idx",
-        "queuert_chain_index_idx",
-        "queuert_chain_running_idx",
-        "queuert_job",
-        "queuert_job_attempt_by_idx",
-        "queuert_job_blocked_idx",
-        "queuert_job_blocker",
-        "queuert_job_blocker_chain_idx",
-        "queuert_job_completed_idx",
-        "queuert_job_idx",
-        "queuert_job_pending_idx",
-        "queuert_job_running_idx",
-        "queuert_migration",
-        "queuert_schema_fence_v1",
-        "queuert_worker",
-        "queuert_worker_idx",
-        "queuert_write_lock",
-        "sqlite_autoindex_queuert_job_1",
-        "sqlite_autoindex_queuert_job_blocker_1",
-        "sqlite_autoindex_queuert_migration_1",
-        "sqlite_autoindex_queuert_worker_1",
-      ]);
-      expect(await workerColumns(provider)).toEqual([
-        "concurrency INTEGER NOT NULL",
-        "id TEXT",
-        "lease_until TEXT NOT NULL",
-        "started_at TEXT NOT NULL",
-        "token TEXT NOT NULL",
-        "type_names TEXT NOT NULL",
-      ]);
-      expect(await jobColumnNames(provider)).toContain("attempt_token");
-    },
-  );
-
-  it("is a no-op on a second run", { timeout: 60_000 }, async ({ database: { adapter } }) => {
-    await adapter.migrateToLatest();
-    expect(await adapter.migrateToLatest()).toEqual({
-      applied: [],
-      skipped: ALL,
-      reverted: [],
-      unrecognized: [],
     });
   });
-});
 
-describe("upgrading from 0.17", () => {
-  it(
-    "carries a 0.17 schema onto the squashed migration, matching a fresh install",
-    { timeout: 60_000 },
-    async ({ database: { provider, adapter } }) => {
-      await migrateTo017(provider);
-      const freshDb = new Database(":memory:");
-      const freshProvider = createBetterSqlite3Provider({ db: freshDb });
-      await createSqliteStateAdapter({ stateProvider: freshProvider }).migrateToLatest();
+  describe("upgrading from 0.17", () => {
+    it(
+      "carries a 0.17 schema onto the squashed migration, matching a fresh install",
+      { timeout: 60_000 },
+      async ({ database: { provider, adapter } }) => {
+        await migrateTo017(provider);
+        const freshDb = new Database(":memory:");
+        const freshProvider = createBetterSqlite3Provider({ db: freshDb, mode });
+        await createSqliteStateAdapter({ stateProvider: freshProvider }).migrateToLatest();
 
-      expect(await adapter.migrateToLatest()).toEqual({
-        applied: [],
-        skipped: [INSTALL],
-        reverted: [],
-        unrecognized: [],
-      });
-      expect(await appliedNames(provider)).toEqual([INSTALL]);
-      expect(await schemaShape(provider)).toEqual(await schemaShape(freshProvider));
-      freshDb.close();
-      expect(await adapter.migrateToLatest()).toEqual({
-        applied: [],
-        skipped: [INSTALL],
-        reverted: [],
-        unrecognized: [],
-      });
-    },
-  );
+        expect(await adapter.migrateToLatest()).toEqual({
+          applied: [],
+          skipped: [INSTALL],
+          reverted: [],
+          unrecognized: [],
+        });
+        expect(await appliedNames(provider)).toEqual([INSTALL]);
+        expect(await schemaShape(provider)).toEqual(await schemaShape(freshProvider));
+        freshDb.close();
+        expect(await adapter.migrateToLatest()).toEqual({
+          applied: [],
+          skipped: [INSTALL],
+          reverted: [],
+          unrecognized: [],
+        });
+      },
+    );
 
-  it(
-    "keeps the jobs and workers of a 0.17 schema as they are",
-    { timeout: 60_000 },
-    async ({ database: { provider, adapter } }) => {
-      await migrateTo017(provider);
-      const workerId = randomUUID();
-      const token = randomUUID();
-      const jobId = randomUUID();
-      await execute(
-        provider,
-        `INSERT INTO queuert_worker (id, lease_until, token, concurrency, type_names)
-         VALUES ('${workerId}', datetime('now', 'subsec', '+60 seconds'), '${token}', 1, '["legacy"]')`,
-      );
-      await execute(
-        provider,
-        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status, attempt, attempt_at, attempt_by, attempt_token)
-         VALUES ('${jobId}', 'legacy', '${jobId}', 0, 'running', 'running', 1, datetime('now', 'subsec'), '${workerId}', '${token}')`,
-      );
-
-      await adapter.migrateToLatest();
-
-      const [job] = await adapter.getJobs({ jobIds: [jobId] });
-      expect(job!.status).toBe("running");
-      expect(job!.attemptBy).toBe(workerId);
-      expect(job!.attemptToken).toBe(token);
-      const [worker] = await adapter.getWorkers({ workerIds: [workerId] });
-      expect(worker!.id).toBe(workerId);
-    },
-  );
-
-  it(
-    "refuses a 0.16 schema, changing nothing",
-    { timeout: 60_000 },
-    async ({ database: { provider, adapter } }) => {
-      await migrateTo017(provider, { only: INSTALL });
-
-      await expect(adapter.migrateToLatest()).rejects.toThrow(
-        "Cannot upgrade a 0.16 schema directly. Upgrade it with @queuert/sqlite 0.17 first, then migrate to this version.",
-      );
-      expect(await appliedNames(provider)).toEqual([INSTALL]);
-      expect(
-        await names(provider, "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"),
-      ).toEqual(["queuert_job", "queuert_job_blocker", "queuert_migration", "queuert_write_lock"]);
-    },
-  );
-
-  it(
-    "refuses a 0.17 schema that records a migration 0.17 did not ship, changing nothing",
-    { timeout: 60_000 },
-    async ({ database: { provider, adapter } }) => {
-      await migrateTo017(provider);
-      await execute(provider, "INSERT INTO queuert_migration (name) VALUES ('003_unknown')");
-
-      await expect(adapter.migrateToLatest()).rejects.toThrow(
-        "Cannot upgrade the 0.17 schema: the migration table records 001_initial_schema, 002_worker_liveness, 003_unknown, but a 0.17 schema records exactly 001_initial_schema and 002_worker_liveness.",
-      );
-      expect(await appliedNames(provider)).toEqual([INSTALL, "002_worker_liveness", "003_unknown"]);
-      expect(
-        await names(
+    it(
+      "keeps the jobs and workers of a 0.17 schema as they are",
+      { timeout: 60_000 },
+      async ({ database: { provider, adapter } }) => {
+        await migrateTo017(provider);
+        const workerId = randomUUID();
+        const token = randomUUID();
+        const jobId = randomUUID();
+        await execute(
           provider,
-          "SELECT name FROM sqlite_master WHERE name = 'queuert_schema_fence_v1'",
-        ),
-      ).toEqual([]);
-    },
-  );
+          `INSERT INTO queuert_worker (id, lease_until, token, concurrency, type_names)
+           VALUES ('${workerId}', datetime('now', 'subsec', '+60 seconds'), '${token}', 1, '["legacy"]')`,
+        );
+        await execute(
+          provider,
+          `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status, attempt, attempt_at, attempt_by, attempt_token)
+           VALUES ('${jobId}', 'legacy', '${jobId}', 0, 'running', 'running', 1, datetime('now', 'subsec'), '${workerId}', '${token}')`,
+        );
+
+        await adapter.migrateToLatest();
+
+        const [job] = await adapter.getJobs({ jobIds: [jobId] });
+        expect(job!.status).toBe("running");
+        expect(job!.attemptBy).toBe(workerId);
+        expect(job!.attemptToken).toBe(token);
+        const [worker] = await adapter.getWorkers({ workerIds: [workerId] });
+        expect(worker!.id).toBe(workerId);
+      },
+    );
+
+    it(
+      "refuses a 0.16 schema, changing nothing",
+      { timeout: 60_000 },
+      async ({ database: { provider, adapter } }) => {
+        await migrateTo017(provider, { only: INSTALL });
+
+        await expect(async () => adapter.migrateToLatest()).rejects.toThrow(
+          "Cannot upgrade a 0.16 schema directly. Upgrade it with @queuert/sqlite 0.17 first, then migrate to this version.",
+        );
+        expect(await appliedNames(provider)).toEqual([INSTALL]);
+        expect(
+          await names(
+            provider,
+            "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
+          ),
+        ).toEqual([
+          "queuert_job",
+          "queuert_job_blocker",
+          "queuert_migration",
+          "queuert_write_lock",
+        ]);
+      },
+    );
+
+    it(
+      "refuses a 0.17 schema that records a migration 0.17 did not ship, changing nothing",
+      { timeout: 60_000 },
+      async ({ database: { provider, adapter } }) => {
+        await migrateTo017(provider);
+        await execute(provider, "INSERT INTO queuert_migration (name) VALUES ('003_unknown')");
+
+        await expect(async () => adapter.migrateToLatest()).rejects.toThrow(
+          "Cannot upgrade the 0.17 schema: the migration table records 001_initial_schema, 002_worker_liveness, 003_unknown, but a 0.17 schema records exactly 001_initial_schema and 002_worker_liveness.",
+        );
+        expect(await appliedNames(provider)).toEqual([
+          INSTALL,
+          "002_worker_liveness",
+          "003_unknown",
+        ]);
+        expect(
+          await names(
+            provider,
+            "SELECT name FROM sqlite_master WHERE name = 'queuert_schema_fence_v1'",
+          ),
+        ).toEqual([]);
+      },
+    );
+  });
+
+  describe("parallel deployments", () => {
+    it(
+      "applies the schema exactly once when several deployments migrate at the same time",
+      { timeout: 120_000 },
+      async ({ database: { path, provider } }) => {
+        const results = await startTogether(
+          Array.from({ length: 4 }, () => spawnDeployment(path, "older")),
+        );
+
+        expect(
+          results.toSorted((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+        ).toEqual([
+          { applied: [], skipped: ALL, reverted: [], unrecognized: [] },
+          { applied: [], skipped: ALL, reverted: [], unrecognized: [] },
+          { applied: [], skipped: ALL, reverted: [], unrecognized: [] },
+          { applied: ALL, skipped: [], reverted: [], unrecognized: [] },
+        ]);
+        expect(await appliedNames(provider)).toEqual(ALL);
+      },
+    );
+
+    it(
+      "lets an older and a newer deployment migrate side by side",
+      { timeout: 120_000 },
+      async ({ database: { path, provider } }) => {
+        const [older, newer] = (await startTogether([
+          spawnDeployment(path, "older"),
+          spawnDeployment(path, "newer"),
+        ])) as MigrationResult[];
+
+        expect([...older.applied, ...newer.applied].toSorted()).toEqual([...ALL, MARKER]);
+        expect(newer.applied).toContain(MARKER);
+        expect(await startTogether([spawnDeployment(path, "older")])).toEqual([
+          { applied: [], skipped: ALL, reverted: [], unrecognized: [MARKER] },
+        ]);
+        expect(await appliedNames(provider)).toEqual([...ALL, MARKER]);
+      },
+    );
+  });
 });
 
-describe("parallel deployments", () => {
-  it(
-    "applies the schema exactly once when several deployments migrate at the same time",
-    { timeout: 120_000 },
-    async ({ database: { path, provider } }) => {
-      const results = await startTogether(
-        Array.from({ length: 4 }, () => spawnDeployment(path, "older")),
-      );
+// A synchronous migration cannot pause for the parent to kill it mid-transaction, so this runs
+// only in the async mode.
+itIn("async")(
+  "rolls back the migration of a deployment killed mid-migration, and the next deployment applies it",
+  { timeout: 120_000 },
+  async ({ database: { path, provider } }) => {
+    const spawnDeployment = spawnerIn("async");
+    const killed = await startPaused(spawnDeployment(path, "older", "inside-migration"));
+    await killed.kill();
 
-      expect(
-        results.toSorted((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
-      ).toEqual([
-        { applied: [], skipped: ALL, reverted: [], unrecognized: [] },
-        { applied: [], skipped: ALL, reverted: [], unrecognized: [] },
-        { applied: [], skipped: ALL, reverted: [], unrecognized: [] },
-        { applied: ALL, skipped: [], reverted: [], unrecognized: [] },
-      ]);
-      expect(await appliedNames(provider)).toEqual(ALL);
-    },
-  );
-
-  it(
-    "rolls back the migration of a deployment killed mid-migration, and the next deployment applies it",
-    { timeout: 120_000 },
-    async ({ database: { path, provider } }) => {
-      const killed = await startPaused(spawnDeployment(path, "older", "inside-migration"));
-      await killed.kill();
-
-      expect(
-        await names(provider, "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"),
-      ).toEqual(["queuert_migration", "queuert_write_lock"]);
-      expect(await startTogether([spawnDeployment(path, "older")])).toEqual([
-        { applied: ALL, skipped: [], reverted: [], unrecognized: [] },
-      ]);
-      expect(await appliedNames(provider)).toEqual(ALL);
-    },
-  );
-
-  it(
-    "lets an older and a newer deployment migrate side by side",
-    { timeout: 120_000 },
-    async ({ database: { path, provider } }) => {
-      const [older, newer] = (await startTogether([
-        spawnDeployment(path, "older"),
-        spawnDeployment(path, "newer"),
-      ])) as MigrationResult[];
-
-      expect([...older.applied, ...newer.applied].toSorted()).toEqual([...ALL, MARKER]);
-      expect(newer.applied).toContain(MARKER);
-      expect(await startTogether([spawnDeployment(path, "older")])).toEqual([
-        { applied: [], skipped: ALL, reverted: [], unrecognized: [MARKER] },
-      ]);
-      expect(await appliedNames(provider)).toEqual([...ALL, MARKER]);
-    },
-  );
-});
+    expect(
+      await names(provider, "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"),
+    ).toEqual(["queuert_migration", "queuert_write_lock"]);
+    expect(await startTogether([spawnDeployment(path, "older")])).toEqual([
+      { applied: ALL, skipped: [], reverted: [], unrecognized: [] },
+    ]);
+    expect(await appliedNames(provider)).toEqual(ALL);
+  },
+);

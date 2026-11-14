@@ -5,7 +5,8 @@ import type { Element, Root, RootContent } from "hast";
 import { fromHtml } from "hast-util-from-html";
 import type { Plugin } from "vite";
 
-import { apiPackages, siteSections } from "../src/docs/sections.ts";
+import { apiEntryPoints } from "../src/docs/api-entry-points.ts";
+import { siteSections } from "../src/docs/sections.ts";
 import type { SourcePage } from "./content.ts";
 
 export type SearchEntry = {
@@ -48,8 +49,8 @@ export const pageHref = (page: SourcePage) => (page.slug === "" ? "/" : `/${page
 
 const sectionLabel = (page: SourcePage): string => {
   if (page.api) {
-    const pkg = apiPackages.find((candidate) => candidate.slug === page.api!.package);
-    return `API · ${pkg?.label ?? page.api.package}`;
+    const entryPoint = apiEntryPoints.find((candidate) => candidate.slug === page.api!.package);
+    return `API · ${entryPoint?.label ?? page.api.package}`;
   }
   for (const section of siteSections) {
     const group = section.groups.find((candidate) => candidate.slugs.includes(page.slug));

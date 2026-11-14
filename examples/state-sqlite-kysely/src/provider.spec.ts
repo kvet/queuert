@@ -1,4 +1,5 @@
 import {
+  asyncSqliteStateProviderConformanceCases,
   createSqliteMigratorConformanceContext,
   createSqliteStateProviderConformanceContext,
   type SqliteStateProviderConformanceContext,
@@ -31,7 +32,10 @@ describe("state-sqlite-kysely provider conformance", () => {
     await db.destroy();
   });
 
-  for (const conformanceCase of sqliteStateProviderConformanceCases) {
+  for (const conformanceCase of [
+    ...sqliteStateProviderConformanceCases,
+    ...asyncSqliteStateProviderConformanceCases,
+  ]) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run(context);
     });

@@ -23,16 +23,13 @@ import {
   createWorkerRunner,
   createProcessors,
   defineJobTypes,
-} from "queuert";
-import {
   createInProcessNotifyAdapter,
   createInProcessStateAdapter,
-} from "queuert/conformance-internal";
+} from "queuert";
 import { it as baseIt, describe, expect, expectTypeOf, vi } from "vitest";
 
 import { createOtelObservabilityAdapter } from "../observability-adapter/observability-adapter.otel.ts";
 
-// Map method names to OTEL metric names
 const methodToMetricName: Record<string, string> = {
   workerStarted: "queuert.worker.started",
   workerError: "queuert.worker.error",
@@ -102,13 +99,16 @@ const it = baseIt
   .extend(
     "stateAdapter",
     async () =>
-      createInProcessStateAdapter() as unknown as StateAdapter<
+      createInProcessStateAdapter({ mode: "async" }) as unknown as StateAdapter<
         { $test: true; txHooks: TxHooks },
         string,
-        string
+        string,
+        "async"
       >,
   )
-  .extend("notifyAdapter", async (): Promise<NotifyAdapter> => createInProcessNotifyAdapter())
+  .extend("notifyAdapter", async (): Promise<NotifyAdapter<"async">> =>
+    createInProcessNotifyAdapter({ mode: "async" }),
+  )
   .extend(
     "withTransaction",
     async ({ stateAdapter }) =>
@@ -152,7 +152,6 @@ const it = baseIt
         const lastExport = _otelExporter.getMetrics().at(-1);
         expectBoundedMetricAttributes(lastExport);
 
-        // Collect actual metric counts (excluding gauges)
         const gaugeNames = new Set([
           methodToMetricName.jobTypeIdleChange,
           methodToMetricName.jobTypeProcessingChange,
@@ -168,20 +167,13 @@ const it = baseIt
           }
         }
 
-        // Count expected metrics
         const expectedCounts = new Map<string, number>();
         for (const { method } of expected) {
           const name = methodToMetricName[method] ?? method;
           expectedCounts.set(name, (expectedCounts.get(name) ?? 0) + 1);
         }
 
-        // Verify counts match
         expect(Object.fromEntries(actualCounts)).toEqual(Object.fromEntries(expectedCounts));
-
-        // Note: We only verify counts here, not attribute details.
-        // The test expectations use ObservabilityAdapter method args which don't map 1:1
-        // to OTEL attributes (e.g., typeName -> chainTypeName)).
-        // Attribute verification should be done via unit tests on the adapter itself.
       },
   )
   .extend(
@@ -192,7 +184,6 @@ const it = baseIt
         const lastExport = _otelExporter.getMetrics().at(-1);
         expectBoundedMetricAttributes(lastExport);
 
-        // Collect actual histogram counts
         const actualCounts = new Map<string, number>();
         for (const scope of lastExport?.scopeMetrics ?? []) {
           for (const m of scope.metrics) {
@@ -204,19 +195,16 @@ const it = baseIt
           }
         }
 
-        // Count expected histograms
         const expectedCounts = new Map<string, number>();
         for (const { method } of expected) {
           const name = methodToMetricName[method] ?? method;
           expectedCounts.set(name, (expectedCounts.get(name) ?? 0) + 1);
         }
 
-        // Verify counts match
         expect(Object.fromEntries(actualCounts)).toEqual(Object.fromEntries(expectedCounts));
       },
   )
   .extend("expectGauges", async ({ _otelReader, _otelExporter }) => {
-    // Track cumulative expected values per metric (keyed by "metricName:typeName")
     const cumulativeExpected = new Map<string, number>();
 
     return async (expected: {
@@ -225,7 +213,6 @@ const it = baseIt
     }): Promise<void> => {
       await _otelReader.forceFlush();
 
-      // Sum expected deltas into cumulative values (grouped by typeName)
       for (const [method, calls] of Object.entries(expected) as [
         "jobTypeIdleChange" | "jobTypeProcessingChange",
         { delta: number; typeName?: string; workerId?: string }[] | undefined,
@@ -238,7 +225,6 @@ const it = baseIt
         }
       }
 
-      // Collect actual cumulative values from OTEL
       const lastExport = _otelExporter.getMetrics().at(-1);
       expectBoundedMetricAttributes(lastExport);
       const actualCumulative = new Map<string, number>();
@@ -259,7 +245,6 @@ const it = baseIt
         }
       }
 
-      // Verify cumulative values match
       expect(Object.fromEntries(actualCumulative)).toEqual(Object.fromEntries(cumulativeExpected));
     };
   })
@@ -279,7 +264,6 @@ const it = baseIt
       ): Promise<void> => {
         const spans = _otelTraceExporter.getFinishedSpans();
 
-        // Build spanId -> name map for parent lookups
         const spanIdToName = new Map<string, string>();
         for (const span of spans) {
           spanIdToName.set(span.spanContext().spanId, span.name);
@@ -1171,7 +1155,7 @@ describe("Metrics", () => {
       test: { entry: true; input: null; output: null };
     }>();
 
-    const failingNotifyAdapter: NotifyAdapter = {
+    const failingNotifyAdapter: NotifyAdapter<"async"> = {
       ...notifyAdapter,
       notifyJobsScheduled: async () => {
         throw new Error("notify error");
@@ -1971,7 +1955,6 @@ describe("Spans", () => {
       }),
     });
 
-    // Create and complete the blocker chain first
     const dependencyChain = await withTransaction(async (txCtx) =>
       client.createChain({
         ...txCtx,
@@ -1984,7 +1967,6 @@ describe("Spans", () => {
     await client.awaitChain(dependencyChain, completionOptions);
     await workerRunner.stop();
 
-    // Now create main chain with already-completed blocker
     const chain = await withTransaction(async (txCtx) =>
       client.createChain({
         ...txCtx,
@@ -2873,7 +2855,6 @@ describe("Rollback", () => {
       { method: "workerStarted" },
       { method: "jobAttemptStarted" },
       { method: "stateAdapterError" },
-      // the autocommit error reschedule failed, so the attempt surfaces it as a worker error
       { method: "workerError" },
       { method: "jobAttemptReclaimed" },
       { method: "jobRescheduled" },
@@ -3290,10 +3271,6 @@ describe("Rollback", () => {
       throw new Error("simulated rollback");
     }).catch(() => {});
 
-    // startJobSpan creates spans eagerly, but their end() is buffered via
-    // txHooks. On rollback the buffer is discarded and the spans
-    // are orphaned — started but never finished. They should be ended with
-    // ERROR status instead.
     await expectSpans([
       { name: "create chain.test", kind: "PRODUCER", status: "ERROR" },
       {
@@ -3373,10 +3350,6 @@ describe("Rollback", () => {
     await client.awaitChain(chain, completionOptions);
     await workerRunner.close();
 
-    // The first attempt's continueWith creates a "create job.linear_next" span
-    // eagerly via startJobSpan. When the user callback throws, the transaction
-    // rolls back and the buffered end() is discarded — orphaning the span.
-    // It should be ended with ERROR status on rollback.
     await expectSpans([
       { name: "create chain.linear", kind: "PRODUCER" },
       { name: "create job.linear", kind: "PRODUCER", parentName: "create chain.linear" },
@@ -3481,9 +3454,6 @@ describe("Rollback", () => {
     await client.awaitChain(chain, completionOptions);
     await workerRunner.close();
 
-    // createChain inside the handler's transaction creates chain + job spans eagerly.
-    // When the transaction rolls back after complete, the hooks are discarded —
-    // the buffered span end() calls must still end both spans.
     await expectSpans([
       { name: "create chain.test", kind: "PRODUCER" },
       { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },

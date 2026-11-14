@@ -1,26 +1,14 @@
+import type { MaybePromise, ResultModeOf, ModeResult } from "@queuert/sync-async";
+
 import {
   type DataType,
   type InferColumns,
   type InferParams,
   type RuntimeType,
   type TypedSql,
-  type TypedSqlTemplate,
   extractColumnTypes,
   extractParamTypes,
 } from "./sql.ts";
-import type { TemplateApplier } from "./template-applier.ts";
-
-export type SqlExecutor<TTxContext> = {
-  executeSql: (options: {
-    txCtx?: TTxContext;
-    id?: string;
-    sql: string;
-    params: unknown[];
-    paramTypes: Record<number, RuntimeType>;
-    columnTypes: Record<string, RuntimeType>;
-    readOnly: boolean;
-  }) => Promise<unknown[]>;
-};
 
 const SQL_IDENTIFIER_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
@@ -33,17 +21,34 @@ export const validateSqlIdentifier = (value: string, name: string): void => {
 };
 
 export const createTypedSqlExecutor =
-  <TTxContext>(executor: SqlExecutor<TTxContext>) =>
-  async <TParams extends readonly DataType[], TColumns extends Record<string, DataType>>({
+  <
+    TExecutor extends {
+      executeSql(options: {
+        txCtx?: any;
+        id?: string;
+        sql: string;
+        params: unknown[];
+        paramTypes: Record<number, RuntimeType>;
+        columnTypes: Record<string, RuntimeType>;
+        readOnly: boolean;
+      }): MaybePromise<unknown[]>;
+    },
+  >(
+    executor: TExecutor,
+  ) =>
+  <TParams extends readonly DataType[], TColumns extends Record<string, DataType>>({
     txCtx,
     sql: typedSql,
     params,
   }: {
-    txCtx?: TTxContext;
+    txCtx?: Parameters<TExecutor["executeSql"]>[0]["txCtx"];
     sql: TypedSql<TParams, TColumns>;
   } & (TParams extends readonly []
     ? { params?: undefined }
-    : { params: [...InferParams<TParams>] })): Promise<InferColumns<TColumns>[]> =>
+    : { params: [...InferParams<TParams>] })): ModeResult<
+    ResultModeOf<ReturnType<TExecutor["executeSql"]>>,
+    InferColumns<TColumns>[]
+  > =>
     executor.executeSql({
       txCtx,
       id: typedSql.id,
@@ -52,19 +57,4 @@ export const createTypedSqlExecutor =
       paramTypes: extractParamTypes(typedSql.params),
       columnTypes: extractColumnTypes(typedSql.columns),
       readOnly: typedSql.readOnly,
-    }) as Promise<InferColumns<TColumns>[]>;
-
-export const createTemplateExecutor =
-  <TTxContext>(executor: SqlExecutor<TTxContext>, applyTemplate: TemplateApplier) =>
-  async (txCtx: TTxContext, statement: TypedSqlTemplate<readonly []>): Promise<void> => {
-    const applied = applyTemplate(statement);
-    await executor.executeSql({
-      txCtx,
-      id: applied.id,
-      sql: applied.sql,
-      params: [],
-      paramTypes: {},
-      columnTypes: {},
-      readOnly: applied.readOnly,
-    });
-  };
+    }) as ModeResult<ResultModeOf<ReturnType<TExecutor["executeSql"]>>, InferColumns<TColumns>[]>;

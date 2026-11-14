@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Application, Converter, ReflectionKind } from "typedoc";
 import type { Plugin } from "vite";
 
-import { apiPackages } from "../src/docs/sections.ts";
+import { type ApiEntryPoint, apiEntryPoints } from "../src/docs/api-entry-points.ts";
 
 const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
 const outputDirectory = fileURLToPath(new URL("../src/content/docs/api", import.meta.url));
@@ -30,6 +30,7 @@ export const renderMarkdownReference = async (options: {
     hideBreadcrumbs: true,
     hidePageHeader: true,
     useCodeBlocks: true,
+    expandObjects: true,
     parametersFormat: "table",
     interfacePropertiesFormat: "list",
     classPropertiesFormat: "list",
@@ -61,13 +62,13 @@ export const renderMarkdownReference = async (options: {
   await app.generateOutputs(project);
 };
 
-const generatePackage = async (pkg: (typeof apiPackages)[number], outputRoot: string) => {
-  const packageDirectory = `${repositoryRoot}packages/${pkg.dir}`;
+const generateEntryPoint = async (entryPoint: ApiEntryPoint, outputRoot: string) => {
+  const packageDirectory = `${repositoryRoot}packages/${entryPoint.dir}`;
   await renderMarkdownReference({
-    entryPoint: `${packageDirectory}/${"entry" in pkg ? pkg.entry : "src/index.ts"}`,
+    entryPoint: `${packageDirectory}/${entryPoint.source}`,
     tsconfig: `${packageDirectory}/tsconfig.json`,
-    name: pkg.label,
-    out: `${outputRoot}/${pkg.slug}`,
+    name: entryPoint.label,
+    out: `${outputRoot}/${entryPoint.slug}`,
   });
 };
 
@@ -77,7 +78,7 @@ const generateApiReference = async (): Promise<void> => {
   generation ??= (async () => {
     const stagingDirectory = `${cacheDirectory}api-reference-${process.pid}`;
     await rm(stagingDirectory, { recursive: true, force: true });
-    for (const pkg of apiPackages) await generatePackage(pkg, stagingDirectory);
+    for (const entryPoint of apiEntryPoints) await generateEntryPoint(entryPoint, stagingDirectory);
     await rm(outputDirectory, { recursive: true, force: true });
     await rename(stagingDirectory, outputDirectory);
   })();

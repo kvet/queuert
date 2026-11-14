@@ -1,0 +1,1 @@
+error-wait/input.ts:4:3: `wait` and `resource` make a body wait, which only uncompiled bodies (tests) may do: yield* wait(workerRunner.start())

@@ -1,14 +1,14 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import type { AttemptMiddleware } from "../attempt-middleware/attempt-middleware.ts";
-import { createClient } from "../client.ts";
+import { createClient } from "../client/client.ts";
 import { DuplicateJobTypeError } from "../errors.ts";
 import { defineJobTypes } from "../job-types/define-job-types.ts";
 import {
   createInProcessStateAdapter,
   type InProcessStateAdapter,
-} from "../state-adapter/state-adapter.in-process.ts";
-import { createWorkerRunner } from "../worker-runner.ts";
+} from "../state-adapter.in-process/state-adapter.in-process.ts";
+import { createWorkerRunner } from "../worker/worker-runner.ts";
 import { createProcessors } from "./create-job-type-processors.ts";
 import {
   type ProcessorDefinitions,
@@ -30,13 +30,13 @@ type BillingDefs = {
 const imageJobTypes = defineJobTypes<ImageDefs>();
 const billingJobTypes = defineJobTypes<BillingDefs>();
 
-const stateAdapter = createInProcessStateAdapter();
+const stateAdapter = createInProcessStateAdapter({ mode: "async" });
 const client = createClient({
   stateAdapter,
   jobTypes: [imageJobTypes, billingJobTypes],
 });
 
-const traceMiddleware: AttemptMiddleware<InProcessStateAdapter, { traceId: string }> = {
+const traceMiddleware: AttemptMiddleware<InProcessStateAdapter<"async">, { traceId: string }> = {
   wrapHandler: async ({ next }) => next({ traceId: "t-1" }),
 };
 

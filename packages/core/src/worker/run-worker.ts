@@ -1,25 +1,25 @@
 import { type ParallelExecutor, createParallelExecutor } from "@queuert/helpers/parallel-executor";
 import { serializeError } from "@queuert/helpers/serialize-error";
 import { raceWithSleep, sleep } from "@queuert/helpers/sleep";
+import { step, syncAsync } from "@queuert/sync-async";
 
 import type { AnyAttemptMiddleware } from "../attempt-middleware/attempt-middleware.ts";
 import { runAttempt } from "../attempt/attempt-handler.ts";
+import { notifyOnCommit } from "../client/implementation.ts";
+import { type Helpers, withHelpersTransaction } from "../client/setup-helpers.ts";
 import { type BackoffConfig, calculateBackoffMs } from "../entities/backoff.ts";
 import {
   JobAttemptReclaimedError,
   WorkerAlreadyLiveError,
   WorkerLeaseLostError,
 } from "../errors.ts";
-import { notifyOnCommit } from "../implementation.ts";
 import {
   type Processor,
   processorAttemptMiddlewareSymbol,
 } from "../job-type-processors/job-type-processors.ts";
-import type { Helpers } from "../setup-helpers.ts";
-import type { BaseTxContext, StateJob, StateWorkerInfo } from "../state-adapter/state-adapter.ts";
+import type { BaseTxContext, StateJob } from "../state-adapter/state-adapter.ts";
 import { type WorkerLeaseConfig, holdLease } from "./worker-lease.ts";
 
-/** Per-processor runtime stamp carrying the middleware tuple of the originating slice. @internal */
 export type StampedProcessor = Processor<any, any, any, any> & {
   readonly [processorAttemptMiddlewareSymbol]: readonly AnyAttemptMiddleware[];
 };
@@ -79,25 +79,25 @@ const waitForNextJob = async (
 
 type ReclaimedJob = { reclaimed: StateJob; rescheduled: StateJob };
 
-const listRunningJobs = async (
+const listRunningJobs = syncAsync(function* (
   helpers: Helpers,
   { txCtx, workerId }: { txCtx?: unknown; workerId: string },
-): Promise<StateJob[]> => {
-  const listPage = async (cursor: string | undefined) =>
+) {
+  const listPage = (cursor: string | undefined) =>
     helpers.stateAdapter.listWorkerJobs({
       txCtx,
       workerId,
       orderDirection: "asc",
       page: { cursor, limit: 100 },
     });
-  const pages = [await listPage(undefined)];
+  const pages = [yield* step(listPage(undefined))];
   while (pages.at(-1)!.nextCursor !== null) {
-    pages.push(await listPage(pages.at(-1)!.nextCursor!));
+    pages.push(yield* step(listPage(pages.at(-1)!.nextCursor!)));
   }
   return pages.flatMap((page) => page.items);
-};
+});
 
-const reclaimWorkerJobs = async (
+const reclaimWorkerJobs = syncAsync(function* (
   helpers: Helpers,
   {
     txCtx,
@@ -112,26 +112,28 @@ const reclaimWorkerJobs = async (
     keepAttemptTokens?: Set<string>;
     message: string;
   },
-): Promise<ReclaimedJob[]> => {
+) {
   const { stateAdapter } = helpers;
-  const runningJobs = (await listRunningJobs(helpers, { txCtx, workerId })).filter(
+  const runningJobs = (yield* listRunningJobs.steps(helpers, { txCtx, workerId })).filter(
     (job) => keepAttemptTokens === undefined || !keepAttemptTokens.has(job.attemptToken!),
   );
   if (runningJobs.length === 0) return [];
   const error = serializeError(new JobAttemptReclaimedError(message, { reclaimedBy }));
-  const rescheduledJobs = await stateAdapter.rescheduleJobs({
-    txCtx,
-    jobs: runningJobs.map((job) => ({
-      jobId: job.id,
-      attemptToken: job.attemptToken!,
-      error,
-    })),
-  });
-  return runningJobs.flatMap((reclaimed, index) => {
+  const rescheduledJobs = yield* step(
+    stateAdapter.rescheduleJobs({
+      txCtx,
+      jobs: runningJobs.map((job) => ({
+        jobId: job.id,
+        attemptToken: job.attemptToken!,
+        error,
+      })),
+    }),
+  );
+  return runningJobs.flatMap((reclaimed, index): ReclaimedJob[] => {
     const rescheduled = rescheduledJobs[index];
     return rescheduled === undefined ? [] : [{ reclaimed, rescheduled }];
   });
-};
+});
 
 const observeReclaimed = (
   helpers: Helpers,
@@ -170,17 +172,19 @@ const announceReclaimed = (
   );
 };
 
-const lockWorker = async (
+const lockWorker = syncAsync(function* (
   helpers: Helpers,
   { txCtx, workerId }: { txCtx: unknown; workerId: string },
-): Promise<StateWorkerInfo | undefined> => {
-  const [worker] = await helpers.stateAdapter.getWorkers({
-    txCtx,
-    workerIds: [workerId],
-    lock: "exclusive",
-  });
+) {
+  const [worker] = yield* step(
+    helpers.stateAdapter.getWorkers({
+      txCtx,
+      workerIds: [workerId],
+      lock: "exclusive",
+    }),
+  );
   return worker;
-};
+});
 
 const announceReclaimedNow = async (
   helpers: Helpers,
@@ -211,31 +215,36 @@ const registerWorker = async (
   },
 ): Promise<{ workerToken: string; reclaimedJobs: ReclaimedJob[] }> => {
   const { stateAdapter } = helpers;
-  return stateAdapter.withTransaction(async (txCtx) => {
-    const existing = await lockWorker(helpers, { txCtx, workerId });
-    if (existing !== undefined && !existing.expired) {
-      throw new WorkerAlreadyLiveError(`Worker "${workerId}" is held by a live worker`, {
+  return withHelpersTransaction(
+    helpers,
+    syncAsync(function* (txCtx: BaseTxContext) {
+      const existing = yield* lockWorker.steps(helpers, { txCtx, workerId });
+      if (existing !== undefined && !existing.expired) {
+        throw new WorkerAlreadyLiveError(`Worker "${workerId}" is held by a live worker`, {
+          workerId,
+        });
+      }
+      if (existing !== undefined) {
+        yield* step(stateAdapter.stopWorker({ txCtx, workerId, workerToken: existing.token }));
+      }
+      const jobs = yield* reclaimWorkerJobs.steps(helpers, {
+        txCtx,
         workerId,
+        reclaimedBy: workerId,
+        message: "Worker holding the attempt lost its lease",
       });
-    }
-    if (existing !== undefined) {
-      await stateAdapter.stopWorker({ txCtx, workerId, workerToken: existing.token });
-    }
-    const jobs = await reclaimWorkerJobs(helpers, {
-      txCtx,
-      workerId,
-      reclaimedBy: workerId,
-      message: "Worker holding the attempt lost its lease",
-    });
-    const worker = await stateAdapter.startWorker({
-      txCtx,
-      workerId,
-      typeNames,
-      concurrency,
-      leaseMs: leaseConfig.durationMs,
-    });
-    return { workerToken: worker.token, reclaimedJobs: jobs };
-  });
+      const worker = yield* step(
+        stateAdapter.startWorker({
+          txCtx,
+          workerId,
+          typeNames,
+          concurrency,
+          leaseMs: leaseConfig.durationMs,
+        }),
+      );
+      return { workerToken: worker.token, reclaimedJobs: jobs };
+    }),
+  );
 };
 
 const reclaimExpiredWorker = async (
@@ -250,19 +259,24 @@ const reclaimExpiredWorker = async (
   });
   if (candidates.length === 0) return false;
   const candidate = candidates[Math.floor(Math.random() * candidates.length)];
-  return stateAdapter.withTransaction(async (txCtx) => {
-    const worker = await lockWorker(helpers, { txCtx, workerId: candidate.id });
-    if (worker === undefined || !worker.expired) return false;
-    await stateAdapter.stopWorker({ txCtx, workerId: worker.id, workerToken: worker.token });
-    const jobs = await reclaimWorkerJobs(helpers, {
-      txCtx,
-      workerId: worker.id,
-      reclaimedBy: workerId,
-      message: "Worker holding the attempt lost its lease",
-    });
-    announceReclaimed(helpers, txCtx, { jobs, workerId });
-    return true;
-  });
+  return withHelpersTransaction(
+    helpers,
+    syncAsync(function* (txCtx: BaseTxContext) {
+      const worker = yield* lockWorker.steps(helpers, { txCtx, workerId: candidate.id });
+      if (worker === undefined || !worker.expired) return false;
+      yield* step(
+        stateAdapter.stopWorker({ txCtx, workerId: worker.id, workerToken: worker.token }),
+      );
+      const jobs = yield* reclaimWorkerJobs.steps(helpers, {
+        txCtx,
+        workerId: worker.id,
+        reclaimedBy: workerId,
+        message: "Worker holding the attempt lost its lease",
+      });
+      announceReclaimed(helpers, txCtx, { jobs, workerId });
+      return true;
+    }),
+  );
 };
 
 const stopOwnWorker = async (
@@ -270,18 +284,21 @@ const stopOwnWorker = async (
   { workerId, workerToken }: { workerId: string; workerToken: string },
 ): Promise<boolean> => {
   const { stateAdapter } = helpers;
-  return stateAdapter.withTransaction(async (txCtx) => {
-    if ((await stateAdapter.stopWorker({ txCtx, workerId, workerToken })) === undefined)
-      return false;
-    const jobs = await reclaimWorkerJobs(helpers, {
-      txCtx,
-      workerId,
-      reclaimedBy: workerId,
-      message: "Worker holding the attempt stopped",
-    });
-    announceReclaimed(helpers, txCtx, { jobs, workerId });
-    return true;
-  });
+  return withHelpersTransaction(
+    helpers,
+    syncAsync(function* (txCtx: BaseTxContext) {
+      if ((yield* step(stateAdapter.stopWorker({ txCtx, workerId, workerToken }))) === undefined)
+        return false;
+      const jobs = yield* reclaimWorkerJobs.steps(helpers, {
+        txCtx,
+        workerId,
+        reclaimedBy: workerId,
+        message: "Worker holding the attempt stopped",
+      });
+      announceReclaimed(helpers, txCtx, { jobs, workerId });
+      return true;
+    }),
+  );
 };
 
 export const runWorker = async ({
@@ -339,7 +356,16 @@ export const runWorker = async ({
     if (!held) loseLease();
   });
   await announceReclaimedNow(helpers, { jobs: reclaimedJobs, workerId });
-  const signal = AbortSignal.any([stopSignal, leaseLost.signal]);
+  // One plain signal instead of AbortSignal.any: the loop reads `aborted` and adds an abort
+  // listener per job, and both cost more on a composite signal.
+  const stopped = new AbortController();
+  const stop = () => {
+    stopped.abort();
+  };
+  stopSignal.addEventListener("abort", stop, { once: true });
+  leaseLost.signal.addEventListener("abort", stop, { once: true });
+  if (stopSignal.aborted || leaseLost.signal.aborted) stop();
+  const signal = stopped.signal;
 
   const executor = createParallelExecutor(concurrency);
   const runningAttemptTokens = new Set<string>();
@@ -377,18 +403,22 @@ export const runWorker = async ({
   };
 
   const reclaimFinishedJobs = async () => {
-    const ownsWorker = await stateAdapter.withTransaction(async (txCtx) => {
-      if ((await lockWorker(helpers, { txCtx, workerId }))?.token !== workerToken) return false;
-      const jobs = await reclaimWorkerJobs(helpers, {
-        txCtx,
-        workerId,
-        reclaimedBy: workerId,
-        keepAttemptTokens: runningAttemptTokens,
-        message: "Worker holding the attempt no longer runs it",
-      });
-      announceReclaimed(helpers, txCtx, { jobs, workerId });
-      return true;
-    });
+    const ownsWorker = await withHelpersTransaction(
+      helpers,
+      syncAsync(function* (txCtx: BaseTxContext) {
+        if ((yield* lockWorker.steps(helpers, { txCtx, workerId }))?.token !== workerToken)
+          return false;
+        const jobs = yield* reclaimWorkerJobs.steps(helpers, {
+          txCtx,
+          workerId,
+          reclaimedBy: workerId,
+          keepAttemptTokens: runningAttemptTokens,
+          message: "Worker holding the attempt no longer runs it",
+        });
+        announceReclaimed(helpers, txCtx, { jobs, workerId });
+        return true;
+      }),
+    );
     if (!ownsWorker) {
       loseLease();
     }
@@ -444,21 +474,24 @@ export const runWorker = async ({
 
   let failures = 0;
   let startedJob = false;
-  while (!signal.aborted) {
-    try {
-      if ((await startJobs()) > 0) {
-        failures = 0;
-        startedJob = true;
+  try {
+    while (!signal.aborted) {
+      try {
+        if ((await startJobs()) > 0) {
+          failures = 0;
+          startedJob = true;
+        }
+        await reclaimOrWait();
+      } catch (error) {
+        finishedJobsReclaimDue = true;
+        observabilityHelper.workerError({ workerId }, error);
+        failures += 1;
+        await sleep(calculateBackoffMs(failures, recoveryBackoffConfig), { signal });
       }
-      await reclaimOrWait();
-    } catch (error) {
-      finishedJobsReclaimDue = true;
-      observabilityHelper.workerError({ workerId }, error);
-      failures += 1;
-      await sleep(calculateBackoffMs(failures, recoveryBackoffConfig), { signal });
     }
+  } finally {
+    stopSignal.removeEventListener("abort", stop);
   }
-
   await executor.drain();
   leaseStop.abort();
   await lease;

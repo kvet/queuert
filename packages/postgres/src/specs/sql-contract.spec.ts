@@ -6,6 +6,7 @@ import type { RuntimeType } from "@queuert/typed-sql";
 import { Client, Pool } from "pg";
 import type { StateAdapterConformanceContext } from "queuert/conformance";
 import {
+  stateAdapterAsyncGroups,
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
 } from "queuert/conformance-internal";
@@ -336,6 +337,10 @@ baseIt("index");
 describe("PostgreSQL SQL contract", () => {
   conformanceTestSuite({
     it,
-    groups: [...stateAdapterBaseGroups, ...stateAdapterConcurrentTransactionGroups],
+    groups: [
+      ...stateAdapterBaseGroups,
+      ...stateAdapterAsyncGroups,
+      ...stateAdapterConcurrentTransactionGroups,
+    ],
   });
 });

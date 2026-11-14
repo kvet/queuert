@@ -1,10 +1,13 @@
 import { createLatch, createResettableLatch } from "@queuert/helpers/latch";
 import { serializeError } from "@queuert/helpers/serialize-error";
+import { type MaybePromise, step, syncAsync } from "@queuert/sync-async";
 
 import {
   type AnyAttemptMiddleware,
   runHandlerMiddlewareChain,
 } from "../attempt-middleware/attempt-middleware.ts";
+import { runCompleteChain, runContinueChain, runRescheduleJobs } from "../client/implementation.ts";
+import { type Helpers, runInMode } from "../client/setup-helpers.ts";
 import { type BackoffConfig, calculateBackoffMs } from "../entities/backoff.ts";
 import { mapStateChainToChain } from "../entities/chain.ts";
 import { type AnyJob, mapStateJobToJob } from "../entities/job.ts";
@@ -13,9 +16,7 @@ import {
   JobNotFoundError,
   JobTakenByAnotherWorkerError,
 } from "../errors.ts";
-import { completeChain, continueChain, rescheduleJobs } from "../implementation.ts";
 import type { JobAttemptSpanHandle } from "../observability-adapter/observability-adapter.ts";
-import type { Helpers } from "../setup-helpers.ts";
 import type { BaseTxContext, StateJob, StateJobInfo } from "../state-adapter/state-adapter.ts";
 import { requireTxCtx } from "../state-adapter/tx-context.ts";
 import type { AnyAttemptHandler, AnyCompleteOptions } from "./attempt-handler.types.ts";
@@ -24,6 +25,12 @@ import { type AttemptOwnership, startAttemptOwnership } from "./attempt-ownershi
 type CompleteWrite = {
   stateJob: StateJob & { continuation?: StateJobInfo };
   job: AnyJob & { continuedTo?: AnyJob };
+};
+
+type AttemptWrites = {
+  complete: (options: AnyCompleteOptions) => MaybePromise<AnyJob & { continuedTo?: AnyJob }>;
+  fence: (options: BaseTxContext) => MaybePromise<void>;
+  close: () => CompleteWrite | null;
 };
 
 const createAttemptWrites = (
@@ -39,7 +46,7 @@ const createAttemptWrites = (
     attemptToken: string;
     ownership: AttemptOwnership;
   },
-) => {
+): AttemptWrites => {
   const closed = createLatch();
   const inProgress = createResettableLatch("complete is already in progress for this attempt");
   const written = createResettableLatch<CompleteWrite>(
@@ -47,8 +54,8 @@ const createAttemptWrites = (
   );
   const committed = createLatch<CompleteWrite>();
 
-  const readLossError = async (txCtx: BaseTxContext): Promise<Error> => {
-    const [job] = await helpers.stateAdapter.getJobs({ txCtx, jobIds: [stateJob.id] });
+  const readLossError = syncAsync(function* (txCtx: BaseTxContext) {
+    const [job] = yield* step(helpers.stateAdapter.getJobs({ txCtx, jobIds: [stateJob.id] }));
     ownership.abort();
     if (!job) {
       return new JobNotFoundError(`Job not found`, { jobId: stateJob.id });
@@ -61,13 +68,16 @@ const createAttemptWrites = (
       workerId,
       attemptBy: job.attemptBy,
     });
-  };
+  });
 
-  const complete = async (options: AnyCompleteOptions) => {
+  const complete = syncAsync(function* (options: AnyCompleteOptions) {
     closed.throwIfTripped("complete cannot be called after the attempt handler has ended");
     const { output, continueWith, reschedule, ...txCtxFields } = options;
-    const outcomeKeys = ["output", "continueWith", "reschedule"].filter((key) => key in options);
-    if (outcomeKeys.length !== 1) {
+    const outcomeCount =
+      Number("output" in options) +
+      Number("continueWith" in options) +
+      Number("reschedule" in options);
+    if (outcomeCount !== 1) {
       throw new Error("complete requires exactly one of output, continueWith or reschedule");
     }
     const txCtx = requireTxCtx(helpers.stateAdapter, txCtxFields, "complete");
@@ -76,23 +86,21 @@ const createAttemptWrites = (
 
     inProgress.trip();
     try {
-      const stateJobWritten =
+      const stateJobWritten: CompleteWrite["stateJob"] | undefined =
         "reschedule" in options
-          ? (
-              await rescheduleJobs(helpers, {
-                txCtx,
-                jobs: [{ jobId: stateJob.id, schedule: reschedule, attemptToken }],
-              })
-            )[0]
+          ? (yield* runRescheduleJobs.steps(helpers, {
+              txCtx,
+              jobs: [{ jobId: stateJob.id, schedule: reschedule, attemptToken }],
+            }))[0]
           : continueWith === undefined
-            ? await completeChain(helpers, {
+            ? yield* runCompleteChain.steps(helpers, {
                 job: stateJob,
                 output,
                 txCtx,
                 attemptToken,
                 workerId,
               })
-            : await continueChain(helpers, {
+            : yield* runContinueChain.steps(helpers, {
                 job: stateJob,
                 continueWith,
                 txCtx,
@@ -100,7 +108,7 @@ const createAttemptWrites = (
                 workerId,
               });
       if (stateJobWritten === undefined) {
-        throw await readLossError(txCtx);
+        throw yield* readLossError.steps(txCtx);
       }
 
       const write: CompleteWrite = {
@@ -125,24 +133,26 @@ const createAttemptWrites = (
     } finally {
       inProgress.reset();
     }
-  };
+  });
 
-  const fence = async (options: BaseTxContext) => {
+  const fence = syncAsync(function* (options: BaseTxContext) {
     closed.throwIfTripped("fence cannot be called after the attempt handler has ended");
     const txCtx = requireTxCtx(helpers.stateAdapter, { ...options }, "fence");
-    const [job] = await helpers.stateAdapter.getJobs({
-      txCtx,
-      jobIds: [stateJob.id],
-      lock: "exclusive",
-    });
+    const [job] = yield* step(
+      helpers.stateAdapter.getJobs({
+        txCtx,
+        jobIds: [stateJob.id],
+        lock: "exclusive",
+      }),
+    );
     if (job?.status !== "running" || job.attemptToken !== attemptToken) {
-      throw await readLossError(txCtx);
+      throw yield* readLossError.steps(txCtx);
     }
-  };
+  });
 
   return {
-    complete,
-    fence,
+    complete: (options) => runInMode(helpers, complete, options),
+    fence: (options) => runInMode(helpers, fence, options),
     close: () => {
       closed.trip();
       return committed.value ?? null;
@@ -166,18 +176,17 @@ const runAttemptHandler = async ({
   stateJob: StateJob & { hasBlockers: boolean };
   workerId: string;
   signal: AbortSignal;
-  complete: Parameters<AnyAttemptHandler>[0]["complete"];
-  fence: Parameters<AnyAttemptHandler>[0]["fence"];
+  complete: AttemptWrites["complete"];
+  fence: AttemptWrites["fence"];
 }): Promise<void> => {
   const blockerChains = stateJob.hasBlockers
     ? await helpers.stateAdapter.getJobBlockers({ jobId: stateJob.id })
     : [];
-  const runningJob = {
-    ...mapStateJobToJob(stateJob, helpers.jobTypes),
+  const runningJob = Object.assign(mapStateJobToJob(stateJob, helpers.jobTypes), {
     blockers: blockerChains.map((blockerChain) =>
       mapStateChainToChain(blockerChain, helpers.jobTypes),
     ),
-  };
+  });
   await runHandlerMiddlewareChain(
     attemptMiddleware,
     { job: runningJob, workerId },

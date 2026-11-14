@@ -1,4 +1,3 @@
-import { createAsyncRwLock } from "@queuert/sqlite";
 import {
   createSqliteMigratorConformanceContext,
   createSqliteStateProviderConformanceContext,
@@ -14,13 +13,12 @@ import { createDrizzleSqliteStateProvider } from "./provider.ts";
 // #region conformance
 describe("state-sqlite-drizzle provider conformance", () => {
   const db = new Database(":memory:");
-  const lock = createAsyncRwLock();
   let context: SqliteStateProviderConformanceContext;
 
-  beforeAll(async () => {
-    context = await createSqliteStateProviderConformanceContext({
-      createStateProvider: async () => createDrizzleSqliteStateProvider({ db, lock }),
-      withNonTransactionContext: async (fn) => fn({ db }),
+  beforeAll(() => {
+    context = createSqliteStateProviderConformanceContext({
+      createStateProvider: () => createDrizzleSqliteStateProvider({ db }),
+      withNonTransactionContext: (fn) => fn({ db }),
     });
   });
 
@@ -39,7 +37,7 @@ describe("state-sqlite-drizzle provider conformance", () => {
 describe("state-sqlite-drizzle migrator conformance", () => {
   const db = new Database(":memory:");
   const context = createSqliteMigratorConformanceContext({
-    stateProvider: createDrizzleSqliteStateProvider({ db, lock: createAsyncRwLock() }),
+    stateProvider: createDrizzleSqliteStateProvider({ db }),
   });
 
   afterAll(async () => {

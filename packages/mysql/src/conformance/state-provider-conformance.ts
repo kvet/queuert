@@ -5,6 +5,7 @@ import {
   type ConformanceGroup,
   type SavepointConformanceContext,
   type SchemaFenceConformanceContext,
+  stateAdapterAsyncGroups,
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
   stateAdapterSavepointGroups,
@@ -64,6 +65,7 @@ export const isolationLevelGroup: ConformanceGroup<MysqlStateProviderConformance
 export const mysqlStateProviderConformanceGroups: ConformanceGroup<MysqlStateProviderConformanceContext>[] =
   [
     ...stateAdapterBaseGroups,
+    ...stateAdapterAsyncGroups,
     ...stateAdapterSchemaFenceGroups,
     ...stateAdapterConcurrentTransactionGroups,
     ...stateAdapterSchemaFenceConcurrentTransactionGroups,

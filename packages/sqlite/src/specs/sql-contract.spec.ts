@@ -1,9 +1,10 @@
 // oxlint-disable no-empty-pattern -- vitest fixtures must destructure their context
 import { conformanceTestSuite } from "@queuert/helpers/conformance";
+import { step, syncAsync, type Mode } from "@queuert/sync-async";
 import type { RuntimeType } from "@queuert/typed-sql";
 import Database from "better-sqlite3";
 import type { StateAdapterConformanceContext } from "queuert/conformance";
-import { stateAdapterBaseGroups } from "queuert/conformance-internal";
+import { stateAdapterAsyncGroups, stateAdapterBaseGroups } from "queuert/conformance-internal";
 import { describe, expect, it } from "vitest";
 
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";
@@ -161,50 +162,57 @@ const validateAfterExecute = (stmt: Database.Statement, args: SqlArgs, rows: unk
 
 const createValidatingProvider = (
   db: Database.Database,
-): SqliteStateProvider<BetterSqlite3Context> => {
-  const inner = createBetterSqlite3Provider({ db });
+  mode: Mode,
+): SqliteStateProvider<BetterSqlite3Context, Mode> => {
+  const inner = createBetterSqlite3Provider({ db, mode });
   return {
-    withTransaction: inner.withTransaction,
-    isTransaction: inner.isTransaction,
-    onTransactionCommit: inner.onTransactionCommit,
-    onTransactionRollback: inner.onTransactionRollback,
-    classifyError: inner.classifyError,
-    executeSql: async (args) => {
-      const stmt = validateBeforeExecute(db, args);
-      const rows = await inner.executeSql(args);
-      if (stmt) validateAfterExecute(stmt, args, rows);
-      return rows;
+    ...inner,
+    executeSql: (args: Parameters<typeof inner.executeSql>[0]) => {
+      const validated = syncAsync(function* () {
+        const stmt = validateBeforeExecute(db, args);
+        const rows = yield* step(inner.executeSql(args));
+        if (stmt) validateAfterExecute(stmt, args, rows);
+        return rows;
+      });
+      return mode === "sync" ? validated.sync() : validated.async();
     },
-    close: inner.close,
   };
 };
 
-const contractIt = it.extend(
-  "conformance",
-  { scope: "file" },
-  async ({}, { onCleanup }): Promise<StateAdapterConformanceContext> => {
-    const db = new Database(":memory:");
-    onCleanup(async () => {
-      db.close();
-    });
-    await createSqliteStateAdapter({
-      stateProvider: createBetterSqlite3Provider({ db }),
-    }).migrateToLatest();
-    return {
-      createStateAdapter: async () => {
-        db.exec(
-          "DELETE FROM queuert_job_blocker; DELETE FROM queuert_job; DELETE FROM queuert_worker;",
-        );
-        return createSqliteStateAdapter({ stateProvider: createValidatingProvider(db) });
-      },
-      withNonTransactionContext: async (fn) => fn({ db }),
-    };
-  },
-);
+const contractIt = (mode: Mode) =>
+  it.extend(
+    "conformance",
+    { scope: "file" },
+    async ({}, { onCleanup }): Promise<StateAdapterConformanceContext> => {
+      const db = new Database(":memory:");
+      onCleanup(async () => {
+        db.close();
+      });
+      await createSqliteStateAdapter({
+        stateProvider: createBetterSqlite3Provider({ db, mode }),
+      }).migrateToLatest();
+      return {
+        createStateAdapter: () => {
+          db.exec(
+            "DELETE FROM queuert_job_blocker; DELETE FROM queuert_job; DELETE FROM queuert_worker;",
+          );
+          return createSqliteStateAdapter({ stateProvider: createValidatingProvider(db, mode) });
+        },
+        withNonTransactionContext: (fn) => fn({ db }),
+      };
+    },
+  );
+
+const asyncContractIt = contractIt("async");
+const syncContractIt = contractIt("sync");
 
 describe("SQLite SQL contract", () => {
   conformanceTestSuite({
-    it: contractIt,
-    groups: stateAdapterBaseGroups,
+    it: asyncContractIt,
+    groups: [...stateAdapterBaseGroups, ...stateAdapterAsyncGroups],
   });
+});
+
+describe("Sync SQLite SQL contract", () => {
+  conformanceTestSuite({ it: syncContractIt, groups: stateAdapterBaseGroups });
 });

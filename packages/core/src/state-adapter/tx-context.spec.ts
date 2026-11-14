@@ -7,7 +7,7 @@ const transaction = Symbol("queuert.test.transaction");
 
 const stateAdapter = {
   isTransaction: (txCtx: Record<PropertyKey, unknown>) => txCtx[transaction] === true,
-} as unknown as StateAdapter<any, any, any>;
+} as unknown as StateAdapter<any, any, any, "async">;
 
 it("keeps a context whose only key is a symbol", () => {
   const txCtx = { [transaction]: true };

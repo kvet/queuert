@@ -15,6 +15,8 @@ const args = process.argv.slice(2);
 
 const measurementModules: Record<string, string> = {
   "state-postgres": "state-postgres.ts",
+  "state-in-process": "state-in-process.ts",
+  "state-in-process-async": "state-in-process-async.ts",
   "state-sqlite": "state-sqlite.ts",
   "state-mysql": "state-mysql.ts",
   "state-mariadb": "state-mariadb.ts",
@@ -22,6 +24,7 @@ const measurementModules: Record<string, string> = {
   "notify-redis": "notify-redis.ts",
   "notify-postgres": "notify-postgres.ts",
   "notify-nats": "notify-nats.ts",
+  "notify-ipc": "notify-ipc.ts",
   otel: "otel.ts",
   dashboard: "dashboard.ts",
   "validation-define": "validation-define.ts",
@@ -49,13 +52,12 @@ async function runMeasurementInChildProcess(name: string, phase: string): Promis
 
     const fullPath = join(__dirname, modulePath);
 
-    // Spawn a new process on the same Node.js binary with --expose-gc, bytecode flushing off (V8 would otherwise drop compiled code mid-measurement)
-    // and the dist hooks, so queuert packages load from their built output
     const child = spawn(
       process.execPath,
       [
         "--expose-gc",
         "--no-flush-bytecode",
+        ...(phase === "profile" ? ["--enable-source-maps"] : []),
         `--import=${join(__dirname, "dist-hooks.ts")}`,
         fullPath,
         `--phase=${phase}`,

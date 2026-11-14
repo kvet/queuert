@@ -7,10 +7,7 @@ export const conformanceTestSuite = <TFixtures extends { conformance: unknown }>
   it: TestAPI<TFixtures>;
   groups: {
     name: string;
-    cases: {
-      name: string;
-      run: (context: TFixtures["conformance"]) => Promise<void>;
-    }[];
+    cases: { name: string; run: (context: TFixtures["conformance"]) => Promise<void> }[];
   }[];
 }): void => {
   for (const group of groups) {

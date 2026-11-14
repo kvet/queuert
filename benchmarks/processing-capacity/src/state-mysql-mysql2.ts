@@ -1,8 +1,9 @@
 import { createMysqlStateAdapter } from "@queuert/mysql";
 import { createMysql2PoolStateProvider } from "example-state-mysql-mysql2/provider";
 import { createConnection, createPool } from "mysql2/promise";
+import { noopNotifyAdapter } from "queuert/conformance-internal";
 
-import { benchmarkNamespace, noopNotifyAdapter, requireEnv, runBenchmark } from "./utils.ts";
+import { benchmarkNamespace, requireEnv, runBenchmark } from "./utils.ts";
 
 const connectionOptions = JSON.parse(requireEnv("BENCHMARK_MYSQL_OPTIONS")) as {
   host: string;

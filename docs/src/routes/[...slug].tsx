@@ -16,7 +16,7 @@ import { formatDate } from "../docs/dates.ts";
 import {
   type DocModule,
   type DocPage,
-  apiPackageOf,
+  apiEntryOf,
   kindLabels,
   findPage,
   loadPage,
@@ -82,7 +82,7 @@ const UsedIn = (props: { page: DocPage }) => (
 
 const Article = (props: { page: DocPage; module: DocModule }) => {
   const pager = () => neighbors(props.page);
-  const pkg = () => apiPackageOf(props.page);
+  const pkg = () => apiEntryOf(props.page);
   const isPackageIndex = () => props.page.slug.endsWith("/readme") && pkg() !== undefined;
   const Content = props.module.default;
 
@@ -166,7 +166,7 @@ const articleFor = (page: DocPage): Component => {
   if (!article) {
     article = lazy(async () => {
       const module = await loadPage(page);
-      const pkg = apiPackageOf(page);
+      const pkg = apiEntryOf(page);
       const headings =
         pkg && page.slug.endsWith("/readme")
           ? pkg.kinds.map((kind) => ({

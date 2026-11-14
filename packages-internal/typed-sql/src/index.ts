@@ -1,7 +1,30 @@
-export * from "./sql.ts";
-export * from "./template-applier.ts";
-export * from "./template-cache.ts";
-export * from "./migrator.ts";
-export * from "./sql-executor.ts";
-export * from "./migration-reconciler.ts";
-export * from "./migration-store-conformance.ts";
+export {
+  type DataType,
+  type InferColumns,
+  type InferParams,
+  type RuntimeType,
+  type TypedSql,
+  type TypedSqlTemplate,
+  extractColumnTypes,
+  extractParamTypes,
+  sql,
+  t,
+} from "./sql.ts";
+export { type TemplateApplier, createTemplateApplier } from "./template-applier.ts";
+export { createTemplateCache } from "./template-cache.ts";
+export { createTypedSqlExecutor, validateSqlIdentifier } from "./sql-executor.ts";
+export {
+  type Migration,
+  type MigrationResult,
+  type MigrationScript,
+  type MigrationStore,
+  type Migrator,
+  createMigrator,
+} from "./migrator.ts";
+export { assertMigrationLockOptions } from "./migration-lock.ts";
+export {
+  type MigratorConformanceContext,
+  migrationStoreBaseGroups,
+  migrationStoreLeaseGroups,
+  migrationStoreTransactionalDdlGroups,
+} from "./migration-store-conformance.ts";

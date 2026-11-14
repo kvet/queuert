@@ -1,0 +1,1 @@
+error-plain-yield/input.ts:4:17: a sync-async body may only use `yield*`: yield db.query(key)

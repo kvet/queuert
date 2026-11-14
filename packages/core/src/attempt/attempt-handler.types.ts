@@ -1,3 +1,6 @@
+import type { MaybePromise, ModeResult, Mode } from "@queuert/sync-async";
+
+import type { ModeOf } from "../adapter-mode.ts";
 import type { AnyChain } from "../entities/chain.ts";
 import type { AnyJob } from "../entities/job.ts";
 import type { ScheduleOptions } from "../entities/schedule.ts";
@@ -13,15 +16,15 @@ import type {
   ResolvedRunningJob,
 } from "../job-types/job-types.resolvers.ts";
 import type {
+  StateAdapter,
   BaseTxContext,
   GetStateAdapterJobId,
   GetStateAdapterTxContext,
   GetStateAdapterWorkerId,
-  StateAdapter,
 } from "../state-adapter/state-adapter.ts";
 
 type AttemptContinueWithOutcome<
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any, any, Mode>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
 > =
@@ -51,7 +54,7 @@ type AttemptRescheduleOutcome = { reschedule: ScheduleOptions };
 
 /** Every outcome `complete` accepts, as a single union. */
 export type AttemptOutcome<
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any, any, Mode>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
 > =
@@ -61,7 +64,7 @@ export type AttemptOutcome<
 
 /** Resolves the committed job shape from the outcome's discriminant key. */
 export type AttemptCompleteResult<
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any, any, Mode>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string,
@@ -135,13 +138,14 @@ export type AttemptCompleteResult<
  * `validateJobId` check.
  */
 export type AttemptComplete<
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any, any, Mode>,
   in out TJobTypeDefinitions extends BaseJobTypeDefinitions,
   in out TJobTypeName extends string,
   out TChainTypeName extends string,
 > = <TOutcome extends AttemptOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName>>(
   options: TOutcome & GetStateAdapterTxContext<TStateAdapter>,
-) => Promise<
+) => ModeResult<
+  ModeOf<TStateAdapter>,
   AttemptCompleteResult<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TChainTypeName, TOutcome>
 >;
 
@@ -168,9 +172,9 @@ export type AttemptComplete<
  * `client.completeChain`, and aborts `signal`.
  * @throws {@link JobNotFoundError} if the job was deleted, and aborts `signal`.
  */
-export type AttemptFence<TStateAdapter extends StateAdapter<any, any, any>> = (
+export type AttemptFence<TStateAdapter extends StateAdapter<any, any, any, Mode>> = (
   options: Partial<GetStateAdapterTxContext<TStateAdapter>>,
-) => Promise<void>;
+) => ModeResult<ModeOf<TStateAdapter>, void>;
 
 /**
  * Handler function called for each job attempt.
@@ -187,9 +191,13 @@ export type AttemptFence<TStateAdapter extends StateAdapter<any, any, any>> = (
  * undo the completion; it is reported as a worker error. Without a counted `complete` — a throw
  * before it, no call, or a call that rolled back — the attempt fails, and the job is rescheduled
  * with backoff.
+ *
+ * The handler is asynchronous in both modes. Over a `"sync"` {@link StateAdapter}, `complete` and
+ * `fence` return their results directly and throw synchronously, so the transaction that calls
+ * them can be the driver's own synchronous transaction.
  */
 export type AttemptHandler<
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any, any, Mode>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   TChainTypeName extends string,
@@ -209,15 +217,15 @@ export type AttemptHandler<
   } & THandlerCtx,
 ) => Promise<Exclude<AnyJob, { status: "running" }>>;
 
+export type AnyAttemptHandler = (options: {
+  signal: AbortSignal;
+  job: AnyJob & { blockers: AnyChain[] };
+  complete: (options: AnyCompleteOptions) => MaybePromise<AnyJob & { continuedTo?: AnyJob }>;
+  fence: (options: BaseTxContext) => MaybePromise<void>;
+}) => Promise<unknown>;
+
 export type AnyCompleteOptions = BaseTxContext & {
   output?: unknown;
   continueWith?: AnyNewJob;
   reschedule?: ScheduleOptions;
 };
-
-export type AnyAttemptHandler = (options: {
-  signal: AbortSignal;
-  job: AnyJob & { blockers: AnyChain[] };
-  complete: (options: AnyCompleteOptions) => Promise<AnyJob & { continuedTo?: AnyJob }>;
-  fence: (options: BaseTxContext) => Promise<void>;
-}) => Promise<unknown>;

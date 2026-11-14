@@ -4,7 +4,7 @@ type Listener = () => void;
 
 // #region adapter
 /** Creates a notify adapter that delivers notifications to listeners in the same process. */
-export const createMemoryNotifyAdapter = (): NotifyAdapter => {
+export const createMemoryNotifyAdapter = (): NotifyAdapter<"async"> => {
   const channels = new Map<string, Set<Listener>>();
   let closed = false;
 

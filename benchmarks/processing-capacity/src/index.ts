@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -28,6 +28,11 @@ const benchmarkModules: Record<
   "state-in-process": {
     modulePath: "state-in-process.ts",
     label: "In-process",
+    axis: "state",
+  },
+  "state-in-process-async": {
+    modulePath: "state-in-process-async.ts",
+    label: "In-process (async)",
     axis: "state",
   },
   "state-sqlite-better-sqlite3": {
@@ -81,6 +86,11 @@ const benchmarkModules: Record<
     label: "In-process",
     axis: "notify",
   },
+  "notify-in-process-async": {
+    modulePath: "notify-in-process-async.ts",
+    label: "In-process (async)",
+    axis: "notify",
+  },
   "notify-redis-redis": {
     modulePath: "notify-redis-redis.ts",
     label: "Redis (redis)",
@@ -111,6 +121,11 @@ const benchmarkModules: Record<
     axis: "notify",
     service: "nats",
   },
+  "notify-ipc": {
+    modulePath: "notify-ipc.ts",
+    label: "IPC",
+    axis: "notify",
+  },
 };
 
 const runBenchmarkInChildProcess = async (
@@ -127,10 +142,14 @@ const runBenchmarkInChildProcess = async (
 
     const fullPath = join(__dirname, benchmarkModule.modulePath);
 
-    const child = spawn(process.execPath, [fullPath, ...extraArgs], {
-      stdio: "inherit",
-      env: { ...process.env, ...extraEnv },
-    });
+    const child = spawn(
+      process.execPath,
+      [`--import=${join(__dirname, "dist-hooks.ts")}`, fullPath, ...extraArgs],
+      {
+        stdio: "inherit",
+        env: { ...process.env, ...extraEnv },
+      },
+    );
 
     child.on("error", (error) => {
       reject(error);
@@ -155,7 +174,7 @@ const readResults = async (resultFile: string): Promise<ScenarioResult[]> => {
 
 const formatResult = (result: ScenarioResult | undefined): string => {
   if (!result) return "-";
-  return `${result.drained ? ">" : "~"}${formatRate(result.count, result.durationMs)}`;
+  return `~${formatRate(result.count, result.durationMs)}`;
 };
 
 const formatMarkdownTable = (header: string[], rows: string[][]): string => {
@@ -206,6 +225,14 @@ const main = async (): Promise<void> => {
   const selected = knownFlags.filter((name) => args.includes(`--${name}`));
 
   const toRun = args.includes("--all") || selected.length === 0 ? knownFlags : selected;
+
+  if (!args.includes("--skip-build")) {
+    console.log("\nBuilding queuert packages (benchmarks load their dist output)...");
+    execSync("pnpm --filter benchmark-processing-capacity^... build", {
+      cwd: join(__dirname, "../../.."),
+      stdio: "inherit",
+    });
+  }
 
   const resultDirectory = await mkdtemp(join(tmpdir(), "processing-capacity-"));
   const resultsByBenchmark = new Map<string, ScenarioResult[]>();

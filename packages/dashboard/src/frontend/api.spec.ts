@@ -1,12 +1,16 @@
 import { RpcError } from "@queuert/rpc";
-import { createClient, defineJobTypes } from "queuert";
-import { createInProcessStateAdapter } from "queuert/conformance-internal";
+import {
+  type InProcessStateAdapter,
+  createClient,
+  defineJobTypes,
+  createInProcessStateAdapter,
+} from "queuert";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createDashboard } from "../api/dashboard.ts";
 import { isNotFound, serverFns } from "./api.ts";
 
-const createChain = async (stateAdapter: ReturnType<typeof createInProcessStateAdapter>) => {
+const createChain = async (stateAdapter: InProcessStateAdapter<"async">) => {
   const [stateChain] = await stateAdapter.withTransaction(async (txCtx) =>
     stateAdapter.createJobs({
       txCtx,
@@ -17,7 +21,7 @@ const createChain = async (stateAdapter: ReturnType<typeof createInProcessStateA
 };
 
 const serveDashboard = () => {
-  const stateAdapter = createInProcessStateAdapter();
+  const stateAdapter = createInProcessStateAdapter({ mode: "async" });
   const dashboard = createDashboard({
     client: createClient({ stateAdapter, jobTypes: defineJobTypes() }),
   });

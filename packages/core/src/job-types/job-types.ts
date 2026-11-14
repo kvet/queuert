@@ -1,4 +1,4 @@
-import { isThenable } from "@queuert/helpers/promise";
+import { isThenable } from "@queuert/sync-async";
 
 import { JobTypeValidationError } from "../errors.ts";
 import type { BaseJobTypeDefinitions, ResolvedJobTypeReference } from "./job-type.ts";
@@ -7,7 +7,6 @@ import { MAX_JSON_DEPTH, findNonJsonPath } from "./json-serializable.ts";
 /** Symbol used to carry phantom job type definitions on a registry. */
 export const definitionsSymbol: unique symbol = Symbol("queuert.definitions");
 
-/** Symbol used to carry phantom external job type definitions on a registry. */
 export const externalDefinitionsSymbol: unique symbol = Symbol("queuert.externalDefinitions");
 
 /** Extract the job type definitions from a {@link JobTypes} slice. */
@@ -265,11 +264,6 @@ export const createJobTypes = <
   };
 };
 
-/**
- * Create a noop registry that passes all values through (identity codec, no
- * runtime checks). Used by {@link defineJobTypes} for compile-time-only type
- * checking.
- */
 export const createNoopJobTypes = <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TExternalJobTypeDefinitions extends BaseJobTypeDefinitions = Record<never, never>,

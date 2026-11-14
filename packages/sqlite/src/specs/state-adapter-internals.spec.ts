@@ -6,6 +6,7 @@ import {
   type BetterSqlite3Context,
   createBetterSqlite3Provider,
 } from "../state-provider/state-provider.better-sqlite3.ts";
+import type { SqliteStateProvider } from "../state-provider/state-provider.sqlite.ts";
 
 const it = baseIt
   // oxlint-disable-next-line no-empty-pattern -- vitest fixtures must destructure their context
@@ -19,7 +20,7 @@ const it = baseIt
   .extend("executed", async (): Promise<{ sql: string; params: unknown[] }[]> => [])
   .extend("adapter", async ({ db, executed }) => {
     const provider = createBetterSqlite3Provider({ db });
-    const adapter = createSqliteStateAdapter<BetterSqlite3Context, string>({
+    const adapter = createSqliteStateAdapter<SqliteStateProvider<BetterSqlite3Context>, string>({
       stateProvider: {
         ...provider,
         executeSql: async (options) => {

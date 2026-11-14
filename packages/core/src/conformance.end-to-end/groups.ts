@@ -1,7 +1,7 @@
 import type { NotifyAdapterConformanceContext } from "../conformance.notify-adapter/types.ts";
 import type { StateAdapterConformanceContext } from "../conformance.state-adapter/types.ts";
 import type { ConformanceGroup } from "../conformance/runner.ts";
-import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.ts";
+import { createInProcessStateAdapter } from "../state-adapter.in-process/state-adapter.in-process.ts";
 import { awaitChainGroup } from "./cases/await-chain.ts";
 import {
   blockerChainsConcurrentTransactionsGroup,
@@ -11,14 +11,19 @@ import { chainsGroup } from "./cases/chains.ts";
 import { clientQueriesGroup } from "./cases/client-queries.ts";
 import { createChainsGroup, createChainsNotifyGroup } from "./cases/create-chains.ts";
 import { deduplicationGroup } from "./cases/deduplication.ts";
-import { deletionGroup, deletionNotifyGroup } from "./cases/deletion.ts";
+import { deletionAsyncGroup, deletionGroup, deletionNotifyGroup } from "./cases/deletion.ts";
 import { notifyResilienceGroup } from "./cases/notify-resilience.ts";
 import { notifyGroup } from "./cases/notify.ts";
 import {
   processErrorHandlingGroup,
   processErrorHandlingPoisonTransactionGroup,
 } from "./cases/process-error-handling.ts";
-import { processGroup, processNotifyGroup, processSavepointGroup } from "./cases/process.ts";
+import {
+  processAsyncGroup,
+  processGroup,
+  processNotifyGroup,
+  processSavepointGroup,
+} from "./cases/process.ts";
 import { rescheduleJobGroup } from "./cases/reschedule-job.ts";
 import { schedulingGroup } from "./cases/scheduling.ts";
 import {
@@ -57,6 +62,11 @@ export const endToEndBaseGroups: ConformanceGroup<StateAdapterConformanceContext
   stateResilienceGroup,
 ];
 
+export const endToEndAsyncGroups: ConformanceGroup<StateAdapterConformanceContext>[] = [
+  processAsyncGroup,
+  deletionAsyncGroup,
+];
+
 export const endToEndNotifyGroups: ConformanceGroup<StateAdapterConformanceContext>[] = [
   createChainsNotifyGroup,
   deletionNotifyGroup,
@@ -86,16 +96,28 @@ export const endToEndFlakyDbGroups: ConformanceGroup<EndToEndFlakyDbContext>[] =
 export const endToEndFlakyDbConcurrentTransactionGroups: ConformanceGroup<EndToEndFlakyDbContext>[] =
   [stateResilienceFlakyDbConcurrentTransactionsGroup];
 
-export const notifyAdapterEndToEndGroups: ConformanceGroup<NotifyAdapterConformanceContext>[] =
-  endToEndNotifyGroups.map((group) => ({
+const toNotifyAdapterGroups = (
+  groups: ConformanceGroup<StateAdapterConformanceContext>[],
+): ConformanceGroup<NotifyAdapterConformanceContext>[] =>
+  groups.map((group) => ({
     name: group.name,
     cases: group.cases.map((testCase) => ({
       name: testCase.name,
-      run: async ({ createNotifyAdapter }) =>
-        testCase.run({
-          createStateAdapter: async () => createInProcessStateAdapter(),
-          withNonTransactionContext: async (fn) => fn({ outsideTransaction: true }),
-          createNotifyAdapter,
-        }),
+      run: async ({ createNotifyAdapter }) => {
+        const notifyAdapter = await createNotifyAdapter();
+        const mode = notifyAdapter.sync === true ? "sync" : "async";
+        try {
+          await testCase.run({
+            createStateAdapter: () => createInProcessStateAdapter({ mode }),
+            withNonTransactionContext: (fn) => fn({ outsideTransaction: true }),
+            createNotifyAdapter: () => notifyAdapter,
+          });
+        } finally {
+          await notifyAdapter.close();
+        }
+      },
     })),
   }));
+
+export const notifyAdapterEndToEndGroups: ConformanceGroup<NotifyAdapterConformanceContext>[] =
+  toNotifyAdapterGroups(endToEndNotifyGroups);

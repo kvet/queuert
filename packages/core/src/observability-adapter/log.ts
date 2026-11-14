@@ -1,3 +1,5 @@
+import type { Mode } from "@queuert/sync-async";
+
 import type { JobStatus } from "../entities/job.ts";
 import type { NotifyAdapter } from "../notify-adapter/notify-adapter.ts";
 import type { StateAdapter } from "../state-adapter/state-adapter.ts";
@@ -144,7 +146,7 @@ type NotifyAdapterErrorLogEntry = LogEntry<
   "notify_adapter_error",
   "warn",
   "Notify adapter error",
-  { operation: keyof NotifyAdapter },
+  { operation: keyof NotifyAdapter<Mode> },
   unknown
 >;
 
@@ -152,7 +154,7 @@ type StateAdapterErrorLogEntry = LogEntry<
   "state_adapter_error",
   "warn",
   "State adapter error",
-  { operation: keyof StateAdapter<any, any, any> },
+  { operation: keyof StateAdapter<any, any, any, Mode> },
   unknown
 >;
 

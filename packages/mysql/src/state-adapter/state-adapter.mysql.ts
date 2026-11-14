@@ -2042,7 +2042,7 @@ export type MysqlStateAdapter<
   TTxContext extends BaseTxContext,
   TJobId extends string = UUID,
   TWorkerId extends string = UUID,
-> = StateAdapter<TTxContext, TJobId, TWorkerId> & {
+> = StateAdapter<TTxContext, TJobId, TWorkerId, "async"> & {
   /**
    * Check the server, then create or upgrade the schema.
    *

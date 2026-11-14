@@ -32,7 +32,19 @@ export const categorize = ({ functionName, url }: CallFrame): Category => {
   if (functionName === "(idle)") return "idle";
   if (url === "" || url.startsWith("node:")) return "runtime";
   if (url.includes("/node_modules/")) return "dependencies";
-  if (url.includes("/packages/core/") || url.includes("/packages-internal/helpers/")) return "core";
+  if (
+    url.includes("/packages/core/src/state-adapter.in-process/") ||
+    url.includes("/packages/core/src/notify-adapter.in-process/")
+  ) {
+    return "adapter";
+  }
+  if (
+    url.includes("/packages/core/") ||
+    url.includes("/packages-internal/helpers/") ||
+    url.includes("/packages-internal/sync-async/")
+  ) {
+    return "core";
+  }
   if (url.includes("/packages/") || url.includes("/packages-internal/typed-sql/")) return "adapter";
   return "harness";
 };

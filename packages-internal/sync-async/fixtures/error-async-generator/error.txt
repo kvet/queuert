@@ -1,0 +1,4 @@
+error-async-generator/input.ts:3:34: a sync-async body must be a generator function, not an async one: async function* (db, key) {
+  const [row] = yield* step(db.query(key));
+  return row;
+}

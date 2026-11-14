@@ -25,6 +25,7 @@
     "test": "vitest --run"
   },
   "devDependencies": {
+    "@queuert/sync-async": "workspace:*",
     "@queuert/tsconfig": "workspace:*"
   }
 }

@@ -6,7 +6,7 @@ import {
 import type { ConformanceTestCase } from "queuert/conformance";
 import { type ConformanceGroup, toConformanceTestCases } from "queuert/conformance-internal";
 
-import { createApplicationMysqlMigrationStore } from "../migration-store/migration-store.mysql.ts";
+import { createMysqlMigratorStore } from "../migration-store/migration-store.mysql.ts";
 import type { MysqlStateProvider } from "../state-provider/state-provider.mysql.ts";
 
 /**
@@ -37,7 +37,7 @@ export const createMysqlMigratorConformanceContext = ({
   stateProvider: MysqlStateProvider<any>;
 }): MysqlMigratorConformanceContext => ({
   createMigrationStore: ({ migrationTableName, lockTableName }) =>
-    createApplicationMysqlMigrationStore({ stateProvider, migrationTableName, lockTableName }),
+    createMysqlMigratorStore({ stateProvider, migrationTableName, lockTableName }),
   executeSql: async (sql, txCtx) => {
     await stateProvider.executeSql({
       txCtx,

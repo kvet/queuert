@@ -18,7 +18,7 @@ export const createRedisNotifyAdapter = ({
   notifyProvider: RedisNotifyProvider;
   /** Prefix for all pub/sub channel names. @defaultValue `"queuert"` */
   channelPrefix?: string;
-}): NotifyAdapter => {
+}): NotifyAdapter<"async"> => {
   const jobScheduledChannel = `${channelPrefix}:sched`;
   const chainCompletedChannel = `${channelPrefix}:chainc`;
   const attemptLostChannel = `${channelPrefix}:atls`;

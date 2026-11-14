@@ -1,8 +1,8 @@
-import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert/internal";
+import { createInProcessNotifyAdapter, createInProcessStateAdapter } from "queuert";
 
-import { runBenchmark } from "./utils.ts";
+import { runSyncBenchmark } from "./utils.ts";
 
-await runBenchmark({
+await runSyncBenchmark({
   title: "PROCESSING CAPACITY — IN-PROCESS NOTIFY",
   stateAdapter: createInProcessStateAdapter(),
   notifyAdapter: createInProcessNotifyAdapter(),

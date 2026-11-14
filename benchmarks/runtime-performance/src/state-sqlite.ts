@@ -2,7 +2,7 @@
  * SQLite State Adapter Memory Measurement
  */
 
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 import { createClient, createWorkerRunner, createProcessors, withTxHooks } from "queuert";
@@ -32,7 +32,7 @@ await runDoubleRunBenchmark<Infra>({
     console.log("\nAfter creating better-sqlite3 database:");
     diffMemory(beforeDb, afterDb);
 
-    const stateProvider = createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() });
+    const stateProvider = createBetterSqlite3StateProvider({ db });
 
     return {
       infra: { db, stateProvider },
@@ -46,7 +46,7 @@ await runDoubleRunBenchmark<Infra>({
 
     const stateAdapter = await step("After creating state adapter (with migrations)", async () => {
       const adapter = createSqliteStateAdapter({ stateProvider });
-      await adapter.migrateToLatest();
+      adapter.migrateToLatest();
       return adapter;
     });
 
@@ -60,8 +60,8 @@ await runDoubleRunBenchmark<Infra>({
           processors: {
             "test-job": {
               attemptHandler: async ({ complete }) => {
-                const result = await withTxHooks(async (txHooks) =>
-                  stateProvider.withTransaction(async (ctx) =>
+                const result = withTxHooks((txHooks) =>
+                  stateProvider.withTransaction((ctx) =>
                     complete({ ...ctx, txHooks, output: { processed: true } }),
                   ),
                 );
@@ -78,8 +78,8 @@ await runDoubleRunBenchmark<Infra>({
 
     await processStep(`After processing ${jobCount} jobs`, async () => {
       for (let i = 0; i < jobCount; i++) {
-        await withTxHooks(async (txHooks) =>
-          stateProvider.withTransaction(async (ctx) =>
+        withTxHooks((txHooks) =>
+          stateProvider.withTransaction((ctx) =>
             setup.client.createChain({
               ...ctx,
               txHooks,
@@ -93,6 +93,6 @@ await runDoubleRunBenchmark<Infra>({
     });
 
     await setup.workerRunner.close();
-    await stateAdapter.close();
+    stateAdapter.close();
   },
 });

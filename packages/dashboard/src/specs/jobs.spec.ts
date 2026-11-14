@@ -1,8 +1,9 @@
-import { createClient, defineJobTypes } from "queuert";
 import {
+  createClient,
+  defineJobTypes,
   createInProcessNotifyAdapter,
   createInProcessStateAdapter,
-} from "queuert/conformance-internal";
+} from "queuert";
 import { describe, expect, it } from "vitest";
 
 import { createDashboard } from "../api/dashboard.ts";
@@ -228,7 +229,7 @@ describe("job server functions", () => {
 
     it("notifies workers only after the reschedule transaction ends", async () => {
       const events: string[] = [];
-      const innerStateAdapter = createInProcessStateAdapter();
+      const innerStateAdapter = createInProcessStateAdapter({ mode: "async" });
       const stateAdapter: typeof innerStateAdapter = {
         ...innerStateAdapter,
         withTransaction: async (fn) =>
@@ -241,7 +242,7 @@ describe("job server functions", () => {
             return result;
           }),
       };
-      const innerNotifyAdapter = createInProcessNotifyAdapter();
+      const innerNotifyAdapter = createInProcessNotifyAdapter({ mode: "async" });
       const client = createClient({
         stateAdapter,
         notifyAdapter: {

@@ -4,6 +4,21 @@ import type { FieldItem } from "../../FieldList.tsx";
 
 /** Members of `PgStateProvider` / `SqliteStateProvider` / `MysqlStateProvider`, listed on each backend's page. */
 export const stateProviderMembers = (dialect: "postgres" | "sqlite" | "mysql"): FieldItem[] => [
+  ...(dialect === "sqlite"
+    ? [
+        {
+          name: "sync",
+          chips: ["optional"],
+          description: (
+            <>
+              <code>true</code> on a synchronous provider, whose members return their results
+              directly (see <a href="#synchronous-providers">Synchronous providers</a>); absent or{" "}
+              <code>false</code> on an asynchronous one.
+            </>
+          ),
+        },
+      ]
+    : []),
   {
     name: "withTransaction",
     description: (
@@ -52,6 +67,13 @@ export const stateProviderMembers = (dialect: "postgres" | "sqlite" | "mysql"): 
         as MikroORM, runs it from those events; any other provider carries <code>txHooks</code> in
         its transaction context and registers the callback on them. See{" "}
         <A href="/guides/tx-hooks/">Tx Hooks</A>.
+        {dialect === "sqlite" ? (
+          <>
+            {" "}
+            A synchronous provider runs it synchronously, and the callback must not return a
+            promise.
+          </>
+        ) : null}
       </>
     ),
   },

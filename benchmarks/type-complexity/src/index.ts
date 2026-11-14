@@ -192,7 +192,7 @@ const generateMiddleware = (count: number): string => {
   for (let i = 0; i < count; i++) {
     decls.push(
       `const middleware${i}: AttemptMiddleware<
-  ReturnType<typeof createInProcessStateAdapter>,
+  InProcessStateAdapter<"async">,
   { ctx${i}: number }
 > = {
   wrapHandler: async ({ job, next }) => {
@@ -216,8 +216,7 @@ const wrapInScenario = (defs: JobTypeDef[], middlewareCount = 1): string => {
   const mwList = middlewareList(middlewareCount);
   const mwPart = mwList ? `attemptMiddleware: [${mwList}], ` : "";
 
-  return `import { defineJobTypes, createProcessors, createWorkerRunner, createClient, type AttemptMiddleware } from "queuert";
-import { createInProcessStateAdapter } from "queuert/internal";
+  return `import { defineJobTypes, createProcessors, createWorkerRunner, createClient, type AttemptMiddleware, type InProcessStateAdapter, createInProcessStateAdapter } from "queuert";
 
 type Defs = {
 ${typeStrings.join("\n")}
@@ -225,7 +224,7 @@ ${typeStrings.join("\n")}
 
 const jobTypes = defineJobTypes<Defs>();
 
-const stateAdapter = createInProcessStateAdapter();
+const stateAdapter = createInProcessStateAdapter({ mode: "async" });
 
 const client = createClient({ stateAdapter, jobTypes });
 
@@ -269,11 +268,10 @@ const ${slice.name}Registry = defineJobTypes<${slice.name}Defs>();`;
   const clientCalls = generateClientCalls(allDefs);
   const middleware = generateMiddleware(middlewareCount);
 
-  return `import { defineJobTypes, createProcessors, createWorkerRunner, createClient, type AttemptMiddleware } from "queuert";
-import { createInProcessStateAdapter } from "queuert/internal";
+  return `import { defineJobTypes, createProcessors, createWorkerRunner, createClient, type AttemptMiddleware, type InProcessStateAdapter, createInProcessStateAdapter } from "queuert"
 ${sliceTypeDecls.join("\n")}
 
-const stateAdapter = createInProcessStateAdapter();
+const stateAdapter = createInProcessStateAdapter({ mode: "async" });
 
 const client = createClient({ stateAdapter, jobTypes: [${registryNames.join(", ")}] });
 
@@ -557,16 +555,13 @@ const generateScenarioFiles = (): Map<
   const scenarioMap = new Map<string, { dir: string; code: string; jobTypeCount: number }>();
   const scenarioNames = new Set(scenarios.map((s) => s.name));
 
-  // Clean up stale generated directories
   try {
     for (const entry of readdirSync(generatedDir)) {
       if (!scenarioNames.has(entry)) {
         rmSync(join(generatedDir, entry), { recursive: true, force: true });
       }
     }
-  } catch {
-    // generatedDir may not exist yet
-  }
+  } catch {}
 
   for (const scenario of scenarios) {
     const dir = join(generatedDir, scenario.name);
@@ -688,7 +683,6 @@ const runBenchmark = (
   console.log(`Compiler: ${compiler.name} (${version})`);
   console.log("=".repeat(80));
 
-  // Warmup using the first generated scenario
   const firstScenario = scenarioMap.values().next().value!;
   runTypeCheck(firstScenario.dir, compiler.path);
 

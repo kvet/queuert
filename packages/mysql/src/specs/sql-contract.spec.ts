@@ -4,6 +4,7 @@ import { acquireMysql } from "@queuert/testcontainers";
 import type { RuntimeType } from "@queuert/typed-sql";
 import { type Pool, createPool } from "mysql2/promise";
 import {
+  stateAdapterAsyncGroups,
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
 } from "queuert/conformance-internal";
@@ -123,7 +124,11 @@ for (const { image, dialect, connectionOptions } of acquired) {
   describe(`${image} SQL contract`, () => {
     conformanceTestSuite({
       it,
-      groups: [...stateAdapterBaseGroups, ...stateAdapterConcurrentTransactionGroups],
+      groups: [
+        ...stateAdapterBaseGroups,
+        ...stateAdapterAsyncGroups,
+        ...stateAdapterConcurrentTransactionGroups,
+      ],
     });
 
     baseIt("every statement declares the types of its params and columns", () => {

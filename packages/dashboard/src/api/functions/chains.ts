@@ -171,8 +171,8 @@ const deleteChainNow = async (
   chainId: string,
 ): Promise<DeleteChainOutcome> => {
   try {
-    const { stateAdapter } = client[helpersSymbol];
-    const deleted = await stateAdapter.withTransaction(async (txCtx) =>
+    // oxlint-disable-next-line typescript/promise-function-async -- runs in the client's mode: a sync state adapter rejects an async callback
+    const deleted = await client[helpersSymbol].stateAdapter.withTransaction((txCtx) =>
       client.deleteChains({ ids: [chainId], ...txCtx }),
     );
     return { outcome: "deleted", count: deleted.length };

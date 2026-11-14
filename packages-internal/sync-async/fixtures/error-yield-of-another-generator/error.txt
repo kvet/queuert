@@ -1,0 +1,1 @@
+error-yield-of-another-generator/input.ts:4:10: `yield*` in a sync-async body must call `step(...)` or `other.steps(...)`: yield* keys.map((key) => db.query(key))

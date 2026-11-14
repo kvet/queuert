@@ -1,13 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 
+import { sleep } from "@queuert/helpers/sleep";
 import { createDeploymentSpawner, startPaused, startTogether } from "@queuert/helpers/testing";
 import { acquirePostgres } from "@queuert/testcontainers";
 import {
   type MigrationResult,
   createMigrator,
   createTemplateApplier,
-  createTemplateExecutor,
+  createTypedSqlExecutor,
 } from "@queuert/typed-sql";
 import { Client, Pool } from "pg";
 import { it as baseIt, describe, expect, vi } from "vitest";
@@ -57,9 +58,6 @@ const appliedNames = async (provider: Provider): Promise<string[]> =>
 const lockRows = async (provider: Provider): Promise<{ locked_by: string }[]> =>
   query(provider, "SELECT locked_by FROM queuert_migration_lock");
 
-const sleep = async (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
-
 // oxlint-disable-next-line no-empty-pattern -- vitest fixtures must destructure their context
 const it = baseIt.extend("database", async ({}, { onCleanup }) => {
   const pg = await acquirePostgres("postgres:14", `pg-migration-${randomUUID()}`);
@@ -108,10 +106,11 @@ const migrateTo017 = async (
     job_id_type: "uuid",
     worker_id_type: "uuid",
   });
+  const exec = createTypedSqlExecutor(provider);
   await createMigrator({
-    migrations: createV017Migrations(createTemplateExecutor(provider, applyTemplate017)).filter(
-      (migration) => only === undefined || migration.name === only,
-    ),
+    migrations: createV017Migrations(async (txCtx: PgPoolContext, statement) =>
+      exec({ txCtx, sql: applyTemplate017(statement) }),
+    ).filter((migration) => only === undefined || migration.name === only),
     store: createMigrationStore(provider, applyTemplate017),
   }).migrateToLatest();
 };

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { setTimeout } from "node:timers/promises";
 
 import { createConnection } from "mysql2/promise";
 import { GenericContainer, type StartedTestContainer, Wait } from "testcontainers";
@@ -55,12 +56,21 @@ export const acquireMysql = async (image: string, callerId: string): Promise<Acq
   const host = container.getHost();
   const port = container.getMappedPort(3306);
 
-  const admin = await createConnection({ host, port, user: "root", password: ROOT_PASSWORD });
-  try {
-    await admin.query(`DROP DATABASE IF EXISTS \`${database}\``);
-    await admin.query(`CREATE DATABASE \`${database}\``);
-  } finally {
-    await admin.end();
+  const deadline = Date.now() + 60_000;
+  for (;;) {
+    try {
+      const admin = await createConnection({ host, port, user: "root", password: ROOT_PASSWORD });
+      try {
+        await admin.query(`DROP DATABASE IF EXISTS \`${database}\``);
+        await admin.query(`CREATE DATABASE \`${database}\``);
+      } finally {
+        await admin.end();
+      }
+      break;
+    } catch (error) {
+      if (Date.now() > deadline) throw error;
+      await setTimeout(500);
+    }
   }
 
   return {

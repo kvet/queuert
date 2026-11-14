@@ -1,326 +1,492 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 
-import { type Migration, type MigrationStore, createMigrator } from "./migrator.ts";
+import { assertRejects } from "@queuert/helpers/assert-rejects";
+import { sleep } from "@queuert/helpers/sleep";
+import {
+  dynamicSyncAsync,
+  type Mode,
+  type ModeResult,
+  resource,
+  step,
+  syncAsync,
+  wait,
+} from "@queuert/sync-async";
+
+import { type MigrationStore, createMigrator } from "./migrator.ts";
 
 /**
  * What the migration store conformance cases run against. Each case creates its own store over
  * tables with names unique to the case, and drops them when it ends.
  *
+ * @typeParam TMode - Whether the members return promises or plain values
  * @experimental
  */
-export type MigratorConformanceContext = {
-  /** Creates the store under test over the given history and lock tables. */
+export type MigratorConformanceContext<TMode extends Mode = "async"> = {
+  /**
+   * Creates the store under test over the given history and lock tables. In the `"sync"` mode the store sets `sync: true` and its members return
+   * their results directly.
+   */
   createMigrationStore: (tables: {
     migrationTableName: string;
     lockTableName: string;
-  }) => MigrationStore<any>;
+  }) => MigrationStore<any, TMode> &
+    ([TMode] extends ["sync"]
+      ? {
+          /** Marks the store as synchronous. */
+          readonly sync: true;
+        }
+      : [TMode] extends ["async"]
+        ? unknown
+        : {
+            /** Present on a synchronous store. */
+            readonly sync?: true;
+          });
   /** Runs a statement that returns no rows, inside the transaction when `txCtx` is given. */
-  executeSql: (sql: string, txCtx?: unknown) => Promise<void>;
-  /** Counts the rows of a table. Rejects when the table doesn't exist. */
-  countRows: (table: string) => Promise<number>;
+  executeSql: (sql: string, txCtx?: unknown) => ModeResult<TMode, void>;
+  /** Counts the rows of a table. Fails when the table doesn't exist. */
+  countRows: (table: string) => ModeResult<TMode, number>;
 };
 
-type Group<TContext> = {
+export type MigratorConformanceGroup = {
   name: string;
-  cases: { name: string; run: (context: TContext) => Promise<void> }[];
+  cases: {
+    name: string;
+    run: (context: MigratorConformanceContext<Mode>) => Promise<void>;
+  }[];
 };
 
-const withTables = async (
-  context: MigratorConformanceContext,
-  fn: (tables: {
-    store: MigrationStore<any>;
-    createStore: () => MigrationStore<any>;
-    item: string;
-  }) => Promise<void>,
-): Promise<void> => {
-  const prefix = `conformance_${randomBytes(4).toString("hex")}`;
-  const tables = {
-    migrationTableName: `${prefix}_migration`,
-    lockTableName: `${prefix}_lock`,
-  };
-  const item = `${prefix}_item`;
-  const createStore = () => context.createMigrationStore(tables);
-  try {
-    await fn({ store: createStore(), createStore, item });
-  } finally {
-    for (const table of [item, tables.migrationTableName, tables.lockTableName]) {
-      await context.executeSql(`DROP TABLE IF EXISTS ${table}`);
-    }
-  }
-};
-
-const createItems = (
-  context: MigratorConformanceContext,
-  item: string,
-  count: number,
-): Migration<any> => ({
-  name: "create_items",
-  up: async (txCtx) => {
-    await context.executeSql(`CREATE TABLE ${item} (id INTEGER PRIMARY KEY)`, txCtx);
-    for (let id = 1; id <= count; id++) {
-      await context.executeSql(`INSERT INTO ${item} (id) VALUES (${id})`, txCtx);
-    }
-  },
-  down: async (txCtx) => context.executeSql(`DROP TABLE ${item}`, txCtx),
-});
-
-const appliedNames = async (store: MigrationStore<any>): Promise<string[]> =>
-  (await store.runInTransaction(async (txCtx) => store.getAppliedMigrationNames(txCtx))).toSorted();
-
-export const migrationStoreBaseGroups: Group<MigratorConformanceContext>[] = [
+export const migrationStoreBaseGroups: MigratorConformanceGroup[] = [
   {
     name: "migrationStore",
     cases: [
       {
         name: "initialize is idempotent and starts with an empty history",
-        run: async (context) =>
-          withTables(context, async ({ store }) => {
-            await store.initialize?.();
-            await store.initialize?.();
-            assert.deepEqual(await appliedNames(store), []);
-          }),
+        run: dynamicSyncAsync(function* (context: MigratorConformanceContext<Mode>) {
+          const prefix = `conformance_${randomBytes(4).toString("hex")}`;
+          const store = yield* resource({
+            ...context.createMigrationStore({
+              migrationTableName: `${prefix}_migration`,
+              lockTableName: `${prefix}_lock`,
+            }),
+            [Symbol.asyncDispose]: async () => {
+              await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_migration`);
+              await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_lock`);
+            },
+          });
+          yield* step(store.initialize?.());
+          yield* step(store.initialize?.());
+          const names = yield* step(
+            store.runInTransaction((txCtx) => store.getAppliedMigrationNames(txCtx)),
+          );
+          assert.deepEqual(names.toSorted(), []);
+        }),
       },
       {
         name: "records, lists and unrecords migrations",
-        run: async (context) =>
-          withTables(context, async ({ store }) => {
-            await store.initialize?.();
-            await store.recordMigration(undefined, "create_invoices");
-            await store.recordMigration(undefined, "add_invoice_due_date");
-            await store.recordMigration(undefined, "create_invoices");
-            assert.deepEqual(await appliedNames(store), [
-              "add_invoice_due_date",
-              "create_invoices",
-            ]);
+        run: dynamicSyncAsync(function* (context: MigratorConformanceContext<Mode>) {
+          const prefix = `conformance_${randomBytes(4).toString("hex")}`;
+          const store = yield* resource({
+            ...context.createMigrationStore({
+              migrationTableName: `${prefix}_migration`,
+              lockTableName: `${prefix}_lock`,
+            }),
+            [Symbol.asyncDispose]: async () => {
+              await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_migration`);
+              await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_lock`);
+            },
+          });
+          yield* step(store.initialize?.());
+          yield* step(store.recordMigration(undefined, "create_invoices"));
+          yield* step(store.recordMigration(undefined, "add_invoice_due_date"));
+          yield* step(store.recordMigration(undefined, "create_invoices"));
+          const recorded = yield* step(
+            store.runInTransaction((txCtx) => store.getAppliedMigrationNames(txCtx)),
+          );
+          assert.deepEqual(recorded.toSorted(), ["add_invoice_due_date", "create_invoices"]);
 
-            await store.unrecordMigration(undefined, "create_invoices");
-            assert.deepEqual(await appliedNames(store), ["add_invoice_due_date"]);
-          }),
+          yield* step(store.unrecordMigration(undefined, "create_invoices"));
+          const remaining = yield* step(
+            store.runInTransaction((txCtx) => store.getAppliedMigrationNames(txCtx)),
+          );
+          assert.deepEqual(remaining.toSorted(), ["add_invoice_due_date"]);
+        }),
       },
       {
         name: "applies a transactional migration and its record in the migration's transaction",
-        run: async (context) =>
-          withTables(context, async ({ store, item }) => {
-            const result = await createMigrator({
-              migrations: [createItems(context, item, 2)],
-              store,
-            }).migrateToLatest();
-
-            assert.deepEqual(result.applied, ["create_items"]);
-            assert.equal(await context.countRows(item), 2);
-            assert.deepEqual(await appliedNames(store), ["create_items"]);
-          }),
-      },
-      {
-        name: "rolls back a failing transactional migration's row writes and record",
-        run: async (context) =>
-          withTables(context, async ({ store, item }) => {
-            await context.executeSql(`CREATE TABLE ${item} (id INTEGER PRIMARY KEY)`);
-            await assert.rejects(
+        run: dynamicSyncAsync(function* (context: MigratorConformanceContext<Mode>) {
+          const prefix = `conformance_${randomBytes(4).toString("hex")}`;
+          const item = `${prefix}_item`;
+          const createItems = syncAsync(function* (txCtx: unknown) {
+            yield* step(context.executeSql(`CREATE TABLE ${item} (id INTEGER PRIMARY KEY)`, txCtx));
+            yield* step(context.executeSql(`INSERT INTO ${item} (id) VALUES (1), (2)`, txCtx));
+          });
+          const store = yield* resource({
+            ...context.createMigrationStore({
+              migrationTableName: `${prefix}_migration`,
+              lockTableName: `${prefix}_lock`,
+            }),
+            [Symbol.asyncDispose]: async () => {
+              await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_migration`);
+              await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_lock`);
+            },
+          });
+          try {
+            const result = yield* step(
               createMigrator({
+                mode: store.sync ? "sync" : "async",
                 migrations: [
                   {
-                    name: "seed_items",
-                    up: async (txCtx) => {
-                      await context.executeSql(`INSERT INTO ${item} (id) VALUES (1)`, txCtx);
-                      await context.executeSql(
-                        `INSERT INTO ${item}_missing (id) VALUES (1)`,
-                        txCtx,
-                      );
-                    },
-                    down: async () => {},
+                    name: "create_items",
+                    up: store.sync ? createItems.sync : createItems.async,
+                    down: (txCtx) => context.executeSql(`DROP TABLE ${item}`, txCtx),
                   },
                 ],
                 store,
               }).migrateToLatest(),
             );
 
-            assert.equal(await context.countRows(item), 0);
-            assert.deepEqual(await appliedNames(store), []);
-          }),
+            assert.deepEqual(result.applied, ["create_items"]);
+            assert.equal(yield* step(context.countRows(item)), 2);
+            const names = yield* step(
+              store.runInTransaction((txCtx) => store.getAppliedMigrationNames(txCtx)),
+            );
+            assert.deepEqual(names.toSorted(), ["create_items"]);
+          } finally {
+            yield* step(context.executeSql(`DROP TABLE IF EXISTS ${item}`));
+          }
+        }),
+      },
+      {
+        name: "rolls back a failing transactional migration's row writes and record",
+        run: dynamicSyncAsync(function* (context: MigratorConformanceContext<Mode>) {
+          const prefix = `conformance_${randomBytes(4).toString("hex")}`;
+          const item = `${prefix}_item`;
+          const seedItems = syncAsync(function* (txCtx: unknown) {
+            yield* step(context.executeSql(`INSERT INTO ${item} (id) VALUES (1)`, txCtx));
+            yield* step(context.executeSql(`INSERT INTO ${item}_missing (id) VALUES (1)`, txCtx));
+          });
+          const store = yield* resource({
+            ...context.createMigrationStore({
+              migrationTableName: `${prefix}_migration`,
+              lockTableName: `${prefix}_lock`,
+            }),
+            [Symbol.asyncDispose]: async () => {
+              await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_migration`);
+              await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_lock`);
+            },
+          });
+          try {
+            yield* step(context.executeSql(`CREATE TABLE ${item} (id INTEGER PRIMARY KEY)`));
+            yield* step(
+              assertRejects(() =>
+                createMigrator({
+                  mode: store.sync ? "sync" : "async",
+                  migrations: [
+                    {
+                      name: "seed_items",
+                      up: store.sync ? seedItems.sync : seedItems.async,
+                      down: () => {},
+                    },
+                  ],
+                  store,
+                }).migrateToLatest(),
+              ),
+            );
+
+            assert.equal(yield* step(context.countRows(item)), 0);
+            const names = yield* step(
+              store.runInTransaction((txCtx) => store.getAppliedMigrationNames(txCtx)),
+            );
+            assert.deepEqual(names.toSorted(), []);
+          } finally {
+            yield* step(context.executeSql(`DROP TABLE IF EXISTS ${item}`));
+          }
+        }),
       },
       {
         name: "records a non-transactional migration after its `up` and unrecords it after its `down`",
-        run: async (context) =>
-          withTables(context, async ({ store, item }) => {
+        run: dynamicSyncAsync(function* (context: MigratorConformanceContext<Mode>) {
+          const prefix = `conformance_${randomBytes(4).toString("hex")}`;
+          const item = `${prefix}_item`;
+          const store = yield* resource({
+            ...context.createMigrationStore({
+              migrationTableName: `${prefix}_migration`,
+              lockTableName: `${prefix}_lock`,
+            }),
+            [Symbol.asyncDispose]: async () => {
+              await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_migration`);
+              await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_lock`);
+            },
+          });
+          try {
             const migrator = createMigrator({
+              mode: store.sync ? "sync" : "async",
               migrations: [
-                createItems(context, item, 0),
+                {
+                  name: "create_items",
+                  up: (txCtx) =>
+                    context.executeSql(`CREATE TABLE ${item} (id INTEGER PRIMARY KEY)`, txCtx),
+                  down: (txCtx) => context.executeSql(`DROP TABLE ${item}`, txCtx),
+                },
                 {
                   name: "seed_items",
                   type: "non-transactional",
-                  up: async ({ assertLockHeld }) => {
+                  up: ({ assertLockHeld }) => {
                     assertLockHeld();
-                    await context.executeSql(`INSERT INTO ${item} (id) VALUES (1)`);
-                    await context.executeSql(`INSERT INTO ${item} (id) VALUES (2)`);
+                    return context.executeSql(`INSERT INTO ${item} (id) VALUES (1), (2)`);
                   },
-                  down: async () => context.executeSql(`DELETE FROM ${item}`),
+                  down: () => context.executeSql(`DELETE FROM ${item}`),
                 },
               ],
               store,
             });
 
-            await migrator.migrateToLatest();
-            assert.equal(await context.countRows(item), 2);
-            assert.deepEqual(await appliedNames(store), ["create_items", "seed_items"]);
+            yield* step(migrator.migrateToLatest());
+            assert.equal(yield* step(context.countRows(item)), 2);
+            const applied = yield* step(
+              store.runInTransaction((txCtx) => store.getAppliedMigrationNames(txCtx)),
+            );
+            assert.deepEqual(applied.toSorted(), ["create_items", "seed_items"]);
 
-            const result = await migrator.migrateTo("create_items");
+            const result = yield* step(migrator.migrateTo("create_items"));
             assert.deepEqual(result.reverted, ["seed_items"]);
-            assert.equal(await context.countRows(item), 0);
-            assert.deepEqual(await appliedNames(store), ["create_items"]);
-          }),
+            assert.equal(yield* step(context.countRows(item)), 0);
+            const remaining = yield* step(
+              store.runInTransaction((txCtx) => store.getAppliedMigrationNames(txCtx)),
+            );
+            assert.deepEqual(remaining.toSorted(), ["create_items"]);
+          } finally {
+            yield* step(context.executeSql(`DROP TABLE IF EXISTS ${item}`));
+          }
+        }),
       },
       {
         name: "names the failing migration, keeping the driver error as the cause",
-        run: async (context) =>
-          withTables(context, async ({ store, item }) => {
-            let failure: unknown;
-            try {
-              await createMigrator({
-                migrations: [
-                  {
-                    name: "create_items",
-                    up: async (txCtx) =>
-                      context.executeSql(`INSERT INTO ${item}_missing (id) VALUES (1)`, txCtx),
-                    down: async () => {},
-                  },
-                ],
-                store,
-              }).migrateToLatest();
-            } catch (error) {
-              failure = error;
-            }
-
-            assert.ok(failure instanceof Error);
-            assert.match(failure.message, /^Migration "create_items" failed: /);
-            assert.ok(failure.cause instanceof Error);
-            assert.ok(failure.message.endsWith(failure.cause.message));
-          }),
-      },
-    ],
-  },
-];
-
-/**
- * Cases for stores whose transactions roll back DDL, which PostgreSQL and SQLite do and MySQL and
- * MariaDB, where DDL commits implicitly, do not.
- *
- * @experimental
- */
-export const migrationStoreTransactionalDdlGroups: Group<MigratorConformanceContext>[] = [
-  {
-    name: "migrationStoreTransactionalDdl",
-    cases: [
-      {
-        name: "rolls back a failing transactional migration's work and record",
-        run: async (context) =>
-          withTables(context, async ({ store, item }) => {
-            await assert.rejects(
+        run: dynamicSyncAsync(function* (context: MigratorConformanceContext<Mode>) {
+          const prefix = `conformance_${randomBytes(4).toString("hex")}`;
+          const item = `${prefix}_item`;
+          const store = yield* resource({
+            ...context.createMigrationStore({
+              migrationTableName: `${prefix}_migration`,
+              lockTableName: `${prefix}_lock`,
+            }),
+            [Symbol.asyncDispose]: async () => {
+              await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_migration`);
+              await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_lock`);
+            },
+          });
+          let failure: unknown;
+          try {
+            yield* step(
               createMigrator({
+                mode: store.sync ? "sync" : "async",
                 migrations: [
                   {
                     name: "create_items",
-                    up: async (txCtx) => {
-                      await context.executeSql(
-                        `CREATE TABLE ${item} (id INTEGER PRIMARY KEY)`,
-                        txCtx,
-                      );
-                      await context.executeSql(
-                        `INSERT INTO ${item}_missing (id) VALUES (1)`,
-                        txCtx,
-                      );
-                    },
-                    down: async () => {},
+                    up: (txCtx) =>
+                      context.executeSql(`INSERT INTO ${item}_missing (id) VALUES (1)`, txCtx),
+                    down: () => {},
                   },
                 ],
                 store,
               }).migrateToLatest(),
             );
+          } catch (error) {
+            failure = error;
+          }
 
-            await assert.rejects(context.countRows(item));
-            assert.deepEqual(await appliedNames(store), []);
-          }),
+          assert.ok(failure instanceof Error);
+          assert.match(failure.message, /^Migration "create_items" failed: /);
+          assert.ok(failure.cause instanceof Error);
+          assert.ok(failure.message.endsWith(failure.cause.message));
+        }),
       },
     ],
   },
 ];
 
-const requireLease = (store: MigrationStore<any>) => {
-  const { acquireMigrationLock, extendMigrationLock, releaseMigrationLock } = store;
-  if (!acquireMigrationLock || !extendMigrationLock || !releaseMigrationLock) {
-    throw new Error("The store has no lease methods.");
-  }
-  return { acquireMigrationLock, extendMigrationLock, releaseMigrationLock };
-};
+export const migrationStoreTransactionalDdlGroups: MigratorConformanceGroup[] = [
+  {
+    name: "migrationStoreTransactionalDdl",
+    cases: [
+      {
+        name: "rolls back a failing transactional migration's work and record",
+        run: dynamicSyncAsync(function* (context: MigratorConformanceContext<Mode>) {
+          const prefix = `conformance_${randomBytes(4).toString("hex")}`;
+          const item = `${prefix}_item`;
+          const createItems = syncAsync(function* (txCtx: unknown) {
+            yield* step(context.executeSql(`CREATE TABLE ${item} (id INTEGER PRIMARY KEY)`, txCtx));
+            yield* step(context.executeSql(`INSERT INTO ${item}_missing (id) VALUES (1)`, txCtx));
+          });
+          const store = yield* resource({
+            ...context.createMigrationStore({
+              migrationTableName: `${prefix}_migration`,
+              lockTableName: `${prefix}_lock`,
+            }),
+            [Symbol.asyncDispose]: async () => {
+              await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_migration`);
+              await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_lock`);
+            },
+          });
+          try {
+            yield* step(
+              assertRejects(() =>
+                createMigrator({
+                  mode: store.sync ? "sync" : "async",
+                  migrations: [
+                    {
+                      name: "create_items",
+                      up: store.sync ? createItems.sync : createItems.async,
+                      down: () => {},
+                    },
+                  ],
+                  store,
+                }).migrateToLatest(),
+              ),
+            );
 
-export const migrationStoreLeaseGroups: Group<MigratorConformanceContext>[] = [
+            yield* step(assertRejects(() => context.countRows(item)));
+            const names = yield* step(
+              store.runInTransaction((txCtx) => store.getAppliedMigrationNames(txCtx)),
+            );
+            assert.deepEqual(names.toSorted(), []);
+          } finally {
+            yield* step(context.executeSql(`DROP TABLE IF EXISTS ${item}`));
+          }
+        }),
+      },
+    ],
+  },
+];
+
+export const migrationStoreLeaseGroups: MigratorConformanceGroup[] = [
   {
     name: "migrationStoreLease",
     cases: [
       {
         name: "lets one owner hold the lease at a time",
-        run: async (context) =>
-          withTables(context, async ({ store }) => {
-            await store.initialize?.();
-            const lease = requireLease(store);
+        run: dynamicSyncAsync(function* (context: MigratorConformanceContext<Mode>) {
+          const prefix = `conformance_${randomBytes(4).toString("hex")}`;
+          const store = yield* resource({
+            ...context.createMigrationStore({
+              migrationTableName: `${prefix}_migration`,
+              lockTableName: `${prefix}_lock`,
+            }),
+            [Symbol.asyncDispose]: async () => {
+              await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_migration`);
+              await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_lock`);
+            },
+          });
+          if (store.sync) return;
 
-            assert.equal(await lease.acquireMigrationLock("first", 60_000), true);
-            assert.equal(await lease.acquireMigrationLock("second", 60_000), false);
-            assert.equal(await lease.extendMigrationLock("second", 60_000), false);
-            await lease.releaseMigrationLock("second");
-            assert.equal(await lease.acquireMigrationLock("second", 60_000), false);
-            assert.equal(await lease.extendMigrationLock("first", 60_000), true);
+          yield* step(store.initialize?.());
+          assert.ok(store.acquireMigrationLock, "The store has no lease methods.");
 
-            await lease.releaseMigrationLock("first");
-            assert.equal(await lease.acquireMigrationLock("second", 60_000), true);
-            await lease.releaseMigrationLock("second");
-          }),
+          assert.equal(yield* step(store.acquireMigrationLock("first", 60_000)), true);
+          assert.equal(yield* step(store.acquireMigrationLock("second", 60_000)), false);
+          assert.equal(yield* step(store.extendMigrationLock("second", 60_000)), false);
+          yield* step(store.releaseMigrationLock("second"));
+          assert.equal(yield* step(store.acquireMigrationLock("second", 60_000)), false);
+          assert.equal(yield* step(store.extendMigrationLock("first", 60_000)), true);
+
+          yield* step(store.releaseMigrationLock("first"));
+          assert.equal(yield* step(store.acquireMigrationLock("second", 60_000)), true);
+          yield* step(store.releaseMigrationLock("second"));
+        }),
       },
       {
         name: "lets another owner take an expired lease",
-        run: async (context) =>
-          withTables(context, async ({ store }) => {
-            await store.initialize?.();
-            const lease = requireLease(store);
+        run: dynamicSyncAsync(function* (context: MigratorConformanceContext<Mode>) {
+          const prefix = `conformance_${randomBytes(4).toString("hex")}`;
+          const store = yield* resource({
+            ...context.createMigrationStore({
+              migrationTableName: `${prefix}_migration`,
+              lockTableName: `${prefix}_lock`,
+            }),
+            [Symbol.asyncDispose]: async () => {
+              await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_migration`);
+              await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_lock`);
+            },
+          });
+          if (store.sync) return;
 
-            assert.equal(await lease.acquireMigrationLock("first", 50), true);
-            await new Promise((resolve) => setTimeout(resolve, 150));
+          yield* step(store.initialize?.());
+          assert.ok(store.acquireMigrationLock, "The store has no lease methods.");
 
-            assert.equal(await lease.acquireMigrationLock("second", 60_000), true);
-            assert.equal(await lease.extendMigrationLock("first", 60_000), false);
-            await lease.releaseMigrationLock("second");
-          }),
+          assert.equal(yield* step(store.acquireMigrationLock("first", 50)), true);
+          yield* wait(sleep(150));
+
+          assert.equal(yield* step(store.acquireMigrationLock("second", 60_000)), true);
+          assert.equal(yield* step(store.extendMigrationLock("first", 60_000)), false);
+          yield* step(store.releaseMigrationLock("second"));
+        }),
       },
       {
         name: "applies each migration once when two migrators run at once",
-        run: async (context) =>
-          withTables(context, async ({ createStore, item }) => {
-            const migrations: Migration<any>[] = [
-              createItems(context, item, 0),
-              {
-                name: "seed_items",
-                type: "non-transactional",
-                up: async () => context.executeSql(`INSERT INTO ${item} (id) VALUES (1)`),
-                down: async () => context.executeSql(`DELETE FROM ${item}`),
+        run: dynamicSyncAsync(function* (context: MigratorConformanceContext<Mode>) {
+          const prefix = `conformance_${randomBytes(4).toString("hex")}`;
+          const tables = {
+            migrationTableName: `${prefix}_migration`,
+            lockTableName: `${prefix}_lock`,
+          };
+          const item = `${prefix}_item`;
+          const stores = [
+            yield* resource({
+              ...context.createMigrationStore(tables),
+              [Symbol.asyncDispose]: async () => {
+                await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_migration`);
+                await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_lock`);
               },
-            ];
-            const results = await Promise.all(
-              [createStore(), createStore()].map(async (store) =>
-                createMigrator({
-                  migrations,
-                  store,
-                  lock: { pollIntervalMs: 10 },
-                }).migrateToLatest(),
+            }),
+            yield* resource({
+              ...context.createMigrationStore(tables),
+              [Symbol.asyncDispose]: async () => {
+                await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_migration`);
+                await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_lock`);
+              },
+            }),
+          ];
+          try {
+            if (stores.some((store) => store.sync)) return;
+            const results = yield* wait(
+              Promise.all(
+                stores.map(async (store) =>
+                  createMigrator({
+                    mode: "async",
+                    migrations: [
+                      {
+                        name: "create_items",
+                        up: async (txCtx) =>
+                          context.executeSql(
+                            `CREATE TABLE ${item} (id INTEGER PRIMARY KEY)`,
+                            txCtx,
+                          ),
+                        down: async (txCtx) => context.executeSql(`DROP TABLE ${item}`, txCtx),
+                      },
+                      {
+                        name: "seed_items",
+                        type: "non-transactional",
+                        up: async () => context.executeSql(`INSERT INTO ${item} (id) VALUES (1)`),
+                        down: async () => context.executeSql(`DELETE FROM ${item}`),
+                      },
+                    ],
+                    store: store as MigrationStore<any>,
+                    lock: { pollIntervalMs: 10 },
+                  }).migrateToLatest(),
+                ),
               ),
             );
 
-            assert.equal(await context.countRows(item), 1);
+            assert.equal(yield* step(context.countRows(item)), 1);
             assert.deepEqual(
               results.map((result) => result.applied.length).toSorted((a, b) => a - b),
               [0, 2],
             );
-          }),
+          } finally {
+            yield* step(context.executeSql(`DROP TABLE IF EXISTS ${item}`));
+          }
+        }),
       },
     ],
   },

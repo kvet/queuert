@@ -70,13 +70,14 @@ const Page = () => (
       is a complete implementation to start from: it keeps every table in plain in-memory maps, runs
       transactions one at a time on a copy of the state, carries <code>TxHooks</code> in its
       transaction context for <code>onTransactionCommit</code> and{" "}
-      <code>onTransactionRollback</code>, and passes <code>stateAdapterConformanceCases</code>.
+      <code>onTransactionRollback</code>, and passes <code>stateAdapterConformanceCases</code>,{" "}
+      <code>stateAdapterEndToEndConformanceCases</code> and their <code>async</code> lists.
     </p>
 
     <h2 id="conformance">Conformance</h2>
     <p>
-      <code>queuert/conformance</code> exports the same cases Queuert uses internally, as four lists
-      to run against your adapter:
+      <code>queuert/conformance</code> exports the same cases Queuert uses internally, as lists to
+      run against your adapter:
     </p>
     <ul>
       <li>
@@ -101,6 +102,9 @@ const Page = () => (
       </li>
     </ul>
     <p>
+      An async adapter also runs <code>asyncStateAdapterConformanceCases</code> next to the contract
+      cases and <code>asyncStateAdapterEndToEndConformanceCases</code> next to the end-to-end ones:
+      they hold a transaction open across an <code>await</code>, which only an async adapter can do.
       Run the two concurrent lists as well when your adapter can run transactions in parallel, such
       as one over a connection pool.
     </p>
@@ -126,6 +130,19 @@ const Page = () => (
       <A href="/integrations/state-adapters/sqlite/#testing-your-provider">SQLite</A> page shows all
       three runners. The full API is in the{" "}
       <A href="/api/conformance/readme/">conformance reference</A>.
+    </p>
+    <p>
+      For a <code>"sync"</code> <code>StateAdapter</code>, register only{" "}
+      <code>stateAdapterConformanceCases</code> and{" "}
+      <code>stateAdapterEndToEndConformanceCases</code>, without the async lists. They call the
+      adapter's members synchronously, the end-to-end ones through a client over it. They run
+      against the same <code>StateAdapterConformanceContext</code>, with a{" "}
+      <code>createStateAdapter</code> that returns the adapter directly and a synchronous{" "}
+      <code>withNonTransactionContext</code>. Every case takes its mode from your adapter's{" "}
+      <code>sync</code> marker and checks the adapter calls it makes against it: a sync adapter
+      fails a case when a call returns a promise or rejects instead of throwing, and an async one
+      when a call returns a plain value. There are no concurrent cases for it: a synchronous
+      transaction never overlaps another one on the same thread.
     </p>
   </>
 );

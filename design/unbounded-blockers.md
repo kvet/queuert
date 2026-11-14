@@ -12,7 +12,7 @@ When a chain completes, `completeChain` calls `stateAdapter.unblockJobs({ blocke
 
 ### Fan-in: one job waits for many
 
-Blockers are a creation-time property today. Every path (`createChain`, `createChains`, `continueWith`) funnels into `createChains` or `continueChain` in `packages/core/src/implementation.ts`: `prepareJobs` enforces the state adapter's `maxBlockersPerJob` (default 100) via `assertBlockerLimit`, and the `addJobsBlockers` helper inserts all of a job's `job_blocker` rows in one `stateAdapter.addJobsBlockers` call, in the same transaction that creates the job. There is no post-creation mutation path. This serves bounded, heterogeneous fan-in well — `[validate-user, load-config]` tuples solve a real pain and stay exactly as-is. It does not serve massive homogeneous fan-in: 1m producer chains that must all complete before one collector runs.
+Blockers are a creation-time property today. Every path (`createChain`, `createChains`, `continueWith`) funnels into `createChains` or `continueChain` in `packages/core/src/client/implementation.ts`: `prepareJobs` enforces the state adapter's `maxBlockersPerJob` (default 100) via `assertBlockerLimit`, and the `addJobsBlockers` helper inserts all of a job's `job_blocker` rows in one `stateAdapter.addJobsBlockers` call, in the same transaction that creates the job. There is no post-creation mutation path. This serves bounded, heterogeneous fan-in well — `[validate-user, load-config]` tuples solve a real pain and stay exactly as-is. It does not serve massive homogeneous fan-in: 1m producer chains that must all complete before one collector runs.
 
 `blockers` stays unchanged. This adds a **separate, opt-in concept** for the homogeneous, unbounded case.
 

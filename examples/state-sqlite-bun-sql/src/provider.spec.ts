@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, test } from "bun:test";
 
 import { createAsyncRwLock } from "@queuert/sqlite";
 import {
+  asyncSqliteStateProviderConformanceCases,
   createSqliteMigratorConformanceContext,
   createSqliteStateProviderConformanceContext,
   type SqliteStateProviderConformanceContext,
@@ -29,7 +30,10 @@ describe("state-sqlite-bun-sql provider conformance", () => {
     await sql.close();
   });
 
-  for (const conformanceCase of sqliteStateProviderConformanceCases) {
+  for (const conformanceCase of [
+    ...sqliteStateProviderConformanceCases,
+    ...asyncSqliteStateProviderConformanceCases,
+  ]) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run(context);
     });

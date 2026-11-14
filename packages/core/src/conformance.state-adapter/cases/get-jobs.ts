@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { sleep } from "@queuert/helpers/sleep";
+import { dynamicSyncAsync, resource, step } from "@queuert/sync-async";
 
 import type { ConformanceGroup } from "../../conformance/runner.ts";
 import type { StateAdapterConformanceContext } from "../types.ts";
@@ -12,30 +13,37 @@ export const getJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   cases: [
     {
       name: "returns undefined for nonexistent job ID",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        // Create a real job to get a valid ID format, then look up a derived nonexistent one
-        const [realChain] = await stateAdapter.withTransaction(async (txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "lookup-test", input: null },
-            ],
-          }),
+        const [realChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "lookup-test", input: null },
+              ],
+            }),
+          ),
         );
         const nonexistentId =
           realChain.head.id.slice(0, -1) + (realChain.head.id.endsWith("0") ? "1" : "0");
-        const result = await stateAdapter.getJobs({ jobIds: [nonexistentId] });
+        const result = yield* step(stateAdapter.getJobs({ jobIds: [nonexistentId] }));
         assert.deepEqual(result, [undefined]);
-      },
+      }),
     },
+  ],
+};
+
+export const getJobsHeldTransactionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
+  name: "getJobs",
+  cases: [
     {
       name: "lock: exclusive blocks a concurrent locked read until the holding tx commits",
       run: async ({ createStateAdapter }) => {
         await using stateAdapter = await createStateAdapter();
 
-        const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
+        const [seedChain] = await stateAdapter.withTransaction((txCtx) =>
           stateAdapter.createJobs({
             txCtx,
             jobs: [
@@ -48,39 +56,31 @@ export const getJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           }),
         );
 
-        let releaseHolder: (() => void) | undefined;
-        const holderGate = new Promise<void>((r) => {
-          releaseHolder = r;
-        });
-        let signalLockHeld: (() => void) | undefined;
-        const lockHeld = new Promise<void>((r) => {
-          signalLockHeld = r;
-        });
+        const { promise: holderGate, resolve: releaseHolder } = Promise.withResolvers<void>();
+        const { promise: lockHeld, resolve: signalLockHeld } = Promise.withResolvers<void>();
 
-        // Tx A: acquire the exclusive lock on `seed`, then wait on the gate.
         const holderTx = stateAdapter.withTransaction(async (txCtx) => {
           await stateAdapter.getJobs({ txCtx, jobIds: [seedChain.head.id], lock: "exclusive" });
-          signalLockHeld!();
+          signalLockHeld();
           await holderGate;
         });
 
         await lockHeld;
 
-        // Tx B: also try to lock the same row. Should not resolve while A holds.
         let waiterResolved = false;
-        const waiterTx = stateAdapter
-          .withTransaction(async (txCtx) =>
+        const waiterTx = Promise.resolve(
+          stateAdapter.withTransaction((txCtx) =>
             stateAdapter.getJobs({ txCtx, jobIds: [seedChain.head.id], lock: "exclusive" }),
-          )
-          .then((job) => {
-            waiterResolved = true;
-            return job;
-          });
+          ),
+        ).then((job) => {
+          waiterResolved = true;
+          return job;
+        });
 
         await sleep(LOCK_BLOCK_OBSERVATION_MS);
         assert.equal(waiterResolved, false);
 
-        releaseHolder!();
+        releaseHolder();
         await holderTx;
 
         const [observed] = await waiterTx;
@@ -101,7 +101,7 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
         run: async ({ createStateAdapter }) => {
           await using stateAdapter = await createStateAdapter();
 
-          const [headChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          const [headChain] = await stateAdapter.withTransaction((txCtx) =>
             stateAdapter.createJobs({
               txCtx,
               jobs: [
@@ -113,7 +113,7 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
               ],
             }),
           );
-          const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
+          const [continued] = await stateAdapter.withTransaction((txCtx) =>
             stateAdapter.continueJobs({
               txCtx,
               jobs: [
@@ -128,37 +128,31 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
           );
           const { continuation } = continued!;
 
-          let releaseHolder: (() => void) | undefined;
-          const holderGate = new Promise<void>((r) => {
-            releaseHolder = r;
-          });
-          let signalLockHeld: (() => void) | undefined;
-          const lockHeld = new Promise<void>((r) => {
-            signalLockHeld = r;
-          });
+          const { promise: holderGate, resolve: releaseHolder } = Promise.withResolvers<void>();
+          const { promise: lockHeld, resolve: signalLockHeld } = Promise.withResolvers<void>();
 
           const holderTx = stateAdapter.withTransaction(async (txCtx) => {
             await stateAdapter.getJobs({ txCtx, jobIds: [continuation.id], lock: "exclusive" });
-            signalLockHeld!();
+            signalLockHeld();
             await holderGate;
           });
 
           await lockHeld;
 
           let waiterResolved = false;
-          const waiterTx = stateAdapter
-            .withTransaction(async (txCtx) =>
+          const waiterTx = Promise.resolve(
+            stateAdapter.withTransaction((txCtx) =>
               stateAdapter.getChains({ txCtx, chainIds: [headChain.head.id], lock: "exclusive" }),
-            )
-            .then((chains) => {
-              waiterResolved = true;
-              return chains;
-            });
+            ),
+          ).then((chains) => {
+            waiterResolved = true;
+            return chains;
+          });
 
           await sleep(LOCK_BLOCK_OBSERVATION_MS);
           assert.equal(waiterResolved, false);
 
-          releaseHolder!();
+          releaseHolder();
           await holderTx;
 
           const [observed] = await waiterTx;
@@ -172,7 +166,7 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
           await using stateAdapter = await createStateAdapter();
 
           const count = 10;
-          const created = await stateAdapter.withTransaction(async (txCtx) =>
+          const created = await stateAdapter.withTransaction((txCtx) =>
             stateAdapter.createJobs({
               txCtx,
               jobs: Array.from({ length: count }, (_, i) => ({
@@ -200,14 +194,8 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
         run: async ({ createStateAdapter }) => {
           await using stateAdapter = await createStateAdapter();
 
-          let release: (() => void) | undefined;
-          const gate = new Promise<void>((r) => {
-            release = r;
-          });
-          let signalTxReady: (() => void) | undefined;
-          const txReady = new Promise<void>((r) => {
-            signalTxReady = r;
-          });
+          const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+          const { promise: txReady, resolve: signalTxReady } = Promise.withResolvers<void>();
           let insertedId: string | undefined;
 
           const txPromise = stateAdapter
@@ -219,7 +207,7 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
                 ],
               });
               insertedId = stateChain.head.id;
-              signalTxReady!();
+              signalTxReady();
               await gate;
               throw new Error("rollback");
             })
@@ -227,7 +215,7 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
 
           await txReady;
           const readPromise = stateAdapter.getJobs({ jobIds: [insertedId!] });
-          release!();
+          release();
           await txPromise;
 
           assert.deepEqual(await readPromise, [undefined]);
@@ -244,7 +232,7 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
             concurrency: 1,
             leaseMs: 60_000,
           });
-          const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          const [seedChain] = await stateAdapter.withTransaction((txCtx) =>
             stateAdapter.createJobs({
               txCtx,
               jobs: [
@@ -253,14 +241,8 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
             }),
           );
 
-          let release: (() => void) | undefined;
-          const gate = new Promise<void>((r) => {
-            release = r;
-          });
-          let signalTxReady: (() => void) | undefined;
-          const txReady = new Promise<void>((r) => {
-            signalTxReady = r;
-          });
+          const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+          const { promise: txReady, resolve: signalTxReady } = Promise.withResolvers<void>();
 
           const txPromise = stateAdapter
             .withTransaction(async (txCtx) => {
@@ -272,7 +254,7 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
                 limit: 1,
               });
               assert.equal(acquired?.id, seedChain.head.id);
-              signalTxReady!();
+              signalTxReady();
               await gate;
               throw new Error("rollback");
             })
@@ -280,7 +262,7 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
 
           await txReady;
           const readPromise = stateAdapter.getJobs({ jobIds: [seedChain.head.id] });
-          release!();
+          release();
           await txPromise;
 
           const [observed] = await readPromise;
@@ -294,7 +276,7 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
         run: async ({ createStateAdapter }) => {
           await using stateAdapter = await createStateAdapter();
 
-          const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          const [seedChain] = await stateAdapter.withTransaction((txCtx) =>
             stateAdapter.createJobs({
               txCtx,
               jobs: [
@@ -303,19 +285,13 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
             }),
           );
 
-          let release: (() => void) | undefined;
-          const gate = new Promise<void>((r) => {
-            release = r;
-          });
-          let signalTxReady: (() => void) | undefined;
-          const txReady = new Promise<void>((r) => {
-            signalTxReady = r;
-          });
+          const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+          const { promise: txReady, resolve: signalTxReady } = Promise.withResolvers<void>();
 
           const txPromise = stateAdapter
             .withTransaction(async (txCtx) => {
               await stateAdapter.deleteChains({ txCtx, chainIds: [seedChain.head.chainId] });
-              signalTxReady!();
+              signalTxReady();
               await gate;
               throw new Error("rollback");
             })
@@ -323,7 +299,7 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
 
           await txReady;
           const readPromise = stateAdapter.getJobs({ jobIds: [seedChain.head.id] });
-          release!();
+          release();
           await txPromise;
 
           const [observed] = await readPromise;
@@ -341,7 +317,7 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
             concurrency: 1,
             leaseMs: 60_000,
           });
-          const [seedChain] = await stateAdapter.withTransaction(async (txCtx) =>
+          const [seedChain] = await stateAdapter.withTransaction((txCtx) =>
             stateAdapter.createJobs({
               txCtx,
               jobs: [
@@ -354,14 +330,8 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
             }),
           );
 
-          let release: (() => void) | undefined;
-          const gate = new Promise<void>((r) => {
-            release = r;
-          });
-          let signalTxReady: (() => void) | undefined;
-          const txReady = new Promise<void>((r) => {
-            signalTxReady = r;
-          });
+          const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+          const { promise: txReady, resolve: signalTxReady } = Promise.withResolvers<void>();
 
           const txPromise = stateAdapter
             .withTransaction(async (txCtx) => {
@@ -372,21 +342,21 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
                 typeNames: ["iso-locked-job"],
                 limit: 1,
               });
-              signalTxReady!();
+              signalTxReady();
               await gate;
               throw new Error("rollback");
             })
             .catch(() => {});
 
           await txReady;
-          const readPromise = stateAdapter.withTransaction(async (readTxCtx) =>
+          const readPromise = stateAdapter.withTransaction((readTxCtx) =>
             stateAdapter.getJobs({
               txCtx: readTxCtx,
               jobIds: [seedChain.head.id],
               lock: "exclusive",
             }),
           );
-          release!();
+          release();
           await txPromise;
 
           const [observed] = await readPromise;

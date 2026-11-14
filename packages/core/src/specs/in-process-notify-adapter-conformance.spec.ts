@@ -1,15 +1,24 @@
 import { conformanceTestSuite } from "@queuert/helpers/conformance";
 import { it as baseIt, describe } from "vitest";
 
+import { notifyAdapterEndToEndGroups } from "../conformance.end-to-end/groups.ts";
 import { notifyAdapterBaseGroups } from "../conformance.notify-adapter/groups.ts";
 import type { NotifyAdapterConformanceContext } from "../conformance.notify-adapter/types.ts";
-import { createInProcessNotifyAdapter } from "../notify-adapter/notify-adapter.in-process.ts";
+import { createInProcessNotifyAdapter } from "../notify-adapter.in-process/notify-adapter.in-process.ts";
 
 const it = baseIt.extend(
   "conformance",
   { scope: "file" },
   async (): Promise<NotifyAdapterConformanceContext> => ({
-    createNotifyAdapter: async () => createInProcessNotifyAdapter(),
+    createNotifyAdapter: async () => createInProcessNotifyAdapter({ mode: "async" }),
+  }),
+);
+
+const syncIt = baseIt.extend(
+  "conformance",
+  { scope: "file" },
+  async (): Promise<NotifyAdapterConformanceContext> => ({
+    createNotifyAdapter: () => createInProcessNotifyAdapter(),
   }),
 );
 
@@ -17,4 +26,12 @@ it("index");
 
 describe("In-Process Notify Adapter Conformance", () => {
   conformanceTestSuite({ it, groups: notifyAdapterBaseGroups });
+});
+
+describe("Sync In-Process Notify Adapter Conformance", () => {
+  conformanceTestSuite({ it: syncIt, groups: notifyAdapterBaseGroups });
+});
+
+describe("Sync In-Process Notify Adapter End-to-End Conformance", () => {
+  conformanceTestSuite({ it: syncIt, groups: notifyAdapterEndToEndGroups });
 });

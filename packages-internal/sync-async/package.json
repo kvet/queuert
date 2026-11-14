@@ -1,0 +1,28 @@
+{
+  "name": "@queuert/sync-async",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Sync-async functions: one generator body run synchronously or asynchronously, plus the build plugin that compiles them into plain sync and async functions",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./plugin": "./src/plugin.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest --run"
+  },
+  "dependencies": {
+    "rolldown": "1.2.16"
+  },
+  "devDependencies": {
+    "@queuert/tsconfig": "workspace:*"
+  }
+}

@@ -1,6 +1,6 @@
 import { createLatch } from "@queuert/helpers/latch";
 
-import type { Helpers } from "../setup-helpers.ts";
+import type { Helpers } from "../client/setup-helpers.ts";
 import type { StateJob } from "../state-adapter/state-adapter.ts";
 
 export type AttemptOwnership = {
@@ -40,7 +40,7 @@ export const startAttemptOwnership = async (
     release: async () => {
       released.trip();
       try {
-        await disposeAttemptLostListener().catch(() => {});
+        await disposeAttemptLostListener();
       } finally {
         abortSignal.removeEventListener("abort", abort);
       }

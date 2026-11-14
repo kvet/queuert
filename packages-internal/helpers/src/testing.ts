@@ -53,9 +53,9 @@ export type DeploymentProcess<TResult> = {
 };
 
 export const createDeploymentSpawner =
-  <TResult>(script: string, cwd: string) =>
+  <TResult>(script: string, cwd: string, args: string[] = []) =>
   (target: string, version: DeploymentVersion, pause: DeploymentPause = "none") => {
-    const child: ChildProcess = spawn(process.execPath, [script, target, version, pause], {
+    const child: ChildProcess = spawn(process.execPath, [script, target, version, pause, ...args], {
       cwd,
       stdio: ["pipe", "pipe", "inherit"],
     });

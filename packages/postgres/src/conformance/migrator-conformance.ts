@@ -7,7 +7,7 @@ import {
 import type { ConformanceTestCase } from "queuert/conformance";
 import { type ConformanceGroup, toConformanceTestCases } from "queuert/conformance-internal";
 
-import { createApplicationPgMigrationStore } from "../migration-store/migration-store.pg.ts";
+import { createPgMigratorStore } from "../migration-store/migration-store.pg.ts";
 import type { PgStateProvider } from "../state-provider/state-provider.pg.ts";
 
 /**
@@ -40,7 +40,7 @@ export const createPgMigratorConformanceContext = ({
   stateProvider: PgStateProvider<any>;
 }): PgMigratorConformanceContext => ({
   createMigrationStore: ({ migrationTableName, lockTableName }) =>
-    createApplicationPgMigrationStore({ stateProvider, migrationTableName, lockTableName }),
+    createPgMigratorStore({ stateProvider, migrationTableName, lockTableName }),
   executeSql: async (sql, txCtx) => {
     await stateProvider.executeSql({
       txCtx,

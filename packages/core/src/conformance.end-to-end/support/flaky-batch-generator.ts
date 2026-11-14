@@ -1,7 +1,3 @@
-/**
- * Creates a seeded PRNG using the mulberry32 algorithm.
- * Produces reproducible random numbers for deterministic tests.
- */
 const createSeededRandom = (seed: number): (() => number) => {
   let state = seed;
   return () => {
@@ -12,11 +8,6 @@ const createSeededRandom = (seed: number): (() => number) => {
   };
 };
 
-/**
- * Creates a function that alternates between success and error batches.
- * Used to simulate flaky connections in tests with reproducible patterns.
- * Returns true when the current call should error.
- */
 export const createFlakyBatchGenerator = ({
   seed = 12345,
   errorBatchSize = { min: 1, max: 20 },

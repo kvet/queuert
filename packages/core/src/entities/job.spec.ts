@@ -1,8 +1,9 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 
+import { JobTypeMismatchError } from "../errors.ts";
 import { createNoopJobTypes } from "../job-types/job-types.ts";
 import type { StateJobInfo } from "../state-adapter/state-adapter.ts";
-import { type Job, mapStateJobToJob } from "./job.ts";
+import { type Job, assertJobTypeName, mapStateJobToJob } from "./job.ts";
 
 const chainInfo = {
   id: "chain-1",
@@ -120,5 +121,38 @@ describe("mapStateJobToJob", () => {
 
     expectTypeOf(job.attemptAt).toEqualTypeOf<Date>();
     expectTypeOf(job.attemptBy).toEqualTypeOf<"worker-id">();
+  });
+});
+
+describe("assertJobTypeName", () => {
+  it("passes without a type name, a stored job, or a mismatch", () => {
+    expect(() => {
+      assertJobTypeName(
+        { ...pendingStateJob, typeName: "other" },
+        { jobId: "job-1", typeName: undefined },
+      );
+    }).not.toThrow();
+    expect(() => {
+      assertJobTypeName(undefined, { jobId: "job-1", typeName: "test" });
+    }).not.toThrow();
+    expect(() => {
+      assertJobTypeName(pendingStateJob, { jobId: "job-1", typeName: "test" });
+    }).not.toThrow();
+  });
+
+  it("throws JobTypeMismatchError when the stored type differs", () => {
+    expect(() => {
+      assertJobTypeName(
+        { ...pendingStateJob, typeName: "other" },
+        { jobId: "job-1", typeName: "test" },
+      );
+    }).toThrow(
+      expect.objectContaining({
+        constructor: JobTypeMismatchError,
+        message: 'Expected job job-1 to have type "test" but found "other"',
+        expectedTypeName: "test",
+        actualTypeName: "other",
+      }),
+    );
   });
 });

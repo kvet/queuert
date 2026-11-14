@@ -30,7 +30,7 @@ export type MemoryTxContext = {
   txHooks: TxHooks;
 };
 
-export type MemoryStateAdapter = StateAdapter<MemoryTxContext, string, string>;
+export type MemoryStateAdapter = StateAdapter<MemoryTxContext, string, string, "async">;
 
 const emptyState = (): MemoryState => ({
   chains: new Map(),

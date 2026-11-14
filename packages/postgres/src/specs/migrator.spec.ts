@@ -1,16 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 
+import { sleep } from "@queuert/helpers/sleep";
 import { createDeploymentSpawner, startPaused, startTogether } from "@queuert/helpers/testing";
 import { acquirePostgres } from "@queuert/testcontainers";
 import type { MigrationResult } from "@queuert/typed-sql";
 import { Pool } from "pg";
 import { it as baseIt, describe, expect, vi } from "vitest";
 
-import {
-  createApplicationPgMigrationStore,
-  createPgMigrator,
-} from "../migration-store/migration-store.pg.ts";
+import { createPgMigratorStore, createPgMigrator } from "../migration-store/migration-store.pg.ts";
 import {
   type PgPoolContext,
   createPgPoolProvider,
@@ -33,9 +31,6 @@ const query = async <T = Record<string, unknown>>(provider: Provider, text: stri
     columnTypes: {},
     readOnly: false,
   }) as Promise<T[]>;
-
-const sleep = async (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
 
 const ALL = createAppMigrations(undefined as unknown as Provider).map((m) => m.name);
 
@@ -264,7 +259,7 @@ describe("createPgMigrator", () => {
     "fences the lease by its owner, so an expired lease stays extendable until another owner claims it",
     { timeout: 120_000 },
     async ({ database: { provider } }) => {
-      const store = createApplicationPgMigrationStore({ stateProvider: provider });
+      const store = createPgMigratorStore({ stateProvider: provider });
       await store.initialize?.();
       const expire = async (): Promise<void> => {
         await query(

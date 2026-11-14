@@ -1,4 +1,4 @@
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 import {
@@ -23,22 +23,21 @@ type ReminderJobTypes = {
 
 const buildJobTypes = () => createSuperjsonJobTypes<ReminderJobTypes>({ remind: true });
 
-const createStateAdapter = async () => {
+const createStateAdapter = () => {
   const stateAdapter = createSqliteStateAdapter({
     stateProvider: createBetterSqlite3StateProvider({
       db: new Database(":memory:"),
-      lock: createAsyncRwLock(),
     }),
   });
-  await stateAdapter.migrateToLatest();
+  stateAdapter.migrateToLatest();
   return stateAdapter;
 };
 
 test("stores superjson's envelope and hands the runtime form to readers", async () => {
-  await using stateAdapter = await createStateAdapter();
+  using stateAdapter = createStateAdapter();
   const client = createClient({ stateAdapter, jobTypes: buildJobTypes() });
 
-  const chain = await stateAdapter.withTransaction(async (ctx) =>
+  const chain = stateAdapter.withTransaction((ctx) =>
     client.createChain({
       ...ctx,
       typeName: "remind",
@@ -46,20 +45,20 @@ test("stores superjson's envelope and hands the runtime form to readers", async 
     }),
   );
 
-  const [stored] = await stateAdapter.getJobs({ jobIds: [chain.id] });
+  const [stored] = stateAdapter.getJobs({ jobIds: [chain.id] });
   expect(stored?.input).toMatchObject({
     json: { sendAt: "2024-06-01T09:00:00.000Z", tags: ["billing"] },
     meta: { values: { sendAt: ["Date"], tags: ["set"] } },
   });
 
-  const job = await client.getJob({ id: chain.id, typeName: "remind" });
+  const job = client.getJob({ id: chain.id, typeName: "remind" });
   expect(job?.input.sendAt).toEqual(new Date("2024-06-01T09:00:00.000Z"));
   expect(job?.input.tags).toEqual(new Set(["billing"]));
 });
 
 test("round-trips a Date and a bigint through the worker and back out of a client read", async () => {
   const jobTypes = buildJobTypes();
-  await using stateAdapter = await createStateAdapter();
+  using stateAdapter = createStateAdapter();
   const client = createClient({ stateAdapter, jobTypes });
 
   const sentAt = new Date("2024-07-04T12:00:00.000Z");
@@ -73,7 +72,7 @@ test("round-trips a Date and a bigint through the worker and back out of a clien
         remind: {
           attemptHandler: async ({ job, complete }) => {
             expect(job.input.sendAt).toBeInstanceOf(Date);
-            return stateAdapter.withTransaction(async (ctx) =>
+            return stateAdapter.withTransaction((ctx) =>
               complete({ ...ctx, output: { sentAt, attempts: 3n } }),
             );
           },
@@ -82,7 +81,7 @@ test("round-trips a Date and a bigint through the worker and back out of a clien
     }),
   });
 
-  const chain = await stateAdapter.withTransaction(async (ctx) =>
+  const chain = stateAdapter.withTransaction((ctx) =>
     client.createChain({
       ...ctx,
       typeName: "remind",
@@ -97,7 +96,7 @@ test("round-trips a Date and a bigint through the worker and back out of a clien
 });
 
 test("rejects a stored value that is not a superjson envelope", async () => {
-  await using stateAdapter = await createStateAdapter();
+  using stateAdapter = createStateAdapter();
   const writer = createClient({
     stateAdapter,
     jobTypes: defineJobTypes<{
@@ -106,7 +105,7 @@ test("rejects a stored value that is not a superjson envelope", async () => {
   });
   const reader = createClient({ stateAdapter, jobTypes: buildJobTypes() });
 
-  const chain = await stateAdapter.withTransaction(async (ctx) =>
+  const chain = stateAdapter.withTransaction((ctx) =>
     writer.createChain({
       ...ctx,
       typeName: "remind",
@@ -114,7 +113,7 @@ test("rejects a stored value that is not a superjson envelope", async () => {
     }),
   );
 
-  await expect(reader.getJob({ id: chain.id })).rejects.toThrow(JobTypeValidationError);
+  expect(() => reader.getJob({ id: chain.id })).toThrow(JobTypeValidationError);
 });
 
 test("carries the runtime types as the job type definitions", () => {

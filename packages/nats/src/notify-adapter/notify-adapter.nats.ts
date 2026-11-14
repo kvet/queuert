@@ -34,7 +34,7 @@ export const createNatsNotifyAdapter = ({
   nc: NatsConnection;
   /** Prefix for all NATS subject names. @defaultValue `"queuert"` */
   subjectPrefix?: string;
-}): NotifyAdapter => {
+}): NotifyAdapter<"async"> => {
   const jobScheduledSubject = `${subjectPrefix}.sched`;
   const chainCompletedSubject = `${subjectPrefix}.chainc`;
   const attemptLostSubject = `${subjectPrefix}.atls`;

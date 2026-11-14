@@ -1,10 +1,11 @@
 import { createRedisStateAdapter } from "@queuert/redis";
 import { createNodeRedisStateProvider } from "example-state-redis-redis/provider";
 import { Redis } from "ioredis";
+import { noopNotifyAdapter } from "queuert/conformance-internal";
 import { type RedisClientType, createClient as createRedisClient } from "redis";
 
 import { createRedisServerStats } from "./redis-server-stats.ts";
-import { benchmarkNamespace, noopNotifyAdapter, requireEnv, runBenchmark } from "./utils.ts";
+import { benchmarkNamespace, requireEnv, runBenchmark } from "./utils.ts";
 
 const redisUrl = requireEnv("BENCHMARK_REDIS_URL");
 const redis = createRedisClient({ url: redisUrl }) as RedisClientType;

@@ -7,8 +7,13 @@
  * every input and output through a schema library.
  */
 
-import { type JobTypes, createClient, createProcessors, createWorkerRunner } from "queuert";
-import { createInProcessStateAdapter } from "queuert/internal";
+import {
+  type JobTypes,
+  createClient,
+  createProcessors,
+  createWorkerRunner,
+  createInProcessStateAdapter,
+} from "queuert";
 
 import { createCompletionCounter, printHeader, runDoubleRunBenchmark } from "./utils.ts";
 
@@ -53,7 +58,7 @@ export const runValidationBenchmark = async ({
       const completions = createCompletionCounter(jobCount);
 
       const stateAdapter = await step("After creating state adapter", async () =>
-        createInProcessStateAdapter(),
+        createInProcessStateAdapter({ mode: "async" }),
       );
 
       const setup = await step("After creating client + worker", async () => {

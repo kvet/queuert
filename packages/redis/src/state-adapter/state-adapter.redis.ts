@@ -279,7 +279,7 @@ export type RedisContext = { readonly [transactionSymbol]: RedisTransaction };
  *
  * @experimental
  */
-export type RedisStateAdapter = StateAdapter<RedisContext, string, string> & {
+export type RedisStateAdapter = StateAdapter<RedisContext, string, string, "async"> & {
   /**
    * Bring the adapter's keys to the latest schema version. Run it before the adapter writes:
    * until it has run, every write other than deleting chains and stopping workers fails at commit

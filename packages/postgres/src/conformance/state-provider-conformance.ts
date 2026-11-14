@@ -6,6 +6,7 @@ import {
   type SavepointConformanceContext,
   type SchemaFenceConformanceContext,
   toConformanceTestCases,
+  stateAdapterAsyncGroups,
   stateAdapterBaseGroups,
   stateAdapterSavepointGroups,
   stateAdapterConcurrentTransactionGroups,
@@ -154,6 +155,7 @@ export const isolationLevelGroup: ConformanceGroup<PgStateProviderConformanceCon
 
 export const pgStateAdapterConformanceGroups: ConformanceGroup<SchemaFenceConformanceContext>[] = [
   ...stateAdapterBaseGroups,
+  ...stateAdapterAsyncGroups,
   ...stateAdapterSchemaFenceGroups,
   ...stateAdapterConcurrentTransactionGroups,
   ...stateAdapterSchemaFenceConcurrentTransactionGroups,

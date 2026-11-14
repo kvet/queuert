@@ -3,8 +3,12 @@
  */
 
 import { createDashboard } from "@queuert/dashboard";
-import { createClient, createWorkerRunner, createProcessors } from "queuert";
-import { createInProcessStateAdapter } from "queuert/internal";
+import {
+  createClient,
+  createWorkerRunner,
+  createProcessors,
+  createInProcessStateAdapter,
+} from "queuert";
 
 import { createCompletionCounter, jobTypes, printHeader, runDoubleRunBenchmark } from "./utils.ts";
 
@@ -20,7 +24,7 @@ await runDoubleRunBenchmark<Record<string, never>>({
     const completions = createCompletionCounter(jobCount);
 
     const stateAdapter = await step("After creating state adapter", async () =>
-      createInProcessStateAdapter(),
+      createInProcessStateAdapter({ mode: "async" }),
     );
 
     const client = await step("After creating client", async () =>

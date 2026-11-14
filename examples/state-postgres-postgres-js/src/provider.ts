@@ -1,5 +1,4 @@
-import type { PgStateProvider } from "@queuert/postgres";
-import type { RuntimeType } from "@queuert/typed-sql";
+import type { PgStateProvider, RuntimeType } from "@queuert/postgres";
 import type postgres from "postgres";
 import { type TxHooks, withTxHooks } from "queuert";
 

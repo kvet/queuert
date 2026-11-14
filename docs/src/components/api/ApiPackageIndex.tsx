@@ -1,22 +1,16 @@
 import { A } from "@solidjs/router";
 import { For, Show } from "solid-js";
 
-import { type ApiPackage, kindLabels, pageHref } from "../../docs/pages.ts";
+import { type ApiEntry, kindLabels, pageHref } from "../../docs/pages.ts";
 import { CopyButton } from "../CopyButton.tsx";
 import { Badge } from "../mdx/Badge.tsx";
 
-export const packageName = (pkg: ApiPackage): string =>
-  pkg.label
-    .split("/")
-    .slice(0, pkg.label.startsWith("@") ? 2 : 1)
-    .join("/");
-
-export const ApiPackageIndex = (props: { pkg: ApiPackage }) => (
+export const ApiPackageIndex = (props: { pkg: ApiEntry }) => (
   <div>
     <div class="flex items-center gap-2 rounded-xs border border-border bg-surface px-3 py-2 text-[13px]">
       <span class="text-fg-subtle">$</span>
-      <span class="flex-1">npm install {packageName(props.pkg)}</span>
-      <CopyButton text={`npm install ${packageName(props.pkg)}`} label="Copy install command" />
+      <span class="flex-1">npm install {props.pkg.packageName}</span>
+      <CopyButton text={`npm install ${props.pkg.packageName}`} label="Copy install command" />
     </div>
     <For each={props.pkg.kinds}>
       {(kind) => (

@@ -132,7 +132,7 @@ export const createMysqlMigrationStore = <TTxContext extends BaseTxContext>({
   };
 };
 
-export const createApplicationMysqlMigrationStore = <TTxContext extends BaseTxContext>({
+export const createMysqlMigratorStore = <TTxContext extends BaseTxContext>({
   stateProvider,
   schema,
   migrationTableName = "migration",
@@ -233,7 +233,7 @@ export const createMysqlMigrator = <TTxContext extends BaseTxContext>({
   assertMigrationLockOptions("createMysqlMigrator", lock);
   return createMigrator({
     migrations,
-    store: createApplicationMysqlMigrationStore({ stateProvider, ...tables }),
+    store: createMysqlMigratorStore({ stateProvider, ...tables }),
     lock,
     before,
     after,

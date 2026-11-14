@@ -1,4 +1,5 @@
 export {
+  endToEndAsyncGroups,
   endToEndBaseGroups,
   endToEndConcurrentTransactionGroups,
   endToEndFlakyDbConcurrentTransactionGroups,
@@ -21,6 +22,7 @@ export type {
   SchemaFenceConformanceContext,
 } from "./conformance.state-adapter/types.ts";
 export {
+  stateAdapterAsyncGroups,
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
   stateAdapterCountCapGroups,
@@ -38,9 +40,5 @@ export {
   seedConfig,
 } from "./conformance.state-adapter/seed-all-states.ts";
 export { createFlakyBatchGenerator } from "./conformance.end-to-end/support/flaky-batch-generator.ts";
-export { createInProcessNotifyAdapter } from "./notify-adapter/notify-adapter.in-process.ts";
 export { noopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.ts";
-export {
-  createInProcessStateAdapter,
-  type InProcessStateAdapter,
-} from "./state-adapter/state-adapter.in-process.ts";
+export { runInModeOf } from "./conformance/adapters.ts";

@@ -1,5 +1,6 @@
 export { type ConformanceTestCase } from "queuert/conformance";
 export {
+  asyncSqliteStateProviderConformanceCases,
   createSqliteStateProviderConformanceContext,
   type SqliteStateProviderConformanceContext,
   sqliteStateProviderConformanceCases,

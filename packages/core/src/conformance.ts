@@ -6,6 +6,8 @@ export {
   notifyAdapterEndToEndConformanceCases,
 } from "./conformance.notify-adapter/notify-adapter-cases.ts";
 export {
+  asyncStateAdapterConformanceCases,
+  asyncStateAdapterEndToEndConformanceCases,
   concurrentStateAdapterConformanceCases,
   concurrentStateAdapterEndToEndConformanceCases,
   stateAdapterConformanceCases,

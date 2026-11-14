@@ -32,12 +32,6 @@ type ShapeCheckConfig = {
   >;
 };
 
-/**
- * A minimal "shape-check" adapter built directly on `createJobTypes`. Used to
- * verify the validation conformance runner end-to-end without pulling in a
- * userland schema library. Each method either returns the value or throws —
- * core's `createJobTypes` wraps thrown errors in `JobTypeValidationError`.
- */
 const createShapeCheckJobTypes = <
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   const TExternalArg extends

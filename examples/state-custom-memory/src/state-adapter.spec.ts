@@ -1,4 +1,6 @@
 import {
+  asyncStateAdapterConformanceCases,
+  asyncStateAdapterEndToEndConformanceCases,
   type StateAdapterConformanceContext,
   stateAdapterConformanceCases,
   stateAdapterEndToEndConformanceCases,
@@ -13,13 +15,19 @@ const context: StateAdapterConformanceContext = {
   withNonTransactionContext: async (fn) => fn({ transaction: undefined }),
 };
 
-for (const conformanceCase of stateAdapterConformanceCases) {
+for (const conformanceCase of [
+  ...stateAdapterConformanceCases,
+  ...asyncStateAdapterConformanceCases,
+]) {
   test(conformanceCase.title, async () => {
     await conformanceCase.run(context);
   });
 }
 
-for (const conformanceCase of stateAdapterEndToEndConformanceCases) {
+for (const conformanceCase of [
+  ...stateAdapterEndToEndConformanceCases,
+  ...asyncStateAdapterEndToEndConformanceCases,
+]) {
   test(conformanceCase.title, async () => {
     await conformanceCase.run(context);
   });

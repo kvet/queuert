@@ -6,7 +6,9 @@ import type { NotifyAdapterConformanceContext } from "./types.ts";
 /**
  * The notify adapter conformance cases, to run one per test in your own test file.
  * Each case creates its own adapter with the context's `createNotifyAdapter` and closes it when
- * the case ends. Works with any test runner.
+ * the case ends, and runs in the adapter's mode: over a sync adapter (`sync: true`) every call
+ * must return a plain value and throw rather than reject, and the cases wait only for delivery.
+ * Works with any test runner.
  *
  * @example
  * ```ts
@@ -26,6 +28,9 @@ import type { NotifyAdapterConformanceContext } from "./types.ts";
 export const notifyAdapterConformanceCases: ConformanceTestCase<NotifyAdapterConformanceContext>[] =
   toConformanceTestCases(notifyAdapterBaseGroups);
 
-/** End-to-end cases that build a client and worker runners over the adapter and in-memory state. */
+/**
+ * End-to-end cases that build a client and worker runners over the adapter and an in-process
+ * state adapter of its mode.
+ */
 export const notifyAdapterEndToEndConformanceCases: ConformanceTestCase<NotifyAdapterConformanceContext>[] =
   toConformanceTestCases(notifyAdapterEndToEndGroups);

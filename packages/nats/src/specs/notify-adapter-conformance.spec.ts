@@ -47,5 +47,8 @@ describe("NATS Notify Adapter Conformance - Custom Subject Prefix", () => {
 });
 
 describe("NATS Notify Adapter End-to-End Conformance", () => {
-  conformanceTestSuite({ it: defaultPrefixIt, groups: notifyAdapterEndToEndGroups });
+  conformanceTestSuite({
+    it: defaultPrefixIt,
+    groups: [...notifyAdapterEndToEndGroups],
+  });
 });

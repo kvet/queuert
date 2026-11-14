@@ -1,9 +1,10 @@
+import type { Mode, ModeResult } from "@queuert/sync-async";
 import type { RuntimeType } from "@queuert/typed-sql";
 import type { BaseTxContext } from "queuert";
 
 /**
- * A driver error the SQLite state adapter acts on, as classified by
- * {@link SqliteStateProvider.classifyError}.
+ * A driver error the SQLite state adapter acts on, as classified by the `classifyError` of a
+ * {@link SqliteStateProvider}.
  *
  * - `undefined_table` — a `no such table: <table>` error, with the missing table's name.
  */
@@ -16,20 +17,31 @@ export type SqliteStateProviderError = { kind: "undefined_table"; tableName: str
  * and SQL execution. Users create their own implementation to integrate with their preferred
  * SQLite client (better-sqlite3, etc.).
  *
- * Every transaction you pass to `complete` or to client methods must be serialized with the
- * transactions `withTransaction` opens, for example by holding the same `AsyncRwLock` write
- * lock. An unserialized transaction can interleave its statements with the worker's own writes on
- * the same connection.
+ * In the default `"async"` mode, every transaction you pass to `complete` or to client methods
+ * must be serialized with the transactions `withTransaction` opens, for example by holding the
+ * same `AsyncRwLock` write lock. An unserialized transaction can interleave its statements with
+ * the worker's own writes on the same connection.
+ *
+ * The `"sync"` mode is for drivers that run statements synchronously (better-sqlite3,
+ * node:sqlite, bun:sqlite): the provider sets `sync: true` and its members return their results
+ * directly. A synchronous transaction cannot interleave with anything else on the thread, so it
+ * takes no lock. An `executeSql` without `txCtx` must throw when the connection is already inside
+ * a transaction, rather than run inside it.
  *
  * @typeParam TTxContext - The transaction context type containing database client/connection info
+ * @typeParam TMode - Whether the members return promises or plain values
  */
-export type SqliteStateProvider<TTxContext extends BaseTxContext> = {
+export type SqliteStateProvider<TTxContext extends BaseTxContext, TMode extends Mode = "async"> = {
+  /** `true` on a synchronous provider; absent or `false` on an asynchronous one. */
+  readonly sync?: boolean;
+
   /**
    * Executes a callback within a database transaction.
    * Acquires a connection, starts a transaction, executes the callback,
-   * commits on success, rolls back on error, and releases the connection.
+   * commits on success, rolls back on error, and releases the connection. In the `"sync"` mode, a
+   * `fn` that returns a promise rolls the transaction back and throws.
    */
-  withTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
+  withTransaction: <T>(fn: (txCtx: TTxContext) => ModeResult<TMode, T>) => ModeResult<TMode, T>;
 
   /**
    * Whether `txCtx` is inside an open transaction. Must be synchronous and must not query the
@@ -39,10 +51,10 @@ export type SqliteStateProvider<TTxContext extends BaseTxContext> = {
 
   /**
    * Runs `callback` after `txCtx`'s transaction commits, before the call that opened it settles.
-   * A provider whose driver has no transaction events carries `TxHooks` in its transaction context, creates them
-   * in `withTransaction`, and registers `callback` on them.
+   * A provider whose driver has no transaction events carries `TxHooks` in its transaction
+   * context, creates them in `withTransaction`, and registers `callback` on them.
    */
-  onTransactionCommit: (txCtx: TTxContext, callback: () => void | Promise<void>) => void;
+  onTransactionCommit: (txCtx: TTxContext, callback: () => void | ModeResult<TMode, void>) => void;
 
   /**
    * Runs `callback` synchronously when `txCtx`'s transaction, or the savepoint `txCtx` belongs to,
@@ -80,7 +92,7 @@ export type SqliteStateProvider<TTxContext extends BaseTxContext> = {
     paramTypes: Record<number, RuntimeType>;
     columnTypes: Record<string, RuntimeType>;
     readOnly: boolean;
-  }) => Promise<unknown[]>;
+  }) => ModeResult<TMode, unknown[]>;
 
   /**
    * Classifies an error thrown by this provider's driver. Returns `undefined` for an error it
@@ -93,5 +105,15 @@ export type SqliteStateProvider<TTxContext extends BaseTxContext> = {
    * Releases provider-owned resources. Optional — providers that wrap a
    * caller-owned connection can omit it. When defined, must be idempotent.
    */
-  close?: () => Promise<void>;
-};
+  close?: () => ModeResult<TMode, void>;
+} & (TMode extends "sync" ? { readonly sync: true } : { readonly sync?: false });
+
+export type ProviderTxContext<TStateProvider> =
+  TStateProvider extends SqliteStateProvider<infer TTxContext, any> ? TTxContext : never;
+
+export type ProviderMode<TStateProvider> =
+  TStateProvider extends SqliteStateProvider<any, "sync">
+    ? "sync"
+    : TStateProvider extends SqliteStateProvider<any>
+      ? "async"
+      : Mode;

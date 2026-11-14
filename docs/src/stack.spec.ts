@@ -12,6 +12,7 @@ import { backends, parseStack, shownInStack, stackScript, stackStyle } from "./s
 const runStackScript = (stored: string | null) => {
   const dataset: Record<string, string> = {};
   const localStorage = { getItem: () => stored };
+  // oxlint-disable-next-line typescript/no-implied-eval
   new Function("localStorage", "document", stackScript)(localStorage, {
     documentElement: { dataset },
   });

@@ -50,6 +50,7 @@
   },
   "devDependencies": {
     "@queuert/helpers": "workspace:*",
+    "@queuert/sync-async": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@queuert/typed-sql": "workspace:*",
     "@types/better-sqlite3": "9.6.0",

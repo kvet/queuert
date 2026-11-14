@@ -225,3 +225,15 @@ Rolling back by throwing, or with `trx.rollback(error)` and an `Error`, rejects 
 Every callback belongs to the innermost savepoint open when it was registered. Rolling a savepoint back drops the commit callbacks registered since it was created and runs the rollback callbacks registered since, newest first; a rollback callback that throws does not stop the others. Releasing a savepoint hands its callbacks to the enclosing scope. As in the database, rolling back a savepoint also releases every savepoint created after it, so rolling one of those back afterwards does nothing.
 
 `withTxHooks` manages this lifecycle automatically: it creates the `TxHooks` instance, passes it to the callback, and calls flush on success or discard on error. `createTxHooks` exposes the same lifecycle for manual control — the caller is responsible for calling `flush()` after commit and `discard()` on error.
+
+## Synchronous transactions
+
+Over a [synchronous provider](/queuert/integrations/state-adapters/sqlite/#synchronous-providers), the client runs inside the driver's own synchronous transaction, such as better-sqlite3's `db.transaction(() => …)()`, so a synchronous provider without transaction events of its own carries `TxHooks` in its context, from `withTxHooks` or `createTxHooks`. The hooks follow the transaction they wrap: when the callback passed to `withTxHooks` returns a plain value, `withTxHooks` returns that value and runs the commit callbacks synchronously, and `flush` from `createTxHooks` returns a promise only when a commit callback returned one.
+
+```ts
+const chain = withTxHooks((txHooks) =>
+  db.transaction(() => client.createChain({ db, txHooks, typeName: "send-email", input }))(),
+);
+```
+
+In a synchronous transaction, commit callbacks must be synchronous too: a commit callback that returns a promise makes the flush throw after every callback has run.

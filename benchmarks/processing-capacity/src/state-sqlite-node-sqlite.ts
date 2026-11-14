@@ -1,18 +1,19 @@
 import { DatabaseSync } from "node:sqlite";
 
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createSqliteStateAdapter } from "@queuert/sqlite";
 import { createNodeSqliteStateProvider } from "example-state-sqlite-node-sqlite/provider";
+import { noopNotifyAdapter } from "queuert/conformance-internal";
 
-import { noopNotifyAdapter, runBenchmark } from "./utils.ts";
+import { runSyncBenchmark } from "./utils.ts";
 
 const db = new DatabaseSync(":memory:");
 
-const stateProvider = createNodeSqliteStateProvider({ db, lock: createAsyncRwLock() });
+const stateProvider = createNodeSqliteStateProvider({ db });
 const stateAdapter = createSqliteStateAdapter({ stateProvider });
-await stateAdapter.migrateToLatest();
+stateAdapter.migrateToLatest();
 console.log("SQLite ready (in-memory).");
 
-await runBenchmark({
+await runSyncBenchmark({
   title: "PROCESSING CAPACITY — SQLITE (node:sqlite)",
   stateAdapter,
   notifyAdapter: noopNotifyAdapter,

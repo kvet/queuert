@@ -15,82 +15,6 @@ export type SiteSection = {
   groups: SiteGroup[];
 };
 
-export const apiPackages = [
-  {
-    label: "queuert",
-    dir: "core",
-    slug: "core",
-    summary: "Client, worker runner and job types.",
-  },
-  {
-    label: "queuert/conformance",
-    dir: "core",
-    slug: "conformance",
-    entry: "src/conformance.ts",
-    summary: "Conformance suites for custom adapters.",
-  },
-  {
-    label: "@queuert/postgres",
-    dir: "postgres",
-    slug: "postgres",
-    summary: "PostgreSQL state and notify adapters.",
-  },
-  {
-    label: "@queuert/postgres/conformance",
-    dir: "postgres",
-    slug: "postgres-conformance",
-    entry: "src/conformance.ts",
-    summary: "Conformance cases for PostgreSQL providers.",
-  },
-  { label: "@queuert/sqlite", dir: "sqlite", slug: "sqlite", summary: "SQLite state adapter." },
-  {
-    label: "@queuert/sqlite/conformance",
-    dir: "sqlite",
-    slug: "sqlite-conformance",
-    entry: "src/conformance.ts",
-    summary: "Conformance cases for SQLite providers.",
-  },
-  {
-    label: "@queuert/mysql",
-    dir: "mysql",
-    slug: "mysql",
-    summary: "MySQL and MariaDB state adapter.",
-  },
-  {
-    label: "@queuert/mysql/conformance",
-    dir: "mysql",
-    slug: "mysql-conformance",
-    entry: "src/conformance.ts",
-    summary: "Conformance cases for MySQL and MariaDB providers.",
-  },
-  {
-    label: "@queuert/redis",
-    dir: "redis",
-    slug: "redis",
-    summary: "Redis notify adapter and experimental state adapter.",
-  },
-  {
-    label: "@queuert/redis/conformance",
-    dir: "redis",
-    slug: "redis-conformance",
-    entry: "src/conformance.ts",
-    summary: "Conformance cases for Redis providers.",
-  },
-  { label: "@queuert/nats", dir: "nats", slug: "nats", summary: "NATS notify adapter." },
-  {
-    label: "@queuert/otel",
-    dir: "otel",
-    slug: "otel",
-    summary: "OpenTelemetry metrics and tracing.",
-  },
-  {
-    label: "@queuert/dashboard",
-    dir: "dashboard",
-    slug: "dashboard",
-    summary: "Embeddable web dashboard.",
-  },
-] as const;
-
 export const siteSections: SiteSection[] = [
   {
     id: "docs",
@@ -156,6 +80,7 @@ export const siteSections: SiteSection[] = [
           "integrations/state-adapters/sqlite",
           "integrations/state-adapters/mysql",
           "integrations/state-adapters/redis",
+          "integrations/state-adapters/in-process",
           "integrations/state-adapters/custom",
         ],
       },
@@ -166,6 +91,7 @@ export const siteSections: SiteSection[] = [
           "integrations/notify-adapters/postgres",
           "integrations/notify-adapters/redis",
           "integrations/notify-adapters/nats",
+          "integrations/notify-adapters/ipc",
           "integrations/notify-adapters/custom",
         ],
       },

@@ -26,14 +26,12 @@ const ensureLockFile = (lockPath: string): void => {
   }
 };
 
-const removeContainerByName = async (containerName: string): Promise<void> => {
+const removeStoppedContainerByName = async (containerName: string): Promise<void> => {
   const docker = new Docker();
   try {
     const container = docker.getContainer(containerName);
     const info = await container.inspect();
-    if (info.State.Running) {
-      await container.stop();
-    }
+    if (info.State.Running) return;
     await container.remove({ force: true });
   } catch {}
 };
@@ -65,7 +63,7 @@ export const withContainerLock = async <T extends StartedTestContainer>({
       return await start();
     } catch {}
 
-    await removeContainerByName(containerName);
+    await removeStoppedContainerByName(containerName);
     return await start();
   } finally {
     await release();

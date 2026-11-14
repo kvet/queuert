@@ -1,6 +1,4 @@
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
-import Database from "better-sqlite3";
-import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
+import { createMemoryStateAdapter } from "example-state-custom-memory/state-adapter";
 import { createClient, createProcessors, createWorkerRunner, defineJobTypes } from "queuert";
 
 import { createMemoryNotifyAdapter } from "./notify-adapter.ts";
@@ -14,14 +12,7 @@ const jobTypes = defineJobTypes<{
 }>();
 
 // Create the state adapter
-await using drivers = new AsyncDisposableStack();
-const db = drivers.adopt(new Database(":memory:"), (db) => {
-  db.close();
-});
-await using stateAdapter = createSqliteStateAdapter({
-  stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
-});
-await stateAdapter.migrateToLatest();
+await using stateAdapter = createMemoryStateAdapter();
 
 // #region setup
 await using notifyAdapter = createMemoryNotifyAdapter();
@@ -50,6 +41,8 @@ await using workerRunner = createWorkerRunner({
   }),
 });
 
+// The worker runner polls only once a minute, so it picks up the job as soon as it is
+// woken by the notify adapter
 await workerRunner.start();
 
 console.log("Requesting sales report...");

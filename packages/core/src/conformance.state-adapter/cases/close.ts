@@ -1,18 +1,19 @@
+import { dynamicSyncAsync, resource, step } from "@queuert/sync-async";
+
 import type { ConformanceGroup } from "../../conformance/runner.ts";
 import type { StateAdapterConformanceContext } from "../types.ts";
 
-/** Verifies the `close()` contract on the case's own adapter. */
 export const closeGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "close",
   cases: [
     {
       name: "close is idempotent",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
 
-        await stateAdapter.close();
-        await stateAdapter.close();
-      },
+        yield* step(stateAdapter.close());
+        yield* step(stateAdapter.close());
+      }),
     },
   ],
 };

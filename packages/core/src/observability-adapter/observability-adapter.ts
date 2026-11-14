@@ -1,3 +1,5 @@
+import type { Mode } from "@queuert/sync-async";
+
 import type { NotifyAdapter } from "../notify-adapter/notify-adapter.ts";
 import type { StateAdapter } from "../state-adapter/state-adapter.ts";
 import type {
@@ -162,11 +164,11 @@ export type ObservabilityAdapter = {
   jobAttemptReclaimed: (data: JobAttemptData & WorkerBasicData & JobReclaimData) => void;
 
   // notify adapter
-  notifyAdapterError: (data: { operation: keyof NotifyAdapter; error: unknown }) => void;
+  notifyAdapterError: (data: { operation: keyof NotifyAdapter<Mode>; error: unknown }) => void;
 
   // state adapter
   stateAdapterError: (data: {
-    operation: keyof StateAdapter<any, any, any>;
+    operation: keyof StateAdapter<any, any, any, Mode>;
     error: unknown;
   }) => void;
 

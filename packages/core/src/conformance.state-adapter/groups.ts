@@ -22,18 +22,26 @@ import {
   extendWorkerLeaseConcurrentTransactionsGroup,
 } from "./cases/extend-worker-lease.ts";
 import { getChainTypeNamesGroup } from "./cases/get-chain-type-names.ts";
-import { getChainsGroup, getChainsConcurrentTransactionsGroup } from "./cases/get-chains.ts";
+import {
+  getChainsGroup,
+  getChainsHeldTransactionGroup,
+  getChainsConcurrentTransactionsGroup,
+} from "./cases/get-chains.ts";
 import {
   getJobBlockersGroup,
   getJobBlockersConcurrentTransactionsGroup,
 } from "./cases/get-job-blockers.ts";
 import { getJobTypeNamesGroup } from "./cases/get-job-type-names.ts";
-import { getJobsGroup, getJobsConcurrentTransactionsGroup } from "./cases/get-jobs.ts";
+import {
+  getJobsGroup,
+  getJobsHeldTransactionGroup,
+  getJobsConcurrentTransactionsGroup,
+} from "./cases/get-jobs.ts";
 import {
   getStartAttemptDelayMsGroup,
   getStartAttemptDelayMsConcurrentTransactionsGroup,
 } from "./cases/get-start-attempt-delay-ms.ts";
-import { getWorkersGroup } from "./cases/get-workers.ts";
+import { getWorkersGroup, getWorkersHeldTransactionGroup } from "./cases/get-workers.ts";
 import { isTransactionGroup } from "./cases/is-transaction.ts";
 import {
   listBlockedJobsGroup,
@@ -51,14 +59,20 @@ import { rescheduleJobsGroup } from "./cases/reschedule-jobs.ts";
 import { schemaFenceConcurrentTransactionsGroup, schemaFenceGroup } from "./cases/schema-fence.ts";
 import {
   startJobAttemptGroup,
+  startJobAttemptHeldTransactionGroup,
   startJobAttemptConcurrentTransactionsGroup,
 } from "./cases/start-job-attempt.ts";
 import { startWorkerGroup } from "./cases/start-worker.ts";
 import { stopWorkerGroup } from "./cases/stop-worker.ts";
-import { txCallbacksGroup, txCallbacksSavepointGroup } from "./cases/tx-callbacks.ts";
+import {
+  txCallbacksAsyncCallbackGroup,
+  txCallbacksGroup,
+  txCallbacksSavepointGroup,
+} from "./cases/tx-callbacks.ts";
 import { unblockJobsGroup, unblockJobsConcurrentTransactionsGroup } from "./cases/unblock-jobs.ts";
 import {
   withTransactionGroup,
+  withTransactionHeldTransactionGroup,
   withTransactionConcurrentTransactionsGroup,
 } from "./cases/with-transaction.ts";
 import type {
@@ -103,6 +117,15 @@ export const stateAdapterBaseGroups: ConformanceGroup<StateAdapterConformanceCon
   closeGroup,
 ];
 
+export const stateAdapterAsyncGroups: ConformanceGroup<StateAdapterConformanceContext>[] = [
+  withTransactionHeldTransactionGroup,
+  txCallbacksAsyncCallbackGroup,
+  getChainsHeldTransactionGroup,
+  getJobsHeldTransactionGroup,
+  getWorkersHeldTransactionGroup,
+  startJobAttemptHeldTransactionGroup,
+];
+
 export const stateAdapterConcurrentTransactionGroups: ConformanceGroup<StateAdapterConformanceContext>[] =
   [
     withTransactionConcurrentTransactionsGroup,
@@ -121,27 +144,17 @@ export const stateAdapterConcurrentTransactionGroups: ConformanceGroup<StateAdap
     listBlockedJobsConcurrentTransactionsGroup,
   ];
 
-/**
- * Cases for adapters that fence writes behind a schema fence table, such as the PostgreSQL and
- * SQLite adapters. Internal for now: the fence is not part of the public state adapter contract.
- */
 export const stateAdapterSchemaFenceGroups: ConformanceGroup<SchemaFenceConformanceContext>[] = [
   schemaFenceGroup,
 ];
 
-/** The schema fence cases that hold two transactions open at once. */
 export const stateAdapterSchemaFenceConcurrentTransactionGroups: ConformanceGroup<SchemaFenceConformanceContext>[] =
   [schemaFenceConcurrentTransactionsGroup];
 
-/**
- * Cases that check the counts stop at `config.countCap`, for an adapter created with a small
- * `countCap`. Internal: at the default cap they would create over 20,000 jobs.
- */
 export const stateAdapterCountCapGroups: ConformanceGroup<StateAdapterConformanceContext>[] = [
   countCapGroup,
 ];
 
-/** The cases that need a savepoint of an open transaction. */
 export const stateAdapterSavepointGroups: ConformanceGroup<SavepointConformanceContext>[] = [
   txCallbacksSavepointGroup,
 ];

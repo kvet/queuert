@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createAsyncRwLock, createSqliteMigrator, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createSqliteMigrator, createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
@@ -17,7 +17,7 @@ import { createMigrations, invoices } from "./migrations.ts";
 import { createDrizzleSqliteStateProvider } from "./provider.ts";
 
 // Create in-memory SQLite database
-await using drivers = new AsyncDisposableStack();
+using drivers = new DisposableStack();
 const sqlite = drivers.adopt(new Database(":memory:"), (sqlite) => {
   sqlite.close();
 });
@@ -53,25 +53,22 @@ const jobTypes = defineJobTypes<{
 
 // Create state provider for Drizzle with better-sqlite3
 // #region adapter
-const lock = createAsyncRwLock();
-const stateProvider = createDrizzleSqliteStateProvider({ db: sqlite, lock });
-await using stateAdapter = createSqliteStateAdapter({ stateProvider });
-await stateAdapter.migrateToLatest();
+const stateProvider = createDrizzleSqliteStateProvider({ db: sqlite });
+using stateAdapter = createSqliteStateAdapter({ stateProvider });
+stateAdapter.migrateToLatest();
 // #endregion
 
+// Run the application's own migrations through the same provider
 const migrator = createSqliteMigrator({
   stateProvider,
-  migrations: createMigrations({ db, lock }),
+  migrations: createMigrations({ db }),
 });
-const { applied } = await migrator.migrateToLatest();
+const { applied } = migrator.migrateToLatest();
 console.log(`Applied application migrations: ${applied.join(", ")}`);
-{
-  using _h = await lock.acquireRead();
-  assert.deepEqual(
-    db.select().from(invoices).orderBy(invoices.id).all(),
-    [1, 2, 3, 4, 5].map((id) => ({ id, customer: `CUSTOMER-${id}`, status: "open" })),
-  );
-}
+assert.deepEqual(
+  db.select().from(invoices).orderBy(invoices.id).all(),
+  [1, 2, 3, 4, 5].map((id) => ({ id, customer: `CUSTOMER-${id}`, status: "open" })),
+);
 
 const client = createClient({ stateAdapter, jobTypes });
 
@@ -83,40 +80,17 @@ await using workerRunner = createWorkerRunner({
     processors: {
       send_welcome_email: {
         attemptHandler: async ({ job, complete }) => {
-          let user: typeof users.$inferSelect | undefined;
-          {
-            using _h = await lock.acquireRead();
-            user = db.select().from(users).where(eq(users.id, job.input.userId)).get();
-          }
+          const user = db.select().from(users).where(eq(users.id, job.input.userId)).get();
           if (!user) throw new Error(`User ${job.input.userId} not found`);
 
           // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          return withTxHooks(async (txHooks) => {
-            // The handler's transaction holds the provider's write lock, so the worker's
-            // autocommit statements on this connection cannot run inside it.
-            using _h = await lock.acquireWrite();
-            sqlite.exec("BEGIN");
-            try {
-              const result = await complete({
-                db: sqlite,
-                txHooks,
-                output: { sentAt: new Date().toISOString() },
-              });
-              sqlite.exec("COMMIT");
-              return result;
-            } catch (error) {
-              if (sqlite.inTransaction) {
-                try {
-                  sqlite.exec("ROLLBACK");
-                } catch {
-                  // ignore rollback errors
-                }
-              }
-              throw error;
-            }
-          });
+          return withTxHooks((txHooks) =>
+            db.transaction(() =>
+              complete({ db: sqlite, txHooks, output: { sentAt: new Date().toISOString() } }),
+            ),
+          );
         },
       },
     },
@@ -128,38 +102,24 @@ await workerRunner.start();
 
 // Register a new user and queue welcome email atomically
 // #region create-chain
-const chain = await withTxHooks(async (txHooks) => {
-  using _h = await lock.acquireWrite();
-  sqlite.exec("BEGIN");
-  try {
+const chain = withTxHooks((txHooks) =>
+  db.transaction((tx) => {
     // Use Drizzle to insert the user
-    const [user] = db
+    const [user] = tx
       .insert(users)
       .values({ name: "Alice", email: "alice@example.com" })
       .returning({ id: users.id })
       .all();
 
     // Queue welcome email - if user creation fails, no email job is created
-    const result = await client.createChain({
+    return client.createChain({
       db: sqlite,
       txHooks,
       typeName: "send_welcome_email",
       input: { userId: user.id },
     });
-
-    sqlite.exec("COMMIT");
-    return result;
-  } catch (error) {
-    if (sqlite.inTransaction) {
-      try {
-        sqlite.exec("ROLLBACK");
-      } catch {
-        // ignore rollback errors
-      }
-    }
-    throw error;
-  }
-});
+  }),
+);
 // #endregion
 
 // Wait for the chain to complete

@@ -1,8 +1,9 @@
-import { createInProcessStateAdapter } from "queuert/internal";
+import { createInProcessStateAdapter } from "queuert";
+import { noopNotifyAdapter } from "queuert/conformance-internal";
 
-import { noopNotifyAdapter, runBenchmark } from "./utils.ts";
+import { runSyncBenchmark } from "./utils.ts";
 
-await runBenchmark({
+await runSyncBenchmark({
   title: "PROCESSING CAPACITY — IN-PROCESS",
   stateAdapter: createInProcessStateAdapter(),
   notifyAdapter: noopNotifyAdapter,

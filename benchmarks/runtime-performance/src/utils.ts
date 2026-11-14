@@ -56,11 +56,6 @@ export function diffMemory(before: MemorySnapshot, after: MemorySnapshot): void 
 
 export async function forceGC(): Promise<void> {
   if (!global.gc) return;
-  // Multiple GC cycles with awaits between them are needed to reach a steady
-  // state: each `global.gc()` is a single mark-sweep pass, but pending
-  // microtasks, finalizers, and weak-ref clearing can produce more garbage on
-  // the next tick. Looping until heapUsed stabilizes (or N attempts) gives a
-  // truer "what's actually retained" reading.
   let last = process.memoryUsage().heapUsed;
   for (let i = 0; i < 8; i++) {
     global.gc();
@@ -94,7 +89,7 @@ export async function measureMemory<T>(
 
 export function printHeader(title: string): void {
   console.log("╔════════════════════════════════════════════════════════════════╗");
-  console.log(`║${title.padStart(35 + title.length / 2).padEnd(68)}║`);
+  console.log(`║${title.padStart(32 + Math.ceil(title.length / 2)).padEnd(64)}║`);
   console.log("╚════════════════════════════════════════════════════════════════╝");
 
   const gcAvailable = typeof global.gc === "function";
@@ -169,6 +164,10 @@ const MEMORY_JOB_COUNT = 100;
  * leak — so the *non-code* delta is the meaningful "what queuert holds onto"
  * number.
  *
+ * Native nodes (ArrayBuffer backing stores) are left out of both: they are not
+ * JS objects, and the heap snapshot stream's own 64 KB read buffer shows up in
+ * one snapshot or the other at random, swinging the delta by ±64 KB.
+ *
  * The snapshot is streamed in-memory via `v8.getHeapSnapshot()` and parsed
  * directly — no disk I/O unless `HEAP_DUMPS=1` is set, in which case a copy is
  * also written to `heap-dumps/` for inspection in Chrome DevTools.
@@ -206,11 +205,14 @@ const liveSizeFromSnapshotJson = (json: string): { code: number; nonCode: number
   const typeFieldIdx = fields.indexOf("type");
   const nodeTypes = snap.snapshot.meta.node_types[typeFieldIdx] as string[];
   const codeTypeIdx = nodeTypes.indexOf("code");
+  const nativeTypeIdx = nodeTypes.indexOf("native");
   let code = 0;
   let nonCode = 0;
   for (let i = 0; i < snap.nodes.length; i += stride) {
     const size = snap.nodes[i + selfSizeIdx];
-    if (snap.nodes[i + typeFieldIdx] === codeTypeIdx) code += size;
+    const type = snap.nodes[i + typeFieldIdx];
+    if (type === nativeTypeIdx) continue;
+    if (type === codeTypeIdx) code += size;
     else nonCode += size;
   }
   return { code, nonCode };
@@ -266,10 +268,6 @@ async function runMemory<TInfra>({
   const { infra, teardown } = await setupInfrastructure();
 
   // ─── Phase 3: WARMUP run (discarded — warms V8 JIT + lazy module loads) ───
-  // Run with the SAME ctx shape as the measured run (measureMemory + formatBytes
-  // + diffMemory + console.log) so all code paths get JIT-compiled before we
-  // capture the infra baseline. Output is suppressed at the stdout.write level
-  // so the full console.log call chain still fires.
   console.log("\n── WARMUP run (discarded — warms V8 JIT + lazy loads) ──");
   const originalWrite = process.stdout.write.bind(process.stdout);
   process.stdout.write = () => true;
@@ -295,6 +293,7 @@ async function runMemory<TInfra>({
   }
 
   // ─── Phase 4: infrastructure baseline established (post-warmup) ───
+  await forceGC();
   const infraBaselineLive = await captureSnapshot(name, "infra-baseline");
   await forceGC();
   const infraBaseline = getMemorySnapshot();
@@ -317,8 +316,6 @@ async function runMemory<TInfra>({
       return result;
     },
     processStep: async <T>(label: string, fn: () => Promise<T>): Promise<T> => {
-      // Heap right before the work step starts is queuert's setup overhead
-      // (state + notify + client + worker, all built but no jobs yet).
       await forceGC();
       setupHeapDelta = process.memoryUsage().heapUsed - infraBaseline.heapUsed;
       const [, after, result] = await measureMemory(fn);

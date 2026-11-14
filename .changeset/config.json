@@ -11,6 +11,7 @@
       "@queuert/mysql",
       "@queuert/redis",
       "@queuert/nats",
+      "@queuert/ipc",
       "@queuert/otel",
       "@queuert/dashboard"
     ]

@@ -56,6 +56,7 @@
   },
   "devDependencies": {
     "@queuert/helpers": "workspace:*",
+    "@queuert/sync-async": "workspace:*",
     "@queuert/tsconfig": "workspace:*"
   },
   "engines": {

@@ -1,7 +1,8 @@
 import type { Component } from "solid-js";
 import pages from "virtual:docs-pages";
 
-import { type SiteSection, apiPackages, siteSections } from "./sections.ts";
+import { type ApiEntryPoint, apiEntryPoints } from "./api-entry-points.ts";
+import { type SiteSection, siteSections } from "./sections.ts";
 
 export type DocPage = (typeof pages)[number];
 
@@ -46,13 +47,13 @@ export const kindLabels: Record<string, string> = {
   Enum: "Enums",
 };
 
-export type ApiPackage = (typeof apiPackages)[number] & {
+export type ApiEntry = ApiEntryPoint & {
   index: DocPage | undefined;
   kinds: { kind: string; pages: DocPage[] }[];
   size: number;
 };
 
-export const apiTree: ApiPackage[] = apiPackages.map((pkg) => {
+export const apiTree: ApiEntry[] = apiEntryPoints.map((pkg) => {
   const symbols = pages.filter(
     (page) => page.api?.package === pkg.slug && page.slug !== `api/${pkg.slug}/readme`,
   );
@@ -71,11 +72,19 @@ export const apiTree: ApiPackage[] = apiPackages.map((pkg) => {
   };
 });
 
-export const apiPackageOf = (page: DocPage): ApiPackage | undefined =>
+export const apiPackageTree: { name: string; size: number; entries: ApiEntry[] }[] = [
+  ...Map.groupBy(apiTree, (entry) => entry.packageName),
+].map(([name, entries]) => ({
+  name,
+  size: entries.reduce((total, entry) => total + entry.size, 0),
+  entries,
+}));
+
+export const apiEntryOf = (page: DocPage): ApiEntry | undefined =>
   page.api ? apiTree.find((pkg) => pkg.slug === page.api!.package) : undefined;
 
 export const trail = (page: DocPage): string[] => {
-  const pkg = apiPackageOf(page);
+  const pkg = apiEntryOf(page);
   if (pkg)
     return [
       "API",
@@ -91,7 +100,7 @@ export const trail = (page: DocPage): string[] => {
 };
 
 const orderedFor = (page: DocPage): DocPage[] => {
-  const pkg = apiPackageOf(page);
+  const pkg = apiEntryOf(page);
   if (pkg) return [...(pkg.index ? [pkg.index] : []), ...pkg.kinds.flatMap((kind) => kind.pages)];
   const section = siteSections.find((candidate) =>
     candidate.groups.some((group) => group.slugs.includes(page.slug)),

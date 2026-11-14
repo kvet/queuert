@@ -38,7 +38,7 @@ const workerRunner = createWorkerRunner({
 await workerRunner.start();
 ```
 
-The worker's lease (`leaseConfig`) is not a runtime limit: it bounds how long a crashed worker's jobs wait before another worker picks them up. Each worker's heartbeat renews its lease every `heartbeatMs`, however many attempts it runs, so a handler may run far longer than `durationMs`. The lease only expires when the worker stops renewing it — it crashed, its event loop stalled, or it lost its database connection. On the in-process and SQLite adapters, a user transaction that holds the write lock past the worker's local deadline also makes the worker give up its lease (see [Worker Lease](../../how-it-works/worker-runner/#worker-lease)). Either way the jobs running under it are reclaimed and start a new attempt. Use the cooperative `signal` pattern above for real runtime limits.
+The worker's lease (`leaseConfig`) is not a runtime limit: it bounds how long a crashed worker's jobs wait before another worker picks them up. Each worker's heartbeat renews its lease every `heartbeatMs`, however many attempts it runs, so a handler may run far longer than `durationMs`. The lease only expires when the worker stops renewing it — it crashed, its event loop stalled, or it lost its database connection. On SQLite, a user transaction that holds an async provider's write lock, or blocks the thread with a synchronous provider, past the worker's local deadline also makes the worker give up its lease (see [Worker Lease](../../how-it-works/worker-runner/#worker-lease)). Either way the jobs running under it are reclaimed and start a new attempt. Use the cooperative `signal` pattern above for real runtime limits.
 
 ```ts
 const workerRunner = createWorkerRunner({

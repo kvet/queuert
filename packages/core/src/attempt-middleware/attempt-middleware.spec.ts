@@ -1,9 +1,9 @@
 import { describe, expectTypeOf, it } from "vitest";
 
-import { type Client, createClient } from "../client.ts";
+import { type Client, createClient } from "../client/client.ts";
 import { createProcessors } from "../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../job-types/define-job-types.ts";
-import { createInProcessStateAdapter } from "../state-adapter/state-adapter.in-process.ts";
+import { createInProcessStateAdapter } from "../state-adapter.in-process/state-adapter.in-process.ts";
 import type { StateAdapter } from "../state-adapter/state-adapter.ts";
 import type { AttemptMiddleware, MergedAttemptHandlerCtx } from "./attempt-middleware.ts";
 
@@ -12,7 +12,7 @@ type Defs = {
 };
 const jobTypes = defineJobTypes<Defs>();
 
-const stateAdapter = createInProcessStateAdapter();
+const stateAdapter = createInProcessStateAdapter({ mode: "async" });
 const client = createClient({ stateAdapter, jobTypes });
 
 type W1<C extends Record<string, unknown>> = AttemptMiddleware<any, C>;
@@ -119,7 +119,7 @@ describe("tuple narrowing without `as const`", () => {
 describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
   it("accepts an adapter with a non-empty txCtx as the TStateAdapter parameter", () => {
     type Tx = { db: { query: (sql: string) => Promise<unknown> } };
-    type DbStateAdapter = StateAdapter<Tx, string, string>;
+    type DbStateAdapter = StateAdapter<Tx, string, string, "async">;
 
     expectTypeOf<AttemptMiddleware<DbStateAdapter>>().toBeObject();
     expectTypeOf<AttemptMiddleware<DbStateAdapter, { trace: string }>>().toBeObject();
@@ -127,7 +127,7 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
 
   it("merges ctx across a multi-element tuple of concrete-adapter middleware", () => {
     type Tx = { db: { query: (sql: string) => Promise<unknown> } };
-    type DbStateAdapter = StateAdapter<Tx, string, string>;
+    type DbStateAdapter = StateAdapter<Tx, string, string, "async">;
     const dbClient = client as unknown as Client<Defs, DbStateAdapter>;
     const dbStateAdapter = stateAdapter as unknown as DbStateAdapter;
 
@@ -161,16 +161,10 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
   });
 
   it("merges ctx across a tuple mixing any- and concrete-adapter middleware", () => {
-    type DbStateAdapter = StateAdapter<
-      { db: { query: (sql: string) => Promise<unknown> } },
-      string,
-      string
-    >;
-
     const agnosticMw: AttemptMiddleware<any, { traceId: string }> = {
       wrapHandler: async ({ next }) => next({ traceId: "t" }),
     };
-    const concreteMw: AttemptMiddleware<DbStateAdapter, { log: (msg: string) => void }> = {
+    const concreteMw: AttemptMiddleware<typeof stateAdapter, { log: (msg: string) => void }> = {
       wrapHandler: async ({ next }) => next({ log: () => {} }),
     };
 
@@ -196,7 +190,7 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
 describe("middleware must match the client's state adapter", () => {
   it("rejects middleware typed against a foreign adapter", () => {
     type PgJobId = string & { readonly brand: "pg" };
-    type PgAdapter = StateAdapter<{ sql: (q: string) => Promise<void> }, PgJobId, string>;
+    type PgAdapter = StateAdapter<{ sql: (q: string) => Promise<void> }, PgJobId, string, "async">;
     const foreignMw: AttemptMiddleware<PgAdapter, { tenant: string }> = {
       wrapHandler: async ({ job, next }) => {
         void (job.id satisfies PgJobId);
@@ -208,7 +202,6 @@ describe("middleware must match the client's state adapter", () => {
       client,
       jobTypes,
       // @ts-expect-error — middleware is typed for an adapter with branded job ids but the
-      // client is in-process; its wrapHandler would read `job.id` as the wrong type
       attemptMiddleware: [foreignMw],
       processors: {
         foo: {

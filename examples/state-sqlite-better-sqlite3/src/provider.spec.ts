@@ -1,4 +1,3 @@
-import { createAsyncRwLock } from "@queuert/sqlite";
 import {
   createSqliteMigratorConformanceContext,
   createSqliteStateProviderConformanceContext,
@@ -14,13 +13,12 @@ import { createBetterSqlite3StateProvider } from "./provider.ts";
 // #region conformance
 describe("state-sqlite-better-sqlite3 provider conformance", () => {
   const db = new Database(":memory:");
-  const lock = createAsyncRwLock();
   let context: SqliteStateProviderConformanceContext;
 
-  beforeAll(async () => {
-    context = await createSqliteStateProviderConformanceContext({
-      createStateProvider: async () => createBetterSqlite3StateProvider({ db, lock }),
-      withNonTransactionContext: async (fn) => fn({ db }),
+  beforeAll(() => {
+    context = createSqliteStateProviderConformanceContext({
+      createStateProvider: () => createBetterSqlite3StateProvider({ db }),
+      withNonTransactionContext: (fn) => fn({ db }),
     });
   });
 
@@ -39,7 +37,7 @@ describe("state-sqlite-better-sqlite3 provider conformance", () => {
 describe("state-sqlite-better-sqlite3 migrator conformance", () => {
   const db = new Database(":memory:");
   const context = createSqliteMigratorConformanceContext({
-    stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
+    stateProvider: createBetterSqlite3StateProvider({ db }),
   });
 
   afterAll(async () => {

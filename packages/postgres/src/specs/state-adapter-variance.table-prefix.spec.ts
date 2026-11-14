@@ -30,8 +30,5 @@ describe("PostgreSQL State Adapter Variance - Custom Table Prefix", () => {
     expect(tableNames).toContain("myapp_migration");
   });
 
-  conformanceTestSuite({
-    it,
-    groups: pgStateAdapterConformanceGroups,
-  });
+  conformanceTestSuite({ it, groups: pgStateAdapterConformanceGroups });
 });

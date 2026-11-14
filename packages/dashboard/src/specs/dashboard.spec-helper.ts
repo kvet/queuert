@@ -1,9 +1,11 @@
 import { readRpcResponse } from "@queuert/rpc/testing";
-import { createClient, defineJobTypes, type StateJobInfo } from "queuert";
 import {
+  createClient,
+  defineJobTypes,
+  type StateJobInfo,
   type InProcessStateAdapter,
   createInProcessStateAdapter,
-} from "queuert/conformance-internal";
+} from "queuert";
 
 import { createDashboard } from "../api/dashboard.ts";
 
@@ -23,9 +25,9 @@ export const createTestDashboard = async (
 ): Promise<{
   request: (path: string, init?: RequestInit) => Promise<Response>;
   call: DashboardCall;
-  stateAdapter: InProcessStateAdapter;
+  stateAdapter: InProcessStateAdapter<"async">;
 }> => {
-  const stateAdapter = createInProcessStateAdapter();
+  const stateAdapter = createInProcessStateAdapter({ mode: "async" });
   const client = createClient({ stateAdapter, jobTypes: defineJobTypes() });
   const dashboard = createDashboard({ client, basePath });
   const prefix = basePath ?? "";
@@ -37,7 +39,7 @@ export const createTestDashboard = async (
 };
 
 export const createJob = async (
-  stateAdapter: InProcessStateAdapter,
+  stateAdapter: InProcessStateAdapter<"async">,
   typeName: string,
   input: unknown,
 ): Promise<StateJobInfo> => {
@@ -51,7 +53,7 @@ export const createJob = async (
 };
 
 export const createContinuation = async (
-  stateAdapter: InProcessStateAdapter,
+  stateAdapter: InProcessStateAdapter<"async">,
   typeName: string,
   continueFromId: string,
   input: unknown,
@@ -66,7 +68,7 @@ export const createContinuation = async (
 };
 
 export const startAttempt = async (
-  stateAdapter: InProcessStateAdapter,
+  stateAdapter: InProcessStateAdapter<"async">,
   typeName: string,
 ): Promise<void> => {
   const [worker] = await stateAdapter.getWorkers({ workerIds: ["worker-1"] });
@@ -79,14 +81,14 @@ export const startAttempt = async (
 };
 
 export const startWorker = async (
-  stateAdapter: InProcessStateAdapter,
+  stateAdapter: InProcessStateAdapter<"async">,
   workerId: string,
   typeNames: string[],
-): ReturnType<InProcessStateAdapter["startWorker"]> =>
+): ReturnType<InProcessStateAdapter<"async">["startWorker"]> =>
   stateAdapter.startWorker({ workerId, typeNames, concurrency: 2, leaseMs: 60_000 });
 
 export const completeJob = async (
-  stateAdapter: InProcessStateAdapter,
+  stateAdapter: InProcessStateAdapter<"async">,
   jobId: string,
   output: unknown,
 ): Promise<void> => {
@@ -105,10 +107,10 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 
 export const createUuidStrictDashboard = async (): Promise<{
   call: DashboardCall;
-  stateAdapter: InProcessStateAdapter;
+  stateAdapter: InProcessStateAdapter<"async">;
   failures: { probe: boolean; reschedule: boolean; delete: boolean };
 }> => {
-  const inner = createInProcessStateAdapter();
+  const inner = createInProcessStateAdapter({ mode: "async" });
   const failures = { probe: false, reschedule: false, delete: false };
   const assertUuids = (ids: string[]) => {
     const malformed = ids.find((id) => !UUID_PATTERN.test(id));
@@ -169,7 +171,7 @@ export const createUuidStrictDashboard = async (): Promise<{
 };
 
 export const addBlocker = async (
-  stateAdapter: InProcessStateAdapter,
+  stateAdapter: InProcessStateAdapter<"async">,
   jobId: string,
   blockerChainId: string,
 ): Promise<void> => {

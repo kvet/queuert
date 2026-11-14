@@ -1,20 +1,23 @@
+import { type MaybePromise, type Mode, step, syncAsync } from "@queuert/sync-async";
 import { type Migration, type TypedSqlTemplate, sql } from "@queuert/typed-sql";
 
 const transactional = <TTxContext>(
   name: string,
   statements: TypedSqlTemplate<readonly []>[],
-  execute: (txCtx: TTxContext, statement: TypedSqlTemplate<readonly []>) => Promise<void>,
-): Migration<TTxContext> => ({
-  name,
-  up: async (txCtx) => {
-    for (const statement of statements) {
-      await execute(txCtx, statement);
-    }
-  },
-  down: async () => {
-    throw new Error(`${name} cannot be reverted.`);
-  },
-});
+  execute: (txCtx: TTxContext, statement: TypedSqlTemplate<readonly []>) => MaybePromise<unknown>,
+  mode: Mode,
+): Migration<TTxContext, Mode> => {
+  const up = syncAsync(function* (txCtx: TTxContext) {
+    for (const statement of statements) yield* step(execute(txCtx, statement));
+  });
+  return {
+    name,
+    up: mode === "sync" ? up.sync : up.async,
+    down: () => {
+      throw new Error(`${name} cannot be reverted.`);
+    },
+  };
+};
 
 const v017Statements: { name: string; statements: TypedSqlTemplate<readonly []>[] }[] = [
   {
@@ -142,7 +145,10 @@ WHERE status = 'running'`),
   },
 ];
 
-export const createV017Migrations = <TTxContext>(
-  execute: (txCtx: TTxContext, statement: TypedSqlTemplate<readonly []>) => Promise<void>,
-): Migration<TTxContext>[] =>
-  v017Statements.map(({ name, statements }) => transactional(name, statements, execute));
+export const createV017Migrations = <TTxContext, TMode extends Mode>(
+  execute: (txCtx: TTxContext, statement: TypedSqlTemplate<readonly []>) => MaybePromise<unknown>,
+  mode: TMode,
+): Migration<TTxContext, TMode>[] =>
+  v017Statements.map(({ name, statements }) =>
+    transactional(name, statements, execute, mode),
+  ) as Migration<TTxContext, TMode>[];

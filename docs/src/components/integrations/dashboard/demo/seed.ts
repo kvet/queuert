@@ -1,6 +1,10 @@
 import { createIdGenerator, jobTypes, populateScenarios } from "example-dashboard/scenarios";
-import { type Client, createClient } from "queuert";
-import { type InProcessStateAdapter, createInProcessStateAdapter } from "queuert/internal";
+import {
+  type Client,
+  createClient,
+  type InProcessStateAdapter,
+  createInProcessStateAdapter,
+} from "queuert";
 
 export type DashboardDemoView =
   | "overview"
@@ -28,7 +32,7 @@ export const seedDashboardDemo = async (): Promise<{
   const { orderChain, blockerChain, retryChain, liveWorkerId } = await populateScenarios({
     client,
     stateAdapter,
-    withTransaction: async (fn) => stateAdapter.withTransaction(async (ctx) => fn(ctx)),
+    withTransaction: (fn) => stateAdapter.withTransaction((ctx) => fn(ctx)),
   });
 
   return {

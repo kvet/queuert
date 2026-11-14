@@ -1,0 +1,1 @@
+error-resource/input.ts:4:24: `wait` and `resource` make a body wait, which only uncompiled bodies (tests) may do: yield* resource(createStateAdapter())

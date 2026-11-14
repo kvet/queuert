@@ -1,5 +1,5 @@
 import { errorResponse, handleRpc } from "@queuert/rpc/server";
-import type { BaseJobTypeDefinitions, Client, StateAdapter } from "queuert";
+import type { Client } from "queuert";
 
 import { renderHtml } from "./html.ts";
 import { serverFns } from "./serverFns.ts";
@@ -33,16 +33,13 @@ const loadAssets = async (): Promise<Assets | null> => {
  * @param options - Dashboard configuration.
  * @experimental
  */
-export const createDashboard = <
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TStateAdapter extends StateAdapter<any, any, any>,
->(options: {
-  /** The Queuert client the dashboard reads jobs, chains and workers from. */
-  client: Client<TJobTypeDefinitions, TStateAdapter>;
+export const createDashboard = (options: {
+  /** The Queuert client the dashboard reads jobs, chains and workers from, over a state adapter of either mode. */
+  client: Client<any, any>;
   /** Mount prefix without trailing slash (e.g. `'/internal/queuert'`). Defaults to `''` (root). */
   basePath?: string;
 }): { fetch: (request: Request) => Response | Promise<Response> } => {
-  const client = options.client as unknown as Client<any, any>;
+  const { client } = options;
   const basePath = options.basePath?.replace(/\/+$/, "") ?? "";
 
   const handleRequest = async (request: Request): Promise<Response> => {

@@ -1,7 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { after, before, describe, test } from "node:test";
 
-import { createAsyncRwLock } from "@queuert/sqlite";
 import {
   createSqliteMigratorConformanceContext,
   createSqliteStateProviderConformanceContext,
@@ -15,13 +14,12 @@ import { createNodeSqliteStateProvider } from "./provider.ts";
 // #region conformance
 void describe("state-sqlite-node-sqlite provider conformance", () => {
   const db = new DatabaseSync(":memory:");
-  const lock = createAsyncRwLock();
   let context: SqliteStateProviderConformanceContext;
 
-  before(async () => {
-    context = await createSqliteStateProviderConformanceContext({
-      createStateProvider: async () => createNodeSqliteStateProvider({ db, lock }),
-      withNonTransactionContext: async (fn) => fn({ db }),
+  before(() => {
+    context = createSqliteStateProviderConformanceContext({
+      createStateProvider: () => createNodeSqliteStateProvider({ db }),
+      withNonTransactionContext: (fn) => fn({ db }),
     });
   });
 
@@ -40,7 +38,7 @@ void describe("state-sqlite-node-sqlite provider conformance", () => {
 void describe("state-sqlite-node-sqlite migrator conformance", () => {
   const db = new DatabaseSync(":memory:");
   const context = createSqliteMigratorConformanceContext({
-    stateProvider: createNodeSqliteStateProvider({ db, lock: createAsyncRwLock() }),
+    stateProvider: createNodeSqliteStateProvider({ db }),
   });
 
   after(() => {

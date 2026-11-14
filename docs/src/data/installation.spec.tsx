@@ -10,9 +10,7 @@ const commandFor = (stateLabel: string, notifyLabel: string) => {
 
 describe("installCommand", () => {
   it("installs queuert with the picked packages", () => {
-    expect(commandFor("SQLite", "Redis")).toBe(
-      "npm install queuert @queuert/sqlite @queuert/redis",
-    );
+    expect(commandFor("SQLite", "IPC")).toBe("npm install queuert @queuert/sqlite @queuert/ipc");
     expect(commandFor("MySQL / MariaDB", "NATS")).toBe(
       "npm install queuert @queuert/mysql @queuert/nats @nats-io/nats-core @nats-io/transport-node",
     );

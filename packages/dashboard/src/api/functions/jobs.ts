@@ -116,7 +116,7 @@ export const getJobDetail: ServerFn<
       job.status === "completed" && job.continuedToId !== null ? job.continuedToId : null;
 
     const [blockers, continuation] = await Promise.all([
-      client.getJobBlockers({ jobId: job.id }),
+      Promise.resolve(client.getJobBlockers({ jobId: job.id })),
       continuationId ? client.getJob({ id: continuationId }) : Promise.resolve(undefined),
     ]);
 
@@ -127,8 +127,8 @@ export const rescheduleJob: ServerFn<{ id: string }, UnknownJob> = createServerF
   .inputValidator(v.strictObject({ id }))
   .handler(async ({ data, client }) => {
     try {
-      const { stateAdapter } = client[helpersSymbol];
-      return await stateAdapter.withTransaction(async (txCtx) =>
+      // oxlint-disable-next-line typescript/promise-function-async -- runs in the client's mode: a sync state adapter rejects an async callback
+      return await client[helpersSymbol].stateAdapter.withTransaction((txCtx) =>
         client.rescheduleJob({ id: data.id, ...txCtx }),
       );
     } catch (err) {

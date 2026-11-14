@@ -2,10 +2,9 @@ import {
   type MigrationScript,
   type MigrationStore,
   type TemplateApplier,
+  createTypedSqlExecutor,
   sql,
   t,
-  createTemplateExecutor,
-  createTypedSqlExecutor,
 } from "@queuert/typed-sql";
 import type { BaseTxContext } from "queuert";
 
@@ -30,13 +29,16 @@ export const createLegacyUpgrade = <TTxContext extends BaseTxContext>(
       },
     ),
   );
-  const createSchemaFence = sql(/* sql */ `
-CREATE TABLE {{schema}}.{{table_prefix}}schema_fence_v1 (id integer PRIMARY KEY)`);
-  const forgetWorkerLiveness = sql(/* sql */ `
-DELETE FROM {{schema}}.{{table_prefix}}migration WHERE name = '${WORKER_LIVENESS}'`);
+  const createSchemaFenceSql = applyTemplate(
+    sql(/* sql */ `
+CREATE TABLE {{schema}}.{{table_prefix}}schema_fence_v1 (id integer PRIMARY KEY)`),
+  );
+  const forgetWorkerLivenessSql = applyTemplate(
+    sql(/* sql */ `
+DELETE FROM {{schema}}.{{table_prefix}}migration WHERE name = '${WORKER_LIVENESS}'`),
+  );
 
   const exec = createTypedSqlExecutor(stateProvider);
-  const execute = createTemplateExecutor(stateProvider, applyTemplate);
 
   return async () => {
     await store.runInTransaction(async (txCtx) => {
@@ -49,8 +51,8 @@ DELETE FROM {{schema}}.{{table_prefix}}migration WHERE name = '${WORKER_LIVENESS
             `Cannot upgrade the 0.17 schema: the migration table records ${applied.join(", ")}, but a 0.17 schema records exactly ${INSTALL} and ${WORKER_LIVENESS}.`,
           );
         }
-        await execute(txCtx, createSchemaFence);
-        await execute(txCtx, forgetWorkerLiveness);
+        await exec({ txCtx, sql: createSchemaFenceSql });
+        await exec({ txCtx, sql: forgetWorkerLivenessSql });
         return;
       }
 

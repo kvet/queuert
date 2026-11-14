@@ -1,3 +1,5 @@
+import type { Mode } from "@queuert/sync-async";
+
 import type { AnyAttemptMiddleware } from "../attempt-middleware/attempt-middleware.ts";
 import type { AttemptHandler } from "../attempt/attempt-handler.types.ts";
 import type { BackoffConfig } from "../entities/backoff.ts";
@@ -7,7 +9,7 @@ import type { StateAdapter } from "../state-adapter/state-adapter.ts";
 
 /** Configuration for processing a single job type. */
 export type Processor<
-  TStateAdapter extends StateAdapter<any, any, any>,
+  TStateAdapter extends StateAdapter<any, any, any, Mode>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   THandlerCtx,
@@ -30,13 +32,6 @@ export type Processor<
  */
 export const processorsDefinitionsSymbol: unique symbol = Symbol("queuert.processor.definitions");
 
-/**
- * Per-processor stamp carrying the middleware tuple of the slice that created
- * this processor. Runtime dispatch reads this to run the correct middleware
- * chain for each job type. Not reflected in the public type — purely a
- * runtime implementation detail.
- * @internal
- */
 export const processorAttemptMiddlewareSymbol: unique symbol = Symbol(
   "queuert.processor.attemptMiddleware",
 );

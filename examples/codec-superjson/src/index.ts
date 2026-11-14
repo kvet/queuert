@@ -7,7 +7,7 @@
  * of a client read — with no per-type schema.
  */
 
-import { createAsyncRwLock, createSqliteStateAdapter } from "@queuert/sqlite";
+import { createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 import { createClient, createWorkerRunner, createProcessors } from "queuert";
@@ -27,14 +27,14 @@ const jobTypes = createSuperjsonJobTypes<{
   };
 }>({ "tally-votes": true, "publish-results": true });
 
-await using drivers = new AsyncDisposableStack();
+using drivers = new DisposableStack();
 const db = drivers.adopt(new Database(":memory:"), (db) => {
   db.close();
 });
-await using stateAdapter = createSqliteStateAdapter({
-  stateProvider: createBetterSqlite3StateProvider({ db, lock: createAsyncRwLock() }),
+using stateAdapter = createSqliteStateAdapter({
+  stateProvider: createBetterSqlite3StateProvider({ db }),
 });
-await stateAdapter.migrateToLatest();
+stateAdapter.migrateToLatest();
 
 const client = createClient({ stateAdapter, jobTypes });
 
@@ -52,7 +52,7 @@ await using workerRunner = createWorkerRunner({
             ["yes", 1_204_331n],
             ["no", 987_112n],
           ]);
-          return stateAdapter.withTransaction(async (ctx) =>
+          return stateAdapter.withTransaction((ctx) =>
             complete({
               ...ctx,
               continueWith: {
@@ -69,7 +69,7 @@ await using workerRunner = createWorkerRunner({
 
           let total = 0n;
           for (const count of job.input.votes.values()) total += count;
-          return stateAdapter.withTransaction(async (ctx) =>
+          return stateAdapter.withTransaction((ctx) =>
             complete({ ...ctx, output: { publishedAt: new Date(), total } }),
           );
         },
@@ -80,7 +80,7 @@ await using workerRunner = createWorkerRunner({
 
 await workerRunner.start();
 
-const chain = await stateAdapter.withTransaction(async (ctx) =>
+const chain = stateAdapter.withTransaction((ctx) =>
   client.createChain({
     ...ctx,
     typeName: "tally-votes",
@@ -92,7 +92,7 @@ const result = await client.awaitChain(chain, { timeoutMs: 5000 });
 console.log(`\npublishedAt is a ${result.output.publishedAt.constructor.name}`);
 console.log(`total is a ${typeof result.output.total}: ${result.output.total}`);
 
-const [stored] = await stateAdapter.getJobs({ jobIds: [chain.id] });
+const [stored] = stateAdapter.getJobs({ jobIds: [chain.id] });
 console.log(`\nStored input: ${JSON.stringify(stored?.input)}`);
 
 console.log("\n=== Done ===");

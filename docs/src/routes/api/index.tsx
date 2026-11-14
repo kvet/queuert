@@ -1,11 +1,26 @@
 import { A } from "@solidjs/router";
 import { For, Show } from "solid-js";
 
-import { packageName } from "../../components/api/ApiPackageIndex.tsx";
 import { ArticleLayout, DocsShell } from "../../components/DocsShell.tsx";
 import { ArrowRightIcon, PackageIcon } from "../../components/icons.tsx";
 import { PageMeta } from "../../components/PageMeta.tsx";
-import { apiTree, kindLabels, pageHref } from "../../docs/pages.ts";
+import { type ApiEntry, apiPackageTree, kindLabels, pageHref } from "../../docs/pages.ts";
+
+const KindCounts = (props: { entry: ApiEntry }) => (
+  <div class="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-subtle">
+    <For each={props.entry.kinds}>
+      {(kind) => (
+        <span>
+          {kind.pages.length}{" "}
+          {(kind.pages.length === 1
+            ? kind.kind
+            : (kindLabels[kind.kind] ?? kind.kind)
+          ).toLowerCase()}
+        </span>
+      )}
+    </For>
+  </div>
+);
 
 const ApiOverview = () => (
   <DocsShell section="api">
@@ -35,40 +50,57 @@ const ApiOverview = () => (
         , then pick the adapters for your stack.
       </p>
       <div class="mt-10 grid gap-4 md:grid-cols-2">
-        <For each={apiTree}>
+        <For each={apiPackageTree}>
           {(pkg) => (
-            <A
-              href={pkg.index ? pageHref(pkg.index) : "/api/"}
-              class="group flex flex-col gap-3 rounded-xs border border-border bg-surface/50 p-5 hover:border-border-strong hover:bg-surface"
-            >
-              <div class="flex items-center gap-2.5">
-                <span class="grid size-8 place-items-center rounded-xs bg-surface-2 text-brand">
-                  <PackageIcon size={16} />
-                </span>
-                <span class="flex-1 font-semibold group-hover:text-accent-fg">{pkg.label}</span>
-                <ArrowRightIcon
-                  size={14}
-                  class="text-fg-subtle transition-transform group-hover:translate-x-0.5"
-                />
-              </div>
-              <p class="text-[13px] leading-6 text-fg-muted">{pkg.summary}</p>
-              <div class="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-subtle">
-                <For each={pkg.kinds}>
-                  {(kind) => (
-                    <span>
-                      {kind.pages.length}{" "}
-                      {(kind.pages.length === 1
-                        ? kind.kind
-                        : (kindLabels[kind.kind] ?? kind.kind)
-                      ).toLowerCase()}
-                    </span>
-                  )}
-                </For>
-                <Show when={pkg.label !== packageName(pkg)}>
-                  <span>· ships in {packageName(pkg)}</span>
-                </Show>
-              </div>
-            </A>
+            <div class="flex flex-col rounded-xs border border-border bg-surface/50">
+              <For each={pkg.entries}>
+                {(entry) => (
+                  <Show
+                    when={entry.subpath}
+                    fallback={
+                      <A
+                        href={entry.index ? pageHref(entry.index) : "/api/"}
+                        class="group flex flex-1 flex-col gap-3 p-5 hover:bg-surface"
+                      >
+                        <div class="flex items-center gap-2.5">
+                          <span class="grid size-8 place-items-center rounded-xs bg-surface-2 text-brand">
+                            <PackageIcon size={16} />
+                          </span>
+                          <span class="flex-1 font-semibold group-hover:text-accent-fg">
+                            {pkg.name}
+                          </span>
+                          <ArrowRightIcon
+                            size={14}
+                            class="text-fg-subtle transition-transform group-hover:translate-x-0.5"
+                          />
+                        </div>
+                        <p class="text-[13px] leading-6 text-fg-muted">{entry.summary}</p>
+                        <KindCounts entry={entry} />
+                      </A>
+                    }
+                  >
+                    {(subpath) => (
+                      <A
+                        href={entry.index ? pageHref(entry.index) : "/api/"}
+                        class="group flex flex-col gap-1.5 border-t border-border px-5 py-3 hover:bg-surface"
+                      >
+                        <div class="flex items-center gap-2.5">
+                          <span class="flex-1 font-mono text-[13px] group-hover:text-accent-fg">
+                            {pkg.name}/{subpath()}
+                          </span>
+                          <ArrowRightIcon
+                            size={14}
+                            class="text-fg-subtle transition-transform group-hover:translate-x-0.5"
+                          />
+                        </div>
+                        <p class="text-[13px] leading-6 text-fg-muted">{entry.summary}</p>
+                        <KindCounts entry={entry} />
+                      </A>
+                    )}
+                  </Show>
+                )}
+              </For>
+            </div>
           )}
         </For>
       </div>

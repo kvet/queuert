@@ -1,5 +1,6 @@
 import { MikroORM } from "@mikro-orm/sqlite";
 import {
+  asyncSqliteStateProviderConformanceCases,
   createSqliteStateProviderConformanceContext,
   type SqliteStateProviderConformanceContext,
   sqliteStateProviderConformanceCases,
@@ -37,7 +38,10 @@ describe("state-sqlite-mikro-orm provider conformance", () => {
     });
   });
 
-  for (const conformanceCase of sqliteStateProviderConformanceCases) {
+  for (const conformanceCase of [
+    ...sqliteStateProviderConformanceCases,
+    ...asyncSqliteStateProviderConformanceCases,
+  ]) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run(context);
     });

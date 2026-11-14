@@ -14,11 +14,11 @@ import {
   createMigrator,
   createTemplateApplier,
   createTemplateCache,
+  createTypedSqlExecutor,
   extractColumnTypes,
   extractParamTypes,
   sql,
   t,
-  createTemplateExecutor,
   validateSqlIdentifier,
 } from "@queuert/typed-sql";
 import {
@@ -112,7 +112,7 @@ const SCHEMA_VERSION = 1;
 const FENCE_GUARD = "NOT EXISTS (SELECT 1 FROM {{fence_table}} WHERE 1 = 0)";
 
 export const createSchemaMigrations = <TTxContext>(
-  execute: (txCtx: TTxContext, statement: TypedSqlTemplate<readonly []>) => Promise<void>,
+  execute: (txCtx: TTxContext, statement: TypedSqlTemplate<readonly []>) => Promise<unknown>,
 ): Migration<TTxContext>[] => [
   {
     name: "001_initial_schema",
@@ -241,7 +241,6 @@ CREATE TABLE {{schema}}.{{table_prefix}}schema_fence_v1 (id integer PRIMARY KEY)
   },
 ];
 
-/** @internal */
 export const createMigrationStore = <TTxContext extends BaseTxContext>(
   stateProvider: PgStateProvider<TTxContext>,
   applyTemplate: TemplateApplier,
@@ -302,7 +301,6 @@ const chainStatusConditions: Record<StateChainStatus, string> = {
   completed: "head_job.chain_status = 'completed'",
 };
 
-/** Clamps a count read with `LIMIT countCap + 1` to `countCap`, flagging that more exist. */
 const capCount = (count: number, countCap: number): StateCount => ({
   count: Math.min(count, countCap),
   hasMore: count > countCap,
@@ -462,7 +460,7 @@ export const createPgStateAdapter = <
    * @defaultValue `10_000`
    */
   countCap?: number;
-}): StateAdapter<TTxContext, TJobId, TWorkerId> & {
+}): StateAdapter<TTxContext, TJobId, TWorkerId, "async"> & {
   /**
    * Create or upgrade the schema.
    *
@@ -2173,8 +2171,11 @@ ORDER BY w.ord
     migrateToLatest: async () => {
       await assertServerSupported();
       const store = createMigrationStore(stateProvider, applyTemplate);
+      const exec = createTypedSqlExecutor(stateProvider);
       return createMigrator({
-        migrations: createSchemaMigrations(createTemplateExecutor(stateProvider, applyTemplate)),
+        migrations: createSchemaMigrations(async (txCtx: TTxContext, statement) =>
+          exec({ txCtx, sql: applyTemplate(statement) }),
+        ),
         store,
         before: createLegacyUpgrade(stateProvider, store, applyTemplate),
       }).migrateToLatest();
@@ -2192,7 +2193,7 @@ export type PgStateAdapter<
   TTxContext extends BaseTxContext,
   TJobId extends string = UUID,
   TWorkerId extends string = UUID,
-> = StateAdapter<TTxContext, TJobId, TWorkerId> & {
+> = StateAdapter<TTxContext, TJobId, TWorkerId, "async"> & {
   /**
    * Create or upgrade the schema.
    *

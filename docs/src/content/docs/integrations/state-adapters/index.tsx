@@ -61,6 +61,17 @@ const adapters: OptionCard[] = [
     action: { label: "Redis state adapter", href: "/integrations/state-adapters/redis/" },
   },
   {
+    name: "In-process",
+    status: { label: "built-in", tone: "default" },
+    pick: "All state is held in memory and lost on process exit. For tests and single-process apps.",
+    facts: [
+      { label: "Package", value: "queuert" },
+      { label: "Clients", value: "none" },
+      { label: "Scope", value: "one process" },
+    ],
+    action: { label: "In-process state adapter", href: "/integrations/state-adapters/in-process/" },
+  },
+  {
     name: "Custom",
     pick: "A StateAdapter of your own, for another database engine.",
     facts: [
@@ -162,10 +173,11 @@ const members = (): FieldItem[] => [
         limit settings used to generate and validate job and worker IDs and enforce the blocker
         limit. <code>close</code> releases internal resources and is idempotent;{" "}
         <code>[Symbol.asyncDispose]</code> calls it, so an adapter can be held with{" "}
-        <code>await using</code>.
+        <code>await using</code>. On a <code>"sync"</code> adapter, <code>close</code> returns
+        nothing and <code>[Symbol.dispose]</code> calls it, so it is held with <code>using</code>.
       </>
     ),
-    extra: ["config", "close", "[Symbol.asyncDispose]"],
+    extra: ["config", "close", "[Symbol.asyncDispose]", "[Symbol.dispose]"],
   },
 ];
 
@@ -181,9 +193,10 @@ const Page = () => (
 
     <h2>The StateAdapter interface</h2>
     <p>
-      <code>StateAdapter&lt;TTxContext, TJobId, TWorkerId&gt;</code> is exported from{" "}
-      <code>queuert</code>. Its type parameters are the transaction context type, the job ID type
-      and the worker ID type. Its members, by purpose:
+      <code>StateAdapter&lt;TTxContext, TJobId, TWorkerId, TMode&gt;</code> is exported from{" "}
+      <code>queuert</code>. Its type parameters are the transaction context type, the job ID type,
+      the worker ID type and the required mode, <code>"async"</code> or <code>"sync"</code>, which
+      sets whether the methods return promises or plain values. Its members, by purpose:
     </p>
     <FieldList
       title="StateAdapter"
@@ -195,6 +208,20 @@ const Page = () => (
       proseNames
       items={members()}
     />
+    <p>
+      Its <code>"sync"</code> mode,{" "}
+      <code>{'StateAdapter<TTxContext, TJobId, TWorkerId, "sync">'}</code>, is for drivers that run
+      statements synchronously: the same members, each returning its result directly, a{" "}
+      <code>withTransaction</code> that runs a synchronous callback, <code>sync: true</code>, which
+      tells Queuert the adapter's mode, and a <code>close</code> that returns nothing, with{" "}
+      <code>[Symbol.dispose]</code> in place of <code>[Symbol.asyncDispose]</code>, so the adapter
+      is held with <code>using</code>. <code>createClient</code> and <code>createWorkerRunner</code>{" "}
+      follow the adapter's mode, so a client over it returns plain values; SQLite ships one, see{" "}
+      <A href="/integrations/state-adapters/sqlite/#synchronous-providers">
+        SQLite synchronous providers
+      </A>
+      .
+    </p>
 
     <h2>How adapters behave</h2>
     <ul>
