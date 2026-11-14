@@ -2493,6 +2493,219 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
     },
 
     {
+      name: "getChainTailJob > getChainTailJob returns the tail job or undefined for nonexistent chain",
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
+        const client = createClient({
+          stateAdapter,
+          notifyAdapter,
+          jobTypes,
+        });
+
+        const chain = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "order",
+              input: { amount: 42 },
+            }),
+          ),
+        );
+
+        const tailJob = yield* step(
+          client.getChainTailJob({ chainId: chain.id, chainTypeName: "order" }),
+        );
+        const missingTailJob = yield* step(
+          client.getChainTailJob({ chainId: "00000000-0000-0000-0000-000000000000" }),
+        );
+
+        assert.partialDeepStrictEqual(tailJob, {
+          id: chain.id,
+          typeName: "order",
+          chainIndex: 0,
+          status: "pending",
+        });
+        assert.equal(missingTailJob, undefined);
+      }),
+    },
+
+    {
+      name: "getChainTailJob > getChainTailJob throws on chainTypeName mismatch",
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
+        const client = createClient({
+          stateAdapter,
+          notifyAdapter,
+          jobTypes,
+        });
+
+        const chain = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "order",
+              input: { amount: 42 },
+            }),
+          ),
+        );
+
+        yield* step(
+          assertRejects(
+            () => client.getChainTailJob({ chainId: chain.id, chainTypeName: "notification" }),
+            ChainTypeMismatchError,
+          ),
+        );
+      }),
+    },
+
+    {
+      name: "getChainTailJobs > getChainTailJobs returns empty array for empty chainIds",
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
+        const client = createClient({
+          stateAdapter,
+          notifyAdapter,
+          jobTypes,
+        });
+
+        const tailJobs = yield* step(client.getChainTailJobs({ chainIds: [] }));
+
+        assert.deepEqual(tailJobs, []);
+      }),
+    },
+
+    {
+      name: "getChainTailJobs > getChainTailJobs returns each chain's tail job in input order",
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
+        const client = createClient({
+          stateAdapter,
+          notifyAdapter,
+          jobTypes,
+        });
+
+        const order = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "order",
+              input: { amount: 42 },
+            }),
+          ),
+        );
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.completeChain({
+              ...txCtx,
+              ...order,
+              handler: ({ job, completeJob }) => {
+                if (job.typeName === "order") {
+                  return completeJob(job, ({ complete }) =>
+                    complete({
+                      continueWith: { typeName: "order_fulfill", input: { orderId: order.id } },
+                    }),
+                  );
+                }
+              },
+            }),
+          ),
+        );
+        const notification = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "notification",
+              input: { message: "hello" },
+            }),
+          ),
+        );
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.completeChain({
+              ...txCtx,
+              ...notification,
+              handler: ({ job, completeJob }) =>
+                completeJob(job, ({ complete }) => complete({ output: { sent: true } })),
+            }),
+          ),
+        );
+
+        const tailJobs = yield* step(
+          client.getChainTailJobs({
+            chainIds: [notification.id, "00000000-0000-0000-0000-000000000000", order.id],
+          }),
+        );
+
+        assert.equal(tailJobs.length, 3);
+        assert.partialDeepStrictEqual(tailJobs[0], {
+          id: notification.id,
+          chainId: notification.id,
+          chainIndex: 0,
+          typeName: "notification",
+          status: "completed",
+          output: { sent: true },
+        });
+        assert.equal(tailJobs[1], undefined);
+        assert.partialDeepStrictEqual(tailJobs[2], {
+          chainId: order.id,
+          chainTypeName: "order",
+          chainIndex: 1,
+          typeName: "order_fulfill",
+          status: "pending",
+          input: { orderId: order.id },
+        });
+      }),
+    },
+
+    {
+      name: "getChainTailJobs > getChainTailJobs throws on chainTypeName mismatch",
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
+        const client = createClient({
+          stateAdapter,
+          notifyAdapter,
+          jobTypes,
+        });
+
+        const chain = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "order",
+              input: { amount: 42 },
+            }),
+          ),
+        );
+
+        yield* step(
+          assertRejects(
+            () =>
+              client.getChainTailJobs({
+                chainIds: ["00000000-0000-0000-0000-000000000000", chain.id],
+                chainTypeName: "notification",
+              }),
+            ChainTypeMismatchError,
+          ),
+        );
+      }),
+    },
+
+    {
       name: "getJobBlockers > getJobBlockers returns empty array when job has no blockers",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));

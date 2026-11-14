@@ -9,7 +9,7 @@
  * 3. Type Discovery: Discover which job and chain types exist in the data
  * 4. Type Counts: Per-status counts for specific type names
  * 5. Paginated Lists: Filter and paginate chains and jobs
- * 6. Chain Jobs: List jobs within a chain ordered by chain index
+ * 6. Chain Jobs: List jobs within a chain ordered by chain index, and get the tail job of a batch of chains
  * 7. Blocker Queries: Inspect blocker relationships from both directions
  * 8. Worker Queries: Look up, count and list workers and the jobs running under them
  */
@@ -320,7 +320,7 @@ for (const j of notifyJobs.items) {
 }
 assert.equal(notifyJobs.items.length, 2);
 
-// Scenario 6: List jobs within a chain
+// Scenario 6: List jobs within a chain and get tail jobs
 console.log("\n--- Scenario 6: Chain Jobs ---\n");
 
 const chainJobs = await client.listChainJobs({
@@ -331,6 +331,16 @@ console.log(`Jobs in order chain (${orderChain.id}):`);
 for (const j of chainJobs.items) {
   console.log(`  [${j.chainIndex}] ${j.typeName} — ${j.status}`);
 }
+
+const tailJobs = await client.getChainTailJobs({
+  chainIds: [orderChain.id, notifyChains[0].id],
+});
+console.log("Tail jobs:");
+for (const j of tailJobs) {
+  if (j) console.log(`  ${j.chainTypeName} chain is on [${j.chainIndex}] ${j.typeName}`);
+}
+assert.equal(tailJobs[0]!.id, chainJobs.items.at(-1)!.id);
+assert.equal(tailJobs[1]!.id, notifyChains[0].id);
 
 // Scenario 7: Blocker relationships
 console.log("\n--- Scenario 7: Blocker Queries ---\n");

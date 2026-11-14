@@ -736,6 +736,7 @@ export const examples: Example[] = [
       "Per-status type counts",
       "Paginated lists",
       "Jobs within a chain ordered by chain index",
+      "Tail job of a batch of chains",
       "Blocker queries from both directions",
       "Worker lookups, counts and lists",
     ],

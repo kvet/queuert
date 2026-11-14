@@ -234,6 +234,20 @@ describe("queries", () => {
     }).toBeFunction();
   });
 
+  it("getChainTailJob and getChainTailJobs narrow return type when chainTypeName is provided", () => {
+    expectTypeOf(async (client: QueryClient) => {
+      const tailJob = await client.getChainTailJob({ chainId: "order-id", chainTypeName: "order" });
+      const tailJobs = await client.getChainTailJobs({
+        chainIds: ["order-id"],
+        chainTypeName: "order",
+      });
+
+      expectTypeOf(tailJob!.typeName).toEqualTypeOf<"order" | "order_fulfill">();
+      expectTypeOf(tailJobs[0]!.typeName).toEqualTypeOf<"order" | "order_fulfill">();
+      expectTypeOf(tailJobs[0]!.input).toEqualTypeOf<{ amount: number } | { orderId: string }>();
+    }).toBeFunction();
+  });
+
   it("getJobBlockers resolves typed blockers when typeName is provided", () => {
     expectTypeOf(async (client: QueryClient) => {
       const blockers = await client.getJobBlockers({ jobId: "report-id", typeName: "report" });

@@ -49,12 +49,18 @@ const completedJobs = await client.listJobs({
 // Jobs within a specific chain, in chain order
 const chainJobs = await client.listChainJobs({ chainId });
 
+// The job a chain is on, or each chain's in one read for a batch
+const tailJob = await client.getChainTailJob({ chainId });
+const tailJobs = await client.getChainTailJobs({ chainIds: [chainId1, chainId2] });
+
 // Blocker relationships
 const blockers = await client.getJobBlockers({ jobId });
 const blockedJobs = await client.listBlockedJobs({ chainId });
 ```
 
-`getChain`, `getChains`, `getJob`, `getJobs`, `getJobBlockers`, and `listBlockedJobs` accept an optional `typeName` for type narrowing (`listChainJobs` takes `chainTypeName`) — the return type narrows to the specified type. If the entity exists but has a different type, `ChainTypeMismatchError` or `JobTypeMismatchError` is thrown. `listChains` and `listJobs` require `typeName` and filter by it.
+A chain's tail job is its latest job in chain order, and the head job while the chain has not continued; `getChainTailJobs` returns one entry per requested chain ID, `undefined` for a missing chain. `getChainTailJob` and `getChainTailJobs` are experimental: they may change in a minor release.
+
+`getChain`, `getChains`, `getJob`, `getJobs`, `getJobBlockers`, and `listBlockedJobs` accept an optional `typeName` for type narrowing (`listChainJobs`, `getChainTailJob` and `getChainTailJobs` take `chainTypeName`) — the return type narrows to the specified type. If the entity exists but has a different type, `ChainTypeMismatchError` or `JobTypeMismatchError` is thrown. `listChains` and `listJobs` require `typeName` and filter by it.
 
 ## Workers
 

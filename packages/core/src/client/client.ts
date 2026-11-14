@@ -190,7 +190,7 @@ type CreateChainsResult<
  *
  * Methods are split into three categories:
  * - **Mutating** — `createChain`, `createChains`, `completeChain`, `deleteChain`, `deleteChains`, `rescheduleJob`, `rescheduleJobs`. Require a transaction context; they throw `Error` if called without a transaction context, or with one the state adapter's `isTransaction` reports as outside an open transaction. With an adapter that fences writes (PostgreSQL, SQLite, Redis), all but the deletions throw {@link SchemaFencedError} once a breaking migration fenced this code version, and change nothing.
- * - **Read-only** — `getChain`, `getChains`, `getJob`, `getJobs`, `getChainTypeNames`, `getJobTypeNames`, `countChainsByTypeName`, `countJobsByTypeName`, `listChains`, `listJobs`, `listChainJobs`, `getJobBlockers`, `listBlockedJobs`, `getWorker`, `getWorkers`, `countWorkers`, `countWorkersByTypeName`, `countRunningJobsByWorkerId`, `listWorkers`, `listWorkerJobs`. Accept an optional transaction context.
+ * - **Read-only** — `getChain`, `getChains`, `getJob`, `getJobs`, `getChainTypeNames`, `getJobTypeNames`, `countChainsByTypeName`, `countJobsByTypeName`, `listChains`, `listJobs`, `listChainJobs`, `getChainTailJob`, `getChainTailJobs`, `getJobBlockers`, `listBlockedJobs`, `getWorker`, `getWorkers`, `countWorkers`, `countWorkersByTypeName`, `countRunningJobsByWorkerId`, `listWorkers`, `listWorkerJobs`. Accept an optional transaction context.
  * - **Waiting** — `awaitChain`. Takes no transaction context: it polls outside any transaction and listens for notify adapter events.
  */
 export type Client<
@@ -605,6 +605,48 @@ export type Client<
   ) => ModeResult<
     TMode,
     Page<ResolvedChainJobs<TJobId, TWorkerId, TJobTypeDefinitions, TChainTypeName>>
+  >;
+
+  /**
+   * Get the tail job of a chain: its latest job in chain order, which is the head job while the
+   * chain has not continued. Pass `chainTypeName` for type narrowing.
+   *
+   * @throws {@link ChainTypeMismatchError} if `chainTypeName` is provided and does not match.
+   * @experimental
+   */
+  getChainTailJob: <
+    TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
+      JobTypeEntryNames<TJobTypeDefinitions>,
+  >(
+    options: {
+      chainId: TJobId;
+      chainTypeName?: TChainTypeName;
+    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+  ) => ModeResult<
+    TMode,
+    ResolvedChainJobs<TJobId, TWorkerId, TJobTypeDefinitions, TChainTypeName> | undefined
+  >;
+
+  /**
+   * Get the tail jobs of multiple chains in one state adapter read. Returns a positional array
+   * aligned with the input `chainIds` — `undefined` for any chain that does not exist. Pass
+   * `chainTypeName` to narrow the return type; all found chains must match or
+   * {@link ChainTypeMismatchError} is thrown.
+   *
+   * @throws {@link ChainTypeMismatchError} if `chainTypeName` is provided and any found chain does not match.
+   * @experimental
+   */
+  getChainTailJobs: <
+    TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
+      JobTypeEntryNames<TJobTypeDefinitions>,
+  >(
+    options: {
+      chainIds: TJobId[];
+      chainTypeName?: TChainTypeName;
+    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+  ) => ModeResult<
+    TMode,
+    (ResolvedChainJobs<TJobId, TWorkerId, TJobTypeDefinitions, TChainTypeName> | undefined)[]
   >;
 
   /**
@@ -1700,6 +1742,75 @@ export const createClient = <
             ),
             nextCursor: result.nextCursor,
           };
+        }),
+      ),
+
+    getChainTailJob: <
+      TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
+        JobTypeEntryNames<TJobTypeDefinitions>,
+    >(
+      options: {
+        chainId: TJobId;
+        chainTypeName?: TChainTypeName;
+      } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+    ) =>
+      runInMode(
+        helpers,
+        syncAsync(function* () {
+          const { chainId, chainTypeName, ...rest } = options;
+          const [tailJob] = yield* step(
+            client.getChainTailJobs<TChainTypeName>({
+              chainIds: [chainId],
+              chainTypeName,
+              ...(rest as Partial<GetStateAdapterTxContext<TStateAdapter>>),
+            }),
+          );
+          return tailJob;
+        }),
+      ),
+
+    getChainTailJobs: <
+      TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
+        JobTypeEntryNames<TJobTypeDefinitions>,
+    >(
+      options: {
+        chainIds: TJobId[];
+        chainTypeName?: TChainTypeName;
+      } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+    ) =>
+      runInMode(
+        helpers,
+        syncAsync(function* () {
+          const { chainIds, chainTypeName, ...rest } = options;
+
+          if (chainIds.length === 0) {
+            return [] as (
+              | ResolvedChainJobs<TJobId, TWorkerId, TJobTypeDefinitions, TChainTypeName>
+              | undefined
+            )[];
+          }
+
+          const stateChains = yield* step(
+            helpers.stateAdapter.getChains({
+              txCtx: normalizeTxCtx(rest),
+              chainIds,
+            }),
+          );
+          stateChains.forEach((stateChain, index) => {
+            assertChainTypeName(stateChain, {
+              chainId: String(chainIds[index]),
+              typeName: chainTypeName,
+            });
+          });
+
+          return stateChains.map((stateChain) => {
+            if (!stateChain) return undefined;
+
+            return mapStateJobToJob(
+              { ...(stateChain.tail ?? stateChain.head), chain: stateChain },
+              helpers.jobTypes,
+            ) as ResolvedChainJobs<TJobId, TWorkerId, TJobTypeDefinitions, TChainTypeName>;
+          });
         }),
       ),
 
