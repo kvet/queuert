@@ -103,7 +103,7 @@ export const classifyErrorGroup: ConformanceGroup<PgStateProviderConformanceCont
 
         try {
           const error = await captureError(async () =>
-            executeSql(stateProvider, "SELECT missing_column FROM public.queuert_job"),
+            executeSql(stateProvider, "SELECT missing_column FROM (SELECT 1) AS probe"),
           );
           assert.equal(stateProvider.classifyError({ error }), undefined);
         } finally {
@@ -181,6 +181,7 @@ export const createPgStateProviderConformanceContext = async ({
   createStateProvider,
   withNonTransactionContext,
   withSavepoint,
+  stateAdapterOptions,
 }: {
   /**
    * Creates the provider under test, over a database the suite may create tables in. Each case's
@@ -200,7 +201,17 @@ export const createPgStateProviderConformanceContext = async ({
    * `onTransactionRollback` follow it; without it, those cases pass without checking anything.
    */
   withSavepoint?: <T>(txCtx: any, fn: (txCtx: any) => Promise<T>) => Promise<T>;
+  /**
+   * Options every adapter of the suite is created with, besides its provider, such as the
+   * `schema`, `tablePrefix` and ID types your application configures. The suite migrates and
+   * clears the tables they name.
+   */
+  stateAdapterOptions?: Omit<
+    Parameters<typeof createPgStateAdapter<any, string, string>>[0],
+    "stateProvider"
+  >;
 }): Promise<PgStateProviderConformanceContext> => {
+  const tables = `${stateAdapterOptions?.schema ?? "public"}.${stateAdapterOptions?.tablePrefix ?? "queuert_"}`;
   const ddl = { params: [], paramTypes: {}, columnTypes: {}, readOnly: false };
   const executeDdl = async (sql: string): Promise<void> => {
     const stateProvider = await createStateProvider();
@@ -212,7 +223,10 @@ export const createPgStateProviderConformanceContext = async ({
   };
 
   {
-    await using stateAdapter = createPgStateAdapter({ stateProvider: await createStateProvider() });
+    await using stateAdapter = createPgStateAdapter({
+      ...stateAdapterOptions,
+      stateProvider: await createStateProvider(),
+    });
     await stateAdapter.migrateToLatest();
   }
 
@@ -222,11 +236,11 @@ export const createPgStateProviderConformanceContext = async ({
     withSavepoint,
     createStateAdapter: async () => {
       const stateProvider = await createStateProvider();
-      const stateAdapter = createPgStateAdapter({ stateProvider });
+      const stateAdapter = createPgStateAdapter({ ...stateAdapterOptions, stateProvider });
       try {
         await stateProvider.executeSql({
           ...ddl,
-          sql: "TRUNCATE public.queuert_job_blocker, public.queuert_job, public.queuert_worker CASCADE",
+          sql: `TRUNCATE ${tables}job_blocker, ${tables}job, ${tables}worker CASCADE`,
         });
       } catch (error) {
         await stateAdapter.close();
@@ -235,11 +249,11 @@ export const createPgStateProviderConformanceContext = async ({
       return stateAdapter;
     },
     withWritesFenced: async (fn) => {
-      await executeDdl("DROP TABLE public.queuert_schema_fence_v1");
+      await executeDdl(`DROP TABLE ${tables}schema_fence_v1`);
       try {
         return await fn();
       } finally {
-        await executeDdl("CREATE TABLE public.queuert_schema_fence_v1 (id integer PRIMARY KEY)");
+        await executeDdl(`CREATE TABLE ${tables}schema_fence_v1 (id integer PRIMARY KEY)`);
       }
     },
   };

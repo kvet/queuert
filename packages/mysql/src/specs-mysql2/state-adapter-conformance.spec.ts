@@ -36,8 +36,34 @@ const defineMysqlStateAdapterConformanceSuite = async ({
     });
   });
 
+  const customOptionsIt = baseIt.extend(
+    "conformance",
+    { scope: "file" },
+    async ({}, { onCleanup }) => {
+      const pool = createPool({ ...connectionOptions, connectionLimit: 20 });
+      onCleanup(async () => pool.end());
+      return createMysqlStateProviderConformanceContext({
+        createStateProvider: async () => createMysql2PoolProvider({ pool }),
+        dialect,
+        withNonTransactionContext: withMysql2PoolNonTransactionContext(pool),
+        withSavepoint: withMysql2PoolSavepoint,
+        stateAdapterOptions: {
+          tablePrefix: "custom_",
+          jobIdType: "varchar(64)",
+          workerIdType: "varchar(64)",
+          generateJobId: () => `job.${crypto.randomUUID()}`,
+          generateWorkerId: () => `worker.${crypto.randomUUID()}`,
+        },
+      });
+    },
+  );
+
   describe(`${image} State Provider Conformance`, () => {
     conformanceTestSuite({ it, groups: mysqlStateProviderConformanceGroups });
+  });
+
+  describe(`${image} State Provider Conformance - Custom Options`, () => {
+    conformanceTestSuite({ it: customOptionsIt, groups: mysqlStateProviderConformanceGroups });
   });
 };
 

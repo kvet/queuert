@@ -13,7 +13,6 @@ import {
   redisStateProviderConformanceGroups,
   withoutLockWaitCases,
 } from "../conformance/state-provider-conformance.ts";
-import { createRedisStateAdapter } from "../state-adapter/state-adapter.redis.ts";
 import { createIoredisStateProvider } from "./state-provider.ioredis.ts";
 
 const redis = await acquireRedis("redis:6");
@@ -33,23 +32,29 @@ const cappedIt = baseIt.extend("conformance", { scope: "file" }, async ({}, { on
   onCleanup(async () => {
     await client.quit();
   });
-  const createStateAdapter = async () => {
-    const stateAdapter = createRedisStateAdapter({
-      stateProvider: createIoredisStateProvider({ client }),
-      keyPrefix: `{queuert-${crypto.randomUUID()}}:`,
-      countCap: 3,
-    });
-    await stateAdapter.migrateToLatest();
-    return stateAdapter;
-  };
-  return {
-    createStateAdapter,
-    withNonTransactionContext: async <T>(fn: (txCtx: any) => Promise<T>) => {
-      const stateAdapter = await createStateAdapter();
-      return fn(await stateAdapter.withTransaction(async (txCtx) => txCtx));
-    },
-  };
+  return createRedisStateProviderConformanceContext({
+    createStateProvider: async () => createIoredisStateProvider({ client }),
+    stateAdapterOptions: { countCap: 3 },
+  });
 });
+
+const customOptionsIt = baseIt.extend(
+  "conformance",
+  { scope: "file" },
+  async ({}, { onCleanup }) => {
+    const client = new Redis(redis.connectionUrl);
+    onCleanup(async () => {
+      await client.quit();
+    });
+    return createRedisStateProviderConformanceContext({
+      createStateProvider: async () => createIoredisStateProvider({ client }),
+      stateAdapterOptions: {
+        generateJobId: () => `job.${crypto.randomUUID()}`,
+        generateWorkerId: () => `worker.${crypto.randomUUID()}`,
+      },
+    });
+  },
+);
 
 // NOTE: hack for vitest plugin
 baseIt("index");
@@ -63,6 +68,10 @@ describe("Redis State Adapter Conformance (ioredis) - Concurrent Transactions", 
     it,
     groups: withoutLockWaitCases(stateAdapterConcurrentTransactionGroups),
   });
+});
+
+describe("Redis State Provider Conformance (ioredis) - Custom Options", () => {
+  conformanceTestSuite({ it: customOptionsIt, groups: redisStateProviderConformanceGroups });
 });
 
 describe("Redis State Adapter Conformance (ioredis) - Count Cap", () => {

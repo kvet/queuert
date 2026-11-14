@@ -36,6 +36,29 @@ const syncIt = baseIt.extend("conformance", { scope: "file" }, async ({}, { onCl
   });
 });
 
+const customOptionsIt = baseIt.extend(
+  "conformance",
+  { scope: "file" },
+  async ({}, { onCleanup }) => {
+    const db = new Database(":memory:");
+    onCleanup(async () => {
+      db.close();
+    });
+    return createSqliteStateProviderConformanceContext({
+      createStateProvider: () => createBetterSqlite3Provider({ db, mode: "sync" }),
+      withNonTransactionContext: (fn) => fn({ db }),
+      withSavepoint: withBetterSqlite3Savepoint("sync"),
+      stateAdapterOptions: {
+        tablePrefix: "custom_",
+        jobIdType: "VARCHAR",
+        workerIdType: "VARCHAR",
+        generateJobId: () => `job.${crypto.randomUUID()}`,
+        generateWorkerId: () => `worker.${crypto.randomUUID()}`,
+      },
+    });
+  },
+);
+
 // NOTE: hack for vitest plugin
 it("index");
 
@@ -49,6 +72,13 @@ describe("SQLite State Provider Conformance", () => {
 describe("Sync SQLite State Provider Conformance", () => {
   conformanceTestSuite({
     it: syncIt,
+    groups: [...sqliteStateProviderConformanceGroups, ...sqliteSyncStateProviderConformanceGroups],
+  });
+});
+
+describe("Sync SQLite State Provider Conformance - Custom Options", () => {
+  conformanceTestSuite({
+    it: customOptionsIt,
     groups: [...sqliteStateProviderConformanceGroups, ...sqliteSyncStateProviderConformanceGroups],
   });
 });

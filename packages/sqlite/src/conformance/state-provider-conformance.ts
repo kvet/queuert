@@ -121,7 +121,7 @@ const classifyErrorGroup: ConformanceGroup<SqliteStateProviderConformanceContext
           context.createStateProvider(),
         );
         const error = yield* captureError.steps(() =>
-          executeSql(stateProvider, "SELECT missing_column FROM queuert_job"),
+          executeSql(stateProvider, "SELECT missing_column FROM (SELECT 1)"),
         );
         assert.equal(stateProvider.classifyError({ error }), undefined);
       }),
@@ -347,6 +347,12 @@ type SqliteStateProviderConformanceOptions<TMode extends Mode = "async"> = {
     txCtx: any,
     fn: (txCtx: any) => ModeResult<TMode, T>,
   ): ModeResult<TMode, T>;
+  /**
+   * Options every adapter of the suite is created with, besides its provider, such as the
+   * `tablePrefix` and ID types your application configures. The suite migrates and clears the
+   * tables they name.
+   */
+  stateAdapterOptions?: Omit<Parameters<typeof createSqliteStateAdapter>[0], "stateProvider">;
 };
 
 const prepareContext = syncAsync(function* (
@@ -354,13 +360,15 @@ const prepareContext = syncAsync(function* (
     createStateProvider,
     withNonTransactionContext,
     withSavepoint,
+    stateAdapterOptions,
   }: SqliteStateProviderConformanceOptions<"sync"> | SqliteStateProviderConformanceOptions,
   firstStateProvider: SqliteStateProvider<any, Mode>,
 ) {
   const sync = firstStateProvider.sync === true;
+  const tablePrefix = stateAdapterOptions?.tablePrefix ?? "queuert_";
   const createModeStateProvider = sync ? createStateProvider : async () => createStateProvider();
   const createStateAdapter = (stateProvider: SqliteStateProvider<any, Mode>) =>
-    createSqliteStateAdapter({ stateProvider });
+    createSqliteStateAdapter({ ...stateAdapterOptions, stateProvider });
 
   const executeDdl = syncAsync(function* (sql: string) {
     const stateProvider = yield* step(createModeStateProvider());
@@ -375,9 +383,11 @@ const prepareContext = syncAsync(function* (
     const stateProvider = yield* step(createModeStateProvider());
     const stateAdapter = createStateAdapter(stateProvider);
     try {
-      yield* step(stateProvider.executeSql({ ...ddl, sql: "DELETE FROM queuert_job_blocker" }));
-      yield* step(stateProvider.executeSql({ ...ddl, sql: "DELETE FROM queuert_job" }));
-      yield* step(stateProvider.executeSql({ ...ddl, sql: "DELETE FROM queuert_worker" }));
+      yield* step(
+        stateProvider.executeSql({ ...ddl, sql: `DELETE FROM ${tablePrefix}job_blocker` }),
+      );
+      yield* step(stateProvider.executeSql({ ...ddl, sql: `DELETE FROM ${tablePrefix}job` }));
+      yield* step(stateProvider.executeSql({ ...ddl, sql: `DELETE FROM ${tablePrefix}worker` }));
     } catch (error) {
       yield* step(stateAdapter.close());
       throw error;
@@ -386,11 +396,13 @@ const prepareContext = syncAsync(function* (
   });
 
   const withWritesFenced = syncAsync(function* (fn: () => MaybePromise<unknown>) {
-    yield* executeDdl.steps("DROP TABLE queuert_schema_fence_v1");
+    yield* executeDdl.steps(`DROP TABLE ${tablePrefix}schema_fence_v1`);
     try {
       return yield* step(fn());
     } finally {
-      yield* executeDdl.steps("CREATE TABLE queuert_schema_fence_v1 (id INTEGER PRIMARY KEY)");
+      yield* executeDdl.steps(
+        `CREATE TABLE ${tablePrefix}schema_fence_v1 (id INTEGER PRIMARY KEY)`,
+      );
     }
   });
 

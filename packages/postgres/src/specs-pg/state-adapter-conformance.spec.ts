@@ -26,9 +26,36 @@ const it = baseIt.extend("conformance", { scope: "file" }, async ({}, { onCleanu
   });
 });
 
+const customOptionsIt = baseIt.extend(
+  "conformance",
+  { scope: "file" },
+  async ({}, { onCleanup }) => {
+    const pool = new Pool({ connectionString: pg.connectionString, idleTimeoutMillis: 0 });
+    onCleanup(async () => pool.end());
+    await pool.query("CREATE SCHEMA IF NOT EXISTS custom");
+    return createPgStateProviderConformanceContext({
+      createStateProvider: async () => createPgPoolProvider({ pool }),
+      withNonTransactionContext: withPgPoolNonTransactionContext(pool),
+      withSavepoint: withPgPoolSavepoint,
+      stateAdapterOptions: {
+        schema: "custom",
+        tablePrefix: "custom_",
+        jobIdType: "text",
+        workerIdType: "text",
+        generateJobId: () => `job.${crypto.randomUUID()}`,
+        generateWorkerId: () => `worker.${crypto.randomUUID()}`,
+      },
+    });
+  },
+);
+
 // NOTE: hack for vitest plugin
 baseIt("index");
 
 describe("PostgreSQL State Provider Conformance", () => {
   conformanceTestSuite({ it, groups: pgStateProviderConformanceGroups });
+});
+
+describe("PostgreSQL State Provider Conformance - Custom Options", () => {
+  conformanceTestSuite({ it: customOptionsIt, groups: pgStateProviderConformanceGroups });
 });

@@ -192,6 +192,7 @@ export const redisStateProviderEvalGroup: ConformanceGroup<RedisStateProviderCon
  */
 export const createRedisStateProviderConformanceContext = ({
   createStateProvider,
+  stateAdapterOptions,
 }: {
   /**
    * Creates the provider under test. Each case's adapter gets its own provider and closes it when
@@ -199,12 +200,22 @@ export const createRedisStateProviderConformanceContext = ({
    * client connection.
    */
   createStateProvider: () => Promise<RedisStateProvider>;
+  /**
+   * Options every adapter of the suite is created with, besides its provider and `keyPrefix`,
+   * such as the ID generators your application configures. Each case still writes under a key
+   * prefix of its own.
+   */
+  stateAdapterOptions?: Omit<
+    Parameters<typeof createRedisStateAdapter>[0],
+    "stateProvider" | "keyPrefix"
+  >;
 }): RedisStateProviderConformanceContext => {
   const keyPrefixes = new Set<string>();
   const createStateAdapter = async () => {
     const keyPrefix = `{queuert-conformance-${randomUUID()}}:`;
     keyPrefixes.add(keyPrefix);
     const stateAdapter = createRedisStateAdapter({
+      ...stateAdapterOptions,
       stateProvider: await createStateProvider(),
       keyPrefix,
     });

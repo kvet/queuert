@@ -35,26 +35,31 @@ export const isolationLevelGroup: ConformanceGroup<MysqlStateProviderConformance
       name: "withTransaction opens transactions at READ COMMITTED",
       run: async ({ createStateProvider }) => {
         const stateProvider = await createStateProvider();
+        const query = async (sql: string, txCtx?: unknown) =>
+          stateProvider.executeSql({
+            txCtx,
+            sql,
+            params: [],
+            paramTypes: {},
+            columnTypes: {},
+            readOnly: false,
+          });
 
         try {
+          await query(
+            "CREATE TABLE IF NOT EXISTS queuert_conformance_probe (id INT NOT NULL PRIMARY KEY) ENGINE=InnoDB",
+          );
           const rows = await stateProvider.withTransaction(async (txCtx) => {
-            const query = async (sql: string) =>
-              stateProvider.executeSql({
-                txCtx,
-                sql,
-                params: [],
-                paramTypes: {},
-                columnTypes: {},
-                readOnly: false,
-              });
-            await query("SELECT id FROM queuert_job LIMIT 1 FOR UPDATE");
+            await query("SELECT id FROM queuert_conformance_probe LIMIT 1 FOR UPDATE", txCtx);
             return query(
               "SELECT trx_isolation_level AS level FROM information_schema.innodb_trx WHERE trx_mysql_thread_id = CONNECTION_ID()",
+              txCtx,
             );
           });
           assert.equal(rows.length, 1);
           assert.equal((rows[0] as { level: unknown }).level, "READ COMMITTED");
         } finally {
+          await query("DROP TABLE IF EXISTS queuert_conformance_probe");
           await stateProvider.close?.();
         }
       },
@@ -87,6 +92,7 @@ export const createMysqlStateProviderConformanceContext = async ({
   dialect,
   withNonTransactionContext,
   withSavepoint,
+  stateAdapterOptions,
 }: {
   /** Creates the provider under test, over a database the suite may create tables in. */
   createStateProvider: () => Promise<MysqlStateProvider<any>>;
@@ -96,7 +102,17 @@ export const createMysqlStateProviderConformanceContext = async ({
   withNonTransactionContext: <T>(fn: (txCtx: any) => Promise<T>) => Promise<T>;
   /** Runs `fn` in a savepoint of `txCtx`'s transaction, opened the way the application opens one. */
   withSavepoint?: <T>(txCtx: any, fn: (txCtx: any) => Promise<T>) => Promise<T>;
+  /**
+   * Options every adapter of the suite is created with, besides its provider and `dialect`, such
+   * as the `schema`, `tablePrefix` and ID types your application configures. The suite migrates
+   * and clears the tables they name.
+   */
+  stateAdapterOptions?: Omit<
+    Parameters<typeof createMysqlStateAdapter<any, string, string>>[0],
+    "stateProvider" | "dialect"
+  >;
 }): Promise<MysqlStateProviderConformanceContext> => {
+  const tables = `${stateAdapterOptions?.schema === undefined ? "" : `${stateAdapterOptions.schema}.`}${stateAdapterOptions?.tablePrefix ?? "queuert_"}`;
   const executeStatements = async (statements: string[]): Promise<void> => {
     const stateProvider = await createStateProvider();
     try {
@@ -116,6 +132,7 @@ export const createMysqlStateProviderConformanceContext = async ({
 
   {
     await using stateAdapter = createMysqlStateAdapter({
+      ...stateAdapterOptions,
       stateProvider: await createStateProvider(),
       dialect,
     });
@@ -128,19 +145,23 @@ export const createMysqlStateProviderConformanceContext = async ({
     withSavepoint,
     createStateAdapter: async () => {
       await executeStatements([
-        "DELETE FROM queuert_job_blocker",
-        "DELETE FROM queuert_job",
-        "DELETE FROM queuert_worker",
+        `DELETE FROM ${tables}job_blocker`,
+        `DELETE FROM ${tables}job`,
+        `DELETE FROM ${tables}worker`,
       ]);
-      return createMysqlStateAdapter({ stateProvider: await createStateProvider(), dialect });
+      return createMysqlStateAdapter({
+        ...stateAdapterOptions,
+        stateProvider: await createStateProvider(),
+        dialect,
+      });
     },
     withWritesFenced: async (fn) => {
-      await executeStatements(["DROP TABLE queuert_schema_fence_v1"]);
+      await executeStatements([`DROP TABLE ${tables}schema_fence_v1`]);
       try {
         return await fn();
       } finally {
         await executeStatements([
-          "CREATE TABLE queuert_schema_fence_v1 (id INT NOT NULL PRIMARY KEY) ENGINE=InnoDB",
+          `CREATE TABLE ${tables}schema_fence_v1 (id INT NOT NULL PRIMARY KEY) ENGINE=InnoDB`,
         ]);
       }
     },
