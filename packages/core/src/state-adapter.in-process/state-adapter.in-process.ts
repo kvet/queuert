@@ -1,10 +1,4 @@
-import {
-  type MaybePromise,
-  type Mode,
-  requireSync,
-  tryCatch,
-  tryFinally,
-} from "@queuert/sync-async";
+import { type MaybePromise, type Mode, syncStep, tryCatch, tryFinally } from "@queuert/sync-async";
 
 import type { StateAdapter } from "../state-adapter/state-adapter.ts";
 import { withTxHooks } from "../tx-hooks/tx-hooks.ts";
@@ -106,13 +100,7 @@ export function createInProcessStateAdapter({
           return tryFinally(
             () =>
               tryCatch(
-                () =>
-                  sync
-                    ? requireSync(
-                        fn(txCtx),
-                        "A sync StateAdapter.withTransaction requires a synchronous callback, but it returned a promise",
-                      )
-                    : fn(txCtx),
+                () => (sync ? syncStep(fn(txCtx)) : fn(txCtx)),
                 (error) => {
                   rollbackTransaction(txCtx);
                   // oxlint-disable-next-line typescript/only-throw-error -- re-throwing caught error

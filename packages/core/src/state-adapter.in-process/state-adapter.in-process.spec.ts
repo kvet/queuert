@@ -67,6 +67,10 @@ it("is synchronous by default and asynchronous with mode: async", async () => {
   expectTypeOf(syncAdapter).toEqualTypeOf<InProcessStateAdapter>();
   expect(syncAdapter.sync).toBe(true);
   expect(syncAdapter.withTransaction(() => "done")).toBe("done");
+  expect(() => syncAdapter.withTransaction(async () => "done")).toThrow(
+    "A synchronous step got a promise: the value must be synchronous",
+  );
+  expect(syncAdapter.withTransaction(() => "after")).toBe("after");
 
   await using asyncAdapter = createInProcessStateAdapter({ mode: "async" });
   expectTypeOf(asyncAdapter).toEqualTypeOf<InProcessStateAdapter<"async">>();

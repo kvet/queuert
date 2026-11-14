@@ -1,13 +1,13 @@
 import { syncStep as __syncStep } from "@queuert/sync-async";
 
 export const countRows = {
-  sync: function (db, keys) {
+  sync: function countRowsSync(db, keys) {
     const countOne = {
-      sync: function (key) {
+      sync: function countOneSync(key) {
         const rows = __syncStep(db.query(key));
         return rows.length;
       },
-      async: async function (key) {
+      async: async function countOneAsync(key) {
         const rows = await db.query(key);
         return rows.length;
       },
@@ -16,13 +16,13 @@ export const countRows = {
     for (const key of keys) total += __syncStep(countOne.sync(key));
     return total;
   },
-  async: async function (db, keys) {
+  async: async function countRowsAsync(db, keys) {
     const countOne = {
-      sync: function (key) {
+      sync: function countOneSync(key) {
         const rows = __syncStep(db.query(key));
         return rows.length;
       },
-      async: async function (key) {
+      async: async function countOneAsync(key) {
         const rows = await db.query(key);
         return rows.length;
       },

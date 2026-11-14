@@ -6,7 +6,6 @@ import {
   isPromise,
   isThenable,
   type MaybePromise,
-  requireSync,
   silence,
   tryCatch,
   tryFinally,
@@ -98,13 +97,6 @@ describe("all", () => {
 
   test("awaits the values when one is a promise", async () => {
     await expect(all([1, Promise.resolve(2)])).resolves.toEqual([1, 2]);
-  });
-});
-
-describe("requireSync", () => {
-  test("returns a plain value and throws on a promise", () => {
-    expect(requireSync(1, "not sync")).toBe(1);
-    expect(() => requireSync(Promise.resolve(1), "not sync")).toThrow("not sync");
   });
 });
 

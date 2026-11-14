@@ -1,7 +1,7 @@
 import { syncStep as __syncStep } from "@queuert/sync-async";
 
 export const deleteChain = {
-  sync: function (db, chainId) {
+  sync: function deleteChainSync(db, chainId) {
     try {
       __syncStep(db.execute("DELETE FROM job WHERE chain_id = ?", [chainId]));
       return true;
@@ -12,7 +12,7 @@ export const deleteChain = {
       __syncStep(db.release());
     }
   },
-  async: async function (db, chainId) {
+  async: async function deleteChainAsync(db, chainId) {
     try {
       await db.execute("DELETE FROM job WHERE chain_id = ?", [chainId]);
       return true;

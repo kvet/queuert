@@ -144,7 +144,7 @@ export const findRow = syncAsync(function* (db) {
   test("returns the compiled code with a source map", () => {
     const result = syncAsyncCompiler().transform.handler(source, "/src/find.ts");
 
-    expect(result?.code).toContain("sync: function (db) {");
+    expect(result?.code).toContain("sync: function findRowSync(db) {");
     expect(result?.map).toMatch(/"mappings":"[^"]+"/);
   });
 });

@@ -1,7 +1,7 @@
 import { syncStep as __syncStep } from "@queuert/sync-async";
 
 export const createTables = {
-  sync: function (
+  sync: function createTablesSync(
     db,
     prefix = `
 job_`,
@@ -10,7 +10,7 @@ job_`,
 job (id TEXT PRIMARY KEY)";
     __syncStep(db.execute(prefix + sql));
   },
-  async: async function (
+  async: async function createTablesAsync(
     db,
     prefix = `
 job_`,

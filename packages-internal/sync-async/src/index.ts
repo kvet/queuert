@@ -7,7 +7,6 @@ export {
   type Mode,
   type ResultModeOf,
   type ModeResult,
-  requireSync,
   silence,
   tryCatch,
   tryFinally,

@@ -5,7 +5,6 @@ import {
   type MaybePromise,
   type ModeResult,
   syncAsync,
-  requireSync,
   step,
   type Mode,
 } from "@queuert/sync-async";
@@ -1134,14 +1133,7 @@ export const createClient = <
                     ),
                   ...txCtx,
                 });
-                const result = yield* step(
-                  helpers.sync
-                    ? requireSync(
-                        callbackResult,
-                        "Expected a synchronous callback, but it returned a promise",
-                      )
-                    : callbackResult,
-                );
+                const result = yield* step(callbackResult);
 
                 const { continuation, ...finishedJob } = completeOnce.requireResult(
                   "complete must be called before the completeJob callback returns",
@@ -1166,14 +1158,7 @@ export const createClient = <
             job: mapStateJobToJob(currentJob, helpers.jobTypes),
             completeJob,
           });
-          yield* step(
-            helpers.sync
-              ? requireSync(
-                  handlerResult,
-                  "Expected a synchronous callback, but it returned a promise",
-                )
-              : handlerResult,
-          );
+          yield* step(handlerResult);
 
           const [updatedChain] = yield* step(
             helpers.stateAdapter.getChains({

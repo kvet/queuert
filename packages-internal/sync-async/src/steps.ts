@@ -1,4 +1,4 @@
-import { isThenable, requireSync, silence, type MaybePromise } from "./maybe-promise.ts";
+import { isThenable, silence, type MaybePromise } from "./maybe-promise.ts";
 
 declare const stepToken: unique symbol;
 declare const waitToken: unique symbol;
@@ -29,8 +29,13 @@ export function* resource<T extends AsyncDisposable | Disposable | null | undefi
   return (yield { [resourceKey]: value } as unknown as WaitYield) as T;
 }
 
-export const syncStep = <T>(value: MaybePromise<T>): T =>
-  requireSync(value, "A synchronous step got a promise: the value must be synchronous");
+export const syncStep = <T>(value: MaybePromise<T>): T => {
+  if (isThenable(value)) {
+    silence(value);
+    throw new Error("A synchronous step got a promise: the value must be synchronous");
+  }
+  return value;
+};
 
 export const withResources = async <T>(
   body: (resources: { use: <TValue>(value: TValue) => TValue }) => Promise<T>,

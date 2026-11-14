@@ -71,11 +71,3 @@ export const tryFinally = <T>(
 
 export const all = <T>(values: MaybePromise<T>[]): MaybePromise<T[]> =>
   values.every((value): value is T => !isPromise(value)) ? values : Promise.all(values);
-
-export const requireSync = <T>(value: MaybePromise<T>, message: string): T => {
-  if (isPromise(value)) {
-    silence(value);
-    throw new Error(message);
-  }
-  return value;
-};

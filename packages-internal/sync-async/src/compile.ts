@@ -33,7 +33,8 @@ type Names = { syncAsync: string; step?: string; wait?: string; resource?: strin
 type Context = {
   code: string;
   id: string;
-  literals: { start: number; end: number }[];
+  identifiers: Set<string>;
+  literalNewlines: Set<number>;
   names: Names;
   localSyncAsyncFunctions: Set<string>;
   syncStep: string;
@@ -77,20 +78,19 @@ const fail = (ctx: Context, node: ESTree.Span, message: string): never => {
 };
 
 const indentLines = (ctx: Context, start: number, end: number, indent: string): string => {
+  if (indent === "") return ctx.code.slice(start, end);
   let result = "";
-  for (let position = start; position < end; position++) {
-    const char = ctx.code[position];
-    result += char;
-    if (
-      char === "\n" &&
-      indent !== "" &&
-      ctx.code[position + 1] !== "\n" &&
-      !ctx.literals.some((literal) => literal.start <= position && position < literal.end)
-    ) {
-      result += indent;
-    }
+  let position = start;
+  for (
+    let newline = ctx.code.indexOf("\n", start);
+    newline !== -1 && newline < end;
+    newline = ctx.code.indexOf("\n", newline + 1)
+  ) {
+    result += ctx.code.slice(position, newline + 1);
+    position = newline + 1;
+    if (ctx.code[position] !== "\n" && !ctx.literalNewlines.has(newline)) result += indent;
   }
-  return result;
+  return result + ctx.code.slice(position, end);
 };
 
 const applyEdits = (
@@ -167,10 +167,15 @@ const classifyYield = (ctx: Context, node: ESTree.YieldExpression): Yielded => {
 
 const editsOf = (ctx: Context, root: ESTree.Node, mode: Mode | null, indent: string): Edit[] => {
   const edits: Edit[] = [];
-  const visit = (node: ESTree.Node, parent: ESTree.Node | null, inBody: boolean): void => {
+  const visit = (
+    node: ESTree.Node,
+    parent: ESTree.Node | null,
+    inBody: boolean,
+    bindingName: string | undefined,
+  ): void => {
     const fn = syncAsyncBodyOf(ctx.names, node);
     if (fn !== undefined) {
-      const compiled = compileSyncAsyncCall(ctx, node, fn, indent);
+      const compiled = compileSyncAsyncCall(ctx, node, fn, indent, bindingName);
       edits.push({
         start: node.start,
         end: node.end,
@@ -194,9 +199,17 @@ const editsOf = (ctx: Context, root: ESTree.Node, mode: Mode | null, indent: str
       );
     }
     const ownsYields = node.type === "FunctionExpression" || node.type === "FunctionDeclaration";
-    for (const child of childrenOf(node)) visit(child, node, inBody && !ownsYields);
+    const childBindingName =
+      node.type === "VariableDeclarator" && node.id.type === "Identifier"
+        ? node.id.name
+        : node.type === "Property" && !node.computed && node.key.type === "Identifier"
+          ? node.key.name
+          : bindingName;
+    for (const child of childrenOf(node)) {
+      visit(child, node, inBody && !ownsYields, childBindingName);
+    }
   };
-  visit(root, null, mode !== null);
+  visit(root, null, mode !== null, undefined);
   return edits;
 };
 
@@ -237,6 +250,7 @@ const compileSyncAsyncCall = (
   call: ESTree.Node,
   fn: ESTree.Function,
   indent: string,
+  bindingName: string | undefined,
 ): string => {
   if (fn.async)
     return fail(ctx, fn, "a sync-async body must be a generator function, not an async one");
@@ -249,17 +263,36 @@ const compileSyncAsyncCall = (
     else if (ctx.code.startsWith("//", star)) star = ctx.code.indexOf("\n", star);
     else return fail(ctx, fn, "unexpected sync-async function head");
   }
+  const spaceBeforeStar = /\s/.test(ctx.code[star - 1]);
+  const named =
+    fn.id === null &&
+    bindingName !== undefined &&
+    !ctx.identifiers.has(`${bindingName}Sync`) &&
+    !ctx.identifiers.has(`${bindingName}Async`);
   let starEnd = star + 1;
-  if (/\s/.test(ctx.code[star - 1])) while (/[ \t]/.test(ctx.code[starEnd])) starEnd++;
-  const headEdits = [{ start: star, end: starEnd, text: "" }];
-  if (fn.returnType) {
-    headEdits.push({ start: fn.returnType.start, end: fn.returnType.end, text: "" });
-  }
+  if (spaceBeforeStar || named) while (/[ \t]/.test(ctx.code[starEnd])) starEnd++;
 
   const base = lineIndentAt(ctx.code, call.start) + indent;
   const inner = `${indent}  `;
-  const head = applyEdits(ctx, fn.start, fnBody.start, headEdits, inner);
-  return `{\n${base}  sync: ${head}${emit(ctx, fnBody, "sync", inner)},\n${base}  async: async ${head}${emit(ctx, fnBody, "async", inner)},\n${base}}`;
+  const [syncHead, asyncHead] = ["Sync", "Async"].map((suffix) =>
+    applyEdits(
+      ctx,
+      fn.start,
+      fnBody.start,
+      [
+        {
+          start: star,
+          end: starEnd,
+          text: named ? `${spaceBeforeStar ? "" : " "}${bindingName}${suffix}` : "",
+        },
+        ...(fn.returnType
+          ? [{ start: fn.returnType.start, end: fn.returnType.end, text: "" }]
+          : []),
+      ],
+      inner,
+    ),
+  );
+  return `{\n${base}  sync: ${syncHead}${emit(ctx, fnBody, "sync", inner)},\n${base}  async: async ${asyncHead}${emit(ctx, fnBody, "async", inner)},\n${base}}`;
 };
 
 const langOf = (id: string): "js" | "jsx" | "ts" | "tsx" => {
@@ -351,13 +384,19 @@ export const compileSyncAsyncFunctions = (
   const names = importedNames(program);
   if (names === undefined) return undefined;
 
-  const literals: Context["literals"] = [];
+  const literalNewlines = new Set<number>();
   const localSyncAsyncFunctions = new Set<string>();
   const identifiers = new Set<string>();
   walk(program, (node) => {
     if (node.type === "Identifier") identifiers.add(node.name);
     if (node.type === "Literal" || node.type === "TemplateElement") {
-      literals.push({ start: node.start, end: node.end });
+      for (
+        let newline = code.indexOf("\n", node.start);
+        newline !== -1 && newline < node.end;
+        newline = code.indexOf("\n", newline + 1)
+      ) {
+        literalNewlines.add(newline);
+      }
     }
     if (
       node.type === "VariableDeclarator" &&
@@ -374,7 +413,8 @@ export const compileSyncAsyncFunctions = (
   const ctx: Context = {
     code,
     id,
-    literals,
+    identifiers,
+    literalNewlines,
     names,
     localSyncAsyncFunctions,
     syncStep,
