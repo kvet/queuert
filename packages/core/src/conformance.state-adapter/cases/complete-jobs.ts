@@ -463,6 +463,7 @@ export const completeJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
         assert.equal(completed!.chain.id, createdChain.head.chainId);
         assert.equal(completed!.chain.status, "completed");
         assert.ok(completed!.chain.completedAt instanceof Date);
+        assert.equal(completed!.hasDependents, false);
 
         const [chain] = yield* step(
           stateAdapter.getChains({
@@ -534,6 +535,7 @@ export const completeJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
         assert.equal(completed!.chain.id, headChain.head.chainId);
         assert.equal(completed!.chain.status, "completed");
         assert.ok(completed!.chain.completedAt instanceof Date);
+        assert.equal(completed!.hasDependents, false);
 
         const [chain] = yield* step(
           stateAdapter.getChains({
@@ -544,6 +546,72 @@ export const completeJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
         assert.ok(chain!.completedAt instanceof Date);
         assert.equal(chain!.tail!.id, tail.id);
         assert.deepEqual(chain!.tail!.output, { final: true });
+      }),
+    },
+    {
+      name: "reports hasDependents for a chain a blocker row references, completed by its head or by its tail",
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
+
+        const [singleJobChain, multiJobChain, dependentChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "single-blocker",
+                  input: null,
+                },
+                { id: stateAdapter.config.generateJobId(), typeName: "multi-blocker", input: null },
+                { id: stateAdapter.config.generateJobId(), typeName: "dependent", input: null },
+              ],
+            }),
+          ),
+        );
+        const [continuedTail] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.continueJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "multi-blocker",
+                  input: null,
+                  continueFromId: multiJobChain.head.id,
+                },
+              ],
+            }),
+          ),
+        );
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [
+                {
+                  jobId: dependentChain.head.id,
+                  blockedByChainIds: [singleJobChain.id, multiJobChain.id],
+                },
+              ],
+            }),
+          ),
+        );
+
+        const [completedHead, completedTail] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.completeJobs({
+              txCtx,
+              jobs: [
+                { jobId: singleJobChain.head.id, output: null },
+                { jobId: continuedTail!.continuation.id, output: null },
+              ],
+            }),
+          ),
+        );
+
+        assert.equal(completedHead!.hasDependents, true);
+        assert.equal(completedTail!.hasDependents, true);
       }),
     },
     {

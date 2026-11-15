@@ -77,6 +77,8 @@ type DbJob = {
 
   chain_trace_context: string | null;
   trace_context: string | null;
+
+  has_dependents: boolean;
 };
 
 type DbWorker = {
@@ -107,7 +109,7 @@ type DbBlocker = {
   trace_context: string | null;
 };
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const SCHEMA_MIGRATION = "001_schema_v1";
 
@@ -241,6 +243,35 @@ CREATE TABLE {{schema}}.{{table_prefix}}schema_fence_v1 (id integer PRIMARY KEY)
       throw new Error("The Queuert schema cannot be reverted.");
     },
   },
+  {
+    name: "002_blocker_counters",
+    up: async (txCtx) => {
+      for (const statement of [
+        sql(/* sql */ `SET LOCAL lock_timeout = '5000ms'`),
+        sql(/* sql */ `
+ALTER TABLE {{schema}}.{{table_prefix}}job
+  ADD COLUMN has_dependents boolean NOT NULL DEFAULT false`),
+        sql(/* sql */ `
+UPDATE {{schema}}.{{table_prefix}}job h
+SET has_dependents = true
+WHERE h.chain_index = 0
+  AND h.id IN (SELECT jb.blocked_by_chain_id FROM {{schema}}.{{table_prefix}}job_blocker jb)`),
+        sql(/* sql */ `
+CREATE INDEX {{table_prefix}}chain_has_dependents_idx
+ON {{schema}}.{{table_prefix}}job (type_name, created_at)
+WHERE chain_index = 0 AND has_dependents`),
+        sql(/* sql */ `
+CREATE TABLE {{schema}}.{{table_prefix}}schema_fence_v2 (id integer PRIMARY KEY)`),
+        sql(/* sql */ `
+DROP TABLE {{schema}}.{{table_prefix}}schema_fence_v1`),
+      ]) {
+        await execute(txCtx, statement);
+      }
+    },
+    down: async () => {
+      throw new Error("The Queuert schema cannot be reverted.");
+    },
+  },
 ];
 
 export const createMigrationStore = <TTxContext extends BaseTxContext>(
@@ -279,6 +310,7 @@ const DB_JOB_COLUMNS = [
   "chain_deduplication_key",
   "chain_trace_context",
   "trace_context",
+  "has_dependents",
 ] as const;
 
 const jobColumnsSelect = (alias: string): string =>
@@ -524,6 +556,7 @@ export const createPgStateAdapter = <
     chain_deduplication_key: t["string?"](),
     chain_trace_context: t["string?"](),
     trace_context: t["string?"](),
+    has_dependents: t.boolean(),
   } as const satisfies Record<(typeof DB_JOB_COLUMNS)[number], DataType>;
 
   const dbChainColumns = {
@@ -1060,6 +1093,7 @@ LEFT JOIN done dh ON dh.id = d.chain_id
           ? {
               ...mapDbJobToStateJobInfo(row.job_row),
               chain: mapDbHeadToStateChainInfo(row.head_job),
+              hasDependents: row.head_job.has_dependents,
             }
           : undefined;
       });
@@ -1380,11 +1414,20 @@ has_incomplete_blockers AS (
   JOIN locked_blocker_heads h ON h.id = d.blocked_by_chain_id
   WHERE h.chain_status = 'running'
 ),
+update_targets AS (
+  SELECT id FROM locked_blocker_heads
+  UNION
+  SELECT job_id FROM has_incomplete_blockers
+),
 updated_jobs AS (
   UPDATE {{schema}}.{{table_prefix}}job j
-  SET status = 'blocked'
-  WHERE j.id IN (SELECT job_id FROM has_incomplete_blockers)
-    AND j.status = 'pending'
+  SET status = CASE
+      WHEN j.status = 'pending' AND j.id IN (SELECT job_id FROM has_incomplete_blockers)
+      THEN 'blocked' ELSE j.status END,
+    has_dependents = j.has_dependents OR j.id IN (SELECT id FROM locked_blocker_heads)
+  FROM update_targets t
+  WHERE j.id = t.id
+    AND (j.status = 'pending' OR j.id IN (SELECT id FROM locked_blocker_heads))
     AND ${FENCE_GUARD}
   RETURNING j.*
 ),
@@ -1843,8 +1886,11 @@ ORDER BY w.ord
       const paramTypes: DataType[] = [t.string()];
       if (status !== undefined) conditions.push(chainStatusConditions[status]);
       if (independent !== undefined) {
+        const referenced = `EXISTS (SELECT 1 FROM ${schema}.${tablePrefix}job_blocker jb WHERE jb.blocked_by_chain_id = head_job.id)`;
         conditions.push(
-          `${independent ? "NOT " : ""}EXISTS (SELECT 1 FROM ${schema}.${tablePrefix}job_blocker jb WHERE jb.blocked_by_chain_id = head_job.id)`,
+          independent
+            ? `(NOT head_job.has_dependents OR NOT ${referenced})`
+            : `(head_job.has_dependents AND ${referenced})`,
         );
       }
       if (from) {

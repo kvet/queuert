@@ -14,6 +14,7 @@ export type IndexedJob = {
   attemptAt: number | null;
   attemptBy: string | null;
   chainCompletedAt: number | null;
+  hasDependents: boolean;
   blockers: { blockedByChainId: string }[];
 };
 
@@ -32,7 +33,7 @@ type NumericField<TRecord> = {
 export type IndexDefinition<TRecord> = {
   name: string;
   type: "zset" | "set" | "counter";
-  where?: Partial<Record<keyof TRecord & string, string | number>>;
+  where?: Partial<Record<keyof TRecord & string, string | number | boolean>>;
   each?: (record: TRecord) => string[];
   key: (record: TRecord, each: string) => string;
   member: (record: TRecord, each: string) => string;
@@ -61,6 +62,7 @@ export type RedisKeys = {
   due: (typeName: string) => string;
   jobs: (orderBy: string, status: StateJobStatus | "all", typeName: string) => string;
   chains: (orderBy: string, status: StateChainStatus | "all", typeName: string) => string;
+  dependentChains: (orderBy: string, status: StateChainStatus | "all", typeName: string) => string;
   chainJobs: (chainId: string) => string;
   running: (workerId: string) => string;
   blockedBy: (chainId: string) => string;
@@ -83,7 +85,7 @@ export type RedisSchema = {
   workerIndexEntries: (worker: IndexedWorker) => IndexEntries;
 };
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const opaqueRecordFields: string[] = [
   "input",
@@ -136,6 +138,8 @@ export const createRedisKeys = (keyPrefix: string): RedisKeys => ({
   due: (typeName) => `${keyPrefix}due:${typeName}`,
   jobs: (orderBy, status, typeName) => `${keyPrefix}jobs:${orderBy}:${status}:${typeName}`,
   chains: (orderBy, status, typeName) => `${keyPrefix}chains:${orderBy}:${status}:${typeName}`,
+  dependentChains: (orderBy, status, typeName) =>
+    `${keyPrefix}dependent-chains:${orderBy}:${status}:${typeName}`,
   chainJobs: (chainId) => `${keyPrefix}chain-jobs:${chainId}`,
   running: (workerId) => `${keyPrefix}running:${workerId}`,
   blockedBy: (chainId) => `${keyPrefix}blocked-by:${chainId}`,
@@ -246,6 +250,30 @@ const createJobIndexes = (keys: RedisKeys): IndexDefinition<IndexedJob>[] => [
     type: "zset",
     where: { chainIndex: 0, chainStatus: "completed" },
     key: (job) => keys.chains("completedAt", "completed", job.typeName),
+    member: (job) => job.id,
+    score: "chainCompletedAt",
+  },
+  {
+    name: "chain_has_dependents_idx",
+    type: "zset",
+    where: { chainIndex: 0, hasDependents: true },
+    key: (job) => keys.dependentChains("createdAt", "all", job.typeName),
+    member: (job) => job.id,
+    score: "createdAt",
+  },
+  {
+    name: "chain_status_has_dependents_idx",
+    type: "zset",
+    where: { chainIndex: 0, hasDependents: true },
+    key: (job) => keys.dependentChains("createdAt", job.chainStatus!, job.typeName),
+    member: (job) => job.id,
+    score: "createdAt",
+  },
+  {
+    name: "chain_completed_has_dependents_idx",
+    type: "zset",
+    where: { chainIndex: 0, chainStatus: "completed", hasDependents: true },
+    key: (job) => keys.dependentChains("completedAt", "completed", job.typeName),
     member: (job) => job.id,
     score: "chainCompletedAt",
   },

@@ -761,6 +761,64 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
       }),
     },
     {
+      name: "listChains counts a chain whose dependents were deleted as independent",
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
+
+        const [blockerChain, dependentChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "task", input: null },
+                { id: stateAdapter.config.generateJobId(), typeName: "dependent", input: null },
+              ],
+            }),
+          ),
+        );
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [
+                { jobId: dependentChain.head.id, blockedByChainIds: [blockerChain.id] },
+              ],
+            }),
+          ),
+        );
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.deleteChains({ txCtx, chainIds: [dependentChain.id] }),
+          ),
+        );
+
+        const nonIndependent = yield* step(
+          stateAdapter.listChains({
+            typeName: "task",
+            orderBy: "createdAt",
+            independent: false,
+            orderDirection: "desc",
+            page: { limit: 10 },
+          }),
+        );
+        assert.deepEqual(nonIndependent.items, []);
+
+        const independent = yield* step(
+          stateAdapter.listChains({
+            typeName: "task",
+            orderBy: "createdAt",
+            independent: true,
+            orderDirection: "desc",
+            page: { limit: 10 },
+          }),
+        );
+        assert.deepEqual(
+          independent.items.map((chain) => chain.id),
+          [blockerChain.id],
+        );
+      }),
+    },
+    {
       name: "listChains paginates non-independent chains and sees blockers added in the transaction",
       run: dynamicSyncAsync(function* ({ createStateAdapter }) {
         const stateAdapter = yield* resource(createStateAdapter());

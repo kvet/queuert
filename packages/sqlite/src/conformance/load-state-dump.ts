@@ -36,7 +36,11 @@ export const loadStateDump = async <TTxContext extends BaseTxContext>(
     }
   };
 
-  await insertRows("job", dump.jobs, mapRow.job);
+  const referencedChainIds = new Set(dump.blockers.map((blocker) => blocker.blockedByChainId));
+  await insertRows("job", dump.jobs, (job) => ({
+    ...mapRow.job(job),
+    has_dependents: job.chainIndex === 0 && referencedChainIds.has(job.id) ? 1 : 0,
+  }));
   await insertRows("job_blocker", dump.blockers, mapRow.blocker);
   await insertRows("worker", dump.workers, mapRow.worker);
 };

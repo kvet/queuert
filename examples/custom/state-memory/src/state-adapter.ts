@@ -334,7 +334,7 @@ export const createMemoryStateAdapter = (
           const chain = state.chains.get(job.chainId)!;
           chain.status = "completed";
           chain.completedAt ??= now;
-          return toJob(state, job);
+          return { ...toJob(state, job), hasDependents: dependentsOf(state, chain.id).length > 0 };
         });
       }),
 

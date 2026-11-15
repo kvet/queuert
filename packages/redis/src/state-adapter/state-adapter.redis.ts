@@ -30,6 +30,7 @@ import type { RedisStateProvider } from "../state-provider/state-provider.redis.
 import { CLAIM_SCRIPT } from "./claim-script.ts";
 import {
   type RedisStore,
+  type RedisStoreContext,
   type RedisStoreTransaction,
   type RedisTransaction,
   type ZsetMember,
@@ -54,6 +55,7 @@ type DbJob = StateJobInfo & {
   deduplicationKey: string | null;
   chainTraceContext: string | null;
   seq: string;
+  hasDependents: boolean;
   blockers: BlockerEntry[];
 };
 
@@ -107,6 +109,7 @@ const deserializeJob = (stored: StoredJob): DbJob => ({
   lastAttemptAt: toDate(stored.lastAttemptAt ?? null),
   attemptAt: toDate(stored.attemptAt ?? null),
   chainCompletedAt: toDate(stored.chainCompletedAt ?? null),
+  hasDependents: stored.hasDependents ?? false,
   blockers: Array.isArray(stored.blockers)
     ? stored.blockers.map((blocker) => ({ ...blocker }))
     : [],
@@ -656,6 +659,7 @@ export const createRedisStateAdapter = ({
     chainTraceContext: params.chainTraceContext ?? null,
     traceContext: params.traceContext ?? null,
     seq: nextSeq(params.now),
+    hasDependents: false,
     blockers: [],
   });
 
@@ -935,10 +939,12 @@ export const createRedisStateAdapter = ({
           loaded.filter((job) => job !== undefined).map((job) => job.chainId),
         );
         const completedJobs: (DbJob | undefined)[] = [];
+        const hasDependents: boolean[] = [];
         for (const { jobId, output, attemptToken, workerId } of jobs) {
           const job = await loadJob(tx, jobId);
           if (!job || job.status === "completed" || !holdsAttempt(job, attemptToken)) {
             completedJobs.push(undefined);
+            hasDependents.push(false);
             continue;
           }
           const isHead = job.id === job.chainId;
@@ -955,7 +961,9 @@ export const createRedisStateAdapter = ({
             ...(isHead ? { chainStatus: "completed" as const, chainCompletedAt: now } : {}),
           };
           writeJob(tx, job, updated);
-          if (!isHead) {
+          if (isHead) {
+            hasDependents.push(updated.hasDependents);
+          } else {
             const head = await loadJob(tx, job.chainId);
             if (!head) throw new Error(`Chain ${job.chainId} not found`);
             writeJob(tx, head, {
@@ -963,6 +971,7 @@ export const createRedisStateAdapter = ({
               chainStatus: "completed",
               chainCompletedAt: head.chainCompletedAt ?? now,
             });
+            hasDependents.push(head.hasDependents);
           }
           completedJobs.push(updated);
         }
@@ -971,7 +980,11 @@ export const createRedisStateAdapter = ({
           completedJobs.filter((job) => job !== undefined),
         );
         let viewIndex = 0;
-        return completedJobs.map((job) => (job === undefined ? undefined : views[viewIndex++]));
+        return completedJobs.map((job, index) =>
+          job === undefined
+            ? undefined
+            : { ...views[viewIndex++], hasDependents: hasDependents[index] },
+        );
       }),
 
     rescheduleJobs: async ({ txCtx, jobs }) =>
@@ -1206,14 +1219,19 @@ export const createRedisStateAdapter = ({
         const updatedJobs: DbJob[] = [];
         const blockersByJob: (StateChainInfo | undefined)[][] = [];
         for (const { jobId, blockedByChainIds, blockerTraceContexts } of jobBlockers) {
+          const blockerHeads = (await loadJobs(tx, blockedByChainIds)).map((head) =>
+            head && head.id === head.chainId ? head : undefined,
+          );
+          for (const head of new Set(blockerHeads)) {
+            if (head && !head.hasDependents) writeJob(tx, head, { ...head, hasDependents: true });
+          }
           const job = (await loadJob(tx, jobId))!;
-          const blockerHeads = await loadJobs(tx, blockedByChainIds);
           const blockerEntries = new Map(
             job.blockers.map((entry) => [`${entry.blockedByChainId}\n${entry.index}`, entry]),
           );
           const blockers = blockedByChainIds.map((blockerChainId, index) => {
             const head = blockerHeads[index];
-            if (!head || head.id !== head.chainId) return undefined;
+            if (!head) return undefined;
             blockerEntries.set(`${blockerChainId}\n${index}`, {
               blockedByChainId: blockerChainId,
               index,
@@ -1401,49 +1419,26 @@ export const createRedisStateAdapter = ({
       page,
     }) =>
       withRead(txCtx, async (tx) => {
-        if (independent === false) {
-          const blockerChainIds = [...(await tx.counterEntries(keys.blockerReferences)).keys()];
-          const scores = await tx.zscoreMany(
-            keys.chains(orderBy, status ?? "all", typeName),
-            blockerChainIds,
-          );
-          const min = from?.getTime() ?? -Infinity;
-          const max = to?.getTime() ?? Infinity;
-          const after = timestampCursorStart(page.cursor, orderBy);
-          const sign = orderDirection === "asc" ? 1 : -1;
-          const members = blockerChainIds
-            .flatMap((member, index): ZsetMember[] => {
-              const score = scores[index];
-              return score !== undefined && score >= min && score <= max ? [{ member, score }] : [];
-            })
-            .filter((member) => after === undefined || compareZsetMembers(member, after) * sign > 0)
-            .toSorted((a, b) => compareZsetMembers(a, b) * sign)
-            .slice(0, page.limit + 1);
-          const heads = await loadPresentJobs(
-            tx,
-            members.slice(0, page.limit).map(({ member }) => member),
-          );
-          return timestampPage(await chainViews(tx, heads), members, page.limit, orderBy);
-        }
         const members: ZsetMember[] = [];
         const batchSize = independent === true ? 200 : scanBatchSize(page.limit);
         let batch: ZsetMember[] = [];
         const flush = async () => {
           if (batch.length === 0) return;
           const references =
-            independent === true
-              ? await tx.counterValues(
+            independent === undefined
+              ? undefined
+              : await tx.counterValues(
                   keys.blockerReferences,
                   batch.map(({ member }) => member),
-                )
-              : undefined;
+                );
           for (const [index, member] of batch.entries()) {
-            if (references !== undefined && references[index] > 0) continue;
+            if (references !== undefined && references[index] > 0 === independent) continue;
             if (members.length <= page.limit) members.push(member);
           }
           batch = [];
         };
-        for await (const member of tx.zscan(keys.chains(orderBy, status ?? "all", typeName), {
+        const chainsKey = independent === false ? keys.dependentChains : keys.chains;
+        for await (const member of tx.zscan(chainsKey(orderBy, status ?? "all", typeName), {
           direction: orderDirection,
           min: from?.getTime(),
           max: to?.getTime(),
@@ -1594,11 +1589,13 @@ export const createRedisStateAdapter = ({
 
     migrateToLatest: async () => {
       closed.throwIfTripped();
+      const withTransaction = async <T>(fn: (txCtx: RedisStoreContext) => Promise<T>) =>
+        runTransaction(async (tx) => fn({ transaction: tx }));
       return createMigrator({
-        migrations: createRedisSchemaMigrations(schema),
+        migrations: createRedisSchemaMigrations({ schema, withTransaction }),
         store: createRedisMigrationStore({
           stateProvider,
-          withTransaction: async (fn) => runTransaction(async (tx) => fn({ transaction: tx })),
+          withTransaction,
           migrationsKey: keys.migrations,
           migrationLockKey: keys.migrationLock,
         }),

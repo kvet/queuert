@@ -85,10 +85,11 @@ const recordKeys = (): FieldItem[] => [
       <>
         One job, the Redis form of a <code>job</code> row with its <code>job_blocker</code> rows.{" "}
         <code>v</code> is the version of its last write, <code>d</code> the JSON fields the Lua
-        scripts read and change (ids, type name, status, chain status, attempt fields and
-        timestamps), and <code>u</code> the JSON fields no script reads: input, output, last attempt
-        error, trace contexts, deduplication key, <code>completedBy</code> and blockers. A field
-        that is <code>null</code> is left out of both.
+        scripts read and change (ids, type name, status, chain status, attempt fields, timestamps
+        and, on a chain's head, <code>hasDependents</code>, the counterpart of{" "}
+        <code>has_dependents</code>), and <code>u</code> the JSON fields no script reads: input,
+        output, last attempt error, trace contexts, deduplication key, <code>completedBy</code> and
+        blockers. A field that is <code>null</code> is left out of both.
       </>
     ),
   },
@@ -227,6 +228,17 @@ const indexKeys = (): FieldItem[] => [
     name: "chains:completedAt:completed:<typeName>",
     chips: ["zset", "chain_completed_idx"],
     description: "Completed chain heads by completion time.",
+  },
+  {
+    name: "dependent-chains:createdAt:all:<typeName>, dependent-chains:createdAt:<status>:<typeName>",
+    chips: ["zset", "chain_has_dependents_idx"],
+    description:
+      "Chain heads some job has depended on, by creation time, all of them and per status: chain listings filtered to chains that block others.",
+  },
+  {
+    name: "dependent-chains:completedAt:completed:<typeName>",
+    chips: ["zset", "chain_has_dependents_idx"],
+    description: "Completed chain heads some job has depended on, by completion time.",
   },
   {
     name: "chain-type-names",

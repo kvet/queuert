@@ -127,9 +127,9 @@ A `complete` that succeeded in a rolled-back try refuses to run again with the s
 
 ### SQLite and in-process
 
-SQLite serializes writers and the in-process adapter serializes through its lock, so neither has these races. Both keep recomputing readiness and take no migration. They only implement the contract changes:
+SQLite serializes writers and the in-process adapter serializes through its lock, so neither has these races. Both keep recomputing readiness. They only implement the contract changes:
 
-- `completeJobs` returns `hasDependents` (an `EXISTS` over `job_blocker` for the completed chain).
+- `completeJobs` returns `hasDependents`: SQLite reads the head's stored `has_dependents` (added by `002_blocker_counters` for the `listChains` index), the in-process adapter its dependents index.
 - `withTransaction` keeps calling `fn` once.
 
 ## Behavior by isolation level
@@ -196,9 +196,11 @@ Attach, as core issues it: `lockBlockerChains`, `createJobs`, then a single-stat
 - At REPEATABLE READ, hot-blocker attaches lose about 25% of throughput and half of them retry; 3.5% of transactions exhaust 5 retries and reach the caller. The write that makes REPEATABLE READ correct is what conflicts, so no correct variant avoids it. Cold attaches at REPEATABLE READ run like READ COMMITTED.
 - At SERIALIZABLE, about half of all attach transactions retry and about 4% exhaust their retries, even on uncontended blockers: SSI predicate-lock conflicts on `job_blocker` and index pages. This is correct but slow; it is documented, not addressed here.
 
-## Migration (`002_blocker_counters`)
+## Migration
 
-One breaking transactional migration after `001_schema_v1`, with a `SET LOCAL lock_timeout` so it gives up rather than queue behind running workers. Besides its schema change it creates `schema_fence_v2` and drops `schema_fence_v1`:
+`002_blocker_counters` has shipped the first part: `has_dependents` with its backfill (step 2), the `chain_has_dependents_idx` partial index that `listChains` uses for `independent: false`, and the move from `schema_fence_v1` to `schema_fence_v2`. The rest is the next breaking migration, `003_blockers_remaining`, which creates `schema_fence_v3` and drops `schema_fence_v2`.
+
+The whole change, as one breaking transactional migration with a `SET LOCAL lock_timeout` so it gives up rather than queue behind running workers:
 
 1. Add `has_dependents` and `blockers_remaining` (constant defaults: no table rewrite).
 2. Set `has_dependents = true` on every head job referenced by a `job_blocker` row.
@@ -256,13 +258,13 @@ Kept separate from the shared suite because it needs raw SQL and per-connection 
 - Migrations, with the session default at `repeatable read` and at `serializable`:
   - parallel deployments through the existing spawner all succeed, exactly one applies each migration, and none fails with 40001;
   - `current_setting('transaction_isolation')` inside a migration reports `read committed`.
-- Migration `002`: a database migrated to `001` and seeded with raw inserts. The seed contains:
+- Migration `003_blockers_remaining`: a database migrated to `002` and seeded with raw inserts. The seed contains:
   - blocked dependents waiting on mixed `running`/`completed` blockers
   - duplicate blocker chains
   - a stuck dependent whose blockers all completed
   - a `running` job whose worker row is missing
 
-  After `002` the counters match the recompute, and both the stuck dependent and the orphaned job are `pending`.
+  After `003` the counters match the recompute, and both the stuck dependent and the orphaned job are `pending`.
 
 **SQLite and in-process**
 

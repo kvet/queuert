@@ -343,7 +343,11 @@ const reportCompletedJob = syncAsync(function* (
     completed,
     encodedOutput,
     txCtx,
-  }: { completed: StateJob; encodedOutput: unknown; txCtx: BaseTxContext },
+  }: {
+    completed: StateJob & { hasDependents: boolean };
+    encodedOutput: unknown;
+    txCtx: BaseTxContext;
+  },
 ) {
   const { chain } = completed;
 
@@ -355,6 +359,7 @@ const reportCompletedJob = syncAsync(function* (
   });
   notifyOnCommit(helpers, txCtx, helpers.notifyHelper.notifyChainsCompleted, [completed.chainId]);
 
+  if (!completed.hasDependents) return;
   const dependentJobs = yield* step(
     helpers.stateAdapter.unblockJobs({
       txCtx,

@@ -49,7 +49,7 @@ type StatementTypes = {
   readOnly?: boolean;
 };
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const SCHEMA_MIGRATION = "001_schema_v1";
 
@@ -670,6 +670,69 @@ WHERE j.status = 'blocked' AND {{fence_guard}}`,
         throw new Error("The Queuert schema cannot be reverted.");
       },
     },
+    {
+      name: "002_blocker_counters",
+      type: "non-transactional",
+      up: async () => {
+        const [column] = await execute(
+          undefined,
+          applyTemplate(
+            sql(
+              `SELECT COUNT(*) AS count FROM information_schema.columns WHERE table_schema = ${schema === undefined ? "DATABASE()" : `'${schema}'`} AND table_name = '{{name_prefix}}job' AND column_name = 'has_dependents'`,
+              { columns: { count: t.number() } },
+            ),
+          ),
+          [],
+        );
+        if (Number(column.count) === 0) {
+          await execute(
+            undefined,
+            applyTemplate(
+              sql(
+                /* sql */ `ALTER TABLE {{prefix}}job ADD COLUMN has_dependents BOOLEAN NOT NULL DEFAULT FALSE`,
+              ),
+            ),
+            [],
+          );
+        }
+        const [index] = await execute(
+          undefined,
+          applyTemplate(
+            sql(
+              `SELECT COUNT(*) AS count FROM information_schema.statistics WHERE table_schema = ${schema === undefined ? "DATABASE()" : `'${schema}'`} AND table_name = '{{name_prefix}}job' AND index_name = '{{name_prefix}}chain_has_dependents_idx'`,
+              { columns: { count: t.number() } },
+            ),
+          ),
+          [],
+        );
+        if (Number(index.count) === 0) {
+          await execute(
+            undefined,
+            applyTemplate(
+              sql(
+                /* sql */ `CREATE INDEX {{name_prefix}}chain_has_dependents_idx ON {{prefix}}job (type_name, has_dependents, chain_index, created_at)`,
+              ),
+            ),
+            [],
+          );
+        }
+        for (const statement of [
+          /* sql */ `DROP TABLE IF EXISTS {{prefix}}schema_fence_v1`,
+          /* sql */ `
+UPDATE {{prefix}}job h
+SET h.has_dependents = TRUE
+WHERE h.chain_index = 0
+  AND h.has_dependents = FALSE
+  AND h.id IN (SELECT jb.blocked_by_chain_id FROM {{prefix}}job_blocker jb)`,
+          /* sql */ `CREATE TABLE IF NOT EXISTS {{prefix}}schema_fence_v2 (id INT NOT NULL PRIMARY KEY) ENGINE=InnoDB`,
+        ]) {
+          await execute(undefined, applyTemplate(sql(statement)), []);
+        }
+      },
+      down: async () => {
+        throw new Error("The Queuert schema cannot be reverted.");
+      },
+    },
   ];
 
   const close = async (): Promise<void> => {
@@ -1077,7 +1140,26 @@ WHERE {{fence_guard}}`,
         txCtx,
         writable.map((job) => job.jobId),
       );
-      return jobs.map((job) => completed.get(job.jobId));
+      const completedHeads = await execute(
+        txCtx,
+        prepared(
+          "readCompletedHeadsForUpdate",
+          `SELECT h.id, h.has_dependents FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.id {{for_update:h}}`,
+          { params: [t.string()], columns: { id: jobIdDataType, has_dependents: t.number() } },
+        ),
+        [sortedIdsParam([...completed.values()].map((job) => job.chainId))],
+      );
+      const referencedChainIds = new Set(
+        completedHeads
+          .filter((row) => toBoolean(row.has_dependents))
+          .map((row) => row.id as string),
+      );
+      return jobs.map((job) => {
+        const completedJob = completed.get(job.jobId);
+        return completedJob === undefined
+          ? undefined
+          : { ...completedJob, hasDependents: referencedChainIds.has(completedJob.chainId) };
+      });
     },
 
     rescheduleJobs: async ({ txCtx, jobs }) => {
@@ -1312,11 +1394,28 @@ FOR UPDATE SKIP LOCKED`,
         txCtx,
         prepared(
           "lockBlockerHeads",
-          `SELECT ${selectJob("h", "h_")} FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.id WHERE h.chain_index = 0 AND {{fence_guard}} {{for_update:h}}`,
-          { params: [t.string()], columns: prefixColumns(dbJobColumns, "h_") },
+          `SELECT ${selectJob("h", "h_")}, h.has_dependents AS h_has_dependents FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.id WHERE h.chain_index = 0 AND {{fence_guard}} {{for_update:h}}`,
+          {
+            params: [t.string()],
+            columns: { ...prefixColumns(dbJobColumns, "h_"), h_has_dependents: t.number() },
+          },
         ),
         [sortedIdsParam(blockerChainIds)],
       );
+      const unflaggedHeadIds = headRows
+        .filter((row) => !toBoolean(row.h_has_dependents))
+        .map((row) => row.h_id as string);
+      if (unflaggedHeadIds.length > 0) {
+        await execute(
+          txCtx,
+          prepared(
+            "flagBlockerHeads",
+            `UPDATE JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.id SET h.has_dependents = TRUE WHERE {{fence_guard}}`,
+            { params: [t.string()] },
+          ),
+          [sortedIdsParam(unflaggedHeadIds)],
+        );
+      }
       const blockerChains = new Map(
         headRows.map((row) => [row.h_id as string, mapDbHeadToStateChainInfo(row, "h_")]),
       );
@@ -1669,8 +1768,11 @@ ORDER BY w.ord`,
       const paramTypes: DataType[] = [t.string()];
       if (status !== undefined) conditions.push(`h.chain_status = '${status}'`);
       if (independent !== undefined) {
+        const referenced = `(SELECT 1 FROM {{prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = h.id LIMIT 1)`;
         conditions.push(
-          `(SELECT 1 FROM {{prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = h.id LIMIT 1) IS ${independent ? "" : "NOT "}NULL`,
+          independent
+            ? `(h.has_dependents = FALSE OR ${referenced} IS NULL)`
+            : `(h.has_dependents = TRUE AND ${referenced} IS NOT NULL)`,
         );
       }
       if (from) {
@@ -1693,13 +1795,15 @@ ORDER BY w.ord`,
       params.push(page.limit + 1);
       paramTypes.push(t.number());
       const pageIndex =
-        orderColumn === "created_at"
-          ? status === undefined
-            ? "chain_idx"
-            : "chain_running_idx"
-          : status === "completed"
-            ? "chain_completed_idx"
-            : undefined;
+        independent === false
+          ? "chain_has_dependents_idx"
+          : orderColumn === "created_at"
+            ? status === undefined
+              ? "chain_idx"
+              : "chain_running_idx"
+            : status === "completed"
+              ? "chain_completed_idx"
+              : undefined;
 
       const rows = await execute(
         txCtx,

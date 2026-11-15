@@ -1,5 +1,7 @@
 # Short term
 
+- [TASK] Revisit the `independent` naming — the `listChains` filter (client, state adapter, dashboard) means "no blocker row references this chain", which the name does not say; pick a name in line with `has_dependents` / `hasDependents`.
+
 # Medium term
 
 - [TASK] Enable npm staged publishing — have `.github/workflows/publish.yaml` stage each package's release on npm for a manual approval before it goes live, instead of publishing straight from the tag, and switch every `@queuert/*` package and `queuert` to it in their npmjs.com settings.
@@ -18,7 +20,7 @@
 - [TASK] Unify workerless and worker tracing — workerless completion (`completeChain`) should create an attempt span like the worker path, eliminating the asymmetric `completeJobSpan` adapter method
 - [EPIC] Align `@queuert/otel` with OpenTelemetry messaging semantic conventions
 - [EPIC] Redis state adapter performance and open problems — claim cache, fewer index updates, lock-wait divergences, notify latency. See `design/redis-state-adapter-performance.md`.
-- [TASK] PostgreSQL REPEATABLE READ and SERIALIZABLE. See `design/pg-isolation-levels.md`.
+- [TASK] PostgreSQL REPEATABLE READ and SERIALIZABLE. `002_blocker_counters` already adds `has_dependents` and the `hasDependents` contract; `blockers_remaining` needs its own breaking migration once `002` is released. See `design/pg-isolation-levels.md`.
 - [TASK] MySQL/MariaDB REPEATABLE READ and SERIALIZABLE. See `design/mysql-isolation-levels.md`.
 - [EPIC] MongoDB adapter. See `design/mongodb-adapter.md`.
 - [TASK] Support numeric job and worker IDs — `TJobId` and `TWorkerId` extend `string`, so an `INTEGER`/`bigint` `jobIdType` or `workerIdType` is accepted by the adapters but its IDs still have to round-trip as strings. Allow `number`/`bigint` ID types end to end, including making the `State*` entity types (`StateJobInfo`, `StateChainInfo`, `StateJobBlockerInfo`, `StateWorkerInfo`, …) generic over `TJobId`/`TWorkerId` instead of using `string`.

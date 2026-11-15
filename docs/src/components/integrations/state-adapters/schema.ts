@@ -122,6 +122,12 @@ export const schemaTables: Record<SchemaDialect, SchemaTable[]> = {
           head: true,
           description: "W3C traceparent for the chain",
         },
+        {
+          name: "has_dependents",
+          type: "boolean",
+          head: true,
+          description: "Set once a job_blocker row references the chain; never cleared",
+        },
       ],
     },
     {
@@ -291,6 +297,12 @@ export const schemaTables: Record<SchemaDialect, SchemaTable[]> = {
           head: true,
           description: "W3C traceparent for the chain",
         },
+        {
+          name: "has_dependents",
+          type: "INTEGER",
+          head: true,
+          description: "Set once a job_blocker row references the chain; never cleared",
+        },
       ],
     },
     {
@@ -449,6 +461,12 @@ export const schemaTables: Record<SchemaDialect, SchemaTable[]> = {
           type: "TEXT",
           head: true,
           description: "W3C traceparent for the chain",
+        },
+        {
+          name: "has_dependents",
+          type: "BOOLEAN",
+          head: true,
+          description: "Set once a job_blocker row references the chain; never cleared",
         },
       ],
     },
@@ -610,6 +628,12 @@ const jobIndexes = (chainIndexPurpose: string): SchemaIndex[] => [
     purpose: "Completed chain listing",
   },
   {
+    name: "chain_has_dependents_idx",
+    table: "job",
+    definition: "(type_name, created_at) WHERE chain_index = 0 AND has_dependents",
+    purpose: "Listing chains that other jobs depend on",
+  },
+  {
     name: "job_blocker_chain_idx",
     table: "job_blocker",
     definition: "(blocked_by_chain_id)",
@@ -659,6 +683,12 @@ const mysqlIndexes: SchemaIndex[] = [
     table: "job",
     definition: "(type_name, chain_status, chain_completed_at)",
     purpose: "Completed chain listing",
+  },
+  {
+    name: "chain_has_dependents_idx",
+    table: "job",
+    definition: "(type_name, has_dependents, chain_index, created_at)",
+    purpose: "Listing chains that other jobs depend on",
   },
   {
     name: "chain_deduplication_idx",

@@ -735,6 +735,68 @@ export const addJobsBlockersConcurrentTransactionsGroup: ConformanceGroup<StateA
         },
       },
       {
+        name: "leaves no dependent blocked when the completion of its blocker races an attach that holds the blocker",
+        run: async ({ createStateAdapter }) => {
+          await using stateAdapter = await createStateAdapter();
+
+          const [blockerChain, mainChain] = await stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "attached-blocker",
+                  input: null,
+                },
+                { id: stateAdapter.config.generateJobId(), typeName: "main", input: null },
+              ],
+            }),
+          );
+
+          const { promise: attached, resolve: signalAttached } = Promise.withResolvers<void>();
+          const { promise: attacherGate, resolve: releaseAttacher } = Promise.withResolvers<void>();
+
+          const addTx = stateAdapter.withTransaction(async (txCtx) => {
+            const result = await stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [{ jobId: mainChain.head.id, blockedByChainIds: [blockerChain.id] }],
+            });
+            signalAttached();
+            await attacherGate;
+            return result;
+          });
+
+          await attached;
+
+          const completerTx = Promise.resolve(
+            stateAdapter.withTransaction(async (txCtx) => {
+              const [completedBlocker] = await stateAdapter.completeJobs({
+                txCtx,
+                jobs: [{ jobId: blockerChain.head.id, output: null }],
+              });
+              const dependents = completedBlocker!.hasDependents
+                ? await stateAdapter.unblockJobs({ txCtx, blockedByChainId: blockerChain.id })
+                : [];
+              return { completedBlocker: completedBlocker!, dependents };
+            }),
+          );
+
+          await sleep(LOCK_BLOCK_OBSERVATION_MS);
+          releaseAttacher();
+          await addTx;
+          const { completedBlocker, dependents } = await completerTx;
+
+          const [dependent] = await stateAdapter.getJobs({ jobIds: [mainChain.head.id] });
+          assert.equal(dependent!.status, "pending");
+          if (completedBlocker.hasDependents) {
+            assert.deepEqual(
+              dependents.map((entry) => entry.job.status),
+              ["pending"],
+            );
+          }
+        },
+      },
+      {
         name: "reports a blocker chain completed after the transaction's first read as complete",
         run: async ({ createStateAdapter }) => {
           await using stateAdapter = await createStateAdapter();

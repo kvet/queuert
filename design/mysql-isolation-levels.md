@@ -44,7 +44,7 @@ Under load (8 connections, 200 dependents × 16 blockers, RR), the counter desig
 
 ### Blocker counters
 
-`002_blocker_counters` adds `has_dependents` and `blockers_remaining` to `job`, with the semantics of `design/pg-isolation-levels.md`, and backfills them from `job_blocker`. The rule stays the same: every invariant that pairs a read in one transaction with a write in another must be a write-write conflict on a shared row. InnoDB adds one more: every read that drives such a write is a current read.
+`002_blocker_counters` has shipped `has_dependents` (with `chain_has_dependents_idx` and the move to `schema_fence_v2`); a later breaking migration adds `blockers_remaining`, with the semantics of `design/pg-isolation-levels.md`, and backfills it from `job_blocker`. The rule stays the same: every invariant that pairs a read in one transaction with a write in another must be a write-write conflict on a shared row. InnoDB adds one more: every read that drives such a write is a current read.
 
 - **Attach** locks the blocker heads in id order with a driven lock (`JSON_TABLE` `STRAIGHT_JOIN` `job` `FORCE INDEX (PRIMARY)`), sets `has_dependents` on heads where it is false, inserts the `job_blocker` rows, and adds to each dependent's `blockers_remaining` the number of its locked heads that are still running.
 - **Completion** reads `has_dependents` from the head row it just updated, and skips `unblockJobs` when it is false.
@@ -91,7 +91,7 @@ Levels apply to either side of each race, mixed or not. Expected values, to be f
 ## API
 
 - No change to the client, worker or processor API.
-- Takes the state adapter contract changes from `design/pg-isolation-levels.md` (`hasDependents`, `withTransaction` may call `fn` more than once). The counters arrive in `002_blocker_counters`.
+- Takes the state adapter contract changes from `design/pg-isolation-levels.md` (`hasDependents`, `withTransaction` may call `fn` more than once). `has_dependents` arrived in `002_blocker_counters`; `blockers_remaining` arrives in a later migration.
 - Docs: the "Isolation level" section of the MySQL integration page states:
   - READ COMMITTED, REPEATABLE READ and SERIALIZABLE are supported for transactions passed to Queuert, as a session default or per transaction.
   - Transactions Queuert opens always run at READ COMMITTED, and why.

@@ -86,6 +86,7 @@ const jobColumns = [
   "last_attempt_error",
   "input",
   "output",
+  "has_dependents",
 ] as const;
 
 const jobColumnsSelect = (alias: string): string =>
@@ -173,6 +174,7 @@ const dbJobColumns = {
   chain_deduplication_key: t["string?"](),
   chain_trace_context: t["string?"](),
   trace_context: t["string?"](),
+  has_dependents: t.number(),
 } as const;
 
 const dbChainColumns = {
@@ -219,6 +221,7 @@ const dbChainRowColumns = {
   tail_chain_deduplication_key: t["string?"](),
   tail_chain_trace_context: t["string?"](),
   tail_trace_context: t["string?"](),
+  tail_has_dependents: t["number?"](),
 } as const;
 
 const dbBlockerColumns = {
@@ -233,7 +236,7 @@ type DbChainColumns = InferColumns<typeof dbChainColumns>;
 type DbWorker = InferColumns<typeof dbWorkerColumns>;
 type DbChainRow = InferColumns<typeof dbChainRowColumns>;
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const SCHEMA_MIGRATION = "001_schema_v1";
 
@@ -367,18 +370,42 @@ CREATE TABLE {{table_prefix}}schema_fence_v1 (id INTEGER PRIMARY KEY)`),
       yield* step(execute(txCtx, statement));
     }
   });
+  const upBlockerCounters = syncAsync(function* (txCtx: TTxContext) {
+    for (const statement of [
+      sql(/* sql */ `
+ALTER TABLE {{table_prefix}}job
+  ADD COLUMN has_dependents INTEGER NOT NULL DEFAULT 0`),
+      sql(/* sql */ `
+UPDATE {{table_prefix}}job
+SET has_dependents = 1
+WHERE chain_index = 0
+  AND id IN (SELECT blocked_by_chain_id FROM {{table_prefix}}job_blocker)`),
+      sql(/* sql */ `
+CREATE INDEX {{table_prefix}}chain_has_dependents_idx
+ON {{table_prefix}}job (type_name, created_at)
+WHERE chain_index = 0 AND has_dependents = 1`),
+      sql(/* sql */ `
+CREATE TABLE {{table_prefix}}schema_fence_v2 (id INTEGER PRIMARY KEY)`),
+      sql(/* sql */ `
+DROP TABLE {{table_prefix}}schema_fence_v1`),
+    ]) {
+      yield* step(execute(txCtx, statement));
+    }
+  });
+  const down =
+    mode === "sync"
+      ? () => {
+          throw schemaNotRevertible();
+        }
+      : async () => {
+          throw schemaNotRevertible();
+        };
   return [
+    { name: SCHEMA_MIGRATION, up: mode === "sync" ? up.sync : up.async, down },
     {
-      name: SCHEMA_MIGRATION,
-      up: mode === "sync" ? up.sync : up.async,
-      down:
-        mode === "sync"
-          ? () => {
-              throw schemaNotRevertible();
-            }
-          : async () => {
-              throw schemaNotRevertible();
-            },
+      name: "002_blocker_counters",
+      up: mode === "sync" ? upBlockerCounters.sync : upBlockerCounters.async,
+      down,
     },
   ];
 }
@@ -1205,9 +1232,11 @@ RETURNING *
         return jobs.map((job) => {
           const row = rowById.get(job.jobId);
           if (!row) return undefined;
+          const headRow = rowById.get(row.chain_id)!;
           return {
             ...mapDbJobToStateJob(row),
-            chain: mapDbHeadToStateChain(rowById.get(row.chain_id)!),
+            chain: mapDbHeadToStateChain(headRow),
+            hasDependents: headRow.has_dependents === 1,
           };
         });
       }),
@@ -1505,6 +1534,25 @@ WHERE EXISTS (
               { params: [t.string()], columns: {} },
             ),
             [payload],
+          ),
+        );
+
+        yield* step(
+          execute(
+            txCtx,
+            prepared(
+              "flagBlockerHeads",
+              `
+UPDATE {{table_prefix}}job
+SET has_dependents = 1
+WHERE id IN (SELECT value FROM json_each(?))
+  AND chain_index = 0
+  AND has_dependents = 0
+  AND ${FENCE_GUARD}
+`,
+              { params: [t.string()], columns: {} },
+            ),
+            [JSON.stringify([...new Set(rows.map((row) => row.blocked_by_chain_id))])],
           ),
         );
 
@@ -2052,11 +2100,11 @@ ORDER BY w.key
 
         if (independent === true) {
           conditions.push(
-            `NOT EXISTS (SELECT 1 FROM {{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = head_job.id)`,
+            `(head_job.has_dependents = 0 OR NOT EXISTS (SELECT 1 FROM {{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = head_job.id))`,
           );
         } else if (independent === false) {
           conditions.push(
-            `EXISTS (SELECT 1 FROM {{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = head_job.id)`,
+            `(head_job.has_dependents = 1 AND EXISTS (SELECT 1 FROM {{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = head_job.id))`,
           );
         }
 

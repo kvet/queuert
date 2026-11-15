@@ -406,10 +406,10 @@ const Page = () => (
     <h2>Write fence</h2>
     <p>
       Every insert, update or delete of a job, a blocker or a worker references an empty{" "}
-      <code>{"{prefix}"}schema_fence_v1</code> table, the write fence of the adapter's schema
-      version. A breaking migration drops the fence tables of older versions, so code older than the
-      schema fails each write with <code>SchemaFencedError</code> and changes nothing. Reads still
-      work.
+      <code>{"{prefix}"}schema_fence_v2</code> table, the write fence of the adapter's schema
+      version. A breaking migration, such as <code>002_blocker_counters</code>, drops the fence
+      tables of older versions, so code older than the schema fails each write with{" "}
+      <code>SchemaFencedError</code> and changes nothing. Reads still work.
     </p>
 
     <h2>Schema</h2>

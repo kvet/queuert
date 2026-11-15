@@ -42,6 +42,15 @@ it.for([
     expect(await readStateRows(stateAdapter)).toEqual(toStateRows(shiftStateDump(dump, offsetMs)));
 
     expect(await readStateCounts(stateAdapter)).toEqual(readStateCounts(reference.stateAdapter));
+    const [flagged] = await pool.query(
+      `SELECT DISTINCT has_dependents,
+         (chain_index = 0 AND id IN (SELECT blocked_by_chain_id FROM queuert_job_blocker)) AS referenced
+       FROM queuert_job ORDER BY referenced`,
+    );
+    expect(flagged).toEqual([
+      { has_dependents: 0, referenced: 0 },
+      { has_dependents: 1, referenced: 1 },
+    ]);
     await pool.end();
   },
 );

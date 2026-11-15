@@ -28,6 +28,7 @@ import { MARKER } from "./state-adapter-migration.process.ts";
 import { createV017Migrations } from "./v0.17-migrations.spec-helper.ts";
 
 const INSTALL = "001_schema_v1";
+const BLOCKER_COUNTERS = "002_blocker_counters";
 const INSTALL_017 = "001_initial_schema";
 const WORKER_LIVENESS_017 = "002_worker_liveness";
 const ALL = createSchemaMigrations(async () => {}, "async").map((migration) => migration.name);
@@ -85,6 +86,27 @@ const migrateTo017 = async (
       mode,
     ).filter((migration) => only === undefined || migration.name === only),
     store: createMigrationStore(provider, applyTemplate017),
+  }).migrateToLatest();
+};
+
+const migrateToInstall = async (provider: Provider): Promise<void> => {
+  const mode = provider.sync === true ? "sync" : "async";
+  const applyTemplateInstall = createTemplateApplier({
+    table_prefix: "queuert_",
+    migration_table: "queuert_migration",
+    write_lock_table: "queuert_write_lock",
+    job_id_type: "TEXT",
+    worker_id_type: "TEXT",
+  });
+  const exec = createTypedSqlExecutor(provider);
+  await createMigrator({
+    mode,
+    migrations: createSchemaMigrations(
+      (txCtx: BetterSqlite3Context, statement) =>
+        exec({ txCtx, sql: applyTemplateInstall(statement) }),
+      mode,
+    ).filter((migration) => migration.name === INSTALL),
+    store: createMigrationStore(provider, applyTemplateInstall),
   }).migrateToLatest();
 };
 
@@ -168,6 +190,7 @@ describe.each(["async", "sync"] as const)("in %s mode", (mode) => {
         expect(await names(provider, "SELECT name FROM sqlite_master ORDER BY name")).toEqual([
           "queuert_chain_completed_idx",
           "queuert_chain_deduplication_idx",
+          "queuert_chain_has_dependents_idx",
           "queuert_chain_idx",
           "queuert_chain_index_idx",
           "queuert_chain_running_idx",
@@ -181,7 +204,7 @@ describe.each(["async", "sync"] as const)("in %s mode", (mode) => {
           "queuert_job_pending_idx",
           "queuert_job_running_idx",
           "queuert_migration",
-          "queuert_schema_fence_v1",
+          "queuert_schema_fence_v2",
           "queuert_worker",
           "queuert_worker_idx",
           "queuert_write_lock",
@@ -224,17 +247,22 @@ describe.each(["async", "sync"] as const)("in %s mode", (mode) => {
         await createSqliteStateAdapter({ stateProvider: freshProvider }).migrateToLatest();
 
         expect(await adapter.migrateToLatest()).toEqual({
-          applied: [],
+          applied: [BLOCKER_COUNTERS],
           skipped: [INSTALL],
           reverted: [],
           unrecognized: [],
         });
-        expect(await appliedNames(provider)).toEqual([INSTALL_017, INSTALL, WORKER_LIVENESS_017]);
+        expect(await appliedNames(provider)).toEqual([
+          INSTALL_017,
+          INSTALL,
+          BLOCKER_COUNTERS,
+          WORKER_LIVENESS_017,
+        ]);
         expect(await schemaShape(provider)).toEqual(await schemaShape(freshProvider));
         freshDb.close();
         expect(await adapter.migrateToLatest()).toEqual({
           applied: [],
-          skipped: [INSTALL],
+          skipped: ALL,
           reverted: [],
           unrecognized: [],
         });
@@ -282,9 +310,14 @@ describe.each(["async", "sync"] as const)("in %s mode", (mode) => {
           applied: [],
           skipped: [INSTALL_017, WORKER_LIVENESS_017],
           reverted: [],
-          unrecognized: [INSTALL],
+          unrecognized: [INSTALL, BLOCKER_COUNTERS],
         });
-        expect(await appliedNames(provider)).toEqual([INSTALL_017, INSTALL, WORKER_LIVENESS_017]);
+        expect(await appliedNames(provider)).toEqual([
+          INSTALL_017,
+          INSTALL,
+          BLOCKER_COUNTERS,
+          WORKER_LIVENESS_017,
+        ]);
       },
     );
 
@@ -333,6 +366,56 @@ describe.each(["async", "sync"] as const)("in %s mode", (mode) => {
             "SELECT name FROM sqlite_master WHERE name = 'queuert_schema_fence_v1'",
           ),
         ).toEqual([]);
+      },
+    );
+  });
+
+  describe("upgrading from 001_schema_v1", () => {
+    it(
+      "flags the chains that blocker rows reference and replaces the write fence",
+      { timeout: 60_000 },
+      async ({ database: { provider, adapter } }) => {
+        await migrateToInstall(provider);
+        const blockerChainId = randomUUID();
+        const continuedBlockerChainId = randomUUID();
+        const continuedBlockerTailId = randomUUID();
+        const unreferencedChainId = randomUUID();
+        const dependentId = randomUUID();
+        await execute(
+          provider,
+          `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status, continued_to_id)
+           VALUES ('${blockerChainId}', 'blocker', '${blockerChainId}', 0, 'pending', 'running', NULL),
+                  ('${continuedBlockerChainId}', 'blocker', '${continuedBlockerChainId}', 0, 'completed', 'running', '${continuedBlockerTailId}'),
+                  ('${continuedBlockerTailId}', 'blocker', '${continuedBlockerChainId}', 1, 'pending', NULL, NULL),
+                  ('${unreferencedChainId}', 'unreferenced', '${unreferencedChainId}', 0, 'pending', 'running', NULL),
+                  ('${dependentId}', 'dependent', '${dependentId}', 0, 'blocked', 'running', NULL)`,
+        );
+        await execute(
+          provider,
+          `INSERT INTO queuert_job_blocker (job_id, blocked_by_chain_id, "index")
+           VALUES ('${dependentId}', '${blockerChainId}', 0),
+                  ('${dependentId}', '${continuedBlockerChainId}', 1)`,
+        );
+
+        expect(await adapter.migrateToLatest()).toEqual({
+          applied: [BLOCKER_COUNTERS],
+          skipped: [INSTALL],
+          reverted: [],
+          unrecognized: [],
+        });
+        expect(
+          await names(
+            provider,
+            "SELECT name FROM sqlite_master WHERE name LIKE 'queuert_schema_fence_%' ORDER BY name",
+          ),
+        ).toEqual(["queuert_schema_fence_v2"]);
+
+        expect(
+          await names(
+            provider,
+            "SELECT id AS name FROM queuert_job WHERE has_dependents = 1 ORDER BY id",
+          ),
+        ).toEqual([blockerChainId, continuedBlockerChainId].toSorted());
       },
     );
   });

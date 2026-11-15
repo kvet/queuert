@@ -9,6 +9,8 @@ import { createIoredisStateProvider } from "./state-provider.ioredis.ts";
 
 const redis = await acquireRedis("redis:6");
 
+const ALL = ["001_schema_fence_v1", "002_chain_has_dependents"];
+
 const it = baseIt.extend("setup", async ({}, { onCleanup }) => {
   const client = new Redis(redis.connectionUrl);
   onCleanup(async () => {
@@ -32,7 +34,7 @@ describe("Redis state adapter migrations", () => {
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(SchemaFencedError);
-    expect((error as SchemaFencedError).codeVersion).toBe(1);
+    expect((error as SchemaFencedError).codeVersion).toBe(2);
     expect((error as Error).message).toContain("migrateToLatest()");
     expect(await stateAdapter.getJobs({ jobIds: [jobId] })).toEqual([undefined]);
   });
@@ -43,16 +45,15 @@ describe("Redis state adapter migrations", () => {
     const first = await stateAdapter.migrateToLatest();
     const second = await stateAdapter.migrateToLatest();
 
-    expect(first.applied).toEqual(["001_schema_fence_v1"]);
+    expect(first.applied).toEqual(ALL);
     expect(second).toEqual({
-      skipped: ["001_schema_fence_v1"],
+      skipped: ALL,
       applied: [],
       reverted: [],
       unrecognized: [],
     });
-    expect(await setup.client.smembers(`${setup.keyPrefix}migrations`)).toEqual([
-      "001_schema_fence_v1",
-    ]);
+    expect((await setup.client.smembers(`${setup.keyPrefix}migrations`)).toSorted()).toEqual(ALL);
+    expect(await setup.client.smembers(`${setup.keyPrefix}schema-fences`)).toEqual(["2"]);
     expect(await setup.client.exists(`${setup.keyPrefix}migration-lock`)).toBe(0);
   });
 
@@ -62,7 +63,7 @@ describe("Redis state adapter migrations", () => {
     const results = await Promise.all(adapters.map(async (adapter) => adapter.migrateToLatest()));
     await Promise.all(adapters.map(async (adapter) => adapter.close()));
 
-    expect(results.flatMap((result) => result.applied)).toEqual(["001_schema_fence_v1"]);
+    expect(results.flatMap((result) => result.applied)).toEqual(ALL);
   });
 
   it("writes once migrateToLatest has run", async ({ setup }) => {
@@ -92,7 +93,7 @@ describe("Redis state adapter migrations", () => {
           txCtx,
           jobs: [{ id: jobId, typeName: "task", input: null }],
         });
-        await setup.client.srem(`${setup.keyPrefix}schema-fences`, "1");
+        await setup.client.srem(`${setup.keyPrefix}schema-fences`, "2");
       })
       .catch((caught: unknown) => caught);
 
@@ -113,11 +114,97 @@ describe("Redis state adapter migrations", () => {
     await expect(
       stateAdapter.withTransaction(async (txCtx) => {
         await stateAdapter.getJobs({ txCtx, jobIds: [chain.head.id], lock: "exclusive" });
-        await setup.client.srem(`${setup.keyPrefix}schema-fences`, "1");
+        await setup.client.srem(`${setup.keyPrefix}schema-fences`, "2");
         await stateAdapter.completeJobs({ txCtx, jobs: [{ jobId: chain.head.id, output: null }] });
       }),
     ).rejects.toThrow(SchemaFencedError);
 
     expect(await setup.client.exists(`${setup.keyPrefix}job-lock:${chain.head.id}`)).toBe(0);
+  });
+
+  it("flags the chains blocker entries reference when upgrading from 001_schema_fence_v1", async ({
+    setup,
+  }) => {
+    const { client, keyPrefix } = setup;
+    await using stateAdapter = setup.createStateAdapter();
+    await stateAdapter.migrateToLatest();
+    const chains = await stateAdapter.withTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
+        txCtx,
+        jobs: ["blocker", "dependent", "unreferenced"].map((typeName) => ({
+          id: stateAdapter.config.generateJobId(),
+          typeName,
+          input: null,
+        })),
+      }),
+    );
+    const [blockerChain, dependentChain] = chains;
+    const [continued] = await stateAdapter.withTransaction(async (txCtx) =>
+      stateAdapter.continueJobs({
+        txCtx,
+        jobs: [
+          {
+            id: stateAdapter.config.generateJobId(),
+            typeName: "blocker",
+            input: null,
+            continueFromId: blockerChain.head.id,
+          },
+        ],
+      }),
+    );
+    await stateAdapter.withTransaction(async (txCtx) =>
+      stateAdapter.addJobsBlockers({
+        txCtx,
+        jobBlockers: [{ jobId: dependentChain.head.id, blockedByChainIds: [blockerChain.id] }],
+      }),
+    );
+    const listDependentChains = async () =>
+      (
+        await stateAdapter.listChains({
+          typeName: "blocker",
+          orderBy: "createdAt",
+          independent: false,
+          orderDirection: "desc",
+          page: { limit: 10 },
+        })
+      ).items.map((chain) => chain.id);
+    expect(await listDependentChains()).toEqual([blockerChain.id]);
+
+    const jobIds = [...chains.map((chain) => chain.id), continued!.continuation.id];
+    for (const jobId of jobIds) {
+      const { hasDependents, ...data } = JSON.parse(
+        (await client.hget(`${keyPrefix}job:${jobId}`, "d"))!,
+      );
+      await client.hset(`${keyPrefix}job:${jobId}`, "d", JSON.stringify(data));
+    }
+    await client.del(...(await client.keys(`${keyPrefix}dependent-chains:*`)));
+    await client.srem(`${keyPrefix}migrations`, "002_chain_has_dependents");
+    await client.srem(`${keyPrefix}schema-fences`, "2");
+    await client.sadd(`${keyPrefix}schema-fences`, "1");
+    expect(await listDependentChains()).toEqual([]);
+
+    expect(await stateAdapter.migrateToLatest()).toEqual({
+      applied: ["002_chain_has_dependents"],
+      skipped: ["001_schema_fence_v1"],
+      reverted: [],
+      unrecognized: [],
+    });
+
+    expect(await client.smembers(`${keyPrefix}schema-fences`)).toEqual(["2"]);
+    const flags = await Promise.all(
+      jobIds.map(
+        async (jobId) =>
+          JSON.parse((await client.hget(`${keyPrefix}job:${jobId}`, "d"))!).hasDependents ?? false,
+      ),
+    );
+    expect(flags).toEqual([true, false, false, false]);
+    expect(await listDependentChains()).toEqual([blockerChain.id]);
+    const [completed] = await stateAdapter.withTransaction(async (txCtx) =>
+      stateAdapter.completeJobs({
+        txCtx,
+        jobs: [{ jobId: continued!.continuation.id, output: null }],
+      }),
+    );
+    expect(completed!.hasDependents).toBe(true);
   });
 });

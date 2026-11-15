@@ -474,13 +474,13 @@ const Page = () => (
     <h2>Write fence</h2>
     <p>
       Every insert, update or delete of a job, a blocker or a worker references an empty{" "}
-      <code>{"{prefix}"}schema_fence_v1</code> table, the write fence of the adapter's schema
-      version. A breaking migration drops the fence tables of older versions, so code older than the
-      schema fails each write with <code>SchemaFencedError</code> and changes nothing, instead of
-      corrupting state. Reads still work, and older workers report the error through{" "}
-      <code>workerError</code> and keep retrying. Stop them once you have deployed the newer
-      version. Processes on 0.17 reference no fence, so stop them before the first breaking
-      migration.
+      <code>{"{prefix}"}schema_fence_v2</code> table, the write fence of the adapter's schema
+      version. A breaking migration, such as <code>002_blocker_counters</code>, drops the fence
+      tables of older versions, so code older than the schema fails each write with{" "}
+      <code>SchemaFencedError</code> and changes nothing, instead of corrupting state. Reads still
+      work, and older workers report the error through <code>workerError</code> and keep retrying.
+      Stop them once you have deployed the newer version. Processes on 0.17 reference no fence, so
+      stop them before <code>migrateToLatest()</code> runs.
     </p>
 
     <h2>Schema</h2>
@@ -495,10 +495,9 @@ const Page = () => (
     <p>
       A database migrated by 0.17 is carried onto the schema by adding the{" "}
       <code>{"{prefix}"}schema_fence_v1</code> table and recording <code>001_schema_v1</code> next
-      to the 0.17 migration records, without touching job or worker rows, so 0.17 processes keep
-      running while <code>migrateToLatest()</code> runs, and a 0.17 process that restarts afterwards
-      finds no migration left to apply. A 0.16 database is refused: upgrade it with{" "}
-      <code>@queuert/sqlite</code> 0.17 first.
+      to the 0.17 migration records, without touching job or worker rows; the migrations after{" "}
+      <code>001_schema_v1</code> then run as on any other database. A 0.16 database is refused:
+      upgrade it with <code>@queuert/sqlite</code> 0.17 first.
     </p>
     <p>
       The migrator behind <code>migrateToLatest()</code> is exported for your own tables too; see{" "}

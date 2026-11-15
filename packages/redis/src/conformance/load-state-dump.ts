@@ -55,7 +55,11 @@ const WRITE_BATCH_ARGUMENTS = 50_000;
 
 const NO_INDEX_ENTRIES: IndexEntries = { zsets: [], sets: [], counters: [] };
 
-const toStoredJob = (row: DumpJobRow, blockers: StateJobBlockerInfo[]): StoredJob => ({
+const toStoredJob = (
+  row: DumpJobRow,
+  blockers: StateJobBlockerInfo[],
+  hasDependents: boolean,
+): StoredJob => ({
   id: row.id,
   typeName: row.typeName,
   chainId: row.chainId,
@@ -80,6 +84,7 @@ const toStoredJob = (row: DumpJobRow, blockers: StateJobBlockerInfo[]): StoredJo
   deduplicationKey: row.chainDeduplicationKey,
   chainTraceContext: row.chainTraceContext,
   seq: nextSeq(new Date(row.createdAt)),
+  hasDependents,
   blockers: blockers.map(({ blockedByChainId, index, traceContext }) => ({
     blockedByChainId,
     index,
@@ -138,8 +143,13 @@ export const loadStateDump = async (
   };
 
   const blockersByJobId = Map.groupBy(dump.blockers, (blocker) => blocker.jobId);
+  const referencedChainIds = new Set(dump.blockers.map((blocker) => blocker.blockedByChainId));
   for (const job of dump.jobs) {
-    const stored = toStoredJob(mapRow.job(job), blockersByJobId.get(job.id) ?? []);
+    const stored = toStoredJob(
+      mapRow.job(job),
+      blockersByJobId.get(job.id) ?? [],
+      job.chainIndex === 0 && referencedChainIds.has(job.id),
+    );
     await write(keys.job(stored.id), stored, schema.jobIndexEntries(stored));
   }
 

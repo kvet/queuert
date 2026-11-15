@@ -250,7 +250,10 @@ export type StateAdapter<
     }[];
   }) => ModeResult<TMode, ((StateJob & { continuation: StateJobInfo }) | undefined)[]>;
 
-  /** Completes each job with its output, ending its chain and recording `workerId` as `completedBy`; `undefined` on a miss. */
+  /**
+   * Completes each job with its output, ending its chain and recording `workerId` as `completedBy`;
+   * `undefined` on a miss. `hasDependents` is `false` only when no blocker row references the chain.
+   */
   completeJobs: (
     params: {
       jobs: {
@@ -260,7 +263,7 @@ export type StateAdapter<
         workerId?: TWorkerId;
       }[];
     } & TransactionTxContextParam<TTxContext>,
-  ) => ModeResult<TMode, (StateJob | undefined)[]>;
+  ) => ModeResult<TMode, ((StateJob & { hasDependents: boolean }) | undefined)[]>;
 
   /** Returns jobs to pending, clearing any running attempt, or moves a blocked job's `scheduledAt`; `undefined` on a miss. */
   rescheduleJobs: (
@@ -312,7 +315,10 @@ export type StateAdapter<
     params: { jobId: TJobId } & AutocommitTxContextParam<TTxContext>,
   ) => ModeResult<TMode, StateChain[]>;
 
-  /** Moves a completed chain's dependents to pending once all their blockers completed; one entry per blocker row. */
+  /**
+   * Moves a completed chain's dependents to pending once all their blockers completed; one entry
+   * per blocker row. Called only when `completeJobs` reports `hasDependents`.
+   */
   unblockJobs: (
     params: { blockedByChainId: TJobId } & TransactionTxContextParam<TTxContext>,
   ) => ModeResult<TMode, StateDependentJob[]>;

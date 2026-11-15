@@ -820,7 +820,11 @@ export const createInProcessState = (
               blocking: chainState.blocking,
             });
           }
-          return { ...completed, chain: chain.state!.info };
+          return {
+            ...completed,
+            chain: chain.state!.info,
+            hasDependents: chain.dependents !== undefined,
+          };
         });
       }),
 

@@ -11,6 +11,7 @@ import {
   toConformanceTestCases,
 } from "queuert/conformance-internal";
 
+import { SCHEMA_VERSION } from "../state-adapter/schema.redis.ts";
 import { createRedisStateAdapter } from "../state-adapter/state-adapter.redis.ts";
 import type { RedisStateProvider } from "../state-provider/state-provider.redis.ts";
 
@@ -231,7 +232,11 @@ export const createRedisStateProviderConformanceContext = ({
     const stateProvider = await createStateProvider();
     try {
       for (const keyPrefix of keyPrefixes) {
-        await stateProvider.eval(FENCE_SCRIPT, [`${keyPrefix}schema-fences`], [action, "1"]);
+        await stateProvider.eval(
+          FENCE_SCRIPT,
+          [`${keyPrefix}schema-fences`],
+          [action, String(SCHEMA_VERSION)],
+        );
       }
     } finally {
       await stateProvider.close?.();

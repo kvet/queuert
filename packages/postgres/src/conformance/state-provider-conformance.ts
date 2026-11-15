@@ -249,11 +249,11 @@ export const createPgStateProviderConformanceContext = async ({
       return stateAdapter;
     },
     withWritesFenced: async (fn) => {
-      await executeDdl(`DROP TABLE ${tables}schema_fence_v1`);
+      await executeDdl(`DROP TABLE ${tables}schema_fence_v2`);
       try {
         return await fn();
       } finally {
-        await executeDdl(`CREATE TABLE ${tables}schema_fence_v1 (id integer PRIMARY KEY)`);
+        await executeDdl(`CREATE TABLE ${tables}schema_fence_v2 (id integer PRIMARY KEY)`);
       }
     },
   };
