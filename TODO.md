@@ -3,7 +3,6 @@
 # Medium term
 
 - [REF] PostgreSQL pipelining
-- [TASK] Multi-process SQLite conformance — the SQLite conformance suites run every transaction on one `:memory:` connection, the async suite behind the in-process `AsyncRwLock` and the sync suite on one thread, so the `lock: "exclusive"` cases pass without exercising SQLite's own write lock. Add a mode that contends from a second connection in a worker thread or child process against a WAL file (better-sqlite3 blocks the event loop while it waits on `busy_timeout`, so both connections cannot share one thread).
 - [TASK] Built-in cleanup. See `design/builtin-cleanup.md`.
 - [TASK] Best-effort `rescheduleJobs` — today it fails the whole batch if any job is not pending, so apps hand-roll "wake a sleeping chain" loops (`listChainJobs` + `rescheduleJob` + catch `JobNotReschedulableError`). Add an option such as `skipNotReschedulable: true` that returns a per-job outcome (`rescheduled` / `not-pending` / `completed`) instead of throwing.
 - [TASK] Reschedule reason and failure-streak backoff — persist `failure_streak` and the `complete({ reschedule, reason })` reason, compute backoff from the streak instead of `attempt`. See `design/reschedule-reason-and-backoff.md`.
