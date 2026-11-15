@@ -1,5 +1,88 @@
 # @queuert/redis
 
+## 0.18.0
+
+### Major Changes
+
+- 0834205: Queuert now requires Node.js 24 or later. Node.js 22 is no longer supported; upgrade the runtime before upgrading Queuert.
+
+  - The `engines.node` field of every package is now `>=24`.
+
+- cf464c5: Every factory now returns its value synchronously instead of a promise, so a client, worker runner or adapter can be built at module top level or in a non-async context. `await` on the result keeps working.
+
+  - Synchronous: `createClient`, `createWorkerRunner`, `createPgStateAdapter`, `createPgNotifyAdapter`, `createSqliteStateAdapter`, `createRedisNotifyAdapter`, `createNatsNotifyAdapter`, `createOtelObservabilityAdapter` and `createDashboard`.
+  - Construction-time validation errors (invalid worker runner options, `InvalidWorkerIdError`, `DuplicateJobTypeError`, missing `requiredAttemptMiddleware`, invalid `schema`, `tablePrefix`, `jobIdType` or `workerIdType`) throw instead of rejecting.
+  - `createX(...).then((x) => ...)` becomes `const x = createX(...)`, and `createX(...).catch(...)` becomes a `try` / `catch` around the call.
+  - A `Promise<Client>` (or other `Promise<...>`) annotation on a factory result becomes `Client`, and `Awaited<ReturnType<typeof createX>>` can be simplified to `ReturnType<typeof createX>`.
+
+### Minor Changes
+
+- 8e6214a: State and notify adapters are async disposable: `[Symbol.asyncDispose]` calls `close()`, so an adapter can be held with `await using` and is closed when the scope ends. The `StateAdapter` and `NotifyAdapter` types require it, so a custom adapter must implement it, usually by pointing it at `close`.
+- 1499392: The state provider conformance helpers take `stateAdapterOptions`, so the suite can run against the adapter configuration your application uses. Before, every helper built its adapter with the defaults, so it could not run against a database migrated with another schema, table prefix or ID type, and custom ID generators were never exercised.
+
+  - `createPgStateProviderConformanceContext`, `createMysqlStateProviderConformanceContext` and `createSqliteStateProviderConformanceContext` take `stateAdapterOptions` (the adapter's options besides its provider, and `dialect` for MySQL), create every adapter with them, and migrate and clear the tables they name.
+  - `createRedisStateProviderConformanceContext` takes `stateAdapterOptions` besides its provider and `keyPrefix`; each case still writes under a key prefix of its own.
+  - The PostgreSQL and SQLite `classifyError` cases and the MySQL isolation-level case no longer read the `queuert_job` table.
+
+- 68cb9eb: The conformance suites are lists of cases you run with your own test runner, one test per case, instead of runners that drive the whole suite inside a single test. Your test file owns the database or broker connections in its own hooks and registers a test for each case; `case.run(context)` resolves when the case passes and rejects when it fails. Each case creates its own adapter from the context's `createStateAdapter` and closes it when it ends; the provider helpers take a provider factory (`createStateProvider` or `createNotifyProvider`), build each case's adapter over a new provider from it, and clear the tables for every state case. This works the same under vitest, `node:test` and `bun:test`, and failures and filters show per case. The state adapter cases are split by what an adapter can do, and each adapter package ships cases for the providers you write for it, with a helper that migrates the schema and builds the adapters over providers from your factory.
+
+  - `queuert/conformance`: `stateAdapterConformanceCases`, `concurrentStateAdapterConformanceCases`, `notifyAdapterConformanceCases` and `validationAdapterConformanceCases`, plus the `ConformanceTestCase` type.
+  - `StateConformanceFixture` and `NotifyConformanceFixture` are renamed `StateAdapterConformanceContext` and `NotifyAdapterConformanceContext`.
+  - The countCap case is no longer part of `stateAdapterConformanceCases`: it needs an adapter created with a small `countCap`.
+  - `StateAdapterConformanceContext` takes `createStateAdapter` in place of `stateAdapter`, and `NotifyAdapterConformanceContext` takes `createNotifyAdapter` in place of `notifyAdapter`; the adapters a case creates are closed when it ends.
+  - `withNonTransactionContext` is required on `StateAdapterConformanceContext` and on the PostgreSQL and SQLite provider context helpers, so the `isTransaction` case always runs.
+  - Removed from `queuert/conformance`: `runStateAdapterConformance`, `runNotifyAdapterConformance`, `runValidationAdapterConformance`, `ConformanceError`, `ConformanceReport`, `ConformanceResult`, the conformance options types, `ValidationConformanceFixture` (use `ValidationAdapterConformanceContext`), and the contexts' `transactionConcurrency`, `dispose` and `reset` fields.
+  - New `@queuert/postgres/conformance` with `pgStateProviderConformanceCases`, `createPgStateProviderConformanceContext`, `pgNotifyProviderConformanceCases` and `createPgNotifyProviderConformanceContext`.
+  - New `@queuert/sqlite/conformance` with `sqliteStateProviderConformanceCases` and `createSqliteStateProviderConformanceContext`.
+  - New `@queuert/redis/conformance` with `redisNotifyProviderConformanceCases` and `createRedisNotifyProviderConformanceContext`.
+
+- 6df6caf: Add an experimental Redis state adapter, `createRedisStateAdapter`, that keeps chains, jobs and workers in Redis, standalone or Cluster; its API may change in a minor release. Redis has no interactive transactions, so these transactions are optimistic: reads record what they saw, writes are buffered, and one Lua script commits them only if nothing read changed, running the transaction callback again otherwise. A common setup is a PostgreSQL or SQLite Queuert used as a transactional outbox whose handlers start chains in a Redis Queuert.
+
+  - `createRedisStateAdapter({ stateProvider, keyPrefix?, maxTransactionTries? })` and the `RedisStateProvider` type: a provider is one `eval(script, keys, args)` over any Redis client.
+  - `migrateToLatest()` on the adapter, required before it writes; processes may run it at once and take turns through a lease.
+  - A schema write fence in `{keyPrefix}schema-fences`: writes of code whose schema version a later migration retired fail with `SchemaFencedError` and change nothing.
+  - `keyPrefix` must contain a hash tag such as `{queuert}`, so a Cluster keeps every key in one slot.
+  - Job ids, worker ids and type names that contain a lone UTF-16 surrogate are rejected with an error, since Redis scripts cannot decode them.
+  - `RedisTransactionConflictError` when a transaction keeps conflicting after `maxTransactionTries` tries.
+  - A commit or claim that the client resends after a reconnect applies once.
+  - An exclusive read of a pending job, such as the one `completeChain` takes, keeps workers from claiming that job until the transaction settles or 60 seconds pass.
+  - No transaction waits on another, so cases that expect a lock wait do not apply; `redisStateAdapterLockWaitCaseNames` lists them.
+  - `createRedisStateProviderConformanceContext` and `redisStateProviderConformanceCases` from `@queuert/redis/conformance`.
+  - Client methods accept a transaction context whose only keys are symbols, as the Redis adapter's context is.
+  - The `queuert/conformance` state adapter cases gain a check of `listChains` with `independent: false` across pages and inside a transaction.
+
+- Queuert 0.18 can run synchronously inside your driver's own transaction. It adds experimental MySQL/MariaDB and Redis state adapters, a broker-free IPC notify adapter and a public migrator for your own migrations. Schema fencing protects state across upgrades, and the release reworks tx hooks, the worker runner, job type codecs and adapter conformance, with breaking API changes and a Node.js 24 minimum.
+
+### Patch Changes
+
+- 9e6c2b5: Functions that run in both synchronous and asynchronous mode now carry their real names in stack traces and CPU profiles, and a synchronous client or in-process state adapter given a callback that returns a promise reports it with one shared error message.
+
+  - Compiled functions are named after the variable or property they belong to, such as `createChainSync` and `createChainAsync`, instead of `sync` and `async`.
+  - A promise returned to a synchronous `completeChain` handler, `completeJob` callback or in-process `withTransaction` callback throws "A synchronous step got a promise: the value must be synchronous".
+
+- Updated dependencies [8e6214a]
+- Updated dependencies [5faa717]
+- Updated dependencies [23481af]
+- Updated dependencies [fa5f72e]
+- Updated dependencies [9358147]
+- Updated dependencies [77e02a0]
+- Updated dependencies [bce5c32]
+- Updated dependencies [aedda52]
+- Updated dependencies [68cb9eb]
+- Updated dependencies [0834205]
+- Updated dependencies [9832912]
+- Updated dependencies [b1c0838]
+- Updated dependencies [6df6caf]
+- Updated dependencies
+- Updated dependencies [cb19191]
+- Updated dependencies [e4244e4]
+- Updated dependencies [9e6c2b5]
+- Updated dependencies [bce5c32]
+- Updated dependencies [cf464c5]
+- Updated dependencies [747cd37]
+- Updated dependencies [cf464c5]
+  - queuert@0.18.0
+
 ## 0.17.0
 
 ### Major Changes

@@ -1,5 +1,131 @@
 # @queuert/postgres
 
+## 0.18.0
+
+### Major Changes
+
+- 8e6214a: `PgStateAdapter` and `SqliteStateAdapter` no longer have `truncate()`. It only existed to clear the tables between tests; run `TRUNCATE` or `DELETE` against the job, blocker and worker tables yourself. The provider conformance contexts still clear the tables before every case.
+- 9358147: Worker runners no longer reschedule running jobs that hold no attempt token, which only a worker of a version before 0.17 claims. Upgrade from a version before 0.17 through 0.17 and let every process on the previous version stop before deploying this version, or a job such a process claims stays running.
+
+  - `StateAdapter.listWorkerJobs` no longer accepts `workerId: null`; custom state adapters can drop the listing of running jobs without an attempt token.
+
+- 0834205: Queuert now requires Node.js 24 or later. Node.js 22 is no longer supported; upgrade the runtime before upgrading Queuert.
+
+  - The `engines.node` field of every package is now `>=24`.
+
+- b1c0838: State providers own commit and rollback callbacks. `PgStateProvider`, `SqliteStateProvider` and `StateAdapter` require `onTransactionCommit(txCtx, callback)` and `onTransactionRollback(txCtx, callback)`, and the client and worker register their side effects only through them. A provider over an ORM with its own transaction events (such as MikroORM) implements them natively, so callers pass the transaction context alone; a provider without them carries `txHooks` in its transaction context, creates them in `withTransaction` with `withTxHooks`, and registers callbacks on them, so callers keep passing `txHooks`, now as a field of that context.
+
+  - `txHooks` is no longer a separate option of `complete` and the client's mutating methods; whatever the provider's context type requires is required for mutating calls and optional for reads.
+  - `fence` takes a partial transaction context, as reads do.
+  - The `completeChain` handler's `completeJob` callback no longer receives `txHooks`; register side effects on the transaction context you passed.
+  - `createPgStateProviderConformanceContext` and `createSqliteStateProviderConformanceContext` accept an optional `withSavepoint`; when given, the provider cases check that `onTransactionCommit` and `onTransactionRollback` follow savepoints.
+  - `complete` succeeds once per attempt instead of once per `txHooks`: a second or concurrent call throws without aborting the attempt, and a call whose transaction rolled back can be retried in a new transaction.
+
+- e4244e4: Code running against a newer schema can no longer corrupt state. The schema now carries an empty write fence table that every insert, update or delete of a job, blocker or worker references. A later breaking migration drops it, so writes from older processes fail with `SchemaFencedError` and change nothing. The migration history of `@queuert/postgres` and `@queuert/sqlite` is squashed into a single `001_schema_v1` migration at schema version 1. `migrateToLatest()` carries a 0.17 database onto it by adding the fence table and recording `001_schema_v1` next to the 0.17 records, without touching job or worker rows, so 0.17 processes keep running, and can restart and run their own `migrateToLatest()`, during the upgrade. 0.17 references no fence, so stop every 0.17 process before the first breaking migration.
+
+  - New `SchemaFencedError`, thrown by every PostgreSQL and SQLite state adapter write once the schema fenced its code version; worker runners report it through `workerError`.
+  - The schema adds a `{prefix}schema_fence_v1` table on PostgreSQL and SQLite.
+  - `001_schema_v1` builds the whole schema in place of `001_initial_schema` and `002_worker_liveness`, which stay recorded on an upgraded 0.17 database. A 0.16 database is refused: upgrade it with 0.17 first.
+  - `PgStateProvider` and `SqliteStateProvider` require `classifyError({ error })`, returning `{ kind: "undefined_table", tableName }` with the missing table's name for a missing-table error, and `undefined` otherwise or when the name cannot be read. Custom providers must implement it; `pgStateProviderConformanceCases` and `sqliteStateProviderConformanceCases` check it, along with the fence itself.
+
+- cf464c5: Every factory now returns its value synchronously instead of a promise, so a client, worker runner or adapter can be built at module top level or in a non-async context. `await` on the result keeps working.
+
+  - Synchronous: `createClient`, `createWorkerRunner`, `createPgStateAdapter`, `createPgNotifyAdapter`, `createSqliteStateAdapter`, `createRedisNotifyAdapter`, `createNatsNotifyAdapter`, `createOtelObservabilityAdapter` and `createDashboard`.
+  - Construction-time validation errors (invalid worker runner options, `InvalidWorkerIdError`, `DuplicateJobTypeError`, missing `requiredAttemptMiddleware`, invalid `schema`, `tablePrefix`, `jobIdType` or `workerIdType`) throw instead of rejecting.
+  - `createX(...).then((x) => ...)` becomes `const x = createX(...)`, and `createX(...).catch(...)` becomes a `try` / `catch` around the call.
+  - A `Promise<Client>` (or other `Promise<...>`) annotation on a factory result becomes `Client`, and `Awaited<ReturnType<typeof createX>>` can be simplified to `ReturnType<typeof createX>`.
+
+### Minor Changes
+
+- 8e6214a: State and notify adapters are async disposable: `[Symbol.asyncDispose]` calls `close()`, so an adapter can be held with `await using` and is closed when the scope ends. The `StateAdapter` and `NotifyAdapter` types require it, so a custom adapter must implement it, usually by pointing it at `close`.
+- 1499392: The state provider conformance helpers take `stateAdapterOptions`, so the suite can run against the adapter configuration your application uses. Before, every helper built its adapter with the defaults, so it could not run against a database migrated with another schema, table prefix or ID type, and custom ID generators were never exercised.
+
+  - `createPgStateProviderConformanceContext`, `createMysqlStateProviderConformanceContext` and `createSqliteStateProviderConformanceContext` take `stateAdapterOptions` (the adapter's options besides its provider, and `dialect` for MySQL), create every adapter with them, and migrate and clear the tables they name.
+  - `createRedisStateProviderConformanceContext` takes `stateAdapterOptions` besides its provider and `keyPrefix`; each case still writes under a key prefix of its own.
+  - The PostgreSQL and SQLite `classifyError` cases and the MySQL isolation-level case no longer read the `queuert_job` table.
+
+- 68cb9eb: The conformance suites are lists of cases you run with your own test runner, one test per case, instead of runners that drive the whole suite inside a single test. Your test file owns the database or broker connections in its own hooks and registers a test for each case; `case.run(context)` resolves when the case passes and rejects when it fails. Each case creates its own adapter from the context's `createStateAdapter` and closes it when it ends; the provider helpers take a provider factory (`createStateProvider` or `createNotifyProvider`), build each case's adapter over a new provider from it, and clear the tables for every state case. This works the same under vitest, `node:test` and `bun:test`, and failures and filters show per case. The state adapter cases are split by what an adapter can do, and each adapter package ships cases for the providers you write for it, with a helper that migrates the schema and builds the adapters over providers from your factory.
+
+  - `queuert/conformance`: `stateAdapterConformanceCases`, `concurrentStateAdapterConformanceCases`, `notifyAdapterConformanceCases` and `validationAdapterConformanceCases`, plus the `ConformanceTestCase` type.
+  - `StateConformanceFixture` and `NotifyConformanceFixture` are renamed `StateAdapterConformanceContext` and `NotifyAdapterConformanceContext`.
+  - The countCap case is no longer part of `stateAdapterConformanceCases`: it needs an adapter created with a small `countCap`.
+  - `StateAdapterConformanceContext` takes `createStateAdapter` in place of `stateAdapter`, and `NotifyAdapterConformanceContext` takes `createNotifyAdapter` in place of `notifyAdapter`; the adapters a case creates are closed when it ends.
+  - `withNonTransactionContext` is required on `StateAdapterConformanceContext` and on the PostgreSQL and SQLite provider context helpers, so the `isTransaction` case always runs.
+  - Removed from `queuert/conformance`: `runStateAdapterConformance`, `runNotifyAdapterConformance`, `runValidationAdapterConformance`, `ConformanceError`, `ConformanceReport`, `ConformanceResult`, the conformance options types, `ValidationConformanceFixture` (use `ValidationAdapterConformanceContext`), and the contexts' `transactionConcurrency`, `dispose` and `reset` fields.
+  - New `@queuert/postgres/conformance` with `pgStateProviderConformanceCases`, `createPgStateProviderConformanceContext`, `pgNotifyProviderConformanceCases` and `createPgNotifyProviderConformanceContext`.
+  - New `@queuert/sqlite/conformance` with `sqliteStateProviderConformanceCases` and `createSqliteStateProviderConformanceContext`.
+  - New `@queuert/redis/conformance` with `redisNotifyProviderConformanceCases` and `createRedisNotifyProviderConformanceContext`.
+
+- 4f302a8: The migrator that runs Queuert's own schema is exported, experimentally, for your application's migrations: `createPgMigrator` and `createSqliteMigrator` keep the history in tables you name, run through your state provider, and let many processes migrate on boot at once ([#8](https://github.com/kvet/queuert/issues/8)). Migrations run in list order and can be reverted; each is an `up` and a `down` function that uses your own query builder inside the migration's transaction, or runs outside a transaction when the migration sets `type: "non-transactional"`.
+
+  - New exports: `createPgMigrator` / `createSqliteMigrator` and the `Migration`, `MigrationScript` and `Migrator` types.
+  - `down` is required: `migrateTo` uses it to revert, and a migration that cannot be reverted throws from it. `migrateTo(null)` reverts every applied migration.
+  - Invalid lease timings throw a `TypeError` when the migrator is created; `heartbeatIntervalMs` must be below a third of `ttlMs`.
+  - `MigrationResult` gains `reverted`.
+  - A failing migration rejects with an error naming it, with the original error as `cause`.
+  - With PostgreSQL, the state adapter's `migrateToLatest` no longer issues `CREATE TABLE IF NOT EXISTS` for its history and lease tables once they exist, so a boot against a migrated database logs no server notices, and a process can take over an expired lease while another process's migration transaction is still open.
+  - `@queuert/postgres/conformance` and `@queuert/sqlite/conformance` export migrator conformance cases to run over your state provider.
+
+- Queuert 0.18 can run synchronously inside your driver's own transaction. It adds experimental MySQL/MariaDB and Redis state adapters, a broker-free IPC notify adapter and a public migrator for your own migrations. Schema fencing protects state across upgrades, and the release reworks tx hooks, the worker runner, job type codecs and adapter conformance, with breaking API changes and a Node.js 24 minimum.
+
+### Patch Changes
+
+- 77e02a0: A `createChain` or `createChains` call that matches an existing multi-step chain through deduplication returns that chain's real output. Before, the PostgreSQL and SQLite adapters left the tail out of a deduplicated match, so a match against a completed chain that had continued reported the head job's empty output.
+
+  - `createJobs` on the PostgreSQL and SQLite state adapters returns the latest continuation as `tail` for a deduplicated match, as `getChains` does.
+
+- 9bffa41: New experimental package `@queuert/mysql`: a state adapter for MySQL 8.4+ and MariaDB 11.4+ (InnoDB), so chains and jobs commit in the same transactions as application data kept in either server. One adapter serves both servers through a required `dialect` option, and, as on PostgreSQL, Queuert supports READ COMMITTED only: its own transactions open at READ COMMITTED, and transactions you pass in must use it too. There is no notify adapter: pair it with the Redis or NATS notify adapter, or let workers poll.
+
+  - `createMysqlStateAdapter({ stateProvider, dialect, schema?, tablePrefix?, jobIdType?, workerIdType?, … })` with the `MysqlStateAdapter` and `MysqlStateProvider` types; `jobIdType` and `workerIdType` take `"uuid"` or `"varchar(n)"`.
+  - `migrateToLatest()` installs the schema with idempotent statements, so a run that stopped partway resumes.
+  - Type names, deduplication keys and text ids use an exact NO PAD binary collation, and timestamps are stored as UTC `DATETIME(6)` whatever the server or session time zone.
+  - `createMysqlMigrator` runs your application's own migrations with the same lease and history as `createPgMigrator`; DDL commits implicitly on MySQL and MariaDB, so schema changes belong in rerunnable `non-transactional` migrations.
+  - `@queuert/mysql/conformance` exports `mysqlStateProviderConformanceCases`, `mysqlMigratorConformanceCases` and their context helpers to check a provider you write; the `state-mysql-mysql2` example is a reference provider for mysql2.
+  - The migrator conformance cases gain one that checks a failing transactional migration rolls back its row writes, and the DDL rollback case moved into its own group, so stores whose servers commit DDL implicitly can run the rest; `pgMigratorConformanceCases` and `sqliteMigratorConformanceCases` include the new case.
+
+- 9bffa41: State providers state READ COMMITTED explicitly when they open a transaction, so a server or role whose `default_transaction_isolation` is higher can no longer raise the level of Queuert's own transactions.
+
+  - `PgStateProvider.withTransaction` documents the requirement; the reference providers in the examples pass the level through their client (`BEGIN ISOLATION LEVEL READ COMMITTED`, or the client's isolation-level option).
+  - `pgStateProviderConformanceCases` gains a case that checks `withTransaction` opens transactions at READ COMMITTED.
+
+- cb19191: Processing a job costs less CPU and allocates less memory: about 35–40% less CPU per job with the SQLite and PostgreSQL state adapters in the runtime performance benchmark.
+
+  - Tx hooks and the adapter logging wrappers allocate less per transaction and per adapter call, and flushing tx hooks adds no extra await unless a commit callback returns a promise.
+  - Notifications from transactions that commit at the same time are sent in one notify adapter call, with duplicate job types, chain ids and job ids removed.
+  - A waiting worker wakes up through a plain timer, without creating an `AbortController`, `AbortSignal.any` and an abort `DOMException` on every wait.
+  - With no `log` and no observability adapter configured, events are dropped before their payloads are built.
+  - The PostgreSQL and SQLite state adapters build each query's parameter and column type maps once instead of on every query.
+  - The SQLite state adapter claims jobs with a prepared statement that SQLite keeps, instead of one it re-parses and re-plans on every claim because of its bound `LIMIT`.
+  - The SQLite state adapter skips unblocking dependent jobs with a single indexed check when no job is blocked by the completed chain, as the PostgreSQL adapter already does.
+
+- 9e6c2b5: Functions that run in both synchronous and asynchronous mode now carry their real names in stack traces and CPU profiles, and a synchronous client or in-process state adapter given a callback that returns a promise reports it with one shared error message.
+
+  - Compiled functions are named after the variable or property they belong to, such as `createChainSync` and `createChainAsync`, instead of `sync` and `async`.
+  - A promise returned to a synchronous `completeChain` handler, `completeJob` callback or in-process `withTransaction` callback throws "A synchronous step got a promise: the value must be synchronous".
+
+- Updated dependencies [8e6214a]
+- Updated dependencies [5faa717]
+- Updated dependencies [23481af]
+- Updated dependencies [fa5f72e]
+- Updated dependencies [9358147]
+- Updated dependencies [77e02a0]
+- Updated dependencies [bce5c32]
+- Updated dependencies [aedda52]
+- Updated dependencies [68cb9eb]
+- Updated dependencies [0834205]
+- Updated dependencies [9832912]
+- Updated dependencies [b1c0838]
+- Updated dependencies [6df6caf]
+- Updated dependencies
+- Updated dependencies [cb19191]
+- Updated dependencies [e4244e4]
+- Updated dependencies [9e6c2b5]
+- Updated dependencies [bce5c32]
+- Updated dependencies [cf464c5]
+- Updated dependencies [747cd37]
+- Updated dependencies [cf464c5]
+  - queuert@0.18.0
+
 ## 0.17.0
 
 ### Major Changes

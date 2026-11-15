@@ -1,5 +1,50 @@
 # @queuert/nats
 
+## 0.18.0
+
+### Major Changes
+
+- 0834205: Queuert now requires Node.js 24 or later. Node.js 22 is no longer supported; upgrade the runtime before upgrading Queuert.
+
+  - The `engines.node` field of every package is now `>=24`.
+
+- cf464c5: Every factory now returns its value synchronously instead of a promise, so a client, worker runner or adapter can be built at module top level or in a non-async context. `await` on the result keeps working.
+
+  - Synchronous: `createClient`, `createWorkerRunner`, `createPgStateAdapter`, `createPgNotifyAdapter`, `createSqliteStateAdapter`, `createRedisNotifyAdapter`, `createNatsNotifyAdapter`, `createOtelObservabilityAdapter` and `createDashboard`.
+  - Construction-time validation errors (invalid worker runner options, `InvalidWorkerIdError`, `DuplicateJobTypeError`, missing `requiredAttemptMiddleware`, invalid `schema`, `tablePrefix`, `jobIdType` or `workerIdType`) throw instead of rejecting.
+  - `createX(...).then((x) => ...)` becomes `const x = createX(...)`, and `createX(...).catch(...)` becomes a `try` / `catch` around the call.
+  - A `Promise<Client>` (or other `Promise<...>`) annotation on a factory result becomes `Client`, and `Awaited<ReturnType<typeof createX>>` can be simplified to `ReturnType<typeof createX>`.
+
+### Minor Changes
+
+- 8e6214a: State and notify adapters are async disposable: `[Symbol.asyncDispose]` calls `close()`, so an adapter can be held with `await using` and is closed when the scope ends. The `StateAdapter` and `NotifyAdapter` types require it, so a custom adapter must implement it, usually by pointing it at `close`.
+- Queuert 0.18 can run synchronously inside your driver's own transaction. It adds experimental MySQL/MariaDB and Redis state adapters, a broker-free IPC notify adapter and a public migrator for your own migrations. Schema fencing protects state across upgrades, and the release reworks tx hooks, the worker runner, job type codecs and adapter conformance, with breaking API changes and a Node.js 24 minimum.
+
+### Patch Changes
+
+- Updated dependencies [8e6214a]
+- Updated dependencies [5faa717]
+- Updated dependencies [23481af]
+- Updated dependencies [fa5f72e]
+- Updated dependencies [9358147]
+- Updated dependencies [77e02a0]
+- Updated dependencies [bce5c32]
+- Updated dependencies [aedda52]
+- Updated dependencies [68cb9eb]
+- Updated dependencies [0834205]
+- Updated dependencies [9832912]
+- Updated dependencies [b1c0838]
+- Updated dependencies [6df6caf]
+- Updated dependencies
+- Updated dependencies [cb19191]
+- Updated dependencies [e4244e4]
+- Updated dependencies [9e6c2b5]
+- Updated dependencies [bce5c32]
+- Updated dependencies [cf464c5]
+- Updated dependencies [747cd37]
+- Updated dependencies [cf464c5]
+  - queuert@0.18.0
+
 ## 0.17.0
 
 ### Major Changes

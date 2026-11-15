@@ -1,5 +1,83 @@
 # @queuert/dashboard
 
+## 0.18.0
+
+### Major Changes
+
+- 927d23f: The dashboard frontend now talks to its server through a single `POST {basePath}/api/rpc` endpoint, replacing the per-resource `/api/chains`, `/api/jobs` and `/api/workers` routes. The `createDashboard` options and `{ fetch }` handler are unchanged; only middleware or proxy rules that match the old API paths or methods need updating.
+
+  - The endpoint accepts only `POST` with `Content-Type: application/json`; other methods get a `405` and other content types a `415`.
+  - Responses stream as NDJSON, so an action such as deleting a chain is acknowledged immediately and its outcome arrives on the same response once the transaction commits.
+  - Reads and writes share the one endpoint and method, so a proxy rule can no longer tell them apart by HTTP method; gate `/api/rpc` as a whole.
+  - Responses decode without `eval`, so the dashboard works under a Content Security Policy without `unsafe-eval`.
+
+- 0834205: Queuert now requires Node.js 24 or later. Node.js 22 is no longer supported; upgrade the runtime before upgrading Queuert.
+
+  - The `engines.node` field of every package is now `>=24`.
+
+- cf464c5: Every factory now returns its value synchronously instead of a promise, so a client, worker runner or adapter can be built at module top level or in a non-async context. `await` on the result keeps working.
+
+  - Synchronous: `createClient`, `createWorkerRunner`, `createPgStateAdapter`, `createPgNotifyAdapter`, `createSqliteStateAdapter`, `createRedisNotifyAdapter`, `createNatsNotifyAdapter`, `createOtelObservabilityAdapter` and `createDashboard`.
+  - Construction-time validation errors (invalid worker runner options, `InvalidWorkerIdError`, `DuplicateJobTypeError`, missing `requiredAttemptMiddleware`, invalid `schema`, `tablePrefix`, `jobIdType` or `workerIdType`) throw instead of rejecting.
+  - `createX(...).then((x) => ...)` becomes `const x = createX(...)`, and `createX(...).catch(...)` becomes a `try` / `catch` around the call.
+  - A `Promise<Client>` (or other `Promise<...>`) annotation on a factory result becomes `Client`, and `Awaited<ReturnType<typeof createX>>` can be simplified to `ReturnType<typeof createX>`.
+
+### Minor Changes
+
+- Queuert 0.18 can run synchronously inside your driver's own transaction. It adds experimental MySQL/MariaDB and Redis state adapters, a broker-free IPC notify adapter and a public migrator for your own migrations. Schema fencing protects state across upgrades, and the release reworks tx hooks, the worker runner, job type codecs and adapter conformance, with breaking API changes and a Node.js 24 minimum.
+
+### Patch Changes
+
+- 5faa717: The dashboard's theme follows a change made in another tab of the same dashboard: switching between System, Light and Dark updates every open tab.
+- bce5c32: Users with a SQLite driver that runs statements synchronously can call Queuert inside the driver's own synchronous transaction, such as `db.transaction(() => …)()`. The client follows its state adapter's mode: over a `StateAdapter` in the `"sync"` mode, `createClient` returns a client whose state-touching methods, workerless `completeChain`, and the attempt handler's `complete` and `fence` return plain values and throw synchronously, so an error rolls the transaction back. Over an async `StateAdapter` they return promises as before. `createProcessors`, `createWorkerRunner`, `withTxHooks` and `createTxHooks` are the same API in both modes.
+
+  - `StateAdapter` and `NotifyAdapter` take a required mode parameter, so existing references must name it: `StateAdapter<TTxContext, TJobId, TWorkerId, "async">` and `NotifyAdapter<"async">` are the promise-returning adapters, `StateAdapter<TTxContext, TJobId, TWorkerId, "sync">` and `NotifyAdapter<"sync">` are adapters that set `sync: true`, close synchronously and are held with `using`, and `StateAdapter<any, any, any, "async" | "sync">` is an adapter of either mode; an async adapter leaves `sync` unset or `false`. Every method of an adapter with `sync: true` must return a plain value: one that returns a promise fails the call with an error. Also new in `queuert`: `PageParams`.
+  - `createClient` takes a state adapter of either mode and types `Client`'s methods by it; over an async state adapter the notify adapter may be of either mode, while a sync state adapter takes only a sync notify adapter, and `createClient` throws otherwise; `awaitChain` returns a promise in both.
+  - Over a synchronous client, the handlers of `createProcessors` get a synchronous `complete` and `fence`, and the worker runner keeps its async `start`, `stop`, `close` and `[Symbol.asyncDispose]`.
+  - `withTxHooks` returns the callback's value and runs the commit callbacks synchronously when the callback returns a plain value, and throws after every commit callback has run if one of them returned a promise; `createTxHooks().flush()` returns a promise only when a commit callback returned one.
+  - Attempt middleware passed to `createProcessors` must be typed for the client's state adapter: middleware typed for a different concrete state adapter is a compile error.
+  - `createDashboard` accepts a client over a state adapter of either mode.
+  - The conformance case lists in `queuert/conformance` run over an adapter of either mode, taking the mode from its `sync` marker. The cases only an async adapter can pass moved to their own lists, which an async adapter runs next to the base lists: `asyncStateAdapterConformanceCases` and `asyncStateAdapterEndToEndConformanceCases`, and `asyncSqliteStateProviderConformanceCases` in `@queuert/sqlite/conformance`.
+  - `SqliteStateProvider` and `SqliteStateAdapter` in `@queuert/sqlite` take a mode parameter (`"async"` by default). `createSqliteStateAdapter` returns a `SqliteStateAdapter<…, "sync">` over a `SqliteStateProvider<…, "sync">`, which sets `sync: true`; a synchronous provider takes no lock, implements synchronous `onTransactionCommit` and `onTransactionRollback` (carrying `TxHooks` in its context when the driver has no transaction events), and its `executeSql` throws when a statement without `txCtx` finds the connection inside an open transaction.
+  - `createSqliteStateAdapter` takes the provider type as its first type parameter instead of the transaction context type, so `createSqliteStateAdapter<TTxContext, TJobId>` becomes `createSqliteStateAdapter<typeof stateProvider, TJobId>`; `createSqliteMigrator` no longer takes a type parameter and infers everything from its `stateProvider`.
+  - `Migrator`, `Migration` and `MigrationScript` in `@queuert/sqlite` take an optional mode parameter (`"async"` by default): `createSqliteMigrator` returns a `Migrator<"sync">` over a synchronous provider, which takes `Migration<TTxContext, "sync">` migrations and no lease.
+  - `sqliteStateProviderConformanceCases` and `sqliteMigratorConformanceCases` in `@queuert/sqlite/conformance` run over a provider of either mode, adding the synchronous provider's own contract cases and passing the migrator's lease cases over a synchronous one. `createSqliteStateProviderConformanceContext` and `createSqliteMigratorConformanceContext` accept a synchronous provider, and the state provider context is returned directly for one.
+
+- 747cd37: Transaction hooks are renamed to tx hooks across the library and gain `txHooks.retryBoundary` for drivers that rerun the transaction callback (MongoDB's `session.withTransaction`, Mongoose's `connection.transaction`, or a retry loop inside `withTxHooks`). Rename `transactionHooks` to `txHooks` in every client, `complete` and workerless call, and `withTransactionHooks` / `createTransactionHooks` to `withTxHooks` / `createTxHooks`. Custom hooks move from the keyed hook registry to `txHooks.onCommit(callback)` and `txHooks.onRollback(callback)`, which roll back with savepoints and `retryBoundary` tries on their own, so side effects registered in a rolled-back savepoint never run.
+
+  - Renamed: `withTransactionHooks` → `withTxHooks`, `createTransactionHooks` → `createTxHooks`, `TransactionHooks` → `TxHooks`, `TransactionHooksHandle` → `TxHooksHandle`, `TransactionHooksSavepoint` → `TxHooksSavepoint`, and the `transactionHooks` option field → `txHooks`.
+  - New `txHooks.retryBoundary(fn)`: each rerun of `fn` rolls back what the previous try buffered, so a `complete` in a rolled-back try no longer blocks the retry and its events no longer flush.
+  - The worker runs its own transactions (registration, reclaiming expired or finished attempts, stop) inside `retryBoundary`, so a state adapter whose `withTransaction` reruns its callback no longer reports a reclaim twice.
+  - Registering a hook, opening a savepoint or starting a `retryBoundary` try on tx hooks that were already flushed or discarded throws, instead of buffering a side effect that never runs; rolling back an earlier savepoint at that point does nothing.
+  - Removed: `txHooks.set`, `get`, `has`, `delete` and `getOrInsert`, the `HookDefinition` type and `HookNotRegisteredError`. Register `txHooks.onCommit(() => …)` for work after commit and `txHooks.onRollback(() => …)` for compensation; aggregate or deduplicate inside the callback.
+  - `onRollback` callbacks run newest first when a savepoint or `retryBoundary` try rolls back or the hooks are discarded, and must be synchronous; the handle's `discard()` returns `void` instead of a promise.
+  - Rolling back a savepoint releases every savepoint created after it, so rolling one of those back afterwards does nothing.
+  - The docs guide moves to `/guides/tx-hooks/`.
+  - With knex, pass `{ doNotRejectOnRollback: false }` to `knex.transaction` so a bare `trx.rollback()` rejects instead of flushing the hooks.
+
+- Updated dependencies [8e6214a]
+- Updated dependencies [5faa717]
+- Updated dependencies [23481af]
+- Updated dependencies [fa5f72e]
+- Updated dependencies [9358147]
+- Updated dependencies [77e02a0]
+- Updated dependencies [bce5c32]
+- Updated dependencies [aedda52]
+- Updated dependencies [68cb9eb]
+- Updated dependencies [0834205]
+- Updated dependencies [9832912]
+- Updated dependencies [b1c0838]
+- Updated dependencies [6df6caf]
+- Updated dependencies
+- Updated dependencies [cb19191]
+- Updated dependencies [e4244e4]
+- Updated dependencies [9e6c2b5]
+- Updated dependencies [bce5c32]
+- Updated dependencies [cf464c5]
+- Updated dependencies [747cd37]
+- Updated dependencies [cf464c5]
+  - queuert@0.18.0
+
 ## 0.17.0
 
 ### Major Changes

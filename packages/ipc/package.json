@@ -1,6 +1,6 @@
 {
   "name": "@queuert/ipc",
-  "version": "0.17.0",
+  "version": "0.18.0",
   "description": "IPC notify adapter for Queuert",
   "keywords": [
     "background-jobs",

@@ -1,5 +1,162 @@
 # queuert
 
+## 0.18.0
+
+### Major Changes
+
+- 8e6214a: State and notify adapters are async disposable: `[Symbol.asyncDispose]` calls `close()`, so an adapter can be held with `await using` and is closed when the scope ends. The `StateAdapter` and `NotifyAdapter` types require it, so a custom adapter must implement it, usually by pointing it at `close`.
+- fa5f72e: Replace the job-type registry's `parseInput`/`parseOutput` with a bidirectional codec: the encoders run on every write and produce the form stored in the database, the decoders run on every read and produce the form handlers and client reads see. Previously there was no decode step, so a schema that transformed on write handed the transformed value straight to the handler — a `Date` written as an ISO string came back as a string. Every encoded value is checked for JSON-serializability before it reaches the state adapter, which turns what used to be silent coercion (a `Date` becoming a string, a `Map` becoming `{}`) into a `JobTypeValidationError`.
+
+  - `parseInput`/`parseOutput` are removed from the `createJobTypes` options and `JobTypes`, replaced by `encodeInput`, `decodeInput`, `encodeOutput` and `decodeOutput`, each taking `(typeName, value)`.
+  - The decoders run only for type names the registry lists in `getTypeNames`; rows of a job type the registry does not know are read in their stored form. Keep a job type and a decoder for every stored shape of it until its rows are deleted.
+  - A `JobTypeValidationError` from an encoder or decoder carries only the rejected value in `details`, under `input` or `output`. When an encoded value is not JSON-serializable, `details` holds that encoded value and the `path` to the offending part, which the message also names; for a value nested deeper than 1000 levels, such as a cycle, it holds only the first 20 keys of the path. An encoder or decoder that returns a promise is rejected the same way, since codecs run synchronously.
+  - `defineJobTypes` now constrains `input` and `output` to JSON-serializable types, recursive types included. A definition carrying a `Date`, `Map`, `Set`, or `bigint` is a compile error pointing at codec adapters. `unknown` still passes, so structural job-type references are unaffected. It stays type-only: values pass through with no runtime checks.
+  - New exports: `JsonSerializable`, `JsonPrimitive`, `EnsureJsonSerializable` and `isJsonSerializable`. Codec adapters should constrain their _stored_ type with `EnsureJsonSerializable` and leave the runtime type free; `examples/codec-zod` shows the pattern.
+  - `validateBlockers` receives each blocker chain's input decoded to its runtime form, matching `validateContinueWith`, so structural blocker schemas can match on runtime types such as `Date`.
+  - Observability hooks receive the encoded (stored) form; this is stated in the `ObservabilityAdapter` docs.
+  - Validation adapters must be updated. An adapter that only validates ports mechanically — its `parseInput` becomes both `encodeInput` and `decodeInput`, its `parseOutput` both `encodeOutput` and `decodeOutput`. See `examples/validation-zod` for that case, `examples/codec-zod` for a transforming codec, and `examples/codec-superjson` for one codec shared by every job type.
+
+- 9358147: Worker runners no longer reschedule running jobs that hold no attempt token, which only a worker of a version before 0.17 claims. Upgrade from a version before 0.17 through 0.17 and let every process on the previous version stop before deploying this version, or a job such a process claims stays running.
+
+  - `StateAdapter.listWorkerJobs` no longer accepts `workerId: null`; custom state adapters can drop the listing of running jobs without an attempt token.
+
+- 77e02a0: `queuert/conformance` exports Queuert's end-to-end cases as case lists of their own, so a custom adapter that passes them also works under a real client and worker runners: each end-to-end case builds a client and worker runners over the adapter under test and checks what an application observes, from chains, blockers and scheduling to deduplication, deletion, workerless completion, notifications and recovery from errors. They take a few seconds in all, so you may run them apart from the fast contract cases, such as only in CI; you run them the same way, one test per case with your own test runner.
+
+  - `stateAdapterEndToEndConformanceCases` and `concurrentStateAdapterEndToEndConformanceCases` run the end-to-end cases against a state adapter, the second holding the cases that need transactions running in parallel, such as several blocker chains completing at once.
+  - `notifyAdapterEndToEndConformanceCases` run the end-to-end cases against a notify adapter; they keep state in an in-memory state adapter, so no database is needed.
+  - `StateAdapterConformanceContext` takes an optional `createNotifyAdapter`, shared by every client and worker runner of an end-to-end case; without it each case uses an in-process notify adapter.
+  - The `Expect` type is no longer exported from `queuert/conformance`.
+  - The `StateJob`, `StateJobInfo`, `StateChain`, `StateChainInfo`, `StateJobBlockerInfo`, `StateBlockedJob`, `StateDependentJob`, `StateWorkerInfo`, `StateCount`, `StateWorkerCounts`, `StateJobStatus` and `StateChainStatus` types that `StateAdapter` members take and return are exported from `queuert`, and no longer from `queuert/internal`.
+
+- bce5c32: The in-process state and notify adapters gain a synchronous mode and now default to it. They keep state only in memory and reach only the current process, so they suit tests, scripts and single-process apps that need no persistence; like the Redis state adapter, they do not commit with your application data. Their transaction context is now opaque.
+
+  - `createInProcessStateAdapter` and `createInProcessNotifyAdapter` return the adapter directly instead of a promise, and take a `mode` option, `"sync"` by default: their methods return results directly, and `withTransaction` requires a synchronous callback. Pass `mode: "async"` for promise-returning adapters as before. `InProcessStateAdapter` takes the matching mode parameter, also `"sync"` by default.
+  - Inside a synchronous transaction, a call to the in-process state adapter without that transaction's context, including a nested `withTransaction`, throws instead of running outside it.
+  - The in-process state adapter keeps indexes for its list, count and type-name queries, so they no longer scan every job, and it creates and completes jobs faster.
+  - Removed from `queuert`: `InProcessContext`. Pass the context `withTransaction` gives you without naming its type.
+
+- aedda52: A client created without `notifyAdapter` wakes its own worker runners and `awaitChain` calls through an in-process notify adapter, so a single-process app gets immediate pickup without configuring one. Worker runners in other processes, or built from another client, still poll; pass a shared notify adapter (PostgreSQL, Redis, NATS, or IPC between processes on one host) for those.
+
+  - `createClient` without `notifyAdapter` uses an in-process notify adapter scoped to that client instead of polling only.
+
+- 68cb9eb: The conformance suites are lists of cases you run with your own test runner, one test per case, instead of runners that drive the whole suite inside a single test. Your test file owns the database or broker connections in its own hooks and registers a test for each case; `case.run(context)` resolves when the case passes and rejects when it fails. Each case creates its own adapter from the context's `createStateAdapter` and closes it when it ends; the provider helpers take a provider factory (`createStateProvider` or `createNotifyProvider`), build each case's adapter over a new provider from it, and clear the tables for every state case. This works the same under vitest, `node:test` and `bun:test`, and failures and filters show per case. The state adapter cases are split by what an adapter can do, and each adapter package ships cases for the providers you write for it, with a helper that migrates the schema and builds the adapters over providers from your factory.
+
+  - `queuert/conformance`: `stateAdapterConformanceCases`, `concurrentStateAdapterConformanceCases`, `notifyAdapterConformanceCases` and `validationAdapterConformanceCases`, plus the `ConformanceTestCase` type.
+  - `StateConformanceFixture` and `NotifyConformanceFixture` are renamed `StateAdapterConformanceContext` and `NotifyAdapterConformanceContext`.
+  - The countCap case is no longer part of `stateAdapterConformanceCases`: it needs an adapter created with a small `countCap`.
+  - `StateAdapterConformanceContext` takes `createStateAdapter` in place of `stateAdapter`, and `NotifyAdapterConformanceContext` takes `createNotifyAdapter` in place of `notifyAdapter`; the adapters a case creates are closed when it ends.
+  - `withNonTransactionContext` is required on `StateAdapterConformanceContext` and on the PostgreSQL and SQLite provider context helpers, so the `isTransaction` case always runs.
+  - Removed from `queuert/conformance`: `runStateAdapterConformance`, `runNotifyAdapterConformance`, `runValidationAdapterConformance`, `ConformanceError`, `ConformanceReport`, `ConformanceResult`, the conformance options types, `ValidationConformanceFixture` (use `ValidationAdapterConformanceContext`), and the contexts' `transactionConcurrency`, `dispose` and `reset` fields.
+  - New `@queuert/postgres/conformance` with `pgStateProviderConformanceCases`, `createPgStateProviderConformanceContext`, `pgNotifyProviderConformanceCases` and `createPgNotifyProviderConformanceContext`.
+  - New `@queuert/sqlite/conformance` with `sqliteStateProviderConformanceCases` and `createSqliteStateProviderConformanceContext`.
+  - New `@queuert/redis/conformance` with `redisNotifyProviderConformanceCases` and `createRedisNotifyProviderConformanceContext`.
+
+- 0834205: Queuert now requires Node.js 24 or later. Node.js 22 is no longer supported; upgrade the runtime before upgrading Queuert.
+
+  - The `engines.node` field of every package is now `>=24`.
+
+- b1c0838: State providers own commit and rollback callbacks. `PgStateProvider`, `SqliteStateProvider` and `StateAdapter` require `onTransactionCommit(txCtx, callback)` and `onTransactionRollback(txCtx, callback)`, and the client and worker register their side effects only through them. A provider over an ORM with its own transaction events (such as MikroORM) implements them natively, so callers pass the transaction context alone; a provider without them carries `txHooks` in its transaction context, creates them in `withTransaction` with `withTxHooks`, and registers callbacks on them, so callers keep passing `txHooks`, now as a field of that context.
+
+  - `txHooks` is no longer a separate option of `complete` and the client's mutating methods; whatever the provider's context type requires is required for mutating calls and optional for reads.
+  - `fence` takes a partial transaction context, as reads do.
+  - The `completeChain` handler's `completeJob` callback no longer receives `txHooks`; register side effects on the transaction context you passed.
+  - `createPgStateProviderConformanceContext` and `createSqliteStateProviderConformanceContext` accept an optional `withSavepoint`; when given, the provider cases check that `onTransactionCommit` and `onTransactionRollback` follow savepoints.
+  - `complete` succeeds once per attempt instead of once per `txHooks`: a second or concurrent call throws without aborting the attempt, and a call whose transaction rolled back can be retried in a new transaction.
+
+- bce5c32: Users with a SQLite driver that runs statements synchronously can call Queuert inside the driver's own synchronous transaction, such as `db.transaction(() => …)()`. The client follows its state adapter's mode: over a `StateAdapter` in the `"sync"` mode, `createClient` returns a client whose state-touching methods, workerless `completeChain`, and the attempt handler's `complete` and `fence` return plain values and throw synchronously, so an error rolls the transaction back. Over an async `StateAdapter` they return promises as before. `createProcessors`, `createWorkerRunner`, `withTxHooks` and `createTxHooks` are the same API in both modes.
+
+  - `StateAdapter` and `NotifyAdapter` take a required mode parameter, so existing references must name it: `StateAdapter<TTxContext, TJobId, TWorkerId, "async">` and `NotifyAdapter<"async">` are the promise-returning adapters, `StateAdapter<TTxContext, TJobId, TWorkerId, "sync">` and `NotifyAdapter<"sync">` are adapters that set `sync: true`, close synchronously and are held with `using`, and `StateAdapter<any, any, any, "async" | "sync">` is an adapter of either mode; an async adapter leaves `sync` unset or `false`. Every method of an adapter with `sync: true` must return a plain value: one that returns a promise fails the call with an error. Also new in `queuert`: `PageParams`.
+  - `createClient` takes a state adapter of either mode and types `Client`'s methods by it; over an async state adapter the notify adapter may be of either mode, while a sync state adapter takes only a sync notify adapter, and `createClient` throws otherwise; `awaitChain` returns a promise in both.
+  - Over a synchronous client, the handlers of `createProcessors` get a synchronous `complete` and `fence`, and the worker runner keeps its async `start`, `stop`, `close` and `[Symbol.asyncDispose]`.
+  - `withTxHooks` returns the callback's value and runs the commit callbacks synchronously when the callback returns a plain value, and throws after every commit callback has run if one of them returned a promise; `createTxHooks().flush()` returns a promise only when a commit callback returned one.
+  - Attempt middleware passed to `createProcessors` must be typed for the client's state adapter: middleware typed for a different concrete state adapter is a compile error.
+  - `createDashboard` accepts a client over a state adapter of either mode.
+  - The conformance case lists in `queuert/conformance` run over an adapter of either mode, taking the mode from its `sync` marker. The cases only an async adapter can pass moved to their own lists, which an async adapter runs next to the base lists: `asyncStateAdapterConformanceCases` and `asyncStateAdapterEndToEndConformanceCases`, and `asyncSqliteStateProviderConformanceCases` in `@queuert/sqlite/conformance`.
+  - `SqliteStateProvider` and `SqliteStateAdapter` in `@queuert/sqlite` take a mode parameter (`"async"` by default). `createSqliteStateAdapter` returns a `SqliteStateAdapter<…, "sync">` over a `SqliteStateProvider<…, "sync">`, which sets `sync: true`; a synchronous provider takes no lock, implements synchronous `onTransactionCommit` and `onTransactionRollback` (carrying `TxHooks` in its context when the driver has no transaction events), and its `executeSql` throws when a statement without `txCtx` finds the connection inside an open transaction.
+  - `createSqliteStateAdapter` takes the provider type as its first type parameter instead of the transaction context type, so `createSqliteStateAdapter<TTxContext, TJobId>` becomes `createSqliteStateAdapter<typeof stateProvider, TJobId>`; `createSqliteMigrator` no longer takes a type parameter and infers everything from its `stateProvider`.
+  - `Migrator`, `Migration` and `MigrationScript` in `@queuert/sqlite` take an optional mode parameter (`"async"` by default): `createSqliteMigrator` returns a `Migrator<"sync">` over a synchronous provider, which takes `Migration<TTxContext, "sync">` migrations and no lease.
+  - `sqliteStateProviderConformanceCases` and `sqliteMigratorConformanceCases` in `@queuert/sqlite/conformance` run over a provider of either mode, adding the synchronous provider's own contract cases and passing the migrator's lease cases over a synchronous one. `createSqliteStateProviderConformanceContext` and `createSqliteMigratorConformanceContext` accept a synchronous provider, and the state provider context is returned directly for one.
+
+- cf464c5: Every factory now returns its value synchronously instead of a promise, so a client, worker runner or adapter can be built at module top level or in a non-async context. `await` on the result keeps working.
+
+  - Synchronous: `createClient`, `createWorkerRunner`, `createPgStateAdapter`, `createPgNotifyAdapter`, `createSqliteStateAdapter`, `createRedisNotifyAdapter`, `createNatsNotifyAdapter`, `createOtelObservabilityAdapter` and `createDashboard`.
+  - Construction-time validation errors (invalid worker runner options, `InvalidWorkerIdError`, `DuplicateJobTypeError`, missing `requiredAttemptMiddleware`, invalid `schema`, `tablePrefix`, `jobIdType` or `workerIdType`) throw instead of rejecting.
+  - `createX(...).then((x) => ...)` becomes `const x = createX(...)`, and `createX(...).catch(...)` becomes a `try` / `catch` around the call.
+  - A `Promise<Client>` (or other `Promise<...>`) annotation on a factory result becomes `Client`, and `Awaited<ReturnType<typeof createX>>` can be simplified to `ReturnType<typeof createX>`.
+
+- 747cd37: Transaction hooks are renamed to tx hooks across the library and gain `txHooks.retryBoundary` for drivers that rerun the transaction callback (MongoDB's `session.withTransaction`, Mongoose's `connection.transaction`, or a retry loop inside `withTxHooks`). Rename `transactionHooks` to `txHooks` in every client, `complete` and workerless call, and `withTransactionHooks` / `createTransactionHooks` to `withTxHooks` / `createTxHooks`. Custom hooks move from the keyed hook registry to `txHooks.onCommit(callback)` and `txHooks.onRollback(callback)`, which roll back with savepoints and `retryBoundary` tries on their own, so side effects registered in a rolled-back savepoint never run.
+
+  - Renamed: `withTransactionHooks` → `withTxHooks`, `createTransactionHooks` → `createTxHooks`, `TransactionHooks` → `TxHooks`, `TransactionHooksHandle` → `TxHooksHandle`, `TransactionHooksSavepoint` → `TxHooksSavepoint`, and the `transactionHooks` option field → `txHooks`.
+  - New `txHooks.retryBoundary(fn)`: each rerun of `fn` rolls back what the previous try buffered, so a `complete` in a rolled-back try no longer blocks the retry and its events no longer flush.
+  - The worker runs its own transactions (registration, reclaiming expired or finished attempts, stop) inside `retryBoundary`, so a state adapter whose `withTransaction` reruns its callback no longer reports a reclaim twice.
+  - Registering a hook, opening a savepoint or starting a `retryBoundary` try on tx hooks that were already flushed or discarded throws, instead of buffering a side effect that never runs; rolling back an earlier savepoint at that point does nothing.
+  - Removed: `txHooks.set`, `get`, `has`, `delete` and `getOrInsert`, the `HookDefinition` type and `HookNotRegisteredError`. Register `txHooks.onCommit(() => …)` for work after commit and `txHooks.onRollback(() => …)` for compensation; aggregate or deduplicate inside the callback.
+  - `onRollback` callbacks run newest first when a savepoint or `retryBoundary` try rolls back or the hooks are discarded, and must be synchronous; the handle's `discard()` returns `void` instead of a promise.
+  - Rolling back a savepoint releases every savepoint created after it, so rolling one of those back afterwards does nothing.
+  - The docs guide moves to `/guides/tx-hooks/`.
+  - With knex, pass `{ doNotRejectOnRollback: false }` to `knex.transaction` so a bare `trx.rollback()` rejects instead of flushing the hooks.
+
+- cf464c5: `createInProcessWorker` is renamed to `createWorkerRunner` and its `InProcessWorker` type to `WorkerRunner`, so "worker" keeps meaning one row in the `worker` table and "worker runner" names the object that runs it. The worker runner gains `stop()`, `close()` and `[Symbol.asyncDispose]`, so it can be held with `await using` next to the adapters; `start()` resolves to `undefined` instead of a stop function, so call `workerRunner.stop()` where you called the returned function. Options, events and errors are unchanged.
+
+  - Renamed: `createInProcessWorker` → `createWorkerRunner`, `InProcessWorker` → `WorkerRunner`.
+  - `stop()` does nothing when the worker runner is not started, and concurrent calls wait for the same shutdown; a stopped worker runner can be started again.
+  - `close()` stops the worker runner if it is started and makes every later `start()` throw; `[Symbol.asyncDispose]` calls `close()`. A top-level `await using` closes the worker runner when the module finishes, so a long-running process keeps its scope open until it shuts down.
+  - Configuration error messages start with `createWorkerRunner:`.
+  - The docs page moves from `/how-it-works/in-process-worker/` to `/how-it-works/worker-runner/`; the old URL has no redirect, so update bookmarks and links to it.
+
+### Minor Changes
+
+- 23481af: The client can read the job a chain is currently on for a whole batch of chains in a single state adapter read, instead of one `listChainJobs` call per chain ([#9](https://github.com/kvet/queuert/issues/9)). Both new methods are experimental and may change in a minor release.
+
+  - `client.getChainTailJobs({ chainIds, chainTypeName? })` returns each chain's tail job (its latest job in chain order, or the head job while the chain has not continued), aligned with `chainIds` and `undefined` for a missing chain.
+  - `client.getChainTailJob({ chainId, chainTypeName? })` returns the tail job of one chain.
+  - Both throw `ChainTypeMismatchError` when `chainTypeName` is given and a found chain has another type.
+
+- Queuert 0.18 can run synchronously inside your driver's own transaction. It adds experimental MySQL/MariaDB and Redis state adapters, a broker-free IPC notify adapter and a public migrator for your own migrations. Schema fencing protects state across upgrades, and the release reworks tx hooks, the worker runner, job type codecs and adapter conformance, with breaking API changes and a Node.js 24 minimum.
+- e4244e4: Code running against a newer schema can no longer corrupt state. The schema now carries an empty write fence table that every insert, update or delete of a job, blocker or worker references. A later breaking migration drops it, so writes from older processes fail with `SchemaFencedError` and change nothing. The migration history of `@queuert/postgres` and `@queuert/sqlite` is squashed into a single `001_schema_v1` migration at schema version 1. `migrateToLatest()` carries a 0.17 database onto it by adding the fence table and recording `001_schema_v1` next to the 0.17 records, without touching job or worker rows, so 0.17 processes keep running, and can restart and run their own `migrateToLatest()`, during the upgrade. 0.17 references no fence, so stop every 0.17 process before the first breaking migration.
+
+  - New `SchemaFencedError`, thrown by every PostgreSQL and SQLite state adapter write once the schema fenced its code version; worker runners report it through `workerError`.
+  - The schema adds a `{prefix}schema_fence_v1` table on PostgreSQL and SQLite.
+  - `001_schema_v1` builds the whole schema in place of `001_initial_schema` and `002_worker_liveness`, which stay recorded on an upgraded 0.17 database. A 0.16 database is refused: upgrade it with 0.17 first.
+  - `PgStateProvider` and `SqliteStateProvider` require `classifyError({ error })`, returning `{ kind: "undefined_table", tableName }` with the missing table's name for a missing-table error, and `undefined` otherwise or when the name cannot be read. Custom providers must implement it; `pgStateProviderConformanceCases` and `sqliteStateProviderConformanceCases` check it, along with the fence itself.
+
+### Patch Changes
+
+- 5faa717: `queuert` no longer depends on Node.js built-ins, so its client, worker runner and in-process adapters also run in browsers and service workers: the default job and worker ID generators use the Web Crypto `crypto.randomUUID()`, and page cursors are encoded without `Buffer`. Cursors keep the same base64url format, so cursors issued before the upgrade still work.
+- 9832912: A notify adapter whose unsubscribe fails no longer interrupts the worker or `awaitChain`: the failure is reported like any other notify adapter error, and the caller carries on.
+
+  - A rejected or thrown unsubscribe from `listenJobScheduled`, `listenChainCompleted` or `listenJobAttemptLost` is logged as a `notify_adapter_error` entry naming that operation.
+
+- 6df6caf: Add an experimental Redis state adapter, `createRedisStateAdapter`, that keeps chains, jobs and workers in Redis, standalone or Cluster; its API may change in a minor release. Redis has no interactive transactions, so these transactions are optimistic: reads record what they saw, writes are buffered, and one Lua script commits them only if nothing read changed, running the transaction callback again otherwise. A common setup is a PostgreSQL or SQLite Queuert used as a transactional outbox whose handlers start chains in a Redis Queuert.
+
+  - `createRedisStateAdapter({ stateProvider, keyPrefix?, maxTransactionTries? })` and the `RedisStateProvider` type: a provider is one `eval(script, keys, args)` over any Redis client.
+  - `migrateToLatest()` on the adapter, required before it writes; processes may run it at once and take turns through a lease.
+  - A schema write fence in `{keyPrefix}schema-fences`: writes of code whose schema version a later migration retired fail with `SchemaFencedError` and change nothing.
+  - `keyPrefix` must contain a hash tag such as `{queuert}`, so a Cluster keeps every key in one slot.
+  - Job ids, worker ids and type names that contain a lone UTF-16 surrogate are rejected with an error, since Redis scripts cannot decode them.
+  - `RedisTransactionConflictError` when a transaction keeps conflicting after `maxTransactionTries` tries.
+  - A commit or claim that the client resends after a reconnect applies once.
+  - An exclusive read of a pending job, such as the one `completeChain` takes, keeps workers from claiming that job until the transaction settles or 60 seconds pass.
+  - No transaction waits on another, so cases that expect a lock wait do not apply; `redisStateAdapterLockWaitCaseNames` lists them.
+  - `createRedisStateProviderConformanceContext` and `redisStateProviderConformanceCases` from `@queuert/redis/conformance`.
+  - Client methods accept a transaction context whose only keys are symbols, as the Redis adapter's context is.
+  - The `queuert/conformance` state adapter cases gain a check of `listChains` with `independent: false` across pages and inside a transaction.
+
+- cb19191: Processing a job costs less CPU and allocates less memory: about 35–40% less CPU per job with the SQLite and PostgreSQL state adapters in the runtime performance benchmark.
+
+  - Tx hooks and the adapter logging wrappers allocate less per transaction and per adapter call, and flushing tx hooks adds no extra await unless a commit callback returns a promise.
+  - Notifications from transactions that commit at the same time are sent in one notify adapter call, with duplicate job types, chain ids and job ids removed.
+  - A waiting worker wakes up through a plain timer, without creating an `AbortController`, `AbortSignal.any` and an abort `DOMException` on every wait.
+  - With no `log` and no observability adapter configured, events are dropped before their payloads are built.
+  - The PostgreSQL and SQLite state adapters build each query's parameter and column type maps once instead of on every query.
+  - The SQLite state adapter claims jobs with a prepared statement that SQLite keeps, instead of one it re-parses and re-plans on every claim because of its bound `LIMIT`.
+  - The SQLite state adapter skips unblocking dependent jobs with a single indexed check when no job is blocked by the completed chain, as the PostgreSQL adapter already does.
+
+- 9e6c2b5: Functions that run in both synchronous and asynchronous mode now carry their real names in stack traces and CPU profiles, and a synchronous client or in-process state adapter given a callback that returns a promise reports it with one shared error message.
+
+  - Compiled functions are named after the variable or property they belong to, such as `createChainSync` and `createChainAsync`, instead of `sync` and `async`.
+  - A promise returned to a synchronous `completeChain` handler, `completeJob` callback or in-process `withTransaction` callback throws "A synchronous step got a promise: the value must be synchronous".
+
 ## 0.17.0
 
 ### Major Changes
