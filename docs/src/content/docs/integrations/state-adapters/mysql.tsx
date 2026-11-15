@@ -39,8 +39,7 @@ const options = (): FieldItem[] => [
     description: (
       <>
         <code>"mysql"</code> or <code>"mariadb"</code>: the server the adapter talks to. It picks
-        the collation and the SQL forms that differ between the two, and{" "}
-        <code>migrateToLatest()</code> checks it against the server.
+        the collation and the SQL forms that differ between the two, so it must match the server.
       </>
     ),
   },
@@ -94,6 +93,16 @@ const requirements = (): FieldItem[] => [
       <>
         <code>STRICT_TRANS_TABLES</code> or <code>STRICT_ALL_TABLES</code>, so the server rejects a
         value instead of truncating it. Both servers enable it by default.
+      </>
+    ),
+  },
+  {
+    name: "No NO_BACKSLASH_ESCAPES",
+    description: (
+      <>
+        Leave <code>NO_BACKSLASH_ESCAPES</code> out of <code>sql_mode</code>: drivers escape the
+        parameters of text-protocol statements with backslashes. Both servers leave it out by
+        default.
       </>
     ),
   },
@@ -165,13 +174,9 @@ const Page = () => (
         />
       </TabItem>
     </Tabs>
-    <p>
-      <code>migrateToLatest()</code> checks the connection before it creates the schema. It throws
-      when the server's version is below the minimum, when the server is not the one{" "}
-      <code>dialect</code> names, or when one of these does not hold:
-    </p>
+    <p>Every connection the adapter uses must meet these:</p>
     <FieldList title="connection requirements" items={requirements()} />
-    <p>Your provider must also meet these, which the adapter cannot check:</p>
+    <p>Your provider must also meet these:</p>
     <FieldList title="provider requirements" items={providerRequirements()} />
 
     <h2>Configuration</h2>

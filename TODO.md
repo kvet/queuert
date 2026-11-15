@@ -1,7 +1,5 @@
 # Short term
 
-- [TASK] Server version checks for the notify adapters — the state adapters check their minimum in `migrateToLatest()`, but the Redis (6+) and NATS (2.2+) notify adapters have no migration step and check nothing. Check when the adapter first connects or subscribes, and throw the same `Unsupported <server> version <version>: Queuert needs <minimum> or later` error.
-
 # Medium term
 
 - [REF] PostgreSQL pipelining

@@ -235,15 +235,6 @@ type DbChainRow = InferColumns<typeof dbChainRowColumns>;
 
 const SCHEMA_VERSION = 1;
 
-const MIN_SQLITE_VERSION = "3.42";
-
-const isVersionAtLeast = (version: string, minimum: string): boolean => {
-  const parts = version.split(".").map(Number);
-  const minimumParts = minimum.split(".").map(Number);
-  const differing = minimumParts.findIndex((part, index) => (parts[index] ?? 0) !== part);
-  return differing === -1 || (parts[differing] ?? 0) > minimumParts[differing];
-};
-
 const FENCE_GUARD = "NOT EXISTS (SELECT 1 FROM {{fence_table}} WHERE 1 = 0)";
 
 type StatementExecutor<TTxContext, TResult> = (
@@ -690,23 +681,6 @@ export function createSqliteStateAdapter<
       columnTypes: extractColumnTypes(typedSql.columns),
       readOnly: typedSql.readOnly,
     }) as MaybePromise<InferColumns<TColumns>[]>;
-
-  const assertServerSupported = syncAsync(function* () {
-    const [row] = yield* step(
-      execute(
-        undefined,
-        prepared("serverVersion", "SELECT sqlite_version() AS version", {
-          columns: { version: t.string() },
-          readOnly: true,
-        }),
-      ),
-    );
-    if (!isVersionAtLeast(row.version, MIN_SQLITE_VERSION)) {
-      throw new Error(
-        `Unsupported SQLite version ${row.version}: Queuert needs ${MIN_SQLITE_VERSION} or later`,
-      );
-    }
-  });
 
   const takeWriteLock = (txCtx: TTxContext): MaybePromise<unknown> =>
     execute(
@@ -2453,7 +2427,6 @@ ORDER BY w.key
 
     migrateToLatest: pick(
       syncAsync(function* () {
-        yield* assertServerSupported.steps();
         const store = createMigrationStore(stateProvider, applyTemplate);
         const exec = createTypedSqlExecutor(stateProvider);
         const migrator = createMigrator({
@@ -2500,7 +2473,6 @@ export type SqliteStateAdapter<
       /**
        * Create or upgrade the schema.
        *
-       * @throws Error if the driver bundles a SQLite version older than 3.42.
        * @throws Error if a 0.16 schema is found (upgrade it with `@queuert/sqlite` 0.17 first), or
        * a 0.17 migration table that records migrations 0.17 did not ship.
        */

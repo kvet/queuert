@@ -279,8 +279,6 @@ const DB_JOB_COLUMNS = [
   "trace_context",
 ] as const;
 
-const MIN_SERVER_VERSION_NUM = 140000;
-
 const jobColumnsSelect = (alias: string): string =>
   DB_JOB_COLUMNS.map((column) => `${alias}.${column}`).join(", ");
 
@@ -464,7 +462,6 @@ export const createPgStateAdapter = <
   /**
    * Create or upgrade the schema.
    *
-   * @throws Error if the server runs a PostgreSQL version older than 14.
    * @throws Error if a 0.16 schema is found (upgrade it with `@queuert/postgres` 0.17 first), or a
    * 0.17 migration table that records migrations 0.17 did not ship.
    */
@@ -606,23 +603,6 @@ export const createPgStateAdapter = <
         );
       }
       throw error;
-    }
-  };
-
-  const assertServerSupported = async (): Promise<void> => {
-    const [row] = await execute(
-      undefined,
-      prepared(
-        "serverVersion",
-        "SELECT current_setting('server_version_num')::integer AS version_num, current_setting('server_version') AS version",
-        { columns: { version_num: t.number(), version: t.string() }, readOnly: true },
-      ),
-      [],
-    );
-    if (row.version_num < MIN_SERVER_VERSION_NUM) {
-      throw new Error(
-        `Unsupported PostgreSQL version ${row.version.split(" ")[0]}: Queuert needs 14 or later`,
-      );
     }
   };
 
@@ -2169,7 +2149,6 @@ ORDER BY w.ord
     },
 
     migrateToLatest: async () => {
-      await assertServerSupported();
       const store = createMigrationStore(stateProvider, applyTemplate);
       const exec = createTypedSqlExecutor(stateProvider);
       return createMigrator({
@@ -2197,7 +2176,6 @@ export type PgStateAdapter<
   /**
    * Create or upgrade the schema.
    *
-   * @throws Error if the server runs a PostgreSQL version older than 14.
    * @throws Error if a 0.16 schema is found (upgrade it with `@queuert/postgres` 0.17 first), or a
    * 0.17 migration table that records migrations 0.17 did not ship.
    */

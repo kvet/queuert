@@ -99,8 +99,6 @@ const DB_TEXT_CAST_COLUMNS = new Set<string>([
   "chain_completed_at",
 ]);
 
-const MIN_VERSIONS = { mysql: [8, 4, 0], mariadb: [11, 4, 0] } as const;
-
 const COLLATIONS = { mysql: "utf8mb4_0900_bin", mariadb: "utf8mb4_nopad_bin" } as const;
 
 const NULLABLE_TYPES: Partial<Record<RuntimeType, DataType>> = {
@@ -249,16 +247,6 @@ const mapDbBlockerRowToStateBlockedJob = <TJob extends StateJobInfo>(
   job,
 });
 
-const parseVersion = (version: string): number[] =>
-  (/^(\d+)\.(\d+)\.(\d+)/.exec(version) ?? []).slice(1).map(Number);
-
-const isVersionAtLeast = (version: number[], minimum: readonly number[]): boolean => {
-  for (let i = 0; i < minimum.length; i++) {
-    if ((version[i] ?? 0) !== minimum[i]) return (version[i] ?? 0) > minimum[i];
-  }
-  return true;
-};
-
 const resolveIdColumnType = (preset: string, collation: string, name: string): string => {
   if (preset === "uuid") return "CHAR(36) CHARACTER SET ascii COLLATE ascii_bin";
   const length = Number(/^varchar\((\d+)\)$/i.exec(preset)?.[1]);
@@ -365,7 +353,7 @@ export const createMysqlStateAdapter = <
 }: {
   /** MySQL state provider wrapping the database connection. */
   stateProvider: MysqlStateProvider<TTxContext>;
-  /** The server the adapter talks to. `migrateToLatest()` checks it against the server's version. */
+  /** The server the adapter talks to. */
   dialect: "mysql" | "mariadb";
   /** Database that holds the tables. @defaultValue the connection's current database */
   schema?: string;
@@ -665,47 +653,6 @@ WHERE j.status = 'blocked' AND {{fence_guard}}`,
       [workerId],
     );
     return row ? mapDbWorkerToStateWorkerInfo(row) : undefined;
-  };
-
-  const assertServerSupported = async (): Promise<void> => {
-    const [row] = await execute(
-      undefined,
-      prepared(
-        "serverInfo",
-        "SELECT VERSION() AS version, @@SESSION.sql_mode AS sql_mode, DATABASE() AS current_database",
-        {
-          columns: { version: t.string(), sql_mode: t.string(), current_database: t["string?"]() },
-          readOnly: true,
-        },
-      ),
-    );
-    const version = String(row.version);
-    const serverDialect = /mariadb/i.test(version) ? "mariadb" : "mysql";
-    if (serverDialect !== dialect) {
-      throw new Error(
-        `The adapter was created with dialect "${dialect}", but the server is ${serverDialect} (${version})`,
-      );
-    }
-    if (!isVersionAtLeast(parseVersion(version), MIN_VERSIONS[dialect])) {
-      throw new Error(
-        `Unsupported ${dialect} version ${version}: Queuert needs ${MIN_VERSIONS[dialect].join(".")} or later`,
-      );
-    }
-    if (row.current_database == null) {
-      throw new Error(
-        "The connection has no default database: connect with a database selected, as MySQL rejects multi-table updates over JSON_TABLE without one",
-      );
-    }
-    if (/NO_BACKSLASH_ESCAPES/.test(String(row.sql_mode))) {
-      throw new Error(
-        `The session sql_mode "${String(row.sql_mode)}" includes NO_BACKSLASH_ESCAPES: remove it, as drivers escape the parameters of text-protocol statements with backslashes`,
-      );
-    }
-    if (!/STRICT_(TRANS|ALL)_TABLES/.test(String(row.sql_mode))) {
-      throw new Error(
-        `The session sql_mode "${String(row.sql_mode)}" is not strict: enable STRICT_TRANS_TABLES so the server rejects values it would otherwise truncate`,
-      );
-    }
   };
 
   const createSchemaMigrations = (): Migration<TTxContext>[] => [
@@ -2017,7 +1964,6 @@ ORDER BY w.ord`,
     },
 
     migrateToLatest: async () => {
-      await assertServerSupported();
       return createMigrator({
         migrations: createSchemaMigrations(),
         store: createMysqlMigrationStore({
@@ -2043,11 +1989,6 @@ export type MysqlStateAdapter<
   TJobId extends string = UUID,
   TWorkerId extends string = UUID,
 > = StateAdapter<TTxContext, TJobId, TWorkerId, "async"> & {
-  /**
-   * Check the server, then create or upgrade the schema.
-   *
-   * @throws Error if the server does not match `dialect`, is below the minimum version, runs
-   * without a strict `sql_mode`, or the connection has no default database.
-   */
+  /** Create or upgrade the schema. */
   migrateToLatest: () => Promise<MigrationResult>;
 };
