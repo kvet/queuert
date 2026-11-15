@@ -63,12 +63,18 @@
     animation-delay: -0.2s, 1.4s;
   }
 
+  /* Opacity hides the round cap a zero-length dash still paints while a stroke waits its turn. */
   @keyframes loading-logo-draw {
-    from {
+    0% {
       stroke-dashoffset: 100;
+      opacity: 0;
     }
-    to {
+    6% {
+      opacity: 1;
+    }
+    100% {
       stroke-dashoffset: 0;
+      opacity: 1;
     }
   }
   @keyframes loading-logo-bead {

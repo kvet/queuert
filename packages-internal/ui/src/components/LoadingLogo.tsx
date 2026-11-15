@@ -13,6 +13,15 @@ export const LoadingLogo = (props: { class?: string; size?: number }) => {
   const link = (x: number, attrs: JSX.SvgSVGAttributes<SVGRectElement> = {}) => (
     <rect x={x} y="17" width="40" height="40" rx="15" pathLength="100" {...attrs} />
   );
+  // The right link drawn as a path that starts on its right edge: a `rect` starts at its top
+  // left, which sits under the left link, so the stroke would appear as a cropped sliver.
+  const rightLinkFromRightEdge = (attrs: JSX.SvgSVGAttributes<SVGPathElement>) => (
+    <path
+      d="M69 37V42A15 15 0 0 1 54 57H44A15 15 0 0 1 29 42V32A15 15 0 0 1 44 17H54A15 15 0 0 1 69 32Z"
+      pathLength="100"
+      {...attrs}
+    />
+  );
   const tail = (attrs: JSX.SvgSVGAttributes<SVGLineElement> = {}) => (
     <line x1="61.07" y1="49.07" x2="73.8" y2="61.8" pathLength="100" {...attrs} />
   );
@@ -55,7 +64,7 @@ export const LoadingLogo = (props: { class?: string; size?: number }) => {
       </g>
       <g mask={`url(#${id}-b)`}>
         <g mask={`url(#${id}-t)`}>
-          {link(29, { class: "loading-logo-draw loading-logo-b" })}
+          {rightLinkFromRightEdge({ class: "loading-logo-draw loading-logo-b" })}
           {beads(29, "b")}
         </g>
       </g>
