@@ -190,6 +190,7 @@ export const siteSections: SiteSection[] = [
       {
         label: "Posts",
         slugs: [
+          "blog/one-body-sync-and-async",
           "blog/post-commit-side-effects",
           "blog/finishing-a-job",
           "blog/typing-job-chains",

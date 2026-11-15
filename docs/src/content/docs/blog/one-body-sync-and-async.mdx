@@ -1,0 +1,180 @@
+---
+title: One body, sync and async
+description: Why a library that runs inside synchronous SQLite transactions and asynchronous Postgres ones writes each function once as a generator, and why it then compiles the generators away.
+date: "2026-11-15"
+---
+
+import { BenchChart } from "../../../components/BenchChart.tsx";
+
+better-sqlite3, `node:sqlite` and `bun:sqlite` run statements synchronously, and so are their transactions. Nothing inside one may await:
+
+```ts
+const placeOrder = db.transaction(async (order) => {
+  db.prepare("INSERT INTO orders (id, total) VALUES (?, ?)").run(order.id, order.total);
+  await queue.enqueue(db, "send-receipt", { orderId: order.id });
+});
+
+placeOrder(order);
+// TypeError: Transaction function cannot return a promise
+```
+
+Drop the `await` and the enqueue runs after COMMIT, outside the transaction — [the dual-write problem](../dual-write-problem/), caused by a function's color. So a library that writes inside the caller's transaction must be synchronous over a synchronous driver and asynchronous over `pg`, `mysql2` or `postgres`, with the same logic in both. There are four ways to write that logic once.
+
+## Option 1: write it twice
+
+```ts
+function completeJobSync(db, id) {
+  const job = findJobSync(db, id);
+  db.update(id, "completed");
+  return db.insert(job.chainId);
+}
+
+async function completeJobAsync(db, id) {
+  const job = await findJobAsync(db, id);
+  await db.update(id, "completed");
+  return db.insert(job.chainId);
+}
+```
+
+As fast as JavaScript gets. For a hundred functions, every fix lands twice and the copies drift.
+
+## Option 2: `MaybePromise` and `.then`
+
+```ts
+const andThen = (value, next) => (isPromise(value) ? value.then(next) : next(value));
+
+const completeJob = (db, id) =>
+  andThen(findJob(db, id), (job) =>
+    andThen(db.update(id, "completed"), () => db.insert(job.chainId)),
+  );
+```
+
+One body, but continuation-passing style by hand: each step nests deeper, and `try`/`finally` and loops turn into helpers.
+
+## Option 3: a generator and a runner
+
+```ts
+const completeJob = syncAsync(function* (db, id) {
+  const job = yield* findJob.steps(db, id);
+  yield* step(db.update(id, "completed"));
+  return yield* step(db.insert(job.chainId));
+});
+
+completeJob.sync(db, id); // the row id
+await completeJob.async(db, id); // a promise of it
+```
+
+`yield* step(x)` goes where `await x` would. A runner loops over the generator: in sync mode it sends each value straight back (and throws on a promise), in async mode it awaits it. Control flow reads like normal code — the same pattern as [`co`](https://github.com/tj/co) before `async`/`await`, and Babel's `gensync`.
+
+## Measuring options 1–3
+
+The same "complete a job" body — a nested lookup and three writes — over an in-memory `Map`, so only the plumbing is measured. Node 24 on an Apple M1 Pro, median of three processes.
+
+<BenchChart
+  title="Complete a job, in-memory map"
+  unit="calls/s"
+  approximate
+  series={["sync", "async"]}
+  groups={[
+    {
+      rows: [
+        { label: "1. Written twice", values: [10478937, 2461765] },
+        { label: "2. MaybePromise", values: [8773336, 2432805] },
+        { label: "3. Generator + runner", values: [2505835, 1189558] },
+      ],
+    },
+  ]}
+/>
+
+The most readable option is the slowest: 4.2× slower than writing it twice in sync mode, 2.1× in async. Every call allocates a generator, and every step is a suspend and resume through the runner.
+
+## Option 4: compile the generator away
+
+The bodies only ever yield `step(…)` or `.steps(…)`, so the rewrite is mechanical. A build plugin turns each `syncAsync(function* …)` into two plain functions:
+
+```ts
+const completeJob = {
+  sync: function completeJobSync(db, id) {
+    const job = __syncStep(findJob.sync(db, id));
+    __syncStep(db.update(id, "completed"));
+    return __syncStep(db.insert(job.chainId));
+  },
+  async: async function completeJobAsync(db, id) {
+    const job = await findJob.async(db, id);
+    await db.update(id, "completed");
+    return await db.insert(job.chainId);
+  },
+};
+```
+
+That is option 1, generated, so it cannot drift. The compiler keeps it sound:
+
+- A plain `yield`, an async generator or a `yield*` of another generator is a build error, not a guess.
+- `__syncStep(x)` throws if `x` is a promise, so a sync body cannot leak an async call.
+- Functions are named after their variable, so profiles show `completeJobSync` instead of runner frames.
+- A fixture per construct (`try`/`finally`, nested calls, renamed imports) pins the output.
+
+## Measuring option 4
+
+<BenchChart
+  title="Complete a job, in-memory map"
+  unit="calls/s"
+  approximate
+  series={["sync", "async"]}
+  groups={[
+    {
+      rows: [
+        { label: "1. Written twice", values: [10478937, 2461765] },
+        { label: "2. MaybePromise", values: [8773336, 2432805] },
+        { label: "3. Generator + runner", values: [2505835, 1189558] },
+        { label: "4. Compiled generator", values: [10059980, 2420873] },
+      ],
+    },
+  ]}
+/>
+
+4.0× faster than the runner in sync mode and 2.0× in async, close to writing it twice — with one body.
+
+## Outcome
+
+The whole queue built both ways — every sync-async body in the core and the SQLite adapter left as a generator, or compiled — through a throughput benchmark. The in-memory adapters show the library's own overhead; SQLite shows what is left once a database does real work.
+
+<BenchChart
+  title="Chains created, one per transaction"
+  unit="chains/s"
+  approximate
+  series={["generator", "compiled"]}
+  groups={[
+    {
+      rows: [
+        { label: "In-memory, sync", values: [196081, 285869] },
+        { label: "In-memory, async", values: [155488, 237795] },
+        { label: "better-sqlite3", values: [31196, 34964] },
+        { label: "node:sqlite", values: [32438, 36215] },
+      ],
+    },
+  ]}
+/>
+
+<BenchChart
+  title="Jobs completed, concurrency 1"
+  unit="jobs/s"
+  approximate
+  series={["generator", "compiled"]}
+  groups={[
+    {
+      rows: [
+        { label: "In-memory, sync", values: [78855, 141727] },
+        { label: "In-memory, async", values: [72021, 125750] },
+        { label: "better-sqlite3", values: [11330, 12638] },
+        { label: "node:sqlite", values: [10349, 11512] },
+      ],
+    },
+  ]}
+/>
+
+- In memory, compiling speeds completion up 1.8× and creation 1.5×.
+- Over real SQLite it is 10–12%, with either driver.
+- Batched creation barely moves (2–8%): one call does a hundred jobs' work.
+
+Most code should pick a color and stay in it. When one codebase must run on both sides of the line, write the body once as a generator and compile it away. In Queuert, every function that touches a state adapter works this way; the [SQLite adapter](../../integrations/state-adapters/sqlite/#synchronous-providers) page covers synchronous providers.
