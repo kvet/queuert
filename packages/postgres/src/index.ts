@@ -1,7 +1,7 @@
 export { createPgStateAdapter, type PgStateAdapter } from "./state-adapter/state-adapter.pg.ts";
 export {
   type PgStateProvider,
-  type PgStateProviderError,
+  type PgErrorClassification,
 } from "./state-provider/state-provider.pg.ts";
 export { createPgNotifyAdapter } from "./notify-adapter/notify-adapter.pg.ts";
 export { type PgNotifyProvider } from "./notify-provider/notify-provider.pg.ts";

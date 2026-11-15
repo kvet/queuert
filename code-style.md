@@ -146,37 +146,37 @@ The core `queuert` package exports these primary factory functions and types:
 
 Adapter packages use their domain-specific prefixes (not "Queuert"):
 
-| Package              | Factory Function                 | Type                       |
-| -------------------- | -------------------------------- | -------------------------- |
-| `@queuert/postgres`  | `createPgStateAdapter`           | `PgStateAdapter`           |
-| `@queuert/postgres`  | `createPgNotifyAdapter`          | -                          |
-| `@queuert/postgres`  | -                                | `PgStateProvider`          |
-| `@queuert/postgres`  | -                                | `PgStateProviderError`     |
-| `@queuert/postgres`  | -                                | `PgNotifyProvider`         |
-| `@queuert/postgres`  | -                                | `MigrationResult`          |
-| `@queuert/postgres`  | `createPgMigrator`               | `Migrator`                 |
-| `@queuert/postgres`  | -                                | `Migration`                |
-| `@queuert/postgres`  | -                                | `MigrationScript`          |
-| `@queuert/sqlite`    | `createSqliteStateAdapter`       | `SqliteStateAdapter`       |
-| `@queuert/sqlite`    | -                                | `SqliteStateProvider`      |
-| `@queuert/sqlite`    | -                                | `SqliteStateProviderError` |
-| `@queuert/sqlite`    | `createAsyncRwLock`              | `AsyncRwLock`              |
-| `@queuert/sqlite`    | -                                | `LockHandle`               |
-| `@queuert/sqlite`    | -                                | `MigrationResult`          |
-| `@queuert/sqlite`    | `createSqliteMigrator`           | `Migrator`                 |
-| `@queuert/sqlite`    | -                                | `Migration`                |
-| `@queuert/sqlite`    | -                                | `MigrationScript`          |
-| `@queuert/redis`     | `createRedisStateAdapter`        | `RedisStateAdapter`        |
-| `@queuert/redis`     | -                                | `RedisStateProvider`       |
-| `@queuert/redis`     | -                                | `RedisContext`             |
-| `@queuert/redis`     | -                                | `RedisTransaction`         |
-| `@queuert/redis`     | `RedisTransactionConflictError`  | -                          |
-| `@queuert/redis`     | -                                | `MigrationResult`          |
-| `@queuert/redis`     | `createRedisNotifyAdapter`       | `RedisNotifyProvider`      |
-| `@queuert/nats`      | `createNatsNotifyAdapter`        | -                          |
-| `@queuert/ipc`       | `createIpcNotifyAdapter`         | -                          |
-| `@queuert/otel`      | `createOtelObservabilityAdapter` | -                          |
-| `@queuert/dashboard` | `createDashboard`                | -                          |
+| Package              | Factory Function                 | Type                        |
+| -------------------- | -------------------------------- | --------------------------- |
+| `@queuert/postgres`  | `createPgStateAdapter`           | `PgStateAdapter`            |
+| `@queuert/postgres`  | `createPgNotifyAdapter`          | -                           |
+| `@queuert/postgres`  | -                                | `PgStateProvider`           |
+| `@queuert/postgres`  | -                                | `PgErrorClassification`     |
+| `@queuert/postgres`  | -                                | `PgNotifyProvider`          |
+| `@queuert/postgres`  | -                                | `MigrationResult`           |
+| `@queuert/postgres`  | `createPgMigrator`               | `Migrator`                  |
+| `@queuert/postgres`  | -                                | `Migration`                 |
+| `@queuert/postgres`  | -                                | `MigrationScript`           |
+| `@queuert/sqlite`    | `createSqliteStateAdapter`       | `SqliteStateAdapter`        |
+| `@queuert/sqlite`    | -                                | `SqliteStateProvider`       |
+| `@queuert/sqlite`    | -                                | `SqliteErrorClassification` |
+| `@queuert/sqlite`    | `createAsyncRwLock`              | `AsyncRwLock`               |
+| `@queuert/sqlite`    | -                                | `LockHandle`                |
+| `@queuert/sqlite`    | -                                | `MigrationResult`           |
+| `@queuert/sqlite`    | `createSqliteMigrator`           | `Migrator`                  |
+| `@queuert/sqlite`    | -                                | `Migration`                 |
+| `@queuert/sqlite`    | -                                | `MigrationScript`           |
+| `@queuert/redis`     | `createRedisStateAdapter`        | `RedisStateAdapter`         |
+| `@queuert/redis`     | -                                | `RedisStateProvider`        |
+| `@queuert/redis`     | -                                | `RedisContext`              |
+| `@queuert/redis`     | -                                | `RedisTransaction`          |
+| `@queuert/redis`     | `RedisTransactionConflictError`  | -                           |
+| `@queuert/redis`     | -                                | `MigrationResult`           |
+| `@queuert/redis`     | `createRedisNotifyAdapter`       | `RedisNotifyProvider`       |
+| `@queuert/nats`      | `createNatsNotifyAdapter`        | -                           |
+| `@queuert/ipc`       | `createIpcNotifyAdapter`         | -                           |
+| `@queuert/otel`      | `createOtelObservabilityAdapter` | -                           |
+| `@queuert/dashboard` | `createDashboard`                | -                           |
 
 ## Reference Documentation
 

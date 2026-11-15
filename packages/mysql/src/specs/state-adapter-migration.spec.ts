@@ -11,8 +11,8 @@ import {
   createMysql2PoolProvider,
 } from "../state-provider/state-provider.mysql2-pool.ts";
 
-const INSTALLED = { applied: ["001_initial_schema"], skipped: [], reverted: [], unrecognized: [] };
-const UP_TO_DATE = { applied: [], skipped: ["001_initial_schema"], reverted: [], unrecognized: [] };
+const INSTALLED = { applied: ["001_schema_v1"], skipped: [], reverted: [], unrecognized: [] };
+const UP_TO_DATE = { applied: [], skipped: ["001_schema_v1"], reverted: [], unrecognized: [] };
 
 const SCHEMA_STATEMENT =
   /^\s*CREATE TABLE IF NOT EXISTS queuert_(job|job_blocker|worker|schema_fence_v1)\b/;

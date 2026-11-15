@@ -422,15 +422,14 @@ const Page = () => (
     <p>
       The set <code>{"{keyPrefix}"}schema-fences</code> holds the schema versions whose code may
       write. The commit script of every transaction that creates, continues, completes, reschedules,
-      blocks or unblocks jobs, or starts a worker or extends its lease, checks that the set holds
-      the adapter's version before it writes anything, and so does the script that starts job
-      attempts. Without it the script writes nothing and the adapter throws{" "}
+      blocks, unblocks or deletes jobs, or starts, stops or extends the lease of a worker, checks
+      that the set holds the adapter's version before it writes anything, and so does the script
+      that starts job attempts. Without it the script writes nothing and the adapter throws{" "}
       <code>SchemaFencedError</code>. Until <code>migrateToLatest()</code> has run, the set is empty
       and every such write is fenced. A breaking migration removes the versions of older code, so
-      older processes fail those writes instead of corrupting state. Reads,{" "}
-      <code>deleteChains</code> and <code>stopWorker</code> still work, and older workers report the
-      error through <code>workerError</code> and keep retrying. Stop them once you have deployed the
-      newer version.
+      older processes fail those writes instead of corrupting state. Reads still work, and older
+      workers report the error through <code>workerError</code> and keep retrying. Stop them once
+      you have deployed the newer version.
     </p>
     <p>
       The check runs when the transaction commits, so a transaction that began before a breaking

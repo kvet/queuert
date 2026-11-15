@@ -45,7 +45,7 @@ import {
 
 import { createPgMigrationStore } from "../migration-store/migration-store.pg.ts";
 import type { PgStateProvider } from "../state-provider/state-provider.pg.ts";
-import { createLegacyUpgrade } from "./legacy-upgrade.pg.ts";
+import { LEGACY_MIGRATION_NAMES, createLegacyUpgrade } from "./legacy-upgrade.pg.ts";
 
 type DbJob = {
   id: string;
@@ -109,13 +109,15 @@ type DbBlocker = {
 
 const SCHEMA_VERSION = 1;
 
+const SCHEMA_MIGRATION = "001_schema_v1";
+
 const FENCE_GUARD = "NOT EXISTS (SELECT 1 FROM {{fence_table}} WHERE 1 = 0)";
 
 export const createSchemaMigrations = <TTxContext>(
   execute: (txCtx: TTxContext, statement: TypedSqlTemplate<readonly []>) => Promise<unknown>,
 ): Migration<TTxContext>[] => [
   {
-    name: "001_initial_schema",
+    name: SCHEMA_MIGRATION,
     up: async (txCtx) => {
       for (const statement of [
         sql(/* sql */ `
@@ -1145,8 +1147,9 @@ FOR UPDATE
           `
 WITH _members AS (
   SELECT id FROM {{schema}}.{{table_prefix}}job
-  WHERE (id = ANY($1::{{job_id_type}}[]) AND chain_index = 0)
-     OR (chain_id = ANY($1::{{job_id_type}}[]) AND chain_index > 0)
+  WHERE ((id = ANY($1::{{job_id_type}}[]) AND chain_index = 0)
+     OR (chain_id = ANY($1::{{job_id_type}}[]) AND chain_index > 0))
+    AND ${FENCE_GUARD}
 ),
 _external_refs AS (
   SELECT jb.job_id, jb.blocked_by_chain_id, jb."index" AS blocker_index, jb.trace_context AS blocker_trace_context
@@ -1617,6 +1620,7 @@ RETURNING *, lease_until <= statement_timestamp() AS expired
 DELETE FROM {{schema}}.{{table_prefix}}worker
 WHERE id = $1::{{worker_id_type}}
   AND token = $2::uuid
+  AND ${FENCE_GUARD}
 RETURNING *, lease_until <= statement_timestamp() AS expired
 `,
           { params: [workerIdDataType, t.uuid()], columns: dbWorkerColumns },
@@ -2151,13 +2155,17 @@ ORDER BY w.ord
     migrateToLatest: async () => {
       const store = createMigrationStore(stateProvider, applyTemplate);
       const exec = createTypedSqlExecutor(stateProvider);
-      return createMigrator({
+      const result = await createMigrator({
         migrations: createSchemaMigrations(async (txCtx: TTxContext, statement) =>
           exec({ txCtx, sql: applyTemplate(statement) }),
         ),
         store,
-        before: createLegacyUpgrade(stateProvider, store, applyTemplate),
+        before: createLegacyUpgrade(stateProvider, store, applyTemplate, SCHEMA_MIGRATION),
       }).migrateToLatest();
+      return {
+        ...result,
+        unrecognized: result.unrecognized.filter((name) => !LEGACY_MIGRATION_NAMES.includes(name)),
+      };
     },
 
     close,

@@ -26,7 +26,9 @@ import type { PgStateProvider } from "../state-provider/state-provider.pg.ts";
 import { LEASE_TTL_MS, MARKER } from "./state-adapter-migration.process.ts";
 import { createV017Migrations } from "./v0.17-migrations.spec-helper.ts";
 
-const INSTALL = "001_initial_schema";
+const INSTALL = "001_schema_v1";
+const INSTALL_017 = "001_initial_schema";
+const WORKER_LIVENESS_017 = "002_worker_liveness";
 const ALL = createSchemaMigrations(async () => {}).map((migration) => migration.name);
 const spawnDeployment = createDeploymentSpawner<MigrationResult>(
   join(import.meta.dirname, "state-adapter-migration.process.ts"),
@@ -99,7 +101,7 @@ const indexNames = async (provider: Provider): Promise<string[]> =>
 const migrateTo017 = async (
   provider: Provider,
   { only }: { only?: string } = {},
-): Promise<void> => {
+): Promise<MigrationResult> => {
   const applyTemplate017 = createTemplateApplier({
     schema: "public",
     table_prefix: "queuert_",
@@ -107,7 +109,7 @@ const migrateTo017 = async (
     worker_id_type: "uuid",
   });
   const exec = createTypedSqlExecutor(provider);
-  await createMigrator({
+  return createMigrator({
     migrations: createV017Migrations(async (txCtx: PgPoolContext, statement) =>
       exec({ txCtx, sql: applyTemplate017(statement) }),
     ).filter((migration) => only === undefined || migration.name === only),
@@ -268,7 +270,7 @@ describe("upgrading from 0.17", () => {
         reverted: [],
         unrecognized: [],
       });
-      expect(await appliedNames(provider)).toEqual([INSTALL]);
+      expect(await appliedNames(provider)).toEqual([INSTALL_017, INSTALL, WORKER_LIVENESS_017]);
       expect(await relations(provider)).toMatchObject({ schema_fence_v1: true });
       expect(await schemaShape(provider, "public")).toEqual(await schemaShape(provider, "fresh"));
       expect(await adapter.migrateToLatest()).toEqual({
@@ -311,6 +313,23 @@ describe("upgrading from 0.17", () => {
   );
 
   it(
+    "lets a 0.17 process migrate after the upgrade, finding nothing to apply",
+    { timeout: 120_000 },
+    async ({ database: { provider, adapter } }) => {
+      await migrateTo017(provider);
+      await adapter.migrateToLatest();
+
+      expect(await migrateTo017(provider)).toEqual({
+        applied: [],
+        skipped: [INSTALL_017, WORKER_LIVENESS_017],
+        reverted: [],
+        unrecognized: [INSTALL],
+      });
+      expect(await appliedNames(provider)).toEqual([INSTALL_017, INSTALL, WORKER_LIVENESS_017]);
+    },
+  );
+
+  it(
     "upgrades while a 0.17 transaction holds the job and worker tables",
     { timeout: 120_000 },
     async ({ database: { connectionString, provider, adapter } }) => {
@@ -341,12 +360,12 @@ describe("upgrading from 0.17", () => {
     "refuses a 0.16 schema, changing nothing",
     { timeout: 120_000 },
     async ({ database: { provider, adapter } }) => {
-      await migrateTo017(provider, { only: INSTALL });
+      await migrateTo017(provider, { only: INSTALL_017 });
 
       await expect(adapter.migrateToLatest()).rejects.toThrow(
         "Cannot upgrade a 0.16 schema directly. Upgrade it with @queuert/postgres 0.17 first, then migrate to this version.",
       );
-      expect(await appliedNames(provider)).toEqual([INSTALL]);
+      expect(await appliedNames(provider)).toEqual([INSTALL_017]);
       expect(await relations(provider)).toMatchObject({ worker: false, schema_fence_v1: false });
     },
   );
@@ -361,7 +380,11 @@ describe("upgrading from 0.17", () => {
       await expect(adapter.migrateToLatest()).rejects.toThrow(
         "Cannot upgrade the 0.17 schema: the migration table records 001_initial_schema, 002_worker_liveness, 003_unknown, but a 0.17 schema records exactly 001_initial_schema and 002_worker_liveness.",
       );
-      expect(await appliedNames(provider)).toEqual([INSTALL, "002_worker_liveness", "003_unknown"]);
+      expect(await appliedNames(provider)).toEqual([
+        INSTALL_017,
+        WORKER_LIVENESS_017,
+        "003_unknown",
+      ]);
       expect(await relations(provider)).toMatchObject({ schema_fence_v1: false });
     },
   );

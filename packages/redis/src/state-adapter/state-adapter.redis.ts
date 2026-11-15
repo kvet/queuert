@@ -1014,7 +1014,7 @@ export const createRedisStateAdapter = ({
       }),
 
     deleteChains: async ({ txCtx, chainIds }) =>
-      withWrite(txCtx, async (tx) => {
+      withFencedWrite(txCtx, async (tx) => {
         const uniqueChainIds = new Set(chainIds);
         const loadedHeads = await loadJobs(tx, [...uniqueChainIds]);
         const heads = new Map(
@@ -1332,7 +1332,7 @@ export const createRedisStateAdapter = ({
       }),
 
     stopWorker: async ({ txCtx, workerId, workerToken }) =>
-      withWrite(txCtx, async (tx) => {
+      withFencedWrite(txCtx, async (tx) => {
         const worker = await loadWorker(tx, workerId);
         if (!worker || worker.token !== workerToken) return undefined;
         writeWorker(tx, worker, undefined);

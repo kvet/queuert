@@ -198,7 +198,7 @@ Attach, as core issues it: `lockBlockerChains`, `createJobs`, then a single-stat
 
 ## Migration (`002_blocker_counters`)
 
-One breaking transactional migration after `001_initial_schema`, with a `SET LOCAL lock_timeout` so it gives up rather than queue behind running workers. Besides its schema change it creates `schema_fence_v2` and drops `schema_fence_v1`:
+One breaking transactional migration after `001_schema_v1`, with a `SET LOCAL lock_timeout` so it gives up rather than queue behind running workers. Besides its schema change it creates `schema_fence_v2` and drops `schema_fence_v1`:
 
 1. Add `has_dependents` and `blockers_remaining` (constant defaults: no table rewrite).
 2. Set `has_dependents = true` on every head job referenced by a `job_blocker` row.

@@ -60,7 +60,7 @@ import type {
   ProviderTxContext,
   SqliteStateProvider,
 } from "../state-provider/state-provider.sqlite.ts";
-import { createLegacyUpgrade } from "./legacy-upgrade.sqlite.ts";
+import { LEGACY_MIGRATION_NAMES, createLegacyUpgrade } from "./legacy-upgrade.sqlite.ts";
 
 const jobColumns = [
   "created_at",
@@ -235,6 +235,8 @@ type DbChainRow = InferColumns<typeof dbChainRowColumns>;
 
 const SCHEMA_VERSION = 1;
 
+const SCHEMA_MIGRATION = "001_schema_v1";
+
 const FENCE_GUARD = "NOT EXISTS (SELECT 1 FROM {{fence_table}} WHERE 1 = 0)";
 
 type StatementExecutor<TTxContext, TResult> = (
@@ -367,7 +369,7 @@ CREATE TABLE {{table_prefix}}schema_fence_v1 (id INTEGER PRIMARY KEY)`),
   });
   return [
     {
-      name: "001_initial_schema",
+      name: SCHEMA_MIGRATION,
       up: mode === "sync" ? up.sync : up.async,
       down:
         mode === "sync"
@@ -1358,6 +1360,7 @@ WHERE job_id IN (
   WHERE (id IN (SELECT value FROM json_each(?)) AND chain_index = 0)
      OR (chain_id IN (SELECT value FROM json_each(?)) AND chain_index > 0)
 )
+  AND ${FENCE_GUARD}
 `,
                 { params: [t.string(), t.string()], columns: {} },
               ),
@@ -1371,8 +1374,9 @@ WHERE job_id IN (
                 "deleteChains",
                 `
 DELETE FROM {{table_prefix}}job
-WHERE (id IN (SELECT value FROM json_each(?)) AND chain_index = 0)
-   OR (chain_id IN (SELECT value FROM json_each(?)) AND chain_index > 0)
+WHERE ((id IN (SELECT value FROM json_each(?)) AND chain_index = 0)
+   OR (chain_id IN (SELECT value FROM json_each(?)) AND chain_index > 0))
+  AND ${FENCE_GUARD}
 `,
                 { params: [t.string(), t.string()], columns: {} },
               ),
@@ -1773,6 +1777,7 @@ RETURNING *, lease_until <= datetime('now', 'subsec') AS expired
 DELETE FROM {{table_prefix}}worker
 WHERE id = ?
   AND token = ?
+  AND ${FENCE_GUARD}
 RETURNING *, lease_until <= datetime('now', 'subsec') AS expired
 `,
               { params: [t.string(), t.string()], columns: dbWorkerColumns },
@@ -2436,9 +2441,15 @@ ORDER BY w.key
             sync ? "sync" : "async",
           ),
           store,
-          before: createLegacyUpgrade(stateProvider, store, applyTemplate),
+          before: createLegacyUpgrade(stateProvider, store, applyTemplate, SCHEMA_MIGRATION),
         });
-        return yield* step(migrator.migrateToLatest());
+        const result = yield* step(migrator.migrateToLatest());
+        return {
+          ...result,
+          unrecognized: result.unrecognized.filter(
+            (name) => !LEGACY_MIGRATION_NAMES.includes(name),
+          ),
+        };
       }),
     ),
   };

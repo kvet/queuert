@@ -7,7 +7,6 @@ import { dynamicSyncAsync, syncAsync, resource, step } from "@queuert/sync-async
 import { runInModeOf } from "../../conformance/adapters.ts";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
 import { SchemaFencedError } from "../../errors.ts";
-import type { StateChain } from "../../state-adapter/state-adapter.ts";
 import type { SchemaFenceConformanceContext } from "../types.ts";
 
 const LOCK_BLOCK_OBSERVATION_MS = 100;
@@ -406,7 +405,7 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceContext> =
       }),
     },
     {
-      name: "reads and deletes chains while writes are fenced",
+      name: "deleteChains fails with SchemaFencedError once its writes are fenced, keeping the chain",
       run: dynamicSyncAsync(function* ({ createStateAdapter, ...context }) {
         const stateAdapter = yield* resource(createStateAdapter());
 
@@ -420,28 +419,91 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceContext> =
             }),
           ),
         );
+        const before = yield* step(stateAdapter.getJobs({ jobIds: [chain.head.id] }));
+
+        yield* step(
+          context.withWritesFenced(() =>
+            assertRejects(
+              () =>
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.deleteChains({ txCtx, chainIds: [chain.id] }),
+                ),
+              SchemaFencedError,
+            ),
+          ),
+        );
+
+        assert.deepEqual(yield* step(stateAdapter.getJobs({ jobIds: [chain.head.id] })), before);
+      }),
+    },
+    {
+      name: "stopWorker fails with SchemaFencedError once its writes are fenced, keeping the worker",
+      run: dynamicSyncAsync(function* ({ createStateAdapter, ...context }) {
+        const stateAdapter = yield* resource(createStateAdapter());
+
+        const worker = yield* step(
+          stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["fenced-stop"],
+            concurrency: 1,
+            leaseMs: 60_000,
+          }),
+        );
+        const before = yield* step(stateAdapter.getWorkers({ workerIds: [worker.id] }));
+
+        yield* step(
+          context.withWritesFenced(() =>
+            assertRejects(
+              () => stateAdapter.stopWorker({ workerId: worker.id, workerToken: worker.token }),
+              SchemaFencedError,
+            ),
+          ),
+        );
+
+        assert.deepEqual(yield* step(stateAdapter.getWorkers({ workerIds: [worker.id] })), before);
+      }),
+    },
+    {
+      name: "reads chains, jobs and workers while writes are fenced",
+      run: dynamicSyncAsync(function* ({ createStateAdapter, ...context }) {
+        const stateAdapter = yield* resource(createStateAdapter());
+
+        const worker = yield* step(
+          stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["fenced-read"],
+            concurrency: 1,
+            leaseMs: 60_000,
+          }),
+        );
+        const [chain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "fenced-read", input: null },
+              ],
+            }),
+          ),
+        );
 
         yield* step(
           context.withWritesFenced(() =>
             runInModeOf(
               stateAdapter,
               syncAsync(function* () {
+                const [readChain] = yield* step(stateAdapter.getChains({ chainIds: [chain.id] }));
+                assert.equal(readChain?.id, chain.id);
                 const [job] = yield* step(stateAdapter.getJobs({ jobIds: [chain.head.id] }));
                 assert.equal(job?.id, chain.head.id);
-                const [deleted] = yield* step(
-                  stateAdapter.withTransaction((txCtx) =>
-                    stateAdapter.deleteChains({ txCtx, chainIds: [chain.id] }),
-                  ),
+                const [readWorker] = yield* step(
+                  stateAdapter.getWorkers({ workerIds: [worker.id] }),
                 );
-                assert.equal((deleted as StateChain).id, chain.id);
+                assert.equal(readWorker?.id, worker.id);
               }),
             ),
           ),
         );
-
-        assert.deepEqual(yield* step(stateAdapter.getJobs({ jobIds: [chain.head.id] })), [
-          undefined,
-        ]);
       }),
     },
   ],

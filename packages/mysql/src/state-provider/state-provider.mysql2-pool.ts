@@ -1,7 +1,7 @@
 import type { Pool, PoolConnection } from "mysql2/promise";
 import { type TxHooks, withTxHooks } from "queuert";
 
-import type { MysqlStateProvider, MysqlStateProviderError } from "./state-provider.mysql.ts";
+import type { MysqlStateProvider, MysqlErrorClassification } from "./state-provider.mysql.ts";
 
 export type Mysql2PoolContext = { connection: PoolConnection; txHooks: TxHooks };
 
@@ -20,7 +20,7 @@ export const classifyMysqlError = ({
   error,
 }: {
   error: unknown;
-}): MysqlStateProviderError | undefined => {
+}): MysqlErrorClassification | undefined => {
   const driverError = error as { errno?: unknown; message?: unknown } | undefined;
   switch (driverError?.errno) {
     case 1146: {

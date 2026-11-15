@@ -27,7 +27,9 @@ import type { SqliteStateProvider } from "../state-provider/state-provider.sqlit
 import { MARKER } from "./state-adapter-migration.process.ts";
 import { createV017Migrations } from "./v0.17-migrations.spec-helper.ts";
 
-const INSTALL = "001_initial_schema";
+const INSTALL = "001_schema_v1";
+const INSTALL_017 = "001_initial_schema";
+const WORKER_LIVENESS_017 = "002_worker_liveness";
 const ALL = createSchemaMigrations(async () => {}, "async").map((migration) => migration.name);
 const spawnerIn = (mode: Mode) =>
   createDeploymentSpawner<MigrationResult>(
@@ -66,7 +68,7 @@ const execute = async (provider: Provider, text: string): Promise<void> => {
 const migrateTo017 = async (
   provider: Provider,
   { only }: { only?: string } = {},
-): Promise<void> => {
+): Promise<MigrationResult> => {
   const mode = provider.sync === true ? "sync" : "async";
   const applyTemplate017 = createTemplateApplier({
     table_prefix: "queuert_",
@@ -76,7 +78,7 @@ const migrateTo017 = async (
     worker_id_type: "TEXT",
   });
   const exec = createTypedSqlExecutor(provider);
-  await createMigrator({
+  return createMigrator({
     mode,
     migrations: createV017Migrations(
       (txCtx: BetterSqlite3Context, statement) => exec({ txCtx, sql: applyTemplate017(statement) }),
@@ -227,7 +229,7 @@ describe.each(["async", "sync"] as const)("in %s mode", (mode) => {
           reverted: [],
           unrecognized: [],
         });
-        expect(await appliedNames(provider)).toEqual([INSTALL]);
+        expect(await appliedNames(provider)).toEqual([INSTALL_017, INSTALL, WORKER_LIVENESS_017]);
         expect(await schemaShape(provider)).toEqual(await schemaShape(freshProvider));
         freshDb.close();
         expect(await adapter.migrateToLatest()).toEqual({
@@ -270,15 +272,32 @@ describe.each(["async", "sync"] as const)("in %s mode", (mode) => {
     );
 
     it(
+      "lets a 0.17 process migrate after the upgrade, finding nothing to apply",
+      { timeout: 60_000 },
+      async ({ database: { provider, adapter } }) => {
+        await migrateTo017(provider);
+        await adapter.migrateToLatest();
+
+        expect(await migrateTo017(provider)).toEqual({
+          applied: [],
+          skipped: [INSTALL_017, WORKER_LIVENESS_017],
+          reverted: [],
+          unrecognized: [INSTALL],
+        });
+        expect(await appliedNames(provider)).toEqual([INSTALL_017, INSTALL, WORKER_LIVENESS_017]);
+      },
+    );
+
+    it(
       "refuses a 0.16 schema, changing nothing",
       { timeout: 60_000 },
       async ({ database: { provider, adapter } }) => {
-        await migrateTo017(provider, { only: INSTALL });
+        await migrateTo017(provider, { only: INSTALL_017 });
 
         await expect(async () => adapter.migrateToLatest()).rejects.toThrow(
           "Cannot upgrade a 0.16 schema directly. Upgrade it with @queuert/sqlite 0.17 first, then migrate to this version.",
         );
-        expect(await appliedNames(provider)).toEqual([INSTALL]);
+        expect(await appliedNames(provider)).toEqual([INSTALL_017]);
         expect(
           await names(
             provider,
@@ -304,8 +323,8 @@ describe.each(["async", "sync"] as const)("in %s mode", (mode) => {
           "Cannot upgrade the 0.17 schema: the migration table records 001_initial_schema, 002_worker_liveness, 003_unknown, but a 0.17 schema records exactly 001_initial_schema and 002_worker_liveness.",
         );
         expect(await appliedNames(provider)).toEqual([
-          INSTALL,
-          "002_worker_liveness",
+          INSTALL_017,
+          WORKER_LIVENESS_017,
           "003_unknown",
         ]);
         expect(

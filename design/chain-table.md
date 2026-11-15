@@ -130,7 +130,7 @@ Results from the spike's two-connection interleavings (PostgreSQL 18):
 
 ## Migration
 
-### Schema (a migration after `001_initial_schema`)
+### Schema (a migration after `001_schema_v1`)
 
 1. **Transactional:** create `chain` and its indexes; add `job.blockers_remaining`.
 2. **Batched:** backfill `chain` from head rows: `id = head.id` (pre-upgrade chains keep the old equality), `has_dependents = EXISTS (job_blocker WHERE blocked_by_chain_id = head.id)`, status, timestamps, key, trace context. Repeat until no head row lacks a chain row.
@@ -149,7 +149,7 @@ Chains created before the upgrade keep `chain.id === head.id`, so code that conf
 
 ### Rolling deploys
 
-Step 5 removes columns that the previous release reads (`h.chain_status` in its unblock check, dedup, `listChains`). A rolling deploy with old and new workers side by side therefore needs either a stop-the-world upgrade, or an expand/contract split: release N runs steps 1–4 and also writes the head-row `chain_*` columns; release N+1 runs step 5. The first breaking migration after `001_initial_schema` already requires stopping every 0.17 process, which references no write fence, so shipping both in one major keeps a single stop-the-world upgrade.
+Step 5 removes columns that the previous release reads (`h.chain_status` in its unblock check, dedup, `listChains`). A rolling deploy with old and new workers side by side therefore needs either a stop-the-world upgrade, or an expand/contract split: release N runs steps 1–4 and also writes the head-row `chain_*` columns; release N+1 runs step 5. The first breaking migration after `001_schema_v1` already requires stopping every 0.17 process, which references no write fence, so shipping both in one major keeps a single stop-the-world upgrade.
 
 ## Performance
 

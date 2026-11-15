@@ -180,7 +180,7 @@ export const schemaTables: Record<SchemaDialect, SchemaTable[]> = {
         {
           name: "name",
           type: "text",
-          description: "Migration identifier (e.g., 001_initial_schema)",
+          description: "Migration identifier (e.g., 001_schema_v1)",
         },
         { name: "applied_at", type: "timestamptz", description: "When the migration was applied" },
       ],
@@ -214,7 +214,7 @@ export const schemaTables: Record<SchemaDialect, SchemaTable[]> = {
         {
           name: "name",
           type: "TEXT",
-          description: "Migration identifier (e.g., 001_initial_schema)",
+          description: "Migration identifier (e.g., 001_schema_v1)",
         },
         {
           name: "applied_at",
@@ -504,7 +504,7 @@ export const schemaTables: Record<SchemaDialect, SchemaTable[]> = {
         {
           name: "name",
           type: "VARCHAR(255)",
-          description: "Migration identifier (e.g., 001_initial_schema)",
+          description: "Migration identifier (e.g., 001_schema_v1)",
         },
         {
           name: "applied_at",

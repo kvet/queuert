@@ -9,7 +9,7 @@ export {
 } from "./state-adapter/state-adapter.sqlite.ts";
 export {
   type SqliteStateProvider,
-  type SqliteStateProviderError,
+  type SqliteErrorClassification,
 } from "./state-provider/state-provider.sqlite.ts";
 export { createSqliteMigrator } from "./migration-store/migration-store.sqlite.ts";
 export {

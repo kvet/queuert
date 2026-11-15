@@ -4,7 +4,7 @@ export {
 } from "./state-adapter/state-adapter.mysql.ts";
 export {
   type MysqlStateProvider,
-  type MysqlStateProviderError,
+  type MysqlErrorClassification,
 } from "./state-provider/state-provider.mysql.ts";
 export { createMysqlMigrator } from "./migration-store/migration-store.mysql.ts";
 export {

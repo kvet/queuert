@@ -51,6 +51,8 @@ type StatementTypes = {
 
 const SCHEMA_VERSION = 1;
 
+const SCHEMA_MIGRATION = "001_schema_v1";
+
 const DB_JOB_COLUMNS = [
   "id",
   "type_name",
@@ -657,7 +659,7 @@ WHERE j.status = 'blocked' AND {{fence_guard}}`,
 
   const createSchemaMigrations = (): Migration<TTxContext>[] => [
     {
-      name: "001_initial_schema",
+      name: SCHEMA_MIGRATION,
       type: "non-transactional",
       up: async () => {
         for (const statement of schemaStatements) {
@@ -1177,16 +1179,20 @@ ORDER BY jb.job_id, jb.\`index\``,
           txCtx,
           prepared(
             "deleteChainBlockers",
-            `DELETE FROM {{prefix}}job_blocker WHERE job_id IN (${jobIds()})`,
+            `DELETE FROM {{prefix}}job_blocker WHERE job_id IN (${jobIds()}) AND {{fence_guard}}`,
             { params: [t.string()] },
           ),
           [memberIdsParam],
         );
         await execute(
           txCtx,
-          prepared("deleteChainJobs", `DELETE FROM {{prefix}}job WHERE id IN (${jobIds()})`, {
-            params: [t.string()],
-          }),
+          prepared(
+            "deleteChainJobs",
+            `DELETE FROM {{prefix}}job WHERE id IN (${jobIds()}) AND {{fence_guard}}`,
+            {
+              params: [t.string()],
+            },
+          ),
           [memberIdsParam],
         );
       }
@@ -1485,7 +1491,7 @@ WHERE {{fence_guard}}`,
         if (!row) return undefined;
         await execute(
           txCtx,
-          prepared("stopWorker", `DELETE FROM {{prefix}}worker WHERE id = ?`, {
+          prepared("stopWorker", `DELETE FROM {{prefix}}worker WHERE id = ? AND {{fence_guard}}`, {
             params: [workerIdDataType],
           }),
           [workerId],

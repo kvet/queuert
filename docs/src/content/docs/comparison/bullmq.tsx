@@ -113,7 +113,8 @@ const Page = () => (
         <a href="https://docs.bullmq.io/">BullMQ's docs</a> describe at-least-once delivery: a job
         whose worker crashes or loses its lock can be processed again, so processors must be
         idempotent. With Queuert, both halves commit inside your DB transaction; for DB-bound work,
-        no outbox and no idempotency-key ritual.
+        no outbox and no idempotency-key ritual. This holds on PostgreSQL, SQLite and MySQL/MariaDB;
+        the Redis state adapter commits jobs in Redis, apart from your application data.
       </li>
       <li>
         <strong>Sandboxing.</strong> BullMQ provides first-class sandboxed processors. Queuert runs

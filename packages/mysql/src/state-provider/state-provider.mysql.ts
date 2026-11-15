@@ -2,7 +2,7 @@ import type { RuntimeType } from "@queuert/typed-sql";
 import type { BaseTxContext } from "queuert";
 
 /**
- * A driver error the MySQL state adapter acts on, as classified by
+ * The classification of a driver error the MySQL state adapter acts on, as returned by
  * {@link MysqlStateProvider.classifyError}.
  *
  * - `undefined_table` — error 1146 (`ER_NO_SUCH_TABLE`), with the missing table's qualified name as
@@ -10,7 +10,7 @@ import type { BaseTxContext } from "queuert";
  *
  * @experimental
  */
-export type MysqlStateProviderError = { kind: "undefined_table"; tableName: string };
+export type MysqlErrorClassification = { kind: "undefined_table"; tableName: string };
 
 /**
  * MySQL and MariaDB state provider interface.
@@ -68,7 +68,7 @@ export type MysqlStateProvider<TTxContext extends BaseTxContext> = {
   }) => Promise<unknown[]>;
 
   /** Classifies an error thrown by this provider's driver. Returns `undefined` for any other. */
-  classifyError: (options: { error: unknown }) => MysqlStateProviderError | undefined;
+  classifyError: (options: { error: unknown }) => MysqlErrorClassification | undefined;
 
   /**
    * Releases provider-owned resources. Optional — providers that wrap a caller-owned client or

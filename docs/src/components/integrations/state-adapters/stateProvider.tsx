@@ -127,12 +127,12 @@ export const stateProviderMembers = (dialect: "postgres" | "sqlite" | "mysql"): 
         ) : dialect === "postgres" ? (
           <>
             missing-table error (SQLSTATE <code>42P01</code>; most drivers expose it as{" "}
-            <code>code</code>), with <code>table</code> read from the{" "}
+            <code>code</code>), with <code>tableName</code> read from the{" "}
             <code>{'relation "<table>" does not exist'}</code> message
           </>
         ) : (
           <>
-            <code>{"no such table: <table>"}</code> error, with <code>table</code> read from the
+            <code>{"no such table: <table>"}</code> error, with <code>tableName</code> read from the
             message (wrappers such as Prisma report it in their own error fields)
           </>
         )}
