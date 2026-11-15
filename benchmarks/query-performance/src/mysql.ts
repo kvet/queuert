@@ -2,13 +2,14 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 import { createMysqlStateAdapter } from "@queuert/mysql";
-import { fastSeedAllStates } from "@queuert/mysql/conformance-internal";
+import { loadStateDump } from "@queuert/mysql/conformance-internal";
 import {
   type Mysql2PoolContext,
   createMysql2PoolStateProvider,
 } from "example-state-mysql-mysql2/provider";
 import { createConnection, createPool } from "mysql2/promise";
 import {
+  generateStateDump,
   observabilityCoverageGroups,
   operationalCoverageGroups,
 } from "queuert/conformance-internal";
@@ -18,7 +19,7 @@ const ITERATIONS = 10;
 
 const dialect = process.argv.includes("--mariadb") ? "mariadb" : "mysql";
 const image = dialect === "mariadb" ? "mariadb:13" : "mysql:26";
-const title = dialect === "mariadb" ? "MARIADB 11.4 (mysql2)" : "MYSQL 8.4 (mysql2)";
+const title = dialect === "mariadb" ? "MARIADB 13 (mysql2)" : "MYSQL 26 (mysql2)";
 const EXPLANATIONS_DIR = new URL(`../explanations/${dialect}`, import.meta.url).pathname;
 const RESULTS_DIR = new URL("../results", import.meta.url).pathname;
 const RESULTS_FILE = `${RESULTS_DIR}/${dialect}.txt`;
@@ -120,7 +121,8 @@ await stateAdapter.migrateToLatest();
 
 console.log(`Seeding data (scale=${scale})...`);
 const seedStart = performance.now();
-const sentinels = await fastSeedAllStates(baseProvider, { scale });
+const { dump, sentinels } = generateStateDump({ scale });
+await loadStateDump(baseProvider, dump, { offsetMs: Date.now() - dump.capturedAt.getTime() });
 await pool.query("ANALYZE TABLE queuert_job, queuert_job_blocker, queuert_worker");
 console.log(`Seed complete in ${((performance.now() - seedStart) / 1000).toFixed(1)}s.\n`);
 

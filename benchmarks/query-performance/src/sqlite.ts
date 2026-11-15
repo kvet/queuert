@@ -2,10 +2,11 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 import { createSqliteStateAdapter } from "@queuert/sqlite";
-import { fastSeedAllStates } from "@queuert/sqlite/conformance-internal";
+import { loadStateDump } from "@queuert/sqlite/conformance-internal";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
 import {
+  generateStateDump,
   observabilityCoverageGroups,
   operationalCoverageGroups,
 } from "queuert/conformance-internal";
@@ -68,7 +69,8 @@ const stateAdapter = createSqliteStateAdapter<typeof stateProvider, string, stri
 stateAdapter.migrateToLatest();
 
 console.log(`Seeding data (scale=${scale})...`);
-const sentinels = await fastSeedAllStates(baseProvider, { scale });
+const { dump, sentinels } = generateStateDump({ scale });
+await loadStateDump(baseProvider, dump, { offsetMs: Date.now() - dump.capturedAt.getTime() });
 
 db.exec("ANALYZE");
 console.log("Seed complete.\n");

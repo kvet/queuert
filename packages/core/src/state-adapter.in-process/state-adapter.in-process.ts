@@ -1,10 +1,12 @@
 import { type MaybePromise, type Mode, syncStep, tryCatch, tryFinally } from "@queuert/sync-async";
 
 import type { StateAdapter } from "../state-adapter/state-adapter.ts";
+import type { StateDump } from "../state-adapter/state-dump.ts";
 import { withTxHooks } from "../tx-hooks/tx-hooks.ts";
 import {
   type InProcessContext,
   type InProcessStateAdapterOptions,
+  type InProcessStateInternals,
   createInProcessState,
   requireTxHooks,
 } from "./in-process-state.ts";
@@ -45,9 +47,27 @@ export function createInProcessStateAdapter({
   mode = "sync",
   ...options
 }: InProcessStateAdapterOptions & { mode?: Mode } = {}): InProcessStateAdapter<Mode> {
+  return createInProcessStateAdapterWithState({ mode, ...options }).stateAdapter;
+}
+
+export const createInProcessStateAdapterWithState = (
+  { mode = "sync", ...options }: InProcessStateAdapterOptions & { mode?: Mode },
+  internals: InProcessStateInternals = {},
+): {
+  stateAdapter: InProcessStateAdapter<Mode>;
+  dumpState: () => StateDump;
+  loadState: (dump: StateDump, options: { offsetMs: number }) => void;
+} => {
   const sync = mode === "sync";
-  const { methods, beginTransaction, rollbackTransaction, endTransaction, close } =
-    createInProcessState(options);
+  const {
+    methods,
+    beginTransaction,
+    rollbackTransaction,
+    endTransaction,
+    close,
+    dumpState,
+    loadState,
+  } = createInProcessState(options, internals);
 
   let held = false;
   const waiters: (() => void)[] = [];
@@ -90,7 +110,7 @@ export function createInProcessStateAdapter({
     }
   };
 
-  return {
+  const stateAdapter = {
     config: methods.config,
 
     withTransaction: (fn: (txCtx: InProcessContext) => MaybePromise<unknown>) =>
@@ -168,4 +188,6 @@ export function createInProcessStateAdapter({
           [Symbol.asyncDispose]: closeExclusively,
         }),
   } as InProcessStateAdapter<Mode>;
-}
+
+  return { stateAdapter, dumpState, loadState };
+};

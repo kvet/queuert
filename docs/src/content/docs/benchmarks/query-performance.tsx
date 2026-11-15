@@ -48,7 +48,6 @@ const QueryChart = (props: { title: string; groups: BenchGroup[] }) => (
     title={props.title}
     unit="p50 ms"
     decimals={2}
-    scalePerGroup
     series={["p50"]}
     groups={queryGroups(props.groups)}
   />
@@ -62,7 +61,7 @@ const setup = [
   {
     label: "Dataset",
     value: "Scale 100",
-    note: "Covers all statuses, blocker topologies and continuations.",
+    note: "A simulated week of traffic, generated once and loaded into every backend: all statuses, blocker topologies, multi-job chains, retries and deduplication keys.",
   },
   { label: "PostgreSQL", value: "pg driver, after ANALYZE" },
   { label: "SQLite", value: "In memory through better-sqlite3, after ANALYZE" },
@@ -80,7 +79,7 @@ const setup = [
   {
     label: "In-process",
     value: "Sync in-process state adapter",
-    note: "Seeded through the adapter itself with seedAllStates, the same dataset the SQL seeders write.",
+    note: "Loaded with the same dataset as the other backends.",
   },
 ] satisfies KeyValueItem[];
 

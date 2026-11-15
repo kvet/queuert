@@ -1,1 +1,1 @@
-export { fastSeedAllStates } from "./conformance/fast-seed-all-states.ts";
+export { loadStateDump } from "./conformance/load-state-dump.ts";

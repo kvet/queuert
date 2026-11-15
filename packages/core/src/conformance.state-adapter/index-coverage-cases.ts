@@ -2,7 +2,7 @@ import { type MaybePromise, type Mode, step, syncAsync } from "@queuert/sync-asy
 
 import { runInModeOf } from "../conformance/adapters.ts";
 import type { StateAdapter } from "../state-adapter/state-adapter.ts";
-import type { SeedSentinels } from "./seed-all-states.ts";
+import type { SeedSentinels } from "./generate-state-dump.ts";
 
 export type IndexCoverageCaseKey =
   | "getChainTypeNames/default"

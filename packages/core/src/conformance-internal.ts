@@ -36,9 +36,27 @@ export {
 } from "./conformance.state-adapter/index-coverage-cases.ts";
 export {
   type SeedSentinels,
-  seedAllStates,
+  generateStateDump,
   seedConfig,
-} from "./conformance.state-adapter/seed-all-states.ts";
+} from "./conformance.state-adapter/generate-state-dump.ts";
+export {
+  type StateCounts,
+  type StateRows,
+  readStateCounts,
+  readStateRows,
+  toStateRows,
+} from "./conformance.state-adapter/read-state-rows.ts";
+export { createSeedStateAdapter } from "./conformance.state-adapter/seed-state-adapter.ts";
+export {
+  type DumpJobRow,
+  type DumpWorkerRow,
+  type StateDump,
+  type StateDumpWorker,
+  chunkItems,
+  createDumpRowMapper,
+  createSqlDumpRowMapper,
+  shiftStateDump,
+} from "./state-adapter/state-dump.ts";
 export { createFlakyBatchGenerator } from "./conformance.end-to-end/support/flaky-batch-generator.ts";
 export { noopNotifyAdapter } from "./notify-adapter/notify-adapter.noop.ts";
 export { runInModeOf } from "./conformance/adapters.ts";

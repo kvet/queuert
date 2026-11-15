@@ -1,10 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 
 import { type RedisStateProvider, createRedisStateAdapter } from "@queuert/redis";
-import { fastSeedAllStates } from "@queuert/redis/conformance-internal";
+import { loadStateDump } from "@queuert/redis/conformance-internal";
 import { RedisContainer } from "@testcontainers/redis";
 import { Redis } from "ioredis";
 import {
+  generateStateDump,
   observabilityCoverageGroups,
   operationalCoverageGroups,
 } from "queuert/conformance-internal";
@@ -69,7 +70,11 @@ const readCommandStats = async () => {
 
 console.log(`Seeding data (scale=${scale})...`);
 const seedStart = performance.now();
-const sentinels = await fastSeedAllStates(stateProvider, { scale, keyPrefix });
+const { dump, sentinels } = generateStateDump({ scale });
+await loadStateDump(stateProvider, dump, {
+  offsetMs: Date.now() - dump.capturedAt.getTime(),
+  keyPrefix,
+});
 const seedSeconds = (performance.now() - seedStart) / 1000;
 console.log(`Seed complete in ${seedSeconds.toFixed(1)}s.\n`);
 

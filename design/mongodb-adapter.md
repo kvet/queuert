@@ -318,7 +318,7 @@ Replication latency (`w: majority` across three nodes), failover and multi-node 
 ## Tests
 
 - `packages-internal/testcontainers/src/mongodb.ts`: a reusable `mongo:8.0` container started as a single-node replica set, a database per test file, leak detection, like `postgres.ts`.
-- Conformance and the end-to-end cases (`endToEndBaseGroups` and the capability groups the adapter supports) under noop and in-process notify, and `endToEndNotifyGroups` under in-process notify only, since a noop notify adapter delivers no notifications; the variance specs (`collectionPrefix`, limits, custom ids), options validation, `fastSeedAllStates` and its equivalence spec.
+- Conformance and the end-to-end cases (`endToEndBaseGroups` and the capability groups the adapter supports) under noop and in-process notify, and `endToEndNotifyGroups` under in-process notify only, since a noop notify adapter delivers no notifications; the variance specs (`collectionPrefix`, limits, custom ids), options validation, `loadStateDump` and its round-trip spec.
 - Migration specs: concurrent `migrateToLatest`, a migration killed mid-way, lease takeover, standalone detection.
 - Isolation: each invariant in the [table](#rule-every-invariant-is-a-write-write-conflict-on-a-shared-document) raced from two sessions in both commit orders ends correct; `blockersRemaining` equals its recomputed count after the blocker cases; a no-op lock write is rejected by a unit test on the `$inc`.
 - Retries: each worker transaction rerun after an injected 112 produces the same state and announces once; `withMongoTransaction` rolls back the hooks of a failed try and flushes once; the `session.withTransaction` test above, with and without `retryBoundary`.

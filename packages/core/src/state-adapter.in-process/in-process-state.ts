@@ -21,6 +21,12 @@ import type {
   StateJobStatus,
   StateWorkerInfo,
 } from "../state-adapter/state-adapter.ts";
+import {
+  type StateDump,
+  shiftStateChain,
+  shiftStateJob,
+  shiftStateWorker,
+} from "../state-adapter/state-dump.ts";
 import type { TxHooks } from "../tx-hooks/tx-hooks.ts";
 import {
   type SortedList,
@@ -316,14 +322,19 @@ type InProcessMethods = Omit<
   | typeof Symbol.dispose
 >;
 
+export type InProcessStateInternals = { now?: () => number };
+
 export const createInProcessState = (
   options: InProcessStateAdapterOptions,
+  { now: clock = Date.now }: InProcessStateInternals = {},
 ): {
   methods: InProcessMethods;
   beginTransaction: (txHooks: TxHooks) => InProcessContext;
   rollbackTransaction: (txCtx: InProcessContext) => void;
   endTransaction: (txCtx: InProcessContext) => void;
   close: () => void;
+  dumpState: () => StateDump;
+  loadState: (dump: StateDump, options: { offsetMs: number }) => void;
 } => {
   const config = resolveStateAdapterConfig(options);
   const { countCap } = config;
@@ -673,7 +684,7 @@ export const createInProcessState = (
 
     getWorkers: ({ txCtx, workerIds }) =>
       read(txCtx, () => {
-        const nowMs = Date.now();
+        const nowMs = clock();
         return workerIds.map((workerId) => {
           const worker = workers.get(workerId);
           return worker === undefined ? undefined : workerView(worker, nowMs);
@@ -682,7 +693,7 @@ export const createInProcessState = (
 
     createJobs: ({ txCtx, jobs: jobInputs }) =>
       write(txCtx, (journal) => {
-        const now = new Date();
+        const now = new Date(clock());
         return jobInputs.map(
           ({ typeName, id, input, schedule, deduplication, traceContext, chainTraceContext }) => {
             if (deduplication !== undefined) {
@@ -727,7 +738,7 @@ export const createInProcessState = (
 
     continueJobs: ({ txCtx, jobs: jobInputs }) =>
       write(txCtx, (journal) => {
-        const now = new Date();
+        const now = new Date(clock());
         const parents = jobInputs.map(({ continueFromId, attemptToken }) => {
           const slot = jobs.get(continueFromId);
           const state = slot?.state;
@@ -778,7 +789,7 @@ export const createInProcessState = (
 
     completeJobs: ({ txCtx, jobs: jobInputs }) =>
       write(txCtx, (journal) => {
-        const now = new Date();
+        const now = new Date(clock());
         return jobInputs.map(({ jobId, output, attemptToken, workerId }) => {
           const slot = jobs.get(jobId);
           const state = slot?.state;
@@ -815,7 +826,7 @@ export const createInProcessState = (
 
     rescheduleJobs: ({ txCtx, jobs: jobInputs }) =>
       write(txCtx, (journal) => {
-        const now = new Date();
+        const now = new Date(clock());
         const resultById = new Map<string, StateJob | undefined>();
         return jobInputs.map(({ jobId, schedule, error, attemptToken }) => {
           if (resultById.has(jobId)) return resultById.get(jobId);
@@ -914,7 +925,7 @@ export const createInProcessState = (
     startJobAttempts: ({ txCtx, typeNames, workerId, workerToken, limit }) =>
       write(txCtx, (journal) => {
         const acquired: (StateJob & { hasBlockers: boolean })[] = [];
-        const now = new Date();
+        const now = new Date(clock());
         const nowMs = now.getTime();
         const worker = workers.get(workerId);
         if (worker === undefined || worker.token !== workerToken || !isLive(worker, nowMs)) {
@@ -964,7 +975,7 @@ export const createInProcessState = (
           const scheduledAt = first.state!.scheduledAt.getTime();
           if (earliest === undefined || scheduledAt < earliest) earliest = scheduledAt;
         }
-        return earliest === undefined ? null : Math.max(0, earliest - Date.now());
+        return earliest === undefined ? null : Math.max(0, earliest - clock());
       }),
 
     addJobsBlockers: ({ txCtx, jobBlockers }) =>
@@ -1028,7 +1039,7 @@ export const createInProcessState = (
       write(txCtx, (journal) => {
         const dependents = chains.get(blockedByChainId)?.dependents;
         if (dependents === undefined) return [];
-        const now = new Date();
+        const now = new Date(clock());
         const result: StateDependentJob[] = [];
         for (const slot of sortedListToArray(dependents)) {
           const state = slot.state!;
@@ -1062,7 +1073,7 @@ export const createInProcessState = (
     startWorker: ({ txCtx, workerId, typeNames, concurrency, leaseMs }) =>
       write(txCtx, (journal) => {
         if (workers.has(workerId)) throw new Error(`Worker id "${workerId}" already exists`);
-        const nowMs = Date.now();
+        const nowMs = clock();
         const worker: WorkerRow = {
           id: workerId,
           typeNames: [...typeNames],
@@ -1077,7 +1088,7 @@ export const createInProcessState = (
 
     extendWorkerLease: ({ txCtx, workerId, workerToken, leaseMs }) =>
       write(txCtx, (journal) => {
-        const nowMs = Date.now();
+        const nowMs = clock();
         const worker = workers.get(workerId);
         if (worker === undefined || worker.token !== workerToken || !isLive(worker, nowMs)) {
           return undefined;
@@ -1092,7 +1103,7 @@ export const createInProcessState = (
         const worker = workers.get(workerId);
         if (worker === undefined || worker.token !== workerToken) return undefined;
         setWorker(journal, workerId, undefined);
-        return workerView(worker, Date.now());
+        return workerView(worker, clock());
       }),
 
     getChainTypeNames: ({ txCtx }) =>
@@ -1137,7 +1148,7 @@ export const createInProcessState = (
 
     countWorkers: ({ txCtx }) =>
       read(txCtx, () => {
-        const nowMs = Date.now();
+        const nowMs = clock();
         let live = 0;
         for (const worker of workers.values()) if (isLive(worker, nowMs)) live++;
         return { live, expired: workers.size - live };
@@ -1145,7 +1156,7 @@ export const createInProcessState = (
 
     countWorkersByTypeName: ({ txCtx, typeNames }) =>
       read(txCtx, () => {
-        const nowMs = Date.now();
+        const nowMs = clock();
         return typeNames.map((typeName) => {
           let live = 0;
           let expired = 0;
@@ -1237,7 +1248,7 @@ export const createInProcessState = (
 
     listWorkers: ({ txCtx, typeName, status, orderDirection, page }) =>
       read(txCtx, () => {
-        const nowMs = Date.now();
+        const nowMs = clock();
         const keyOf = (worker: WorkerRow) => worker.startedAt.getTime();
         const compare = (a: WorkerRow, b: WorkerRow) => keyOf(a) - keyOf(b) || compareIds(a, b);
         const matched = [...workers.values()].filter(
@@ -1294,5 +1305,66 @@ export const createInProcessState = (
     for (const index of [...jobIndexes, ...chainIndexes]) index.buckets.clear();
   };
 
-  return { methods, beginTransaction, rollbackTransaction, endTransaction, close };
+  const dumpState = (): StateDump => {
+    closed.throwIfTripped();
+    const jobSlots = [...jobs.values()].sort((a, b) => a.seq - b.seq);
+    return {
+      capturedAt: new Date(clock()),
+      chains: [...chains.values()].map((chain) => chain.state!.info),
+      jobs: jobSlots.map((slot) => slot.state!),
+      blockers: jobSlots.flatMap((slot) =>
+        slot.blockers.map((row) => ({
+          jobId: slot.id,
+          blockedByChainId: row.blockedByChainId,
+          index: row.index,
+          traceContext: row.traceContext,
+        })),
+      ),
+      workers: [...workers.values()].map((worker) => ({
+        ...worker,
+        typeNames: [...worker.typeNames],
+      })),
+    };
+  };
+
+  const loadState = (dump: StateDump, { offsetMs }: { offsetMs: number }): void => {
+    closed.throwIfTripped();
+    if (currentTransaction !== undefined || jobs.size + chains.size + workers.size > 0) {
+      throw new Error("loadState needs an empty in-process state and no open transaction");
+    }
+    for (const info of dump.chains) {
+      const chain: ChainSlot = {
+        id: info.id,
+        deduplicationIndexKey:
+          info.deduplicationKey !== null
+            ? `${info.typeName}\u0000${info.deduplicationKey}`
+            : undefined,
+        state: undefined,
+        jobs: [],
+        dependents: undefined,
+      };
+      applyChain(chain, { info: shiftStateChain(info, offsetMs), blocking: false });
+    }
+    for (const job of dump.jobs) {
+      applyJob(createJobSlot(chains.get(job.chainId)!, job.id), shiftStateJob(job, offsetMs));
+    }
+    const blockerRowsByJobId = new Map<string, BlockerRow[]>();
+    for (const { jobId, blockedByChainId, index, traceContext } of dump.blockers) {
+      const rows = blockerRowsByJobId.get(jobId) ?? [];
+      rows.push({ blockedByChainId, index, traceContext, chain: chains.get(blockedByChainId)! });
+      blockerRowsByJobId.set(jobId, rows);
+    }
+    for (const [jobId, rows] of blockerRowsByJobId) applyBlockers(jobs.get(jobId)!, rows);
+    for (const worker of dump.workers) applyWorker(worker.id, shiftStateWorker(worker, offsetMs));
+  };
+
+  return {
+    methods,
+    beginTransaction,
+    rollbackTransaction,
+    endTransaction,
+    close,
+    dumpState,
+    loadState,
+  };
 };

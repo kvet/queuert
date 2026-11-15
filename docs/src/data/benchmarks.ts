@@ -187,28 +187,28 @@ export const instantiationGroups = [
 export const operationalGroups = [
   {
     rows: [
-      { label: "getChains/default", values: [0.45, 0.06, 1.75, 0.6, 0.92, 0] },
-      { label: "getChains/lock", values: [1.22, 0.03, 2.28, 1.52, 0.86, 0] },
-      { label: "getJobs/default", values: [0.49, 0.08, 0.38, 0.42, 0.35, 0] },
-      { label: "getJobs/lock", values: [1.21, 0.03, 1.02, 0.99, 0.41, 0] },
-      { label: "getWorkers/default", values: [0.28, 0.04, 0.33, 0.29, 0.23, 0] },
-      { label: "getWorkers/lock", values: [0.67, 0.02, 1.15, 0.92, 0.29, 0] },
-      { label: "createJobs/default", values: [1.44, 0.05, 2.18, 2.49, 0.55, 0.01] },
-      { label: "createJobs/deduplication", values: [0.66, 0.02, 1.09, 1.55, 1.08, 0] },
-      { label: "continueJobs/default", values: [1.11, 0.1, 14.66, 3.01, 1.02, 0.01] },
-      { label: "addJobsBlockers/default", values: [1.35, 0.08, 2.79, 2.89, 0.89, 0.01] },
-      { label: "getJobBlockers/default", values: [0.33, 0.1, 0.32, 0.42, 0.86, 0] },
-      { label: "unblockJobs/default", values: [1.39, 0.21, 1.44, 3.07, 0.7, 0.01] },
-      { label: "startWorker/default", values: [0.29, 0.01, 1.31, 1.85, 0.43, 0] },
-      { label: "extendWorkerLease/default", values: [0.3, 0.02, 2.09, 2.06, 0.51, 0] },
-      { label: "stopWorker/default", values: [0.35, 0.01, 2.46, 1.76, 0.5, 0] },
-      { label: "startJobAttempts/default", values: [0.72, 0.04, 3.74, 2.49, 0.29, 0] },
-      { label: "startJobAttempts/limit10", values: [1.17, 0.32, 3.98, 3.04, 0.66, 0.01] },
-      { label: "completeJobs/default", values: [1.54, 0.3, 2.57, 2.6, 0.69, 0.01] },
-      { label: "getStartAttemptDelayMs/default", values: [1.01, 0.02, 1.02, 1.81, 0.91, 0] },
-      { label: "rescheduleJobs/default", values: [1.43, 0.04, 2.47, 3, 0.48, 0] },
-      { label: "deleteChains/default", values: [2.29, 0.07, 3.89, 3.63, 1.13, 0.01] },
-      { label: "deleteChains/multiJob", values: [1.82, 0.07, 7.04, 3.43, 1.58, 0] },
+      { label: "getChains/default", values: [0.48, 0.06, 2.56, 0.62, 0.81, 0.01] },
+      { label: "getChains/lock", values: [0.96, 0.05, 3.47, 1.28, 0.74, 0.01] },
+      { label: "getJobs/default", values: [0.44, 0.03, 0.55, 0.39, 0.22, 0] },
+      { label: "getJobs/lock", values: [1.04, 0.03, 1.71, 0.89, 0.39, 0] },
+      { label: "getWorkers/default", values: [0.47, 0.02, 0.66, 0.26, 0.22, 0] },
+      { label: "getWorkers/lock", values: [0.83, 0.03, 1.37, 1.3, 0.23, 0] },
+      { label: "createJobs/default", values: [1.46, 0.07, 17.14, 3.43, 0.32, 0.01] },
+      { label: "createJobs/deduplication", values: [0.75, 0.12, 1.18, 1.51, 0.65, 0.01] },
+      { label: "continueJobs/default", values: [1.32, 0.1, 3.09, 2.86, 0.53, 0.01] },
+      { label: "addJobsBlockers/default", values: [1.43, 0.09, 3.41, 2.25, 0.56, 0.01] },
+      { label: "getJobBlockers/default", values: [0.35, 0.08, 0.56, 0.31, 0.57, 0] },
+      { label: "unblockJobs/default", values: [2.47, 0.14, 1.97, 1.74, 0.56, 0.01] },
+      { label: "startWorker/default", values: [0.67, 0.06, 2, 1.88, 0.49, 0] },
+      { label: "extendWorkerLease/default", values: [0.96, 0.02, 2.57, 2.26, 0.32, 0] },
+      { label: "stopWorker/default", values: [0.83, 0.02, 1.93, 2.55, 0.32, 0] },
+      { label: "startJobAttempts/default", values: [2.58, 0.07, 3.05, 4.07, 0.21, 0] },
+      { label: "startJobAttempts/limit10", values: [4.3, 0.18, 5.91, 3.58, 0.49, 0.01] },
+      { label: "completeJobs/default", values: [2.35, 0.07, 2.58, 2.92, 0.43, 0.01] },
+      { label: "getStartAttemptDelayMs/default", values: [1.47, 0.03, 1.07, 1.18, 0.38, 0] },
+      { label: "rescheduleJobs/default", values: [0.94, 0.04, 2.75, 2.51, 0.37, 0] },
+      { label: "deleteChains/default", values: [2.53, 0.08, 4.26, 5.31, 0.84, 0.01] },
+      { label: "deleteChains/multiJob", values: [3.22, 0.09, 15.28, 3.24, 1.26, 0.01] },
     ],
   },
 ] satisfies BenchGroup[];
@@ -216,22 +216,22 @@ export const operationalGroups = [
 export const discoveryGroups = [
   {
     rows: [
-      { label: "getChainTypeNames/default", values: [0.49, 0.04, 0.8, 0.38, 0.31, 0.01] },
-      { label: "getJobTypeNames/default", values: [0.55, 0.05, 0.45, 0.3, 0.25, 0.01] },
+      { label: "getChainTypeNames/default", values: [0.74, 0.05, 0.53, 0.43, 0.28, 0.01] },
+      { label: "getJobTypeNames/default", values: [0.69, 0.06, 0.41, 0.61, 0.26, 0.02] },
       {
         label: "countChainsByTypeName/default",
-        values: [2.29, 1.34, 7.95, 9.41, 0.23, 0.01],
+        values: [2.61, 1.41, 7.93, 11.4, 0.19, 0],
       },
       {
         label: "countJobsByTypeName/default",
-        values: [2.62, 1.42, 7.88, 9.22, 0.23, 0.01],
+        values: [2.8, 1.33, 8.45, 12.51, 0.2, 0],
       },
-      { label: "countWorkers/default", values: [0.28, 0.01, 0.33, 0.37, 0.27, 0.01] },
+      { label: "countWorkers/default", values: [0.27, 0.01, 0.26, 0.39, 0.25, 0] },
       {
         label: "countWorkersByTypeName/default",
-        values: [0.28, 0.03, 0.5, 0.41, 0.29, 0.01],
+        values: [0.45, 0.04, 0.42, 0.5, 0.24, 0.01],
       },
-      { label: "countRunningJobsByWorkerId/default", values: [0.27, 0.02, 0.56, 0.27, 0.21, 0] },
+      { label: "countRunningJobsByWorkerId/default", values: [0.33, 0.02, 0.31, 0.38, 0.19, 0] },
     ],
   },
 ] satisfies BenchGroup[];
@@ -242,41 +242,41 @@ export const listChainsGroups = [
     rows: [
       {
         label: "listChains/noStatus/default",
-        values: [45.37, 0.35, 1.07, 1.3, 1.09, 0.01],
+        values: [0.77, 0.27, 1.05, 0.91, 0.82, 0.02],
       },
       {
         label: "listChains/noStatus/independent",
-        values: [61.83, 0.42, 1.23, 1.19, 2.41, 0.01],
+        values: [1.02, 0.33, 1.39, 0.88, 1.44, 0.01],
       },
       {
         label: "listChains/noStatus/nonIndependent",
-        values: [99.08, 118.12, 160.34, 156.3, 49.42, 0],
+        values: [145.73, 121.13, 219.43, 223.56, 74.26, 0],
       },
       {
         label: "listChains/noStatus/fromTo",
-        values: [46.37, 0.36, 1.42, 1.02, 1.44, 0.01],
+        values: [1.01, 0.27, 1.27, 2.22, 0.98, 0.01],
       },
       {
         label: "listChains/noStatus/cursor",
-        values: [99.6, 0.6, 2.83, 1.73, 2.73, 0.02],
+        values: [1.95, 0.57, 1.87, 2.6, 2.01, 0.03],
       },
     ],
   },
   {
     label: "Running",
     rows: [
-      { label: "listChains/running/default", values: [9.4, 0.51, 1.74, 0.92, 1.31, 0.01] },
+      { label: "listChains/running/default", values: [1.02, 0.27, 1.32, 1.44, 0.83, 0.01] },
       {
         label: "listChains/running/independent",
-        values: [142.21, 0.75, 2.09, 1.13, 2.54, 0.01],
+        values: [1.09, 0.29, 1.44, 1.6, 1.56, 0.01],
       },
       {
         label: "listChains/running/nonIndependent",
-        values: [70.81, 19.91, 72.09, 68.69, 45.65, 0],
+        values: [24.26, 20.83, 100.78, 128.02, 68.6, 0],
       },
       {
         label: "listChains/running/cursor",
-        values: [19.59, 0.68, 3.36, 2.49, 2.72, 0.02],
+        values: [1.81, 0.52, 2.27, 3.65, 2.21, 0.03],
       },
     ],
   },
@@ -285,35 +285,35 @@ export const listChainsGroups = [
     rows: [
       {
         label: "listChains/completed/default",
-        values: [23.99, 0.36, 1.32, 1.35, 1.14, 0.01],
+        values: [0.64, 0.29, 0.86, 1.96, 1.19, 0.01],
       },
       {
         label: "listChains/completed/independent",
-        values: [47.54, 0.47, 1.27, 0.98, 1.94, 0.01],
+        values: [1.2, 0.33, 1.38, 1.83, 1.98, 0.01],
       },
       {
         label: "listChains/completed/nonIndependent",
-        values: [64.66, 49.56, 159.95, 131.05, 43.86, 0],
+        values: [61.87, 50.1, 229.74, 251.91, 73.19, 0],
       },
       {
         label: "listChains/completed/orderByCreatedAt",
-        values: [23.36, 0.34, 1.22, 1.66, 1.4, 0.02],
+        values: [0.99, 0.61, 1.3, 1.71, 0.95, 0.01],
       },
       {
         label: "listChains/completed/orderByCompletedAt",
-        values: [22.28, 0.33, 1.28, 1.47, 1.09, 0.01],
+        values: [0.76, 0.3, 1.2, 1.71, 1.05, 0.01],
       },
       {
         label: "listChains/completed/cursor",
-        values: [50.21, 0.62, 1.72, 2.7, 2.5, 0.02],
+        values: [1.35, 0.74, 2.43, 2.92, 2.09, 0.03],
       },
       {
         label: "listChains/completed/orderByCreatedAtCursor",
-        values: [45.95, 0.7, 2.42, 2.51, 2.18, 0.02],
+        values: [1.25, 0.6, 2.33, 2.99, 2.03, 0.02],
       },
       {
         label: "listChains/completed/orderByCompletedAtCursor",
-        values: [46.48, 0.67, 2.55, 2.42, 2.07, 0.02],
+        values: [1.21, 0.52, 2, 3.06, 1.77, 0.03],
       },
     ],
   },
@@ -323,61 +323,61 @@ export const listJobsGroups = [
   {
     label: "No status filter",
     rows: [
-      { label: "listJobs/noStatus/default", values: [46.07, 0.4, 0.77, 0.56, 0.8, 0.02] },
-      { label: "listJobs/noStatus/fromTo", values: [45.38, 0.41, 0.66, 0.61, 0.66, 0.02] },
+      { label: "listJobs/noStatus/default", values: [0.79, 0.27, 1.31, 1.03, 0.79, 0.02] },
+      { label: "listJobs/noStatus/fromTo", values: [0.85, 0.25, 0.89, 0.64, 0.79, 0.02] },
       {
         label: "listJobs/noStatus/cursor",
-        values: [94.27, 0.86, 0.99, 1.05, 1.61, 0.04],
+        values: [1.92, 0.41, 1.6, 1.14, 1.85, 0.04],
       },
     ],
   },
   {
     label: "Pending",
     rows: [
-      { label: "listJobs/pending/default", values: [56.66, 0.28, 0.44, 0.45, 0.88, 0.02] },
-      { label: "listJobs/pending/fromTo", values: [49.97, 0.29, 0.45, 0.44, 0.97, 0.01] },
+      { label: "listJobs/pending/default", values: [1.27, 0.2, 0.62, 0.87, 0.83, 0.01] },
+      { label: "listJobs/pending/fromTo", values: [0.78, 0.22, 0.49, 0.95, 0.65, 0.01] },
       {
         label: "listJobs/pending/orderByCreatedAt",
-        values: [50.61, 0.3, 0.51, 0.49, 0.85, 0.01],
+        values: [0.78, 0.2, 0.52, 1.11, 0.56, 0.02],
       },
       {
         label: "listJobs/pending/cursor",
-        values: [107.73, 0.55, 0.87, 1.27, 3.54, 0.03],
+        values: [1.3, 0.41, 0.89, 1.68, 1.17, 0.03],
       },
     ],
   },
   {
     label: "Blocked",
     rows: [
-      { label: "listJobs/blocked/default", values: [32.81, 0.28, 0.45, 0.79, 1.4, 0.01] },
-      { label: "listJobs/blocked/fromTo", values: [35.42, 0.3, 0.45, 0.84, 1.12, 0.01] },
+      { label: "listJobs/blocked/default", values: [1.1, 0.23, 0.47, 0.7, 0.6, 0.01] },
+      { label: "listJobs/blocked/fromTo", values: [1.11, 0.22, 0.48, 0.72, 0.56, 0.01] },
       {
         label: "listJobs/blocked/orderByCreatedAt",
-        values: [34.42, 0.31, 0.48, 0.88, 0.98, 0.01],
+        values: [1.08, 0.22, 0.54, 0.82, 0.56, 0.01],
       },
-      { label: "listJobs/blocked/cursor", values: [65.17, 0.55, 0.82, 1.02, 2.4, 0.03] },
+      { label: "listJobs/blocked/cursor", values: [1.93, 0.4, 0.94, 1, 1.16, 0.03] },
     ],
   },
   {
     label: "Running",
     rows: [
-      { label: "listJobs/running/default", values: [13.99, 0.29, 0.46, 0.52, 1, 0.01] },
+      { label: "listJobs/running/default", values: [1.36, 0.32, 0.48, 0.52, 0.61, 0.02] },
       {
         label: "listJobs/running/orderByCreatedAt",
-        values: [14.88, 0.3, 0.53, 0.49, 0.85, 0.01],
+        values: [0.77, 0.21, 0.53, 0.96, 0.56, 0.01],
       },
-      { label: "listJobs/running/cursor", values: [21.21, 0.55, 1.15, 0.78, 1.85, 0.03] },
+      { label: "listJobs/running/cursor", values: [11.11, 0.6, 0.93, 1.43, 1.18, 0.03] },
     ],
   },
   {
     label: "Completed",
     rows: [
-      { label: "listJobs/completed/default", values: [21.22, 0.32, 0.93, 0.45, 0.97, 0.01] },
+      { label: "listJobs/completed/default", values: [0.95, 0.26, 0.69, 0.53, 0.56, 0.01] },
       {
         label: "listJobs/completed/orderByCreatedAt",
-        values: [22.94, 0.32, 0.74, 0.9, 0.97, 0.01],
+        values: [1.02, 0.23, 1.07, 0.59, 0.54, 0.01],
       },
-      { label: "listJobs/completed/cursor", values: [46.6, 0.55, 1.23, 1.78, 2.3, 0.02] },
+      { label: "listJobs/completed/cursor", values: [1.56, 0.46, 1.61, 0.9, 1.32, 0.02] },
     ],
   },
 ] satisfies BenchGroup[];
@@ -385,15 +385,15 @@ export const listJobsGroups = [
 export const chainJobsGroups = [
   {
     rows: [
-      { label: "listChainJobs/default", values: [1.55, 0.56, 0.57, 2.07, 1.81, 0.01] },
-      { label: "listChainJobs/cursor", values: [5.15, 1.31, 0.82, 3.76, 1.89, 0.01] },
+      { label: "listChainJobs/default", values: [3.33, 0.91, 0.8, 3.63, 0.51, 0.01] },
+      { label: "listChainJobs/cursor", values: [6.14, 1.93, 1.33, 5.18, 1.15, 0.01] },
       {
         label: "listBlockedJobs/default",
-        values: [224.73, 221.3, 204.77, 223.36, 1.55, 0.01],
+        values: [177.82, 225.34, 207.28, 175.24, 0.55, 0.01],
       },
       {
         label: "listBlockedJobs/cursor",
-        values: [473.66, 414.99, 395.7, 456.17, 2.3, 0.03],
+        values: [324.83, 438.39, 420.59, 324.15, 1.01, 0.02],
       },
     ],
   },
@@ -402,12 +402,12 @@ export const chainJobsGroups = [
 export const workerGroups = [
   {
     rows: [
-      { label: "listWorkers/default", values: [0.46, 0.09, 0.42, 0.73, 0.78, 0.04] },
-      { label: "listWorkers/typeName", values: [0.6, 0.06, 0.34, 1.13, 0.51, 0.01] },
-      { label: "listWorkers/status", values: [0.37, 0.05, 0.29, 0.66, 2.86, 0.01] },
-      { label: "listWorkers/cursor", values: [1.25, 0.16, 0.72, 1.24, 1.65, 0.07] },
-      { label: "listWorkerJobs/default", values: [0.72, 0.16, 0.5, 0.61, 0.52, 0.01] },
-      { label: "listWorkerJobs/cursor", values: [1.66, 0.3, 0.83, 0.82, 1.08, 0.02] },
+      { label: "listWorkers/default", values: [0.74, 0.1, 0.58, 0.4, 0.45, 0.03] },
+      { label: "listWorkers/typeName", values: [0.45, 0.07, 0.73, 0.32, 0.3, 0.01] },
+      { label: "listWorkers/status", values: [0.28, 0.06, 0.37, 0.28, 1.74, 0] },
+      { label: "listWorkers/cursor", values: [0.74, 0.17, 0.99, 0.69, 1.07, 0.06] },
+      { label: "listWorkerJobs/default", values: [0.49, 0.15, 0.41, 6.75, 0.46, 0] },
+      { label: "listWorkerJobs/cursor", values: [1.58, 0.27, 1.7, 14.47, 0.77, 0.02] },
     ],
   },
 ] satisfies BenchGroup[];

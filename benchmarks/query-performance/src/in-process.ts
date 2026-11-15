@@ -1,10 +1,10 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 
-import { createInProcessStateAdapter } from "queuert";
 import {
+  createSeedStateAdapter,
+  generateStateDump,
   observabilityCoverageGroups,
   operationalCoverageGroups,
-  seedAllStates,
 } from "queuert/conformance-internal";
 
 const ITERATIONS = 10;
@@ -32,11 +32,12 @@ const report = (line = "") => {
   resultLines.push(line);
 };
 
-const stateAdapter = createInProcessStateAdapter();
+const { stateAdapter, loadState } = createSeedStateAdapter();
 
 console.log(`\nSeeding data (scale=${scale})...`);
 const seedStart = performance.now();
-const sentinels = await seedAllStates(stateAdapter, { scale });
+const { dump, sentinels } = generateStateDump({ scale });
+loadState(dump, { offsetMs: Date.now() - dump.capturedAt.getTime() });
 console.log(`Seed complete in ${((performance.now() - seedStart) / 1000).toFixed(1)}s.\n`);
 
 report("═══════════════════════════════════════════════════════════════════════════════════");

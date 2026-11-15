@@ -2,11 +2,12 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 import { createPgStateAdapter } from "@queuert/postgres";
-import { fastSeedAllStates } from "@queuert/postgres/conformance-internal";
+import { loadStateDump } from "@queuert/postgres/conformance-internal";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { type PgPoolContext, createPgPoolStateProvider } from "example-state-postgres-pg/provider";
 import { Pool } from "pg";
 import {
+  generateStateDump,
   observabilityCoverageGroups,
   operationalCoverageGroups,
 } from "queuert/conformance-internal";
@@ -68,7 +69,8 @@ const stateAdapter = createPgStateAdapter<PgPoolContext, string, string>({ state
 await stateAdapter.migrateToLatest();
 
 console.log(`Seeding data (scale=${scale})...`);
-const sentinels = await fastSeedAllStates(baseProvider, { scale });
+const { dump, sentinels } = generateStateDump({ scale });
+await loadStateDump(baseProvider, dump, { offsetMs: Date.now() - dump.capturedAt.getTime() });
 
 await pool.query("VACUUM ANALYZE");
 console.log("Seed complete.\n");
