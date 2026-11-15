@@ -23,6 +23,7 @@
     "@types/hast": "3.0.5",
     "@types/mdast": "4.0.4",
     "@types/node": "24.19.1",
+    "benchmark-results": "workspace:*",
     "estree-util-value-to-estree": "3.5.0",
     "estree-util-visit": "2.0.0",
     "example-observability-dashboard": "workspace:*",

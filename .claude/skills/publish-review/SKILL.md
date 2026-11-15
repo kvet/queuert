@@ -31,7 +31,7 @@ Determine the release version `<VERSION>` from the current `packages/core/packag
 
 ## Step 2: Start benchmarks
 
-Run `pnpm benchmarks > <scratchpad>/benchmarks.log 2>&1` with `run_in_background: true`. You compare it against the benchmark numbers in `docs/src/data/benchmarks.ts` (shown on the `docs/src/content/docs/benchmarks/` pages) yourself in Step 4 — no agent needed.
+Run `pnpm benchmarks > <scratchpad>/benchmarks.log 2>&1` with `run_in_background: true`. Each suite rewrites its `benchmarks/<suite>/results.md`, the numbers the `docs/src/content/docs/benchmarks/` pages show; you read the `git diff` of those files yourself in Step 4 — no agent needed.
 
 ## Step 3: Launch agents
 
@@ -64,7 +64,7 @@ Report findings only — no inventories of things that are fine. Every finding n
 
 1. Drop anything matching `accepted.md` that slipped through, and merge duplicates reported by more than one agent.
 2. Spot-check every CRITICAL by reading the cited lines. Downgrade or drop the ones that do not hold up, and say so.
-3. Read the benchmarks log: report failures, and regressions against `docs/src/data/benchmarks.ts`.
+3. Read the benchmarks log for failures, and `git diff benchmarks/*/results.md` for regressions; weigh each against the load average on the file's run line.
 4. Write `docs/publish-readiness-report.md`:
 
 ```markdown

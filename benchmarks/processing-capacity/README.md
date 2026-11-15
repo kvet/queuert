@@ -8,7 +8,7 @@ Job throughput along two independent axes: state adapter (with a noop notify ada
 
 Every completion scenario starts from the same 40,000-job queue, so only concurrency varies between them. The window starts when the worker takes its first job; a fast adapter that drains the queue before the window ends is timed up to its last job, so its rate is still exact. Redis state runs also print the Redis main-thread CPU time spent per chain or job during the window.
 
-Containers (PostgreSQL, MySQL, MariaDB, Redis, NATS) start once per run and are shared: each scenario child gets its own PostgreSQL schema, MySQL database, channel prefix or subject prefix. After all runs finish, the tool prints one markdown table per scenario family (creation, no-op completion), with adapters as rows grouped by axis; the docs take these numbers in `docs/src/data/benchmarks.ts`.
+Containers (PostgreSQL, MySQL, MariaDB, Redis, NATS) start once per run and are shared: each scenario child gets its own PostgreSQL schema, MySQL database, channel prefix or subject prefix. After all runs finish, the tool writes `results.md`: one markdown table per scenario family (creation, no-op completion) and axis, with adapters as rows. A run of some adapters or scenarios rewrites only its own cells, and the line under the title records the date, commit, load average and what ran. The docs site reads its numbers from this file, so commit it with the run.
 
 ## Running
 

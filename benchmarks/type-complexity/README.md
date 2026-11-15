@@ -14,6 +14,8 @@ pnpm start ts7 --filter=merge   # only scenarios whose name or family matches
 
 Each scenario runs 3 times; the best result is reported. When more than one compiler runs, a comparison table follows, with speedups relative to the first compiler (TS 6 in a full run). Generated scenario files are kept for inspection. Run `pnpm install` first so all compilers are present.
 
+Every run writes `results.md`, the numbers the docs site shows: the best type-check time and the instantiation count of each scenario per compiler, and its job type count. A run of one compiler or a `--filter` rewrites only its own cells, and the line under the title records the date, commit, load average and what ran. Commit it with the run.
+
 tsrs tracks a newer TS 7.x release than the `typescript-7` dependency, so its instantiation counts can differ slightly from TS 7's. A large gap points at a port divergence rather than a change in Queuert's types.
 
 ## Scenarios

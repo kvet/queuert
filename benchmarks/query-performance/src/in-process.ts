@@ -7,6 +7,8 @@ import {
   operationalCoverageGroups,
 } from "queuert/conformance-internal";
 
+import { writeQueryResults } from "./results.ts";
+
 const ITERATIONS = 10;
 const RESULTS_DIR = new URL("../results", import.meta.url).pathname;
 const RESULTS_FILE = `${RESULTS_DIR}/in-process.txt`;
@@ -20,12 +22,12 @@ const scale = parseScale();
 
 const stats = (times: number[]) => ({
   p50: times[Math.floor(times.length * 0.5)],
-  p95: times[Math.floor(times.length * 0.95)],
   max: times[times.length - 1],
 });
 
 const formatMs = (ms: number) => `${ms.toFixed(2)}ms`;
 
+const timings = new Map<string, { p50: number; max: number }>();
 const resultLines: string[] = [];
 const report = (line = "") => {
   console.log(line);
@@ -56,8 +58,9 @@ for (const group of [...operationalCoverageGroups, ...observabilityCoverageGroup
     }
     times.sort((a, b) => a - b);
     const timing = stats(times);
+    timings.set(testCase.key, timing);
     report(
-      `    ${testCase.key.padEnd(50)} p50=${formatMs(timing.p50).padStart(10)}  p95=${formatMs(timing.p95).padStart(10)}  max=${formatMs(timing.max).padStart(10)}`,
+      `    ${testCase.key.padEnd(50)} p50=${formatMs(timing.p50).padStart(10)}  max=${formatMs(timing.max).padStart(10)}`,
     );
   }
   report("");
@@ -66,5 +69,6 @@ for (const group of [...operationalCoverageGroups, ...observabilityCoverageGroup
 mkdirSync(RESULTS_DIR, { recursive: true });
 writeFileSync(RESULTS_FILE, [`-- scale=${scale}`, "", ...resultLines].join("\n") + "\n");
 console.log(`  Results written to ${RESULTS_FILE}\n`);
+writeQueryResults("In-process", scale, timings);
 
 stateAdapter.close();

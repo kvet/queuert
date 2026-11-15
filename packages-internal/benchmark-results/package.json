@@ -1,0 +1,24 @@
+{
+  "name": "benchmark-results",
+  "version": "0.0.1",
+  "private": true,
+  "description": "The results.md format the benchmarks write and the docs site reads",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest --run"
+  },
+  "devDependencies": {
+    "@queuert/tsconfig": "workspace:*"
+  }
+}

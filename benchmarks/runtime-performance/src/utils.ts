@@ -252,11 +252,27 @@ export type DoubleRunBenchmarkOptions<TInfra> = {
   runLifecycle: (infra: TInfra, ctx: LifecycleContext) => Promise<void>;
 };
 
+export type MeasurementResult =
+  | {
+      name: string;
+      phase: "memory";
+      setupBytes: number;
+      peakBytes: number;
+      liveJsBytes: number;
+      jitCodeBytes: number;
+    }
+  | {
+      name: string;
+      phase: "profile";
+      cpuMicrosecondsPerJob: Record<string, number>;
+      allocatedBytesPerJob: number;
+    };
+
 async function runMemory<TInfra>({
   name,
   setupInfrastructure,
   runLifecycle,
-}: DoubleRunBenchmarkOptions<TInfra>): Promise<void> {
+}: DoubleRunBenchmarkOptions<TInfra>): Promise<MeasurementResult> {
   // ─── Phase 1: process baseline ───
   console.log("\n── Infrastructure setup (not queuert) ──");
   await forceGC();
@@ -346,6 +362,15 @@ async function runMemory<TInfra>({
     ["After close (live JS objects):", afterCloseLive.nonCode - infraBaselineLive.nonCode],
     ["After close (V8 JIT code):", afterCloseLive.code - infraBaselineLive.code],
   ]);
+
+  return {
+    name,
+    phase: "memory",
+    setupBytes: setupHeapDelta,
+    peakBytes: peakHeapDelta,
+    liveJsBytes: afterCloseLive.nonCode - infraBaselineLive.nonCode,
+    jitCodeBytes: afterCloseLive.code - infraBaselineLive.code,
+  };
 }
 
 /**
@@ -356,9 +381,9 @@ export const runDoubleRunBenchmark = async <TInfra>(
   options: DoubleRunBenchmarkOptions<TInfra>,
 ): Promise<void> => {
   const phase = process.argv.find((arg) => arg.startsWith("--phase="))?.split("=")[1] ?? "memory";
-  if (phase === "profile") {
-    await runProfile(options);
-    return;
+  const result = phase === "profile" ? await runProfile(options) : await runMemory(options);
+  const resultFile = process.argv.find((arg) => arg.startsWith("--result-file="))?.split("=")[1];
+  if (resultFile !== undefined) {
+    fs.appendFileSync(resultFile, `${JSON.stringify(result)}\n`);
   }
-  await runMemory(options);
 };

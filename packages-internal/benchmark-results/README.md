@@ -1,0 +1,3 @@
+# benchmark-results
+
+The `results.md` format shared by the benchmarks and the docs site. Each benchmark that feeds the docs writes one `results.md` next to its `package.json`: a run line, then one padded markdown table per docs chart. `results-file.ts` renders, parses and merges those tables and is safe to import in the browser; `write-results-file.ts` writes a file from Node, keeping the cells a partial run did not measure. Not published, and named outside the `@queuert/` scope so the benchmarks' dist hooks leave it on its source.

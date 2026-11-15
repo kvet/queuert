@@ -15,6 +15,8 @@ import {
 } from "queuert/conformance-internal";
 import { GenericContainer, Wait } from "testcontainers";
 
+import { writeQueryResults } from "./results.ts";
+
 const ITERATIONS = 10;
 
 const dialect = process.argv.includes("--mariadb") ? "mariadb" : "mysql";
@@ -33,12 +35,12 @@ const scale = parseScale();
 
 const stats = (times: number[]) => ({
   p50: times[Math.floor(times.length * 0.5)],
-  p95: times[Math.floor(times.length * 0.95)],
   max: times[times.length - 1],
 });
 
 const fmt = (ms: number) => `${ms.toFixed(2)}ms`;
 
+const timings = new Map<string, { p50: number; max: number }>();
 const resultLines: string[] = [];
 const report = (line = "") => {
   console.log(line);
@@ -173,8 +175,9 @@ for (const group of [...operationalCoverageGroups, ...observabilityCoverageGroup
     }
     times.sort((a, b) => a - b);
     const s = stats(times);
+    timings.set(testCase.key, s);
     report(
-      `    ${testCase.key.padEnd(50)} p50=${fmt(s.p50).padStart(10)}  p95=${fmt(s.p95).padStart(10)}  max=${fmt(s.max).padStart(10)}`,
+      `    ${testCase.key.padEnd(50)} p50=${fmt(s.p50).padStart(10)}  max=${fmt(s.max).padStart(10)}`,
     );
 
     const filePath = `${EXPLANATIONS_DIR}/${testCase.key.replaceAll("/", "__")}.txt`;
@@ -185,7 +188,7 @@ for (const group of [...operationalCoverageGroups, ...observabilityCoverageGroup
     });
     const content = [
       `-- ${testCase.key}`,
-      `-- scale=${scale}  p50=${fmt(s.p50)}  p95=${fmt(s.p95)}  max=${fmt(s.max)}`,
+      `-- scale=${scale}  p50=${fmt(s.p50)}  max=${fmt(s.max)}`,
       "",
       ...sections,
     ].join("\n\n");
@@ -197,6 +200,7 @@ for (const group of [...operationalCoverageGroups, ...observabilityCoverageGroup
 mkdirSync(RESULTS_DIR, { recursive: true });
 writeFileSync(RESULTS_FILE, [`-- scale=${scale}`, "", ...resultLines].join("\n") + "\n");
 console.log(`  Results written to ${RESULTS_FILE}`);
+writeQueryResults(dialect === "mariadb" ? "MariaDB" : "MySQL", scale, timings);
 console.log(`  Explanations written to ${EXPLANATIONS_DIR}\n`);
 
 await pool.end();

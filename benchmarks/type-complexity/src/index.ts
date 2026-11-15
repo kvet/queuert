@@ -2,6 +2,9 @@ import { execSync } from "node:child_process";
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
+import { notMeasured } from "benchmark-results/results-file";
+import { writeResultsFile } from "benchmark-results/write-results-file";
+
 const benchmarkDir = resolve(import.meta.dirname, "..");
 const projectRoot = resolve(benchmarkDir, "../..");
 const generatedDir = join(benchmarkDir, "generated");
@@ -439,7 +442,7 @@ const scenarios: Scenario[] = [
   // Single-slice: Linear
   ...linearSizes.map((n): Scenario => ({
     name: `linear-${n}`,
-    description: `Linear: ${n} types`,
+    description: `Linear: ${n} ${n === 1 ? "type" : "types"}`,
     group: "linear",
     generate: () => wrapInScenario(generateLinearChain(n)),
   })),
@@ -471,7 +474,7 @@ const scenarios: Scenario[] = [
   // Multi-slice: Merge
   ...mergeConfigs.map(([slices, types]): Scenario => ({
     name: `merge-${slices}x${types}`,
-    description: `Merge: ${slices} slices x ${types}`,
+    description: `Merge: ${slices} x ${types}`,
     group: "merge",
     generate: () =>
       wrapMergeScenario(
@@ -603,8 +606,8 @@ type Compiler = { name: string; label: string; path: string };
 
 // Order matters: the first compiler that runs is the comparison baseline.
 const knownCompilers: Compiler[] = [
-  { name: "ts6", label: "TS6", path: join(benchmarkDir, "node_modules/typescript-6/bin/tsc") },
-  { name: "ts7", label: "TS7", path: join(benchmarkDir, "node_modules/typescript-7/bin/tsc") },
+  { name: "ts6", label: "TS 6", path: join(benchmarkDir, "node_modules/typescript-6/bin/tsc") },
+  { name: "ts7", label: "TS 7", path: join(benchmarkDir, "node_modules/typescript-7/bin/tsc") },
   // Experimental Rust port of the TS 7 checker; tracks a newer TS 7.x than typescript-7.
   { name: "tsrs", label: "tsrs", path: join(benchmarkDir, "node_modules/tsrs/bin/tsrs") },
 ];
@@ -811,3 +814,42 @@ if (compilers.length > 1) {
     console.log(`${row[0].description.padEnd(25)} ${cells.map((c) => c.padStart(12)).join(" ")}`);
   }
 }
+
+const resultOf = (compiler: Compiler, scenario: Scenario) =>
+  allResults.get(compiler.name)?.find((result) => result.name === scenario.name)?.diagnostics;
+
+const content = writeResultsFile({
+  path: join(benchmarkDir, "results.md"),
+  title: "Type complexity",
+  ran: `${compilers.map((compiler) => compiler.label).join(", ")}${filterArg === undefined ? "" : `, scenarios matching "${filterArg}"`}`,
+  tables: [
+    {
+      title: "Type-check time (ms)",
+      columns: ["Scenario", ...knownCompilers.map((compiler) => compiler.label)],
+      rows: scenarios.map((scenario) => [
+        scenario.description,
+        ...knownCompilers.map((compiler) => {
+          const diagnostics = resultOf(compiler, scenario);
+          return diagnostics === null || diagnostics === undefined || diagnostics.errors > 0
+            ? notMeasured
+            : String(diagnostics.timeMs);
+        }),
+      ]),
+    },
+    {
+      title: "Instantiations",
+      columns: ["Scenario", "Job types", ...knownCompilers.map((compiler) => compiler.label)],
+      rows: scenarios.map((scenario) => [
+        scenario.description,
+        String(scenarioMap.get(scenario.name)!.jobTypeCount),
+        ...knownCompilers.map((compiler) => {
+          const instantiations = resultOf(compiler, scenario)?.instantiations;
+          return instantiations === null || instantiations === undefined
+            ? notMeasured
+            : String(instantiations);
+        }),
+      ]),
+    },
+  ],
+});
+console.log(`\n${content}`);

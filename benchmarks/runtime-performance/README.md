@@ -5,7 +5,7 @@ Measures what Queuert costs at runtime per adapter, in two phases:
 - **Memory** — Queuert's steady-state heap footprint. The headline question: **once you close queuert, does it release its allocated heap?** Yes for live JS state — what remains is V8 metadata (hidden classes, JIT-compiled code) that's tied to module load, not to queuert holding references.
 - **Profile** — where CPU time and allocations go per job, so hot paths are measured before optimizing.
 
-Headline numbers live in the [Runtime Performance docs page](../../docs/src/content/docs/benchmarks/runtime-performance.tsx) (numbers in [`docs/src/data/benchmarks.ts`](../../docs/src/data/benchmarks.ts)) — this README covers methodology and how to reproduce them.
+Headline numbers live in the [Runtime Performance docs page](../../docs/src/content/docs/benchmarks/runtime-performance.tsx), which reads them from [`results.md`](results.md) — this README covers methodology and how to reproduce them.
 
 ## Memory phase
 
@@ -58,11 +58,12 @@ The schema library's own time lands in `dependencies` and the example adapter's 
 
 ## Output
 
+- `results.md` — the numbers the docs show: memory, CPU per job by category and allocated per job for each adapter measurement, plus the schema library CPU (`dependencies`) and allocations for each job type registry. Memory is rounded to 5 KB. A run of some measurements or one phase rewrites only its own cells, and the line under the title records the date, commit, load average and what ran. Commit it with the run.
 - `results/memory/<adapter>.txt` — the memory summary.
 - `results/profile/<adapter>.txt` — CPU µs and allocated KB per job by category, the process CPU time from `process.cpuUsage()`, and the top functions by self time and by self allocation.
 - `profiles/<adapter>.cpuprofile` and `profiles/<adapter>.heapprofile` — the raw profiles with TypeScript locations, for Chrome DevTools (Performance / Memory panels) or [speedscope](https://www.speedscope.app/).
 
-`results/`, `profiles/` and `heap-dumps/` are git-ignored.
+`results/`, `profiles/` and `heap-dumps/` are git-ignored; `results.md` is not.
 
 ## Running
 

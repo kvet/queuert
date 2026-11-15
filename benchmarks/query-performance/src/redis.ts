@@ -10,6 +10,8 @@ import {
   operationalCoverageGroups,
 } from "queuert/conformance-internal";
 
+import { writeQueryResults } from "./results.ts";
+
 const ITERATIONS = 10;
 const EXPLANATIONS_DIR = new URL("../explanations/redis", import.meta.url).pathname;
 const RESULTS_DIR = new URL("../results", import.meta.url).pathname;
@@ -26,7 +28,6 @@ const scale = parseScale();
 
 const stats = (times: number[]) => ({
   p50: times[Math.floor(times.length * 0.5)],
-  p95: times[Math.floor(times.length * 0.95)],
   max: times[times.length - 1],
 });
 
@@ -38,6 +39,7 @@ const formatRange = (values: number[]) => {
   return minimum === maximum ? `${minimum}` : `${minimum}-${maximum}`;
 };
 
+const timings = new Map<string, { p50: number; max: number }>();
 const resultLines: string[] = [];
 const report = (line = "") => {
   console.log(line);
@@ -102,7 +104,7 @@ report("════════════════════════
 const summaries: {
   key: string;
   p50: number;
-  p95: number;
+  max: number;
   evals: string;
   commands: number;
   error: string | undefined;
@@ -145,20 +147,21 @@ for (const group of [...operationalCoverageGroups, ...observabilityCoverageGroup
 
     if (error !== undefined || times.length === 0) {
       report(`    ${testCase.key.padEnd(50)} ERROR: ${error ?? "no timings"}`);
-      summaries.push({ key: testCase.key, p50: NaN, p95: NaN, evals: "-", commands: 0, error });
+      summaries.push({ key: testCase.key, p50: NaN, max: NaN, evals: "-", commands: 0, error });
       continue;
     }
 
     times.sort((a, b) => a - b);
     const timing = stats(times);
+    timings.set(testCase.key, timing);
     const evals = formatRange(evalCounts);
     report(
-      `    ${testCase.key.padEnd(50)} p50=${formatMs(timing.p50).padStart(10)}  p95=${formatMs(timing.p95).padStart(10)}  max=${formatMs(timing.max).padStart(10)}  evals=${evals.padStart(5)}  commands=${String(commandCalls).padStart(7)}`,
+      `    ${testCase.key.padEnd(50)} p50=${formatMs(timing.p50).padStart(10)}  max=${formatMs(timing.max).padStart(10)}  evals=${evals.padStart(5)}  commands=${String(commandCalls).padStart(7)}`,
     );
     summaries.push({
       key: testCase.key,
       p50: timing.p50,
-      p95: timing.p95,
+      max: timing.max,
       evals,
       commands: commandCalls,
       error,
@@ -166,7 +169,7 @@ for (const group of [...operationalCoverageGroups, ...observabilityCoverageGroup
 
     const content = [
       `-- ${testCase.key}`,
-      `-- scale=${scale}  p50=${formatMs(timing.p50)}  p95=${formatMs(timing.p95)}  max=${formatMs(timing.max)}`,
+      `-- scale=${scale}  p50=${formatMs(timing.p50)}  max=${formatMs(timing.max)}`,
       `-- evals=${evals}  commands=${commandCalls}  server_time=${(serverUsec / 1000).toFixed(2)}ms`,
       "",
       ...commandBreakdown.map(([name, calls]) => `${name.padEnd(24)} ${calls}`),
@@ -179,26 +182,27 @@ for (const group of [...operationalCoverageGroups, ...observabilityCoverageGroup
 mkdirSync(RESULTS_DIR, { recursive: true });
 writeFileSync(RESULTS_FILE, [`-- scale=${scale}`, "", ...resultLines].join("\n") + "\n");
 console.log(`  Results written to ${RESULTS_FILE}`);
+writeQueryResults("Redis", scale, timings);
 console.log(`  Explanations written to ${EXPLANATIONS_DIR}\n`);
 
 if (existsSync(POSTGRES_RESULTS_FILE)) {
   const postgresContent = readFileSync(POSTGRES_RESULTS_FILE, "utf8");
   const postgresScale = /^-- scale=(\d+)/.exec(postgresContent)?.[1];
   const postgresTimings = new Map(
-    [...postgresContent.matchAll(/^\s+(\S+)\s+p50=\s*([\d.]+)ms\s+p95=\s*([\d.]+)ms/gm)].map(
-      (match) => [match[1], { p50: Number(match[2]), p95: Number(match[3]) }] as const,
+    [...postgresContent.matchAll(/^\s+(\S+)\s+p50=\s*([\d.]+)ms/gm)].map(
+      (match) => [match[1], { p50: Number(match[2]) }] as const,
     ),
   );
   console.log(`  REDIS (scale=${scale}) vs POSTGRESQL (scale=${postgresScale ?? "?"})`);
   console.log(
-    `    ${"operation".padEnd(50)} ${"redis p50".padStart(10)} ${"redis p95".padStart(10)} ${"evals".padStart(6)} ${"commands".padStart(8)} ${"pg p50".padStart(10)} ${"ratio".padStart(8)}`,
+    `    ${"operation".padEnd(50)} ${"redis p50".padStart(10)} ${"redis max".padStart(10)} ${"evals".padStart(6)} ${"commands".padStart(8)} ${"pg p50".padStart(10)} ${"ratio".padStart(8)}`,
   );
   for (const summary of summaries) {
     const postgres = postgresTimings.get(summary.key);
     if (postgres === undefined) continue;
     const ratio = summary.p50 / postgres.p50;
     console.log(
-      `    ${summary.key.padEnd(50)} ${formatMs(summary.p50).padStart(10)} ${formatMs(summary.p95).padStart(10)} ${summary.evals.padStart(6)} ${String(summary.commands).padStart(8)} ${formatMs(postgres.p50).padStart(10)} ${`${ratio.toFixed(2)}x`.padStart(8)}`,
+      `    ${summary.key.padEnd(50)} ${formatMs(summary.p50).padStart(10)} ${formatMs(summary.max).padStart(10)} ${summary.evals.padStart(6)} ${String(summary.commands).padStart(8)} ${formatMs(postgres.p50).padStart(10)} ${`${ratio.toFixed(2)}x`.padStart(8)}`,
     );
   }
   console.log("");

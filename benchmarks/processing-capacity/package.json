@@ -32,6 +32,7 @@
     "@queuert/postgres": "workspace:*",
     "@queuert/redis": "workspace:*",
     "@queuert/sqlite": "workspace:*",
+    "benchmark-results": "workspace:*",
     "better-sqlite3": "13.0.3",
     "example-mysql-state-mysql2": "workspace:*",
     "example-postgresql-notify-pg": "workspace:*",
