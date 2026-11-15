@@ -161,12 +161,14 @@ export const Rows = (props: {
   columns?: string;
   spine?: boolean | "start" | "end";
   gap?: "normal" | "none";
+  stack?: "rows" | "columns" | "none";
   children: JSX.Element;
 }) => (
   <div
     class="q-d-rows"
     data-spine={props.spine === true ? "start" : props.spine === false ? undefined : props.spine}
     data-gap={props.gap ?? "normal"}
+    data-stack={props.stack ?? (props.spine ? "none" : "rows")}
     style={{ "--r-cols": props.columns ?? "minmax(3.5rem, auto) auto" }}
   >
     {props.children}

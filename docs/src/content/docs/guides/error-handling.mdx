@@ -35,9 +35,8 @@ For workflows that need rollback, continue to a compensation job that undoes pre
 
 <Diagram
   label="Compensation: charge-card continues with ship-order on success; a declined charge or a failed shipment continues with refund-charge"
-  stack="none"
 >
-  <Rows gap="none" columns="auto minmax(6rem, auto) auto">
+  <Rows gap="none" stack="none" columns="auto minmax(6rem, auto) auto">
     <Flow>
       <Node>charge-card</Node>
       <Arrow label="success" />

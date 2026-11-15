@@ -242,13 +242,10 @@ const Home = () => (
       eyebrow="How it works"
       title="A thin library over the database you already run."
     >
-      <Diagram
-        label="Architecture: the client enqueues and workers acquire and complete jobs through your database; an optional pub/sub carries notifications from the client to workers"
-        stack="none"
-      >
+      <Diagram label="Architecture: the client enqueues and workers acquire and complete jobs through your database; an optional pub/sub carries notifications from the client to workers">
         <Flow align="stretch">
           <Node sub="app process">client</Node>
-          <Rows columns="minmax(7rem, auto) auto minmax(7rem, auto)">
+          <Rows stack="columns" columns="minmax(7rem, auto) auto minmax(7rem, auto)">
             <Flow>
               <Arrow label="enqueue" sub="state adapter" />
               <Node

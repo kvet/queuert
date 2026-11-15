@@ -11,11 +11,10 @@ Deploy multiple worker processes sharing the same database for horizontal scalin
 
 <Diagram
   label="Identical workers: pub/sub wakes all three; they race to claim the job and FOR UPDATE SKIP LOCKED lets only one win"
-  stack="none"
 >
   <Flow align="stretch">
-    <Node sub="Postgres LISTEN · Redis · NATS · in-process">your pub/sub</Node>
-    <Rows spine columns="minmax(4rem, auto) auto minmax(7rem, auto)">
+    <Node sub={"Postgres LISTEN · Redis\nNATS · in-process"}>your pub/sub</Node>
+    <Rows spine stack="columns" columns="minmax(4rem, auto) auto minmax(7rem, auto)">
       <Flow>
         <Arrow label="1 · wake" dashed />
         <Node>worker A</Node>
@@ -32,7 +31,7 @@ Deploy multiple worker processes sharing the same database for horizontal scalin
         <Arrow label="2 · claim" sub="skipped" dashed />
       </Flow>
     </Rows>
-    <Node sub="FOR UPDATE SKIP LOCKED">your database</Node>
+    <Node sub={"FOR UPDATE\nSKIP LOCKED"}>your database</Node>
   </Flow>
 </Diagram>
 

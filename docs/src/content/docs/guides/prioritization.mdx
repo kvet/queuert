@@ -11,10 +11,9 @@ Queuert has no built-in `priority` field. Prioritization is a consequence of **p
 
 <Diagram
   label="Two workers with separate capacity: the transactional worker's three slots only acquire transactional emails; the marketing worker's single slot only acquires marketing emails"
-  stack="none"
 >
   <Flow align="stretch">
-    <Rows columns="auto minmax(9rem, auto)">
+    <Rows stack="columns" columns="auto minmax(9rem, auto)">
       <Flow>
         <Group title="transactional · concurrency 3">
           <Flow>

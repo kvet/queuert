@@ -352,7 +352,7 @@
 }
 
 .q-d-flow[data-direction="column"],
-.q-d__body[data-stacked] .q-d-flow:not(.q-d-rows > *) {
+.q-d__body[data-stacked] .q-d-flow:not(.q-d-rows[data-stack="none"] > *) {
   flex-direction: column;
   align-items: center;
 
@@ -422,7 +422,7 @@
 .q-d-arrow:is(
   [data-direction="down"],
   .q-d-flow[data-direction="column"] > *,
-  .q-d__body[data-stacked] .q-d-flow:not(.q-d-rows > *) > *
+  .q-d__body[data-stacked] .q-d-flow:not(.q-d-rows[data-stack="none"] > *) > *
 ) {
   grid-template-columns: 1fr auto 1fr;
   grid-template-rows: none;
@@ -482,9 +482,89 @@
   align-self: stretch;
 }
 
-.q-d-rows[data-spine="start"]:is(
+.q-d__body[data-stacked] .q-d-rows:is([data-stack="rows"], [data-stack="columns"]) {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  min-width: 0;
+
+  > .q-d-flow {
+    display: flex;
+  }
+}
+
+.q-d__body[data-stacked] .q-d-rows[data-stack="rows"]:not([data-gap="none"]) {
+  row-gap: 1.75rem;
+}
+
+.q-d__body[data-stacked] .q-d-rows[data-stack="columns"] {
+  flex-direction: row;
+  column-gap: var(--q-d-gap);
+  padding-inline: 0;
+
+  &::before,
+  &::after,
+  > .q-d-flow::before {
+    content: none;
+  }
+
+  > .q-d-flow {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  > .q-d-flow > .q-d-arrow {
+    flex-grow: 1;
+    grid-template-columns: 1rem auto minmax(0, 1fr);
+    grid-template-rows: 1fr 1fr;
+
+    .q-d-arrow__line {
+      grid-row: 1 / -1;
+    }
+
+    .q-d-arrow__label {
+      align-self: end;
+    }
+
+    .q-d-arrow__sub {
+      grid-column: 3;
+      grid-row: 2;
+      align-self: start;
+      padding: 0 0 0 0.625rem;
+      text-align: left;
+    }
+  }
+}
+
+.q-d__body[data-stacked] {
+  .q-d-rows,
+  .q-d-node {
+    min-width: 0;
+  }
+
+  .q-d-arrow:has(> .q-d-arrow__label:not(:empty), > .q-d-arrow__sub:not(:empty)) {
+    min-width: min-content;
+  }
+
+  :is(.q-d-node__title, .q-d-group__title, .q-d-arrow__label, .q-d-arrow__sub) {
+    white-space: normal;
+  }
+
+  .q-d-transition {
+    flex-wrap: wrap;
+    width: auto;
+  }
+
+  .q-d-timeline {
+    grid-template-columns: repeat(var(--tl-lanes), minmax(0, 15rem));
+    column-gap: 0.75rem;
+    min-width: 0;
+  }
+}
+
+.q-d-rows[data-spine="start"]:not([data-stack="columns"]):is(
     .q-d-flow[data-direction="column"] > *,
-    .q-d__body[data-stacked] .q-d-flow:not(.q-d-rows > *) > *
+    .q-d__body[data-stacked] .q-d-flow:not(.q-d-rows[data-stack="none"] > *) > *
   ) {
   align-self: stretch;
   margin-top: 0.75rem;
