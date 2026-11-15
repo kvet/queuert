@@ -35,7 +35,7 @@ const Page = () => (
       </A>{" "}
       the processes share. Give every process the same directory:
     </p>
-    <ExampleCode example="notify-ipc" file="src/index.ts" region="setup" />
+    <ExampleCode example="ipc/notify" file="src/index.ts" region="setup" />
     <p>
       The adapter is held with <code>using</code>, so it closes when the scope ends, before the
       state adapter created above it, in the{" "}
@@ -70,7 +70,7 @@ const Page = () => (
       test runner, see{" "}
       <A href="/integrations/notify-adapters/custom/#conformance">Custom Notify Adapter</A>.
     </p>
-    <ExampleCode example="notify-ipc" file="src/adapter.spec.ts" region="conformance" />
+    <ExampleCode example="ipc/notify" file="src/adapter.spec.ts" region="conformance" />
 
     <h2 id="delivery">Delivery</h2>
     <p>
@@ -90,7 +90,7 @@ const Page = () => (
     </p>
 
     <h2 id="examples">Examples</h2>
-    <ExampleRows title="@queuert/ipc" names={["notify-ipc", "state-sqlite-multi-worker"]} />
+    <ExampleRows title="@queuert/ipc" names={["ipc/notify", "sqlite/multi-worker"]} />
   </>
 );
 

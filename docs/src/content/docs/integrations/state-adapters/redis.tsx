@@ -301,18 +301,18 @@ const Page = () => (
     </p>
     <Tabs syncKey="redis-driver">
       <TabItem label="node-redis">
-        <ExampleCode example="state-redis-redis" file="src/provider.ts" />
+        <ExampleCode example="redis/state-redis" file="src/provider.ts" />
         <ExampleCode
-          example="state-redis-redis"
+          example="redis/state-redis"
           file="src/index.ts"
           region="adapter"
           title="src/index.ts"
         />
       </TabItem>
       <TabItem label="ioredis">
-        <ExampleCode example="state-redis-ioredis" file="src/provider.ts" />
+        <ExampleCode example="redis/state-ioredis" file="src/provider.ts" />
         <ExampleCode
-          example="state-redis-ioredis"
+          example="redis/state-ioredis"
           file="src/index.ts"
           region="adapter"
           title="src/index.ts"
@@ -366,7 +366,7 @@ const Page = () => (
     <Tabs syncKey="redis-driver">
       <TabItem label="node-redis">
         <ExampleCode
-          example="state-redis-redis"
+          example="redis/state-redis"
           file="src/index.ts"
           region="transaction"
           title="src/index.ts"
@@ -374,7 +374,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="ioredis">
         <ExampleCode
-          example="state-redis-ioredis"
+          example="redis/state-ioredis"
           file="src/index.ts"
           region="transaction"
           title="src/index.ts"
@@ -507,7 +507,7 @@ const Page = () => (
     <Tabs syncKey="redis-driver">
       <TabItem label="node-redis">
         <ExampleCode
-          example="state-redis-redis"
+          example="redis/state-redis"
           file="src/provider.spec.ts"
           region="conformance"
           title="src/provider.spec.ts"
@@ -515,7 +515,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="ioredis">
         <ExampleCode
-          example="state-redis-ioredis"
+          example="redis/state-ioredis"
           file="src/provider.spec.ts"
           region="conformance"
           title="src/provider.spec.ts"
@@ -527,7 +527,10 @@ const Page = () => (
     </p>
 
     <h2>Examples</h2>
-    <ExampleRows title="@queuert/redis" names={["state-redis-redis", "state-redis-ioredis"]} />
+    <ExampleRows
+      title="@queuert/redis"
+      names={["redis/state-redis", "redis/state-ioredis", "redis/multi-worker"]}
+    />
     <p>
       The API reference for every export is in <A href="/api/redis/readme/">@queuert/redis</A>.
     </p>

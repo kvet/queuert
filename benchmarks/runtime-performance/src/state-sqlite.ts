@@ -4,7 +4,7 @@
 
 import { createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
-import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
+import { createBetterSqlite3StateProvider } from "example-sqlite-state-better-sqlite3/provider";
 import { createClient, createWorkerRunner, createProcessors, withTxHooks } from "queuert";
 
 import {

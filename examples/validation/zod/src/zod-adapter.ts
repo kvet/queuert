@@ -1,0 +1,198 @@
+/**
+ * Zod Adapter for Queuert Runtime Validation
+ *
+ * This is a user-land adapter that shows how to integrate Zod with Queuert's
+ * runtime validation system. The same pattern applies to Valibot, ArkType,
+ * or any other validation library.
+ *
+ * Every schema here is identity: `z.input` equals `z.output`, so each field's
+ * encoder and decoder are the same validation pass. A schema that transforms
+ * would be applied again on every read; see `examples/validation/codec-zod` for the
+ * transforming case, where the runtime form and the stored form differ (a
+ * `Date` handler-side, an ISO string at rest).
+ *
+ * Each schema is compiled once with `z.compile`, so the parse that runs on every
+ * job read and write takes Zod's generated fast path. A schema Zod cannot compile
+ * keeps its regular parser.
+ */
+
+import {
+  type BaseJobTypeDefinitions,
+  type JobTypesDefinitions,
+  type JobTypeDefinitionErrors,
+  type JobTypeReference,
+  type JobTypes,
+  type ValidatedJobTypeDefinitions,
+  createJobTypes,
+} from "queuert";
+import { z } from "zod";
+
+/**
+ * Schema definition for a single job type using Zod.
+ */
+export type ZodJobTypeSchema = {
+  /** Whether this job type can start a chain (entry point). Default: false */
+  entry?: boolean;
+  /** Zod schema for validating job input */
+  input: z.ZodType;
+  /** Zod schema for validating job output. Omit if job must continue. */
+  output?: z.ZodType;
+  /**
+   * Zod schema for validating continuation targets.
+   * Receives { typeName, input } object at runtime.
+   * Schema can validate typeName (nominal), input (structural), or both.
+   *
+   * @example
+   * // Nominal: validate by type name only
+   * continueWith: z.object({ typeName: z.literal("step2") })
+   *
+   * // Structural: validate by input shape only
+   * continueWith: z.object({ input: z.object({ payload: z.unknown() }) })
+   *
+   * // Both: validate type name and input shape
+   * continueWith: z.object({ typeName: z.literal("step2"), input: z.object({ data: z.string() }) })
+   */
+  continueWith?: z.ZodType<JobTypeReference>;
+  /**
+   * Zod schema for validating blocker references.
+   * Receives array of { typeName, input } objects at runtime.
+   * Schema can validate typeName (nominal), input (structural), or both.
+   *
+   * @example
+   * // Fixed blockers by name (tuple)
+   * blockers: z.tuple([
+   *   z.object({ typeName: z.literal("auth") }),
+   *   z.object({ typeName: z.literal("config") }),
+   * ])
+   *
+   * // Variable blockers by name (array)
+   * blockers: z.array(z.object({ typeName: z.literal("processor") }))
+   *
+   * // Structural validation: any blocker with matching input shape
+   * blockers: z.array(z.object({ input: z.object({ token: z.string() }) }))
+   */
+  blockers?: z.ZodType<readonly JobTypeReference[]>;
+};
+
+/**
+ * Infer BaseJobTypeDefinitions from Zod schemas.
+ * This enables compile-time type safety for the job types.
+ */
+type InferZodJobTypes<T extends Record<string, ZodJobTypeSchema>> = {
+  [K in keyof T & string]: {
+    entry: T[K]["entry"] extends true ? true : undefined;
+    input: z.infer<T[K]["input"]>;
+    output: T[K]["output"] extends z.ZodType ? z.infer<T[K]["output"]> : undefined;
+    continueWith: T[K]["continueWith"] extends z.ZodType<infer U>
+      ? U extends JobTypeReference
+        ? U
+        : JobTypeReference
+      : undefined;
+    blockers: T[K]["blockers"] extends z.ZodType<infer U>
+      ? U extends readonly JobTypeReference[]
+        ? U
+        : readonly JobTypeReference[]
+      : undefined;
+  };
+};
+
+/**
+ * Create a Zod-based job type registry.
+ *
+ * This adapter:
+ * 1. Accepts Zod schemas for each job type
+ * 2. Infers TypeScript types from the schemas
+ * 3. Validates at runtime using Zod's .parse() method
+ *
+ * Errors thrown by Zod are caught by the core registry and wrapped
+ * in JobTypeValidationError with the appropriate error code.
+ *
+ * @example
+ * const jobTypes = createZodJobTypes({
+ *   "process-data": {
+ *     entry: true,
+ *     input: z.object({ dataId: z.string() }),
+ *     output: z.object({ result: z.number() }),
+ *   },
+ *   "send-notification": {
+ *     entry: true,
+ *     input: z.object({ userId: z.string(), message: z.string() }),
+ *     output: z.object({ sent: z.boolean() }),
+ *   },
+ * });
+ */
+export const createZodJobTypes = <
+  const T extends Record<string, ZodJobTypeSchema>,
+  const TExternal extends
+    | JobTypes<BaseJobTypeDefinitions>
+    | readonly JobTypes<BaseJobTypeDefinitions>[] = readonly [],
+>(
+  schemas: [InferZodJobTypes<T>] extends [
+    ValidatedJobTypeDefinitions<InferZodJobTypes<T>, JobTypesDefinitions<TExternal>>,
+  ]
+    ? T
+    : JobTypeDefinitionErrors<InferZodJobTypes<T>, JobTypesDefinitions<TExternal>>,
+  _externalDefinitions?: TExternal,
+) => {
+  const _schemas = Object.fromEntries(
+    Object.entries(schemas as Record<string, ZodJobTypeSchema>).map(([typeName, schema]) => [
+      typeName,
+      {
+        entry: schema.entry,
+        input: z.compile(schema.input),
+        output: schema.output && z.compile(schema.output),
+        continueWith: schema.continueWith && z.compile(schema.continueWith),
+        blockers: schema.blockers && z.compile(schema.blockers),
+      },
+    ]),
+  );
+  const getSchema = (typeName: string): ZodJobTypeSchema => {
+    const schema = _schemas[typeName];
+    if (!schema) {
+      throw new Error(`Unknown job type: ${typeName}`);
+    }
+    return schema;
+  };
+
+  const parseInput = (typeName: string, input: unknown): unknown =>
+    getSchema(typeName).input.parse(input);
+
+  const parseOutput = (typeName: string, output: unknown): unknown => {
+    const schema = getSchema(typeName).output;
+    if (!schema) throw new Error(`Job type "${typeName}" does not have an output schema`);
+    return schema.parse(output);
+  };
+
+  return createJobTypes<InferZodJobTypes<T>, JobTypesDefinitions<TExternal>>({
+    getTypeNames: () => Object.keys(_schemas),
+    validateEntry: (typeName) => {
+      const schema = getSchema(typeName);
+      if (schema.entry !== true) {
+        throw new Error(`Job type "${typeName}" is not an entry point`);
+      }
+    },
+
+    encodeInput: parseInput,
+    decodeInput: parseInput,
+    encodeOutput: parseOutput,
+    decodeOutput: parseOutput,
+
+    validateContinueWith: (typeName, continuation) => {
+      const schema = getSchema(typeName);
+      if (schema.continueWith) {
+        schema.continueWith.parse(continuation);
+      } else {
+        throw new Error(`Job type "${typeName}" does not support continuations`);
+      }
+    },
+
+    validateBlockers: (typeName, blockers) => {
+      const schema = getSchema(typeName);
+      if (schema.blockers) {
+        schema.blockers.parse(blockers);
+      } else if (blockers.length > 0) {
+        throw new Error(`Job type "${typeName}" does not support blockers`);
+      }
+    },
+  });
+};

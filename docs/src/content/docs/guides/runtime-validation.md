@@ -32,7 +32,7 @@ const jobTypes = createZodJobTypes({
 const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 ```
 
-Handlers keep full type inference — `job.input` is typed from the Zod schema. Copy the adapter from [examples/validation-zod](https://github.com/kvet/queuert/tree/main/examples/validation-zod) or pick another library from the integration page.
+Handlers keep full type inference — `job.input` is typed from the Zod schema. Copy the adapter from [examples/validation/zod](https://github.com/kvet/queuert/tree/main/examples/validation/zod) or pick another library from the integration page.
 
 ## Values that aren't JSON
 
@@ -53,9 +53,9 @@ const jobTypes = createZodCodecJobTypes({
 });
 ```
 
-See [examples/codec-zod](https://github.com/kvet/queuert/tree/main/examples/codec-zod) for the full chain.
+See [examples/validation/codec-zod](https://github.com/kvet/queuert/tree/main/examples/validation/codec-zod) for the full chain.
 
-When you'd rather not write a codec per type, one codec can serve every job type. [examples/codec-superjson](https://github.com/kvet/queuert/tree/main/examples/codec-superjson) declares job types as plain TypeScript types holding a `Date`, `Map` or `bigint` and stores each value as superjson's `{ json, meta }` envelope:
+When you'd rather not write a codec per type, one codec can serve every job type. [examples/validation/codec-superjson](https://github.com/kvet/queuert/tree/main/examples/validation/codec-superjson) declares job types as plain TypeScript types holding a `Date`, `Map` or `bigint` and stores each value as superjson's `{ json, meta }` envelope:
 
 ```ts
 const jobTypes = createSuperjsonJobTypes<{

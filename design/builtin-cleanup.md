@@ -4,7 +4,7 @@ Ship ready-made cleanup as a slice plus two scheduling helpers, so users delete 
 
 ## Problem
 
-The cleanup guide (`docs/src/content/docs/guides/cleanup.md`) walks users through a ~60-line attempt handler that every production deployment needs. The loop is identical across users: paginate completed chains, delete in batches, reschedule the next run. The knobs — retention, interval, and which types to sweep — are the only things that vary.
+The cleanup guide (`docs/src/content/docs/guides/cleanup.mdx`) walks users through a ~60-line attempt handler that every production deployment needs. The loop is identical across users: paginate completed chains, delete in batches, reschedule the next run. The knobs — retention, interval, and which types to sweep — are the only things that vary.
 
 An earlier draft exported the slice but left scheduling to the user, who then had to write the magic job-type string, hand-roll `deduplication`, and — because retention/interval rode in the chain input — perform a `listChains → deleteChain → createChain` dance by hand to change a single number. That leaks internals and is easy to get wrong. It also offered no per-type retention: it deleted _all_ completed chains past one global cutoff.
 

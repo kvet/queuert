@@ -2,12 +2,6 @@ import { Box, type IconProps } from "@queuert/ui/components";
 import { A } from "@solidjs/router";
 import { For, type JSX, Show } from "solid-js";
 
-// oxlint-disable-next-line import/default, import/no-duplicates -- a region of examples/showcase-onboarding, served by the queuert:highlight plugin in plugins/content.ts
-import defineSnippet from "../../../examples/showcase-onboarding/src/index.ts?region=define&highlight";
-// oxlint-disable-next-line import/default, import/no-duplicates -- a region of examples/showcase-onboarding, served by the queuert:highlight plugin in plugins/content.ts
-import enqueueSnippet from "../../../examples/showcase-onboarding/src/index.ts?region=create-chain&highlight";
-// oxlint-disable-next-line import/default, import/no-duplicates -- a region of examples/showcase-onboarding, served by the queuert:highlight plugin in plugins/content.ts
-import processSnippet from "../../../examples/showcase-onboarding/src/index.ts?region=process&highlight";
 import { CopyButton } from "../components/CopyButton.tsx";
 import {
   Arrow,
@@ -17,6 +11,7 @@ import {
   Rows,
   Transition,
 } from "../components/diagrams/flow/Diagram.tsx";
+import { ExampleCode } from "../components/ExampleCode.tsx";
 import {
   ArrowRightIcon,
   BoltIcon,
@@ -30,7 +25,7 @@ import {
   ShieldIcon,
   TransactionIcon,
 } from "../components/icons.tsx";
-import { CodeTour } from "../components/landing/CodeTour.tsx";
+import { CodeTour, CodeTourStep } from "../components/landing/CodeTour.tsx";
 import { LiveChain } from "../components/landing/LiveChain.tsx";
 import { LinkCard } from "../components/mdx/Cards.tsx";
 import { PageMeta } from "../components/PageMeta.tsx";
@@ -159,14 +154,6 @@ const integrations: {
   },
 ];
 
-const footerLinks: { label: string; href: string; external?: boolean }[] = [
-  { label: "Docs", href: "/getting-started/introduction/" },
-  { label: "API", href: "/api/" },
-  { label: "Changelog", href: "/changelog/" },
-  { label: "GitHub", href: github, external: true },
-  { label: "npm", href: "https://www.npmjs.com/package/queuert", external: true },
-];
-
 const Section = (props: { id: string; eyebrow: string; title: string; children: JSX.Element }) => (
   <section id={props.id} class="mx-auto max-w-300 px-4 py-16 sm:px-6 lg:py-20">
     <p class="text-xs font-semibold font-mono tracking-wider text-brand-fg uppercase">
@@ -285,26 +272,26 @@ const Home = () => (
       eyebrow="See it in action"
       title="Typed from the first enqueue to the last step."
     >
-      <CodeTour
-        steps={[
-          {
-            label: "Define",
-            caption: "Each step's input, output and continuation are inferred.",
-            snippet: defineSnippet,
-          },
-          {
-            label: "Enqueue",
-            caption: "Start the chain inside your transaction. Roll back, and it never existed.",
-            snippet: enqueueSnippet,
-          },
-          {
-            label: "Process",
-            caption:
-              "Complete in the same transaction as your writes, and continue with the next step.",
-            snippet: processSnippet,
-          },
-        ]}
-      />
+      <CodeTour>
+        <CodeTourStep
+          label="Define"
+          caption="Each step's input, output and continuation are inferred."
+        >
+          <ExampleCode example="postgresql/onboarding" file="src/index.ts" region="define" />
+        </CodeTourStep>
+        <CodeTourStep
+          label="Enqueue"
+          caption="Start the chain inside your transaction. Roll back, and it never existed."
+        >
+          <ExampleCode example="postgresql/onboarding" file="src/index.ts" region="create-chain" />
+        </CodeTourStep>
+        <CodeTourStep
+          label="Process"
+          caption="Complete in the same transaction as your writes, and continue with the next step."
+        >
+          <ExampleCode example="postgresql/onboarding" file="src/index.ts" region="process" />
+        </CodeTourStep>
+      </CodeTour>
     </Section>
 
     <Section id="why" eyebrow="Why Queuert" title="The guarantees are structural, not ceremonial.">
@@ -374,27 +361,6 @@ const Home = () => (
         </For>
       </div>
     </Section>
-
-    <footer class="border-t border-border">
-      <div class="mx-auto flex max-w-300 flex-col gap-4 px-4 py-8 text-xs text-fg-subtle sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <span>MIT licensed · built with SolidStart</span>
-        <nav aria-label="Footer" class="flex flex-wrap gap-x-5 gap-y-2">
-          <For each={footerLinks}>
-            {(link) =>
-              link.external ? (
-                <a href={link.href} target="_blank" rel="noopener" class="hover:text-fg">
-                  {link.label}
-                </a>
-              ) : (
-                <A href={link.href} class="hover:text-fg">
-                  {link.label}
-                </A>
-              )
-            }
-          </For>
-        </nav>
-      </div>
-    </footer>
   </main>
 );
 

@@ -15,63 +15,19 @@ The migrator API (`createPgMigrator`, `createSqliteMigrator`, `createMysqlMigrat
 
 ## Create a Migrator
 
-The migrator runs through the same state provider you pass to the state adapter:
+The migrator runs through the same state provider you pass to the [PostgreSQL state adapter](/queuert/integrations/state-adapters/postgres/), here the postgres.js one:
 
-```ts
-import { createPgMigrator } from "@queuert/postgres";
+<ExampleCode example="postgresql/state-postgres-js" file="src/index.ts" region="create-migrator" />
 
-const migrator = createPgMigrator({ stateProvider, migrations });
-
-await migrator.migrateToLatest();
-```
+`lock` sets the timing of the lease described in [Several Processes](#several-processes), and `after` is a script that runs once the migrations have run, described in [Before and After](#before-and-after); both are optional. `migrator.migrateToLatest()` applies the pending migrations and resolves with what it `applied`, what it `skipped` and the `unrecognized` names described in [Order](#order).
 
 It creates its tables on the first run, if they are missing: `migration` for the history and `migration_lock` for the lease, in the `public` schema. `schema` (created if missing), `migrationTableName` and `lockTableName` rename them. With SQLite, `createSqliteMigrator` takes the same options without `schema`. With MySQL or MariaDB, `createMysqlMigrator` puts them in the connection's database, and `schema` names another database, which must exist.
 
 ## Define Migrations
 
-Every migration has a unique `name`, an `up` and a `down`. `Migration` takes the provider's transaction context type:
+Every migration has a unique `name`, an `up` and a `down`. `Migration` takes the provider's transaction context type, `PostgresJsContext` for postgres.js. This list, from the postgres.js state example, creates an `invoices` table, indexes it without locking writes, backfills its `status` in batches and numbers every invoice:
 
-```ts
-import type { Migration } from "@queuert/postgres";
-
-const migrations: Migration<TxContext>[] = [
-  {
-    name: "create_invoices",
-    up: async ({ txSql }) => {
-      await txSql`CREATE TABLE invoices (id integer PRIMARY KEY, customer text NOT NULL, status text)`;
-    },
-    down: async ({ txSql }) => {
-      await txSql`DROP TABLE invoices`;
-    },
-  },
-  {
-    name: "invoices_customer_idx",
-    type: "non-transactional",
-    up: async () => {
-      await sql`CREATE INDEX CONCURRENTLY IF NOT EXISTS invoices_customer_idx ON invoices (customer)`;
-    },
-    down: async () => {
-      await sql`DROP INDEX CONCURRENTLY IF EXISTS invoices_customer_idx`;
-    },
-  },
-  {
-    name: "backfill_invoice_status",
-    type: "non-transactional",
-    up: async ({ assertLockHeld }) => {
-      let updated: number;
-      do {
-        assertLockHeld();
-        updated = (
-          await sql`UPDATE invoices SET status = 'open' WHERE id IN (SELECT id FROM invoices WHERE status IS NULL LIMIT ${1000})`
-        ).count;
-      } while (updated > 0);
-    },
-    down: async () => {
-      await sql`UPDATE invoices SET status = NULL`;
-    },
-  },
-];
-```
+<ExampleCode example="postgresql/state-postgres-js" file="src/migrations.ts" />
 
 A migration is `transactional` unless it sets `type`. Its `up` and `down` receive the transaction context and run inside one transaction together with the history record, so your query builder works on the migration's connection.
 
@@ -93,15 +49,13 @@ Migrations run in the order of the list, and names only need to be unique. Appen
 
 ## Several Processes
 
-Every run first claims a lease row in the lock table. One process migrates and extends the lease while it works; the others poll until it is released and then skip what it applied. A process that dies leaves the lease to expire, and the next process takes over. `lock` sets the timing, with `heartbeatIntervalMs` below a third of `ttlMs`; it defaults to the lower of 15 seconds and a quarter of `ttlMs`:
+Every run first claims a lease row in the lock table. One process migrates and extends the lease while it works; the others poll until it is released and then skip what it applied. A process that dies leaves the lease to expire, and the next process takes over. Two migrators over one database stand in for two processes booting at once; one resolves with every migration `applied`, the other with them all `skipped`:
 
-```ts
-createPgMigrator({
-  stateProvider,
-  migrations,
-  lock: { ttlMs: 60_000, heartbeatIntervalMs: 15_000, pollIntervalMs: 1_000 },
-});
-```
+<ExampleCode example="postgresql/state-postgres-js" file="src/index.ts" region="several-processes" />
+
+The `lock` passed to both migrators sets the lease timing, with `heartbeatIntervalMs` below a third of `ttlMs`; it defaults to the lower of 15 seconds and a quarter of `ttlMs`:
+
+<ExampleCode example="postgresql/state-postgres-js" file="src/index.ts" region="lock" />
 
 With SQLite, claiming and extending the lease write to the database, so they wait for SQLite's write lock while another process runs a migration transaction. Set the driver's busy timeout longer than your longest migration transaction; otherwise a waiting process fails with `SQLITE_BUSY` instead of waiting its turn.
 
@@ -111,29 +65,19 @@ With a [synchronous provider](/queuert/integrations/state-adapters/sqlite/#synch
 
 ## Revert
 
-`migrateTo(name)` brings the database to the named migration. It applies the pending migrations up to it, or reverts the applied migrations after it with their `down`, last first. `migrateTo(null)` reverts every applied migration:
+`migrateTo(name)` brings the database to the named migration. It applies the pending migrations up to it, or reverts the applied migrations after it with their `down`, last first. `migrateTo(null)` reverts every applied migration. Here `reverted` is `["assign_invoice_numbers", "backfill_invoice_status", "invoices_customer_idx"]`:
 
-```ts
-const result = await migrator.migrateTo("create_invoices");
-result.reverted; // ["backfill_invoice_status", "invoices_customer_idx"]
-```
+<ExampleCode example="postgresql/state-postgres-js" file="src/index.ts" region="revert" />
 
 Before reverting anything, it refuses if the database has applied migrations the code doesn't know. A migration that cannot be reverted throws from its `down`: the revert stops there, and that migration stays recorded. A `transactional` revert removes the record in the same transaction as its `down`; a `non-transactional` one removes it after its `down`, which must then be safe to run again.
 
 ## Before and After
 
-`before` and `after` run under the lease: `before` on every run, after the migrator has created its tables and before the history is read, and `after` once the migrations have run, unless one failed. They record nothing, and take the same `{ assertLockHeld }` argument as a `non-transactional` migration:
+`before` and `after` run under the lease: `before` on every run, after the migrator has created its tables and before the history is read, and `after` once the migrations have run, unless one failed. They record nothing, and are a `MigrationScript`, taking the same `{ assertLockHeld }` argument as a `non-transactional` migration. The `after` passed to the migrators above logs every run in a table of its own, including a run with nothing to do; the lease keeps the other process out while it creates the table:
 
-```ts
-createPgMigrator({
-  stateProvider,
-  migrations,
-  after: async ({ assertLockHeld }) => {
-    assertLockHeld();
-    await refreshInvoiceTotalsView();
-  },
-});
-```
+<ExampleCode example="postgresql/state-postgres-js" file="src/index.ts" region="after" />
+
+A `before` is passed to `createPgMigrator` the same way.
 
 ## An Existing History Table
 
@@ -167,4 +111,4 @@ for (const conformanceCase of pgMigratorConformanceCases) {
 }
 ```
 
-See [examples/showcase-application-migrations](https://github.com/kvet/queuert/tree/main/examples/showcase-application-migrations) for a complete working example demonstrating both migration types, several processes migrating at once, and reverting with `migrateTo`. Every state example also runs a few migrations of its own through its driver or ORM.
+The code on this page runs in [examples/postgresql/state-postgres-js](https://github.com/kvet/queuert/tree/main/examples/postgresql/state-postgres-js). The other PostgreSQL, SQLite and MySQL state examples, except MikroORM, run a few migrations of their own through their driver or ORM in `src/migrations.ts`.

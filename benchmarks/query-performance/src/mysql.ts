@@ -6,7 +6,7 @@ import { loadStateDump } from "@queuert/mysql/conformance-internal";
 import {
   type Mysql2PoolContext,
   createMysql2PoolStateProvider,
-} from "example-state-mysql-mysql2/provider";
+} from "example-mysql-state-mysql2/provider";
 import { createConnection, createPool } from "mysql2/promise";
 import {
   generateStateDump,

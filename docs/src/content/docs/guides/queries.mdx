@@ -1,0 +1,58 @@
+---
+title: Job, Chain & Worker Queries
+description: Read-only methods for inspecting jobs, chains and workers.
+sidebar:
+  order: 14
+---
+
+The client provides read-only methods for inspecting chains, jobs and workers. The examples below query an order workflow: a `reserve-stock` chain blocks a `process-order` chain, which continues to `ship-order`.
+
+## Lookups
+
+Look up a single chain or job by ID, or a batch of them in one round trip. Batch lookups return a positional array with `undefined` for each missing ID:
+
+<ExampleCode example="guides" file="src/queries.ts" region="lookups" />
+
+`getChain`, `getChains`, `getJob`, `getJobs`, `getJobBlockers`, and `listBlockedJobs` accept an optional `typeName` for type narrowing (`listChainJobs`, `getChainTailJob` and `getChainTailJobs` take `chainTypeName`) — the return type narrows to the specified type, so a completed `process-order` chain exposes its typed `output`. If the entity exists but has a different type, `ChainTypeMismatchError` or `JobTypeMismatchError` is thrown.
+
+All query methods accept an optional transaction context in which every field is optional, so a read needs only the transaction handle, not the `txHooks` some providers carry in their context:
+
+<ExampleCode example="guides" file="src/queries.ts" region="in-transaction" />
+
+## Types and Counts
+
+Discover which chain and job types exist in the data, and get per-status counts for specific types:
+
+<ExampleCode example="guides" file="src/queries.ts" region="type-counts" />
+
+## Paginated Lists
+
+`listChains` and `listJobs` require `typeName` and filter by it. Pass the previous page's `nextCursor` to read the next page:
+
+<ExampleCode example="guides" file="src/queries.ts" region="lists" />
+
+`listChains` and `listJobs` route queries to status-specific indexes based on the `status` and `orderBy` combination. Each status has a natural default sort order — for example, completed chains default to `completedAt` descending, pending and blocked jobs to `scheduledAt` descending. Pass `orderBy: "createdAt"` to override.
+
+## Chain Jobs
+
+`listChainJobs` lists the jobs within a chain in chain order. A chain's tail job is its latest job in chain order, and the head job while the chain has not continued; `getChainTailJobs` returns one entry per requested chain ID, `undefined` for a missing chain:
+
+<ExampleCode example="guides" file="src/queries.ts" region="chain-jobs" />
+
+`getChainTailJob` and `getChainTailJobs` are experimental: they may change in a minor release.
+
+## Blockers
+
+Inspect blocker relationships from both directions: `getJobBlockers` returns the chains a job waits on, and `listBlockedJobs` lists the jobs a chain blocks:
+
+<ExampleCode example="guides" file="src/queries.ts" region="blockers" />
+
+## Workers
+
+Look up workers by ID (`undefined` for a worker with no row), count live and expired workers overall and per job type, and list the jobs running under a worker:
+
+<ExampleCode example="guides" file="src/queries.ts" region="workers" />
+
+`listWorkers` orders workers by `startedAt` and optionally keeps only those processing a `typeName`; `listWorkerJobs` orders jobs by `attemptAt`. Both sort by that column, then id, ascending unless `orderDirection` says otherwise, and take no `orderBy`.
+
+See [examples/guides/src/queries.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/queries.ts) for the runnable code. See also the [Client API](/queuert/api/core/type-aliases/client/) reference and [Dashboard](/queuert/integrations/dashboard/).

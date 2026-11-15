@@ -106,82 +106,82 @@ const Page = () => (
     </p>
     <Tabs syncKey="postgres-driver">
       <TabItem label="pg">
-        <ExampleCode example="state-postgres-pg" file="src/provider.ts" />
+        <ExampleCode example="postgresql/state-pg" file="src/provider.ts" />
         <ExampleCode
-          example="state-postgres-pg"
+          example="postgresql/state-pg"
           file="src/index.ts"
           region="adapter"
           title="src/index.ts"
         />
       </TabItem>
       <TabItem label="postgres.js">
-        <ExampleCode example="state-postgres-postgres-js" file="src/provider.ts" />
+        <ExampleCode example="postgresql/state-postgres-js" file="src/provider.ts" />
         <ExampleCode
-          example="state-postgres-postgres-js"
+          example="postgresql/state-postgres-js"
           file="src/index.ts"
           region="adapter"
           title="src/index.ts"
         />
       </TabItem>
       <TabItem label="Bun SQL" badge="Bun">
-        <ExampleCode example="state-postgres-bun-sql" file="src/provider.ts" />
+        <ExampleCode example="postgresql/state-bun-sql" file="src/provider.ts" />
         <ExampleCode
-          example="state-postgres-bun-sql"
+          example="postgresql/state-bun-sql"
           file="src/index.ts"
           region="adapter"
           title="src/index.ts"
         />
       </TabItem>
       <TabItem label="Drizzle">
-        <ExampleCode example="state-postgres-drizzle" file="src/provider.ts" />
+        <ExampleCode example="postgresql/state-drizzle" file="src/provider.ts" />
         <ExampleCode
-          example="state-postgres-drizzle"
+          example="postgresql/state-drizzle"
           file="src/index.ts"
           region="adapter"
           title="src/index.ts"
         />
       </TabItem>
       <TabItem label="Kysely">
-        <ExampleCode example="state-postgres-kysely" file="src/provider.ts" />
+        <ExampleCode example="postgresql/state-kysely" file="src/provider.ts" />
         <ExampleCode
-          example="state-postgres-kysely"
+          example="postgresql/state-kysely"
           file="src/index.ts"
           region="adapter"
           title="src/index.ts"
         />
       </TabItem>
       <TabItem label="Prisma">
-        <ExampleCode example="state-postgres-prisma" file="src/provider.ts" />
+        <ExampleCode example="postgresql/state-prisma" file="src/provider.ts" />
         <ExampleCode
-          example="state-postgres-prisma"
+          example="postgresql/state-prisma"
           file="src/index.ts"
           region="adapter"
           title="src/index.ts"
         />
       </TabItem>
       <TabItem label="Knex">
-        <ExampleCode example="state-postgres-knex" file="src/provider.ts" />
+        <ExampleCode example="postgresql/state-knex" file="src/provider.ts" />
         <ExampleCode
-          example="state-postgres-knex"
+          example="postgresql/state-knex"
           file="src/index.ts"
           region="adapter"
           title="src/index.ts"
         />
       </TabItem>
       <TabItem label="MikroORM">
-        <ExampleCode example="state-postgres-mikro-orm" file="src/provider.ts" />
+        <ExampleCode example="postgresql/state-mikro-orm" file="src/provider.ts" />
         <p>
           <code>skipTables</code> keeps MikroORM's schema diff from dropping Queuert's tables, which{" "}
           <code>migrateToLatest()</code> manages:
         </p>
         <ExampleCode
-          example="state-postgres-mikro-orm"
+          example="postgresql/state-mikro-orm"
           file="src/index.ts"
           region="orm"
           title="src/index.ts"
         />
         <ExampleCode
-          example="state-postgres-mikro-orm"
+          example="postgresql/state-mikro-orm"
           file="src/index.ts"
           region="adapter"
           title="src/index.ts"
@@ -232,7 +232,7 @@ const Page = () => (
     <Tabs syncKey="postgres-driver">
       <TabItem label="pg">
         <ExampleCode
-          example="state-postgres-pg"
+          example="postgresql/state-pg"
           file="src/provider.spec.ts"
           region="conformance"
           title="src/provider.spec.ts"
@@ -240,7 +240,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="postgres.js">
         <ExampleCode
-          example="state-postgres-postgres-js"
+          example="postgresql/state-postgres-js"
           file="src/provider.spec.ts"
           region="conformance"
           title="src/provider.spec.ts"
@@ -248,7 +248,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="Bun SQL" badge="Bun">
         <ExampleCode
-          example="state-postgres-bun-sql"
+          example="postgresql/state-bun-sql"
           file="src/provider.spec.ts"
           region="conformance"
           title="src/provider.spec.ts"
@@ -256,7 +256,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="Drizzle">
         <ExampleCode
-          example="state-postgres-drizzle"
+          example="postgresql/state-drizzle"
           file="src/provider.spec.ts"
           region="conformance"
           title="src/provider.spec.ts"
@@ -264,7 +264,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="Kysely">
         <ExampleCode
-          example="state-postgres-kysely"
+          example="postgresql/state-kysely"
           file="src/provider.spec.ts"
           region="conformance"
           title="src/provider.spec.ts"
@@ -272,7 +272,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="Prisma">
         <ExampleCode
-          example="state-postgres-prisma"
+          example="postgresql/state-prisma"
           file="src/provider.spec.ts"
           region="conformance"
           title="src/provider.spec.ts"
@@ -280,7 +280,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="Knex">
         <ExampleCode
-          example="state-postgres-knex"
+          example="postgresql/state-knex"
           file="src/provider.spec.ts"
           region="conformance"
           title="src/provider.spec.ts"
@@ -288,7 +288,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="MikroORM">
         <ExampleCode
-          example="state-postgres-mikro-orm"
+          example="postgresql/state-mikro-orm"
           file="src/provider.spec.ts"
           region="conformance"
           title="src/provider.spec.ts"
@@ -385,15 +385,15 @@ const Page = () => (
     <ExampleRows
       title="@queuert/postgres"
       names={[
-        "state-postgres-pg",
-        "state-postgres-postgres-js",
-        "state-postgres-bun-sql",
-        "state-postgres-drizzle",
-        "state-postgres-kysely",
-        "state-postgres-prisma",
-        "state-postgres-knex",
-        "state-postgres-mikro-orm",
-        "state-postgres-multi-worker",
+        "postgresql/state-pg",
+        "postgresql/state-postgres-js",
+        "postgresql/state-bun-sql",
+        "postgresql/state-drizzle",
+        "postgresql/state-kysely",
+        "postgresql/state-prisma",
+        "postgresql/state-knex",
+        "postgresql/state-mikro-orm",
+        "postgresql/multi-worker",
       ]}
     />
     <p>

@@ -1,5 +1,5 @@
 import { createRedisNotifyAdapter } from "@queuert/redis";
-import { createIoredisNotifyProvider } from "example-notify-redis-ioredis/provider";
+import { createIoredisNotifyProvider } from "example-postgresql-notify-redis-ioredis/provider";
 import { Redis } from "ioredis";
 import { createInProcessStateAdapter } from "queuert";
 

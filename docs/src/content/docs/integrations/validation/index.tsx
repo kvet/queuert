@@ -109,16 +109,16 @@ const Page = () => (
     <h2>Define job types</h2>
     <Tabs syncKey="validation-library">
       <TabItem label="Zod">
-        <ExampleCode example="validation-zod" file="src/index.ts" region="usage" />
+        <ExampleCode example="validation/zod" file="src/index.ts" region="usage" />
       </TabItem>
       <TabItem label="Valibot">
-        <ExampleCode example="validation-valibot" file="src/index.ts" region="usage" />
+        <ExampleCode example="validation/valibot" file="src/index.ts" region="usage" />
       </TabItem>
       <TabItem label="TypeBox">
-        <ExampleCode example="validation-typebox" file="src/index.ts" region="usage" />
+        <ExampleCode example="validation/typebox" file="src/index.ts" region="usage" />
       </TabItem>
       <TabItem label="ArkType">
-        <ExampleCode example="validation-arktype" file="src/index.ts" region="usage" />
+        <ExampleCode example="validation/arktype" file="src/index.ts" region="usage" />
       </TabItem>
     </Tabs>
     <h2>The adapter</h2>
@@ -128,16 +128,16 @@ const Page = () => (
     </p>
     <Tabs syncKey="validation-library">
       <TabItem label="Zod">
-        <ExampleCode example="validation-zod" file="src/zod-adapter.ts" />
+        <ExampleCode example="validation/zod" file="src/zod-adapter.ts" />
       </TabItem>
       <TabItem label="Valibot">
-        <ExampleCode example="validation-valibot" file="src/valibot-adapter.ts" />
+        <ExampleCode example="validation/valibot" file="src/valibot-adapter.ts" />
       </TabItem>
       <TabItem label="TypeBox">
-        <ExampleCode example="validation-typebox" file="src/typebox-adapter.ts" />
+        <ExampleCode example="validation/typebox" file="src/typebox-adapter.ts" />
       </TabItem>
       <TabItem label="ArkType">
-        <ExampleCode example="validation-arktype" file="src/arktype-adapter.ts" />
+        <ExampleCode example="validation/arktype" file="src/arktype-adapter.ts" />
       </TabItem>
     </Tabs>
     <h2>The JobTypes interface</h2>
@@ -156,10 +156,10 @@ const Page = () => (
       Each codec method takes the <code>typeName</code> and the value. An adapter whose schemas only
       validate passes one function as both the encoder and the decoder of a field, so a schema that
       transforms would be applied again on every read; transforming schemas belong in a codec
-      adapter such as the <code>codec-zod</code> example. The encoders are the gate: they run on
-      every write, and a value they reject never reaches the database. The decoders run on every
-      read and only for type names the registry lists in <code>getTypeNames</code>. When a decoder
-      throws, the read that needed the value fails with <code>JobTypeValidationError</code>.
+      adapter such as the <code>validation/codec-zod</code> example. The encoders are the gate: they
+      run on every write, and a value they reject never reaches the database. The decoders run on
+      every read and only for type names the registry lists in <code>getTypeNames</code>. When a
+      decoder throws, the read that needed the value fails with <code>JobTypeValidationError</code>.
     </p>
     <Aside type="caution">
       Keep a job type, and a decoder that accepts every stored shape of it, for as long as rows of
@@ -177,24 +177,24 @@ const Page = () => (
     </p>
     <Tabs syncKey="validation-library">
       <TabItem label="Zod">
-        <ExampleCode example="validation-zod" file="src/zod-adapter.spec.ts" />
+        <ExampleCode example="validation/zod" file="src/zod-adapter.spec.ts" />
       </TabItem>
       <TabItem label="Valibot">
-        <ExampleCode example="validation-valibot" file="src/valibot-adapter.spec.ts" />
+        <ExampleCode example="validation/valibot" file="src/valibot-adapter.spec.ts" />
       </TabItem>
       <TabItem label="TypeBox">
-        <ExampleCode example="validation-typebox" file="src/typebox-adapter.spec.ts" />
+        <ExampleCode example="validation/typebox" file="src/typebox-adapter.spec.ts" />
       </TabItem>
       <TabItem label="ArkType">
-        <ExampleCode example="validation-arktype" file="src/arktype-adapter.spec.ts" />
+        <ExampleCode example="validation/arktype" file="src/arktype-adapter.spec.ts" />
       </TabItem>
     </Tabs>
     <h2>Examples</h2>
     <ExampleRows
       title="Validation adapters"
-      names={["validation-zod", "validation-valibot", "validation-typebox", "validation-arktype"]}
+      names={["validation/zod", "validation/valibot", "validation/typebox", "validation/arktype"]}
     />
-    <ExampleRows title="Codecs" names={["codec-zod", "codec-superjson"]} />
+    <ExampleRows title="Codecs" names={["validation/codec-zod", "validation/codec-superjson"]} />
   </>
 );
 

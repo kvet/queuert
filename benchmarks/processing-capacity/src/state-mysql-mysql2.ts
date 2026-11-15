@@ -1,5 +1,5 @@
 import { createMysqlStateAdapter } from "@queuert/mysql";
-import { createMysql2PoolStateProvider } from "example-state-mysql-mysql2/provider";
+import { createMysql2PoolStateProvider } from "example-mysql-state-mysql2/provider";
 import { createConnection, createPool } from "mysql2/promise";
 import { noopNotifyAdapter } from "queuert/conformance-internal";
 

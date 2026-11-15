@@ -137,7 +137,7 @@ When the attempt no longer owns the job, `fence` throws the same error `complete
 
 ## Errors and Commit Detection
 
-The attempt counts as completed once a successful `complete` call's commit callbacks run, which the state provider's `onTransactionCommit` does after your transaction commits, so a successful attempt needs no extra database round-trip. If no `complete` call's commit callbacks ran — the handler threw before committing, or returned without calling `complete` — the attempt fails: the worker runs one reschedule under the attempt token, which retries the job with backoff while the attempt still owns it and matches nothing if a `complete` committed or the attempt was lost. An error thrown after a committed `complete` does not roll the completion back; it is reported as a `workerError`.
+The attempt counts as completed once a successful `complete` call's commit callbacks run, which the state provider's `onTransactionCommit` does after your transaction commits, so a successful attempt needs no extra database round-trip. If no `complete` call's commit callbacks ran — the handler threw before committing, or returned without calling `complete` — the attempt fails: the worker runs one reschedule under the attempt token, which reschedules the job with backoff while the attempt still owns it and matches nothing if a `complete` committed or the attempt was lost. An error thrown after a committed `complete` does not roll the completion back; it is reported as a `workerError`.
 
 Commit callbacks stand for a committed write only when the state provider meets these requirements:
 
@@ -154,19 +154,17 @@ See [Job Processing Reliability](../processing-reliability/) for each scenario w
 
 Every attempt handler receives a `signal` that aborts when the worker is stopping, when its worker lost its lease, or when the attempt is lost (taken by another worker, deleted, or completed externally). Your own committed `complete` never aborts it. On abort, stop working and commit a `complete` — with partial output or `{ reschedule }` — or throw to reschedule with backoff. If the attempt was lost, `complete` and `fence` write nothing and throw. A handler that returns without a committed `complete` fails the attempt.
 
-```typescript
-attemptHandler: async ({ signal, complete }) => {
-  let processed = 0;
-  for (const item of items) {
-    if (signal.aborted) break;
-    await processItem(item);
-    processed++;
-  }
-  return withTxHooks(async (txHooks) =>
-    db.transaction(async (tx) => complete({ tx, txHooks, output: { processed } })),
-  );
-},
-```
+The batch handler below stops at the next item once its `signal` aborts and completes with the number of items it processed, so a worker that stops mid-batch still commits partial output:
+
+<ExampleCode example="guides" file="src/signals.ts" region="partial-results" />
+
+Completing a chain from outside the worker also aborts the `signal` of the attempt still running it. The `await-payment-confirmation` handler below polls the payment provider until its `signal` aborts, then throws `signal.reason`:
+
+<ExampleCode example="guides" file="src/signals.ts" region="polling-handler" />
+
+A payment webhook completes the job with `completeChain` while the handler polls. The handler stops polling, and since its attempt no longer owns the job, nothing it does afterwards is written:
+
+<ExampleCode example="guides" file="src/signals.ts" region="external-completion" />
 
 ## See Also
 
@@ -174,5 +172,5 @@ attemptHandler: async ({ signal, complete }) => {
 - [Client API](/queuert/api/core/type-aliases/client/) — Mutation methods, query methods, awaitChain
 - [Worker Runner](../worker-runner/) — Worker lifecycle, worker lease, reclaim
 - [State Adapters — the transaction context](/queuert/integrations/state-adapters/#transaction-context) — what the transaction context represents and how it is passed
-- [`showcase-timeouts`](https://github.com/kvet/queuert/tree/main/examples/showcase-timeouts) — Runnable example: work that outlasts the worker lease while the heartbeat renews it, then `complete` in your own transaction
-- [`showcase-signals`](https://github.com/kvet/queuert/tree/main/examples/showcase-signals) — Runnable example: external completion via `completeChain`, graceful shutdown with partial results
+- [`guides/src/timeouts.ts`](https://github.com/kvet/queuert/blob/main/examples/guides/src/timeouts.ts) — Runnable example: work that outlasts the worker lease while the heartbeat renews it, then `complete` in your own transaction
+- [`guides/src/signals.ts`](https://github.com/kvet/queuert/blob/main/examples/guides/src/signals.ts) — Runnable example: external completion via `completeChain`, graceful shutdown with partial results

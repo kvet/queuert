@@ -51,8 +51,8 @@ Each sample is put in one category by the file of its frame:
 The `validation-*` measurements run the same lifecycle on the in-process state and notify adapters, varying only the job type registry, so comparing each with `validation-define` gives the cost of a registry per job. Every registry processes the same order payload (nested customer object, three line items) and output:
 
 - `validation-define` — `defineJobTypes`, the baseline: values pass through with no runtime checks
-- `validation-zod`, `validation-valibot`, `validation-typebox`, `validation-arktype` — the adapters from `examples/validation-*`; the Zod and TypeBox ones compile their schemas once with `z.compile` and `TypeCompiler.Compile`
-- `validation-codec-zod`, `validation-codec-superjson` — the codec adapters from `examples/codec-*`, on the same JSON payload, so they measure the codec path rather than a transform
+- `validation-zod`, `validation-valibot`, `validation-typebox`, `validation-arktype` — the adapters from `examples/validation/*`; the Zod and TypeBox ones compile their schemas once with `z.compile` and `TypeCompiler.Compile`
+- `validation-codec-zod`, `validation-codec-superjson` — the codec adapters from `examples/validation/codec-*`, on the same JSON payload, so they measure the codec path rather than a transform
 
 The schema library's own time lands in `dependencies` and the example adapter's in `harness`. The `core` and `total` CPU values vary by roughly ±15 µs between runs at this job count, so compare allocations and the `dependencies` row, or repeat a run, before reading a CPU difference.
 

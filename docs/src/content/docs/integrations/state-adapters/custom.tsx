@@ -64,9 +64,9 @@ const Page = () => (
       them; see <A href="/guides/tx-hooks/">Tx Hooks</A>.
     </p>
     <p>
-      <A href="/examples/state-adapters/#state-custom-memory">
-        <code>state-custom-memory</code>
-      </A>{" "}
+      <a href="https://github.com/kvet/queuert/tree/main/examples/custom/state-memory">
+        <code>custom/state-memory</code>
+      </a>{" "}
       is a complete implementation to start from: it keeps every table in plain in-memory maps, runs
       transactions one at a time on a copy of the state, carries <code>TxHooks</code> in its
       transaction context for <code>onTransactionCommit</code> and{" "}
@@ -117,7 +117,7 @@ const Page = () => (
       share one context, so run them one at a time:
     </p>
     <ExampleCode
-      example="state-custom-memory"
+      example="custom/state-memory"
       file="src/state-adapter.spec.ts"
       region="conformance"
     />

@@ -1,0 +1,17 @@
+generator client {
+  provider = "prisma-client"
+  output   = "./generated/prisma"
+  importFileExtension = "ts"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model User {
+  id    Int    @id @default(autoincrement())
+  name  String
+  email String
+
+  @@map("users")
+}

@@ -2,7 +2,7 @@
  * Job Type Registry Measurement: Zod codec adapter (z.encode / z.decode)
  */
 
-import { createZodCodecJobTypes } from "example-codec-zod/adapter";
+import { createZodCodecJobTypes } from "example-validation-codec-zod/adapter";
 import { z } from "zod";
 
 import { runValidationBenchmark } from "./validation.ts";

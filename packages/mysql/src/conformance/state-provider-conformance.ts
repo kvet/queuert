@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { sleep } from "@queuert/helpers/sleep";
 import type { ConformanceTestCase } from "queuert/conformance";
 import {
   type ConformanceGroup,
@@ -51,10 +52,16 @@ export const isolationLevelGroup: ConformanceGroup<MysqlStateProviderConformance
           );
           const rows = await stateProvider.withTransaction(async (txCtx) => {
             await query("SELECT id FROM queuert_conformance_probe LIMIT 1 FOR UPDATE", txCtx);
-            return query(
-              "SELECT trx_isolation_level AS level FROM information_schema.innodb_trx WHERE trx_mysql_thread_id = CONNECTION_ID()",
-              txCtx,
-            );
+            // InnoDB serves innodb_trx from a server-wide cache refreshed at most every 100 ms,
+            // so a read by another session just before this one can hide this transaction.
+            for (let attempt = 1; ; attempt++) {
+              const trxRows = await query(
+                "SELECT trx_isolation_level AS level FROM information_schema.innodb_trx WHERE trx_mysql_thread_id = CONNECTION_ID()",
+                txCtx,
+              );
+              if (trxRows.length > 0 || attempt === 10) return trxRows;
+              await sleep(150);
+            }
           });
           assert.equal(rows.length, 1);
           assert.equal((rows[0] as { level: unknown }).level, "READ COMMITTED");

@@ -266,26 +266,25 @@ pnpm check      # Run all checks together
 
 ## Examples
 
-### Naming Convention
+### Layout
 
-Examples are organized by prefix to indicate their primary focus:
+Examples are grouped by the stack a reader runs, because a PostgreSQL user should find everything for PostgreSQL in one place and nothing else:
 
-- `log-xxx`: Logging adapter integration
-- `observability-xxx`: OpenTelemetry and metrics
-- `state-xxx`: State adapter examples (PostgreSQL, SQLite, etc.)
-- `notify-xxx`: Notify adapter examples (Redis, NATS, etc.)
-- `validation-xxx`: Runtime validation with schema libraries whose stored form equals the runtime form
-- `codec-xxx`: Bidirectional codecs where the runtime form differs from the stored form
-- `showcase-xxx`: Feature demonstrations combining multiple concerns
-- `benchmark-xxx`: Performance measurement and benchmarks
+- `examples/<stack>/` holds a stack's state examples (`state-<driver>`), its notify examples (`notify-<broker>-<client>`, kept with the state database they run on) and `multi-worker`. The stacks are `postgresql/`, `sqlite/`, `mysql/`, `redis/`, `ipc/` (the IPC notify adapter) and `custom/` (adapters written from scratch). `postgresql/onboarding` holds the code tour of the home page.
+- `examples/guides/` is one package with one file per guide (`src/job-blockers.ts`), small enough to read in one sitting, embedded by the guide it belongs to. A guide that cannot run there gets its own `examples/guides-xxx/` package (`guides-slices`, whose subject is a multi-file layout). Application migrations are part of the state examples: each runs a few in `src/migrations.ts`, and the Application Migrations guide embeds `postgresql/state-postgres-js`, which also runs two migrators at once, an `after` script and a revert.
+- Examples not tied to a stack are grouped by concern: `log/` (`console`, `pino`, `winston`), `validation/` (`zod`, `valibot`, `typebox`, `arktype` for schema libraries whose stored form equals the runtime form, and `codec-zod`, `codec-superjson` for codecs whose runtime form differs from the stored form) and `observability/` (`otel`, `dashboard`).
+
+A package is named `example-` plus its path with `/` replaced by `-` (`examples/postgresql/state-pg` is `example-postgresql-state-pg`), and the docs registry (`docs/src/data/examples.ts`) names it by its path (`postgresql/state-pg`).
 
 ### Single-Purpose Design
 
 Each example demonstrates **one integration concern**:
 
-- **State examples** pass no notify adapter, so the client's in-process default wakes their worker runner
-- **Notify examples** keep their state in PostgreSQL through the state example for the same client: `example-state-postgres-pg/provider`, `example-state-postgres-postgres-js/provider` or, under Bun, `example-state-postgres-bun-sql/provider`. `notify-ipc` is the exception: its adapter is a `NotifyAdapter<"sync">` that connects processes on one host, so its processes share a SQLite file through `example-state-sqlite-better-sqlite3/provider`. `notify-custom-memory` is the other exception: its adapter reaches only the current process, so it keeps its state in the custom state adapter of `example-state-custom-memory/state-adapter`
-- **Every other example** keeps its state in an in-memory SQLite database through `example-state-sqlite-better-sqlite3/provider` with `createSqliteStateAdapter` and `createClient`
+- **State examples** other than `multi-worker` pass no notify adapter, so the client's in-process default wakes their worker runner. Each SQL driver example creates a chain in the same transaction as an application write and completes its job inside a transaction opened with its own client
+- **Notify examples** keep their state in the PostgreSQL state example of the same client (`example-postgresql-state-pg/provider`, `example-postgresql-state-postgres-js/provider` or, under Bun, `example-postgresql-state-bun-sql/provider`) and wait for results with `awaitChain`. `ipc/notify` is the exception: its adapter is a `NotifyAdapter<"sync">` that connects processes on one host, so its processes share a SQLite file through `example-sqlite-state-better-sqlite3/provider`. `custom/notify-memory` is the other exception: its adapter reaches only the current process, so it keeps its state in the custom state adapter of `example-custom-state-memory/state-adapter`
+- **Guide examples** keep their state in the in-process state adapter with `mode: "async"`, so they need no database and their code reads like the asynchronous drivers readers use
+- **`postgresql/onboarding`** keeps its state in PostgreSQL through `example-postgresql-state-drizzle/provider`, the stack of the home page tour
+- **Every other example** keeps its state in an in-memory SQLite database through `example-sqlite-state-better-sqlite3/provider` with `createSqliteStateAdapter` and `createClient`
 
 This ensures users can copy-paste relevant code without untangling unrelated integrations.
 
@@ -294,48 +293,62 @@ This ensures users can copy-paste relevant code without untangling unrelated int
 State examples showcase the database client integrations for PostgreSQL, SQLite, MySQL / MariaDB and Redis, and a custom state adapter written from scratch:
 
 ```
-state-postgres-pg           # node-postgres (pg)
-state-postgres-postgres-js  # postgres.js
-state-postgres-drizzle      # Drizzle ORM
-state-postgres-kysely       # Kysely
-state-postgres-prisma       # Prisma
-state-postgres-knex         # Knex
-state-postgres-bun-sql      # Bun.SQL
+postgresql/state-pg           # node-postgres (pg)
+postgresql/state-postgres-js  # postgres.js
+postgresql/state-drizzle      # Drizzle ORM
+postgresql/state-kysely       # Kysely
+postgresql/state-prisma       # Prisma
+postgresql/state-knex         # Knex
+postgresql/state-mikro-orm    # MikroORM
+postgresql/state-bun-sql      # Bun.SQL
+postgresql/multi-worker       # worker processes sharing one database, PostgreSQL notify
 
-state-sqlite-better-sqlite3 # better-sqlite3
-state-sqlite-node-sqlite    # node:sqlite
-state-sqlite-drizzle        # Drizzle ORM
-state-sqlite-kysely         # Kysely
-state-sqlite-prisma         # Prisma
-state-sqlite-knex           # Knex
-state-sqlite-bun-sqlite     # bun:sqlite
-state-sqlite-bun-sql        # Bun.SQL
-state-sqlite-multi-worker   # worker processes sharing one SQLite file, IPC notify
+sqlite/state-better-sqlite3   # better-sqlite3
+sqlite/state-node-sqlite      # node:sqlite
+sqlite/state-drizzle          # Drizzle ORM
+sqlite/state-kysely           # Kysely
+sqlite/state-prisma           # Prisma
+sqlite/state-knex             # Knex
+sqlite/state-mikro-orm        # MikroORM
+sqlite/state-bun-sqlite       # bun:sqlite
+sqlite/state-bun-sql          # Bun.SQL
+sqlite/multi-worker           # worker processes sharing one SQLite file, IPC notify
 
-state-mysql-mysql2          # mysql2 (experimental MySQL / MariaDB state adapter)
+mysql/state-mysql2            # mysql2 (experimental MySQL / MariaDB state adapter)
+mysql/state-mariadb           # mariadb connector, on MariaDB
+mysql/state-drizzle           # Drizzle ORM
+mysql/state-kysely            # Kysely
+mysql/state-prisma            # Prisma
+mysql/state-knex              # Knex
+mysql/state-mikro-orm         # MikroORM
+mysql/state-bun-sql           # Bun.SQL
+mysql/multi-worker            # worker processes sharing one database, polling
 
-state-redis-ioredis         # ioredis (experimental Redis state adapter)
-state-redis-redis           # node-redis (experimental Redis state adapter)
+redis/state-ioredis           # ioredis (experimental Redis state adapter)
+redis/state-redis             # node-redis (experimental Redis state adapter)
+redis/multi-worker            # worker processes sharing one Redis, Redis notify
 
-state-custom-memory         # custom StateAdapter over in-memory maps
+custom/state-memory           # custom StateAdapter over in-memory maps
 ```
 
-Each driver example implements a state provider (`PgStateProvider` or `SqliteStateProvider`, in either mode for SQLite) with `withTransaction`, `isTransaction` and `executeSql` methods specific to that client library. It also runs a few application migrations (`src/migrations.ts`) with `createPgMigrator` or `createSqliteMigrator`, and `src/provider.spec.ts` runs the migrator conformance cases alongside the provider cases. The better-sqlite3, node:sqlite, Drizzle and bun:sqlite examples run statements synchronously, so they implement a `SqliteStateProvider<…, "sync">`, and `createSqliteStateAdapter`, `createClient` and `withTxHooks` run synchronously over it; a client over a sync state adapter takes only a sync notify adapter. The Redis examples implement a `RedisStateProvider`, a single `eval` with SHA caching, run only the adapter's own `migrateToLatest()`, and run `redisStateProviderConformanceCases`. The custom example implements `StateAdapter` itself and validates it in `src/state-adapter.spec.ts` by registering one test per case of `stateAdapterConformanceCases`, `stateAdapterEndToEndConformanceCases` and their `async…` lists from `queuert/conformance`.
+Each driver example implements a state provider (`PgStateProvider`, `MysqlStateProvider` or `SqliteStateProvider`, in either mode for SQLite) with `withTransaction`, `isTransaction` and `executeSql` methods specific to that client library. Except for the MikroORM ones, it also runs a few application migrations (`src/migrations.ts`) with `createPgMigrator`, `createMysqlMigrator` or `createSqliteMigrator`, and `src/provider.spec.ts` runs the migrator conformance cases alongside the provider cases. The better-sqlite3, node:sqlite, Drizzle and bun:sqlite examples run statements synchronously, so they implement a `SqliteStateProvider<…, "sync">`, and `createSqliteStateAdapter`, `createClient` and `withTxHooks` run synchronously over it; a client over a sync state adapter takes only a sync notify adapter. The Redis examples implement a `RedisStateProvider`, a single `eval` with SHA caching, run only the adapter's own `migrateToLatest()`, and run `redisStateProviderConformanceCases`. The custom example implements `StateAdapter` itself and validates it in `src/state-adapter.spec.ts` by registering one test per case of `stateAdapterConformanceCases`, `stateAdapterEndToEndConformanceCases` and their `async…` lists from `queuert/conformance`.
 
 ### Notify Examples
 
 Notify examples showcase different pub/sub client integrations:
 
 ```
-notify-redis-ioredis         # ioredis
-notify-redis-redis           # node-redis
-notify-redis-bun             # Bun Redis
-notify-postgres-pg           # pg (node-postgres)
-notify-postgres-postgres-js  # postgres-js
-notify-postgres-bun-sql      # Bun.SQL
-notify-nats-transport-node   # NATS
-notify-ipc                   # IPC between processes on one host
-notify-custom-memory         # custom NotifyAdapter, in-process listeners
+postgresql/notify-pg                        # pg (node-postgres)
+postgresql/notify-postgres-js               # postgres-js
+postgresql/notify-bun-sql                   # Bun.SQL
+postgresql/notify-redis-ioredis             # ioredis
+postgresql/notify-redis-redis               # node-redis
+postgresql/notify-redis-bun                 # Bun Redis
+postgresql/notify-redis-cluster-ioredis     # ioredis, Redis Cluster
+postgresql/notify-redis-cluster-node-redis  # node-redis, Redis Cluster
+postgresql/notify-nats                      # NATS
+ipc/notify                                  # IPC between processes on one host
+custom/notify-memory                        # custom NotifyAdapter, in-process listeners
 ```
 
 Redis examples implement a `RedisNotifyProvider` with `subscribe` and `eval` methods. PostgreSQL examples implement a `PgNotifyProvider` with `publish` (a batch of messages in one statement) and `subscribe` methods using PostgreSQL's LISTEN/NOTIFY. The custom example implements `NotifyAdapter` itself and validates it in `src/notify-adapter.spec.ts` by registering one test per case of `notifyAdapterConformanceCases` from `queuert/conformance`.
@@ -364,7 +377,7 @@ State adapters have configuration differences that reflect database capabilities
 
 ### In-Process Adapters
 
-The in-process state and notify adapters (`createInProcessStateAdapter` and `createInProcessNotifyAdapter`, synchronous by default and asynchronous with `mode: "async"`) are exported from `queuert`. They hold state only in memory and reach only the current process, like a Redis state adapter they do not commit with application data, and they suit tests, scripts and single-process apps that need no persistence. Their transaction context stays opaque: `InProcessContext` is not exported. Specs, benchmarks and the browser dashboard demo import them from `queuert`; `queuert/conformance-internal` holds only conformance groups and seeding helpers. Examples keep their state in SQLite instead. `createClient` without `notifyAdapter` uses an in-process notify adapter internally, scoped to that client.
+The in-process state and notify adapters (`createInProcessStateAdapter` and `createInProcessNotifyAdapter`, synchronous by default and asynchronous with `mode: "async"`) are exported from `queuert`. They hold state only in memory and reach only the current process, like a Redis state adapter they do not commit with application data, and they suit tests, scripts and single-process apps that need no persistence. Their transaction context stays opaque: `InProcessContext` is not exported. Specs, benchmarks, the browser dashboard demo and `examples/guides/` import them from `queuert`; `queuert/conformance-internal` holds only conformance groups and seeding helpers. `createClient` without `notifyAdapter` uses an in-process notify adapter internally, scoped to that client.
 
 ### Code Style for Examples
 
@@ -375,15 +388,15 @@ Examples should follow these conventions for clarity and readability:
 - **Simple patterns**: Prefer straightforward code over abstraction layers — examples should be copy-paste friendly
 - **No obvious comments**: Users are smart
 - **Workflow visualization**: Examples with job chains should include ASCII workflow diagrams as comments inside the `defineJobTypes` generic, directly above the relevant job type definitions
-- **Region markers are load-bearing**: `// #region <name>` markers in `examples/` are embedded by the docs site, so renaming or removing one breaks `pnpm docs:build`; update the `<ExampleCode>` (or `?region=`) reference in the same change
+- **Region markers are load-bearing**: `// #region <name>` markers in `examples/` are embedded by the docs site, so renaming or removing one breaks `pnpm docs:build`; update the `<ExampleCode>` reference in the same change
 
 ### Guides and Examples Stay in Sync
 
-Each guide in `docs/src/content/docs/guides/` links the example that demonstrates it. The example is the source of truth for correctness because it runs in `pnpm examples`; the guide is the source of truth for teaching:
+Each guide in `docs/src/content/docs/guides/` embeds its code from `examples/guides/src/<guide>.ts`: the MDX renders a region with `<ExampleCode example="guides" file="src/<guide>.ts" region="<name>" />`. The example is the source of truth for correctness because it runs in `pnpm examples`; the guide is the source of truth for teaching:
 
-- **Every pattern the guide teaches is runnable in the example**: if a guide section shows something the example does not do, add it to the example (within its single purpose) or drop it from the guide.
-- **Guide snippets may stay generic**: they don't have to be excerpts of the example. Use names and values that read well in prose, and leave out demo scaffolding (hardcoded IDs, forced failures, shortened timeouts, assertions).
-- **Change both together**: a change to an example that alters a pattern a guide teaches updates the guide, and a guide edit that changes a pattern updates the example. The same holds for the example's `README.md`.
+- **Every snippet the guide shows is a region of the example**: a guide section shows a diagram, the region and its explanation. Keep demo scaffolding (assertions, setup the reader does not need) outside the regions, or inside `// #hide` … `// #endhide`.
+- **Keep each guide file small**: one file covers one guide, with only the scenarios the guide teaches.
+- **Change both together**: a change to a region rewrites the prose around it, and a guide edit that changes a pattern changes the example.
 
 ## Documentation Updates
 
@@ -404,7 +417,7 @@ When making changes:
 
 `docs/src/content/docs/integrations/dashboard.tsx` shows the live dashboard in place of screenshots: each `<DashboardDemo view="…">` frame (`docs/src/components/integrations/dashboard/DashboardDemo.tsx`) opens one view. A service worker (`demo/service-worker.ts`, bundled by `docs/plugins/dashboard-demo-worker.ts` to `/queuert/dashboard-demo.js`) runs a `createDashboard` fetch handler in the browser, so the frames load the regular `@queuert/dashboard` build, which `pnpm docs:dev` and `pnpm docs:build` build first.
 
-- The data comes from `examples/dashboard/src/scenarios.ts`, which both the example's populator (SQLite) and the demo's `demo/seed.ts` (in-process adapter) run, so the example and the docs show the same chains, jobs and workers
+- The data comes from `examples/observability/dashboard/src/scenarios.ts`, which both the example's populator (SQLite) and the demo's `demo/seed.ts` (in-process adapter) run, so the example and the docs show the same chains, jobs and workers
 - IDs come from the scenarios' seeded `createIdGenerator` and each scenario's writes are awaited before the next starts, so a run always yields the same IDs; the demo relies on it, since the browser stops an idle service worker and the reseed must keep open frames working
 - `seedDashboardDemo` returns the path of every documented view, and the frame opens `__view/<view>`, which the service worker redirects to that path; a new view gets its path there and a `view` value on the page
 - A dashboard change that needs data no scenario has (a new status, a new kind of row) adds a scenario to `scenarios.ts`, and the prose next to the frame is updated to match

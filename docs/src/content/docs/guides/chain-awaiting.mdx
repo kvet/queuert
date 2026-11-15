@@ -9,35 +9,6 @@ import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/dia
 
 `awaitChain` waits for a chain to complete by combining polling with notify adapter events. Between polls, it listens for completion notifications to react immediately.
 
-```ts
-const completedChain = await client.awaitChain(
-  { id: chainId },
-  { timeoutMs: 30_000, pollIntervalMs: 5_000 },
-);
-
-console.log(completedChain.output); // Typed output from the final job
-```
-
-`awaitChain` takes the chain (or any `{ id }`) and options: `timeoutMs` is required, `pollIntervalMs` sets how often the database is polled between notifications (default 15 seconds), and `signal` accepts an `AbortSignal`. It runs outside any transaction, so several chains can be awaited concurrently:
-
-```ts
-const completedChains = await Promise.all(
-  chains.map(async (chain) => client.awaitChain(chain, { timeoutMs: 30_000 })),
-);
-```
-
-Both a timeout and an abort throw `WaitChainTimeoutError`:
-
-```ts
-try {
-  await client.awaitChain({ id: chainId }, { timeoutMs: 30_000, signal: request.signal });
-} catch (error) {
-  if (error instanceof WaitChainTimeoutError) {
-    /* timed out or aborted */
-  }
-}
-```
-
 <Diagram label="awaitChain polls the database and listens for a completion notification at the same time; it returns the output when the chain completes, or throws on timeout or abort">
   <Flow>
     <Node>awaitChain()</Node>
@@ -59,4 +30,20 @@ try {
   </Flow>
 </Diagram>
 
-See [examples/showcase-chain-awaiting](https://github.com/kvet/queuert/tree/main/examples/showcase-chain-awaiting) for a complete working example demonstrating basic awaiting, parallel awaiting, timeout handling, and abort signals.
+A chain's output is the output of its final job. Here `fetch-price` continues with `apply-discount`, so the chain resolves to the discounted price:
+
+<ExampleCode example="guides" file="src/chain-awaiting.ts" region="types" />
+
+Create the chain, then await it once the transaction has committed. `awaitChain` takes the chain (or any `{ id }`) and options: `timeoutMs` is required, and `pollIntervalMs` sets how often the database is polled between notifications (default 15 seconds). The completed chain carries the typed `output` of `apply-discount`:
+
+<ExampleCode example="guides" file="src/chain-awaiting.ts" region="await-one" />
+
+`awaitChain` runs outside any transaction, so several chains can be awaited concurrently:
+
+<ExampleCode example="guides" file="src/chain-awaiting.ts" region="await-many" />
+
+`signal` accepts an `AbortSignal`, such as the signal of the incoming request that is waiting for the result. Both a timeout and an abort throw `WaitChainTimeoutError`, and the chain keeps running. Here `laterChain` is a `fetch-price` chain created with a one-minute [deferred start](../scheduling/), so the worker has not reached it yet and the request gives up on it:
+
+<ExampleCode example="guides" file="src/chain-awaiting.ts" region="await-abort" />
+
+See [examples/guides/src/chain-awaiting.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/chain-awaiting.ts) for the runnable code. See also [Notify Adapters](/queuert/integrations/notify-adapters/) for the completion notifications and [Scheduling](../scheduling/) for deferred starts.

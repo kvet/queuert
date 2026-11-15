@@ -5,112 +5,37 @@ sidebar:
   order: 9
 ---
 
-import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
-
 ## Deferred Start
 
-Jobs can be scheduled to start at a future time using the `schedule` option. The job is created transactionally but won't be processed until the specified time.
+Jobs can be scheduled to start at a future time using the `schedule` option. The chain is created transactionally but its first job isn't processed until the specified time. Pass `{ at }` for a specific time, as this reminder does, or `{ afterMs }` for a delay from now:
 
-<Tabs>
-  <TabItem label="Relative delay (afterMs)">
-    ```ts
-    await stateProvider.withTransaction(async (txCtx) =>
-      client.createChain({
-        ...txCtx,
-        typeName: "send-reminder",
-        input: { userId: "123" },
-        schedule: { afterMs: 5 * 60 * 1000 }, // 5 minutes from now
-      }),
-    );
-    ```
-  </TabItem>
-  <TabItem label="Specific time (at)">
-    ```ts
-    await stateProvider.withTransaction(async (txCtx) =>
-      client.createChain({
-        ...txCtx,
-        typeName: "send-reminder",
-        input: { userId: "123" },
-        schedule: { at: scheduledDate },
-      }),
-    );
-    ```
-  </TabItem>
-</Tabs>
+<ExampleCode example="guides" file="src/scheduling.ts" region="deferred-start" />
 
-The same `schedule` option works with `continueWith` for deferred continuations:
+The same `schedule` option works with `continueWith` for deferred continuations. Starting a trial sends its follow-up a day later:
 
-```ts
-return stateProvider.withTransaction(async (txCtx) =>
-  complete({
-    ...txCtx,
-    continueWith: {
-      typeName: "follow-up",
-      input: { userId: job.input.userId },
-      schedule: { afterMs: 24 * 60 * 60 * 1000 }, // 24 hours later
-    },
-  }),
-);
-```
+<ExampleCode example="guides" file="src/scheduling.ts" region="continue-with-schedule" />
 
-<Aside type="tip">
-  Combine `schedule` with `deduplication: { key, scope }` to prevent duplicate future jobs — for example,
-  ensuring only one reminder is queued per user even if the trigger fires multiple times. See
-  [Deduplication](../deduplication/).
-</Aside>
+:::tip
+Combine `schedule` with `deduplication: { key, scope }` to prevent duplicate future jobs — for example, ensuring only one reminder is queued per user even if the trigger fires multiple times. See [Deduplication](../deduplication/).
+:::
 
 ## Rescheduling from a Handler
 
-When a handler needs to defer work without treating it as a failure — for example, a rate-limited API saying "come back later" — use `complete({ reschedule })`:
+When a handler needs to defer work without treating it as a failure — for example, a rate-limited API saying "come back later" — use `complete({ reschedule })`. The handler below waits as long as the API asks before calling it again:
 
-```ts
-attemptHandler: async ({ job, complete }) => {
-  const response = await fetch(job.input.url);
+<ExampleCode example="guides" file="src/scheduling.ts" region="reschedule-from-handler" />
 
-  if (response.status === 429) {
-    const retryAfter = parseInt(response.headers.get("Retry-After") || "60", 10);
-    return stateProvider.withTransaction(async (txCtx) =>
-      complete({ ...txCtx, reschedule: { afterMs: retryAfter * 1000 } }),
-    );
-  }
-
-  if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return stateProvider.withTransaction(async (txCtx) =>
-    complete({ ...txCtx, output: { data } }),
-  );
-},
-```
-
-Because `complete({ reschedule })` is a normal outcome — not an error — the job keeps a clean slate: no `lastAttemptError`, no failure event, no error span. The attempt counter still increments, so backoff reflects total attempts if the job later fails for real.
-
-```ts
-complete({ ...txCtx, reschedule: { afterMs: 30_000 } }); // 30 seconds from now
-complete({ ...txCtx, reschedule: { at: new Date("2026-06-15T09:00:00Z") } }); // specific time
-```
+Because `complete({ reschedule })` is a normal outcome — not an error — the job keeps a clean slate: no `lastAttemptError`, no failure event, no error span. The attempt counter still increments, so backoff reflects total attempts if the job later fails for real. `reschedule` takes the same `{ afterMs }` or `{ at }` as `schedule`.
 
 ## Rescheduling Pending Jobs
 
-A scheduled job is just a pending job with a future `scheduledAt`. Use `rescheduleJob` (or `rescheduleJobs` for a batch) to change when it runs. Omit `schedule` to run it immediately — useful for admin "run now" actions or manually advancing a queued reminder — or pass `schedule: { at }` / `{ afterMs }` to push it to a different time. Past times clamp to now, matching `createChain`.
+A scheduled job is just a pending job with a future `scheduledAt`. Use `rescheduleJob` (or `rescheduleJobs` for a batch) to change when it runs. Pass `schedule: { at }` or `{ afterMs }` to move it to a different time — here the reminder moves to two hours from now:
 
-```ts
-// Run now
-await stateProvider.withTransaction(async (txCtx) =>
-  client.rescheduleJob({ ...txCtx, id: jobId }),
-);
+<ExampleCode example="guides" file="src/scheduling.ts" region="push-back" />
 
-// Push 30 minutes out
-await stateProvider.withTransaction(async (txCtx) =>
-  client.rescheduleJob({
-    ...txCtx,
-    id: jobId,
-    schedule: { afterMs: 30 * 60 * 1000 },
-  }),
-);
-```
+Omit `schedule` to run it immediately — useful for admin "run now" actions or manually advancing a queued reminder. Past times clamp to now, matching `createChain`.
+
+<ExampleCode example="guides" file="src/scheduling.ts" region="run-now" />
 
 `rescheduleJob` throws `JobNotFoundError` if the job does not exist and `JobNotReschedulableError` if it is not `pending` (blocked, running or completed).
 
@@ -118,44 +43,10 @@ await stateProvider.withTransaction(async (txCtx) =>
 
 ## Recurring Jobs
 
-Queuert has no cron syntax. For periodic tasks like daily digests, health checks, or billing cycles, start a new independent chain from within the handler instead of using `continueWith`. This keeps each execution as its own short-lived chain rather than building an ever-growing chain history.
+Queuert has no cron syntax. For periodic tasks like daily digests, health checks, or billing cycles, start a new independent chain from within the handler instead of using `continueWith`. This keeps each execution as its own short-lived chain rather than building an ever-growing chain history. The digest below completes its job, then schedules the next digest a day later in the same transaction while the user is still subscribed:
 
-```ts
-const jobTypes = defineJobTypes<{
-  'daily-digest': {
-    entry: true;
-    input: { userId: string };
-    output: { sentAt: string };
-  };
-}>();
+<ExampleCode example="guides" file="src/scheduling.ts" region="recurring" />
 
-// In processor — start a new chain with a scheduled delay
-'daily-digest': {
-  attemptHandler: async ({ job, complete }) => {
-    await sendDigestEmail(job.input.userId);
+Each occurrence is its own chain, so the next digest can be pushed back or run now with `rescheduleJob` like any other scheduled job. To make sure only one occurrence is ever queued, add a deduplication key and keep `complete` ahead of `createChain`, as [Self-Scheduling Recurring Chains](../deduplication/#self-scheduling-recurring-chains) explains.
 
-    return stateProvider.withTransaction(async (txCtx) => {
-      const completedJob = await complete({
-        ...txCtx,
-        output: { sentAt: new Date().toISOString() },
-      });
-
-      if (userStillSubscribed) {
-        await client.createChain({
-          ...txCtx,
-          typeName: 'daily-digest',
-          input: { userId: job.input.userId },
-          schedule: { afterMs: 24 * 60 * 60 * 1000 }, // Run again tomorrow
-          deduplication: {
-            key: `digest:${job.input.userId}`,
-            scope: 'running',
-          },
-        });
-      }
-      return completedJob;
-    });
-  },
-}
-```
-
-See [examples/showcase-scheduling](https://github.com/kvet/queuert/tree/main/examples/showcase-scheduling) for a complete working example demonstrating recurring jobs, deduplication, trigger-early, and rescheduling from a handler. See also [Deduplication](../deduplication/) and [Tx Hooks](../tx-hooks/).
+See [examples/guides/src/scheduling.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/scheduling.ts) for the runnable code. See also [Deduplication](../deduplication/) and [Tx Hooks](../tx-hooks/).

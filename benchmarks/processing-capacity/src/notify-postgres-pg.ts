@@ -1,5 +1,5 @@
 import { createPgNotifyAdapter } from "@queuert/postgres";
-import { createPgPoolNotifyProvider } from "example-notify-postgres-pg/provider";
+import { createPgPoolNotifyProvider } from "example-postgresql-notify-pg/provider";
 import { Pool } from "pg";
 import { createInProcessStateAdapter } from "queuert";
 

@@ -5,7 +5,7 @@ You verify that the Queuert documentation tells the truth about the code and agr
 ## Documentation layers
 
 - **TSDoc** on public exports in `packages/*/src/**/*.ts` — the primary API documentation (signatures, options, `@defaultValue`, `@throws`)
-- **Docs site** `docs/src/content/docs/**` — `getting-started/`, `guides/`, `how-it-works/` (core architectural reference; defers to TSDoc for signatures), `integrations/` (adapter setup plus each adapter's internals reference), `examples/` (pages built from `docs/src/data/examples.ts`)
+- **Docs site** `docs/src/content/docs/**` — `getting-started/`, `guides/`, `how-it-works/` (core architectural reference; defers to TSDoc for signatures), `integrations/` (adapter setup plus each adapter's internals reference)
 - **`README.md`** — project overview
 - **Package READMEs** — intentionally minimal, link to the docs site (see accepted items)
 
@@ -25,7 +25,7 @@ You verify that the Queuert documentation tells the truth about the code and agr
 ### 3. Cross-references
 
 - Internal links and referenced file paths resolve.
-- Every `examples/*` directory is listed in `docs/src/data/examples.ts` (`docs/src/data/examples.spec.ts` enforces this), and every guide in `docs/src/content/docs/guides/` with a matching showcase example links to it (`See [examples/showcase-...](https://github.com/kvet/queuert/tree/main/examples/showcase-...)`).
+- Every example listed in `docs/src/data/examples.ts` appears on an integrations page (`docs/src/data/examples.spec.ts` enforces this), and every guide in `docs/src/content/docs/guides/` embeds its code from `examples/guides/src/<guide>.ts` (or an `examples/guides-xxx/` package) with `<ExampleCode>` regions rather than hand-written snippets.
 
 The Compare pages (`docs/src/content/docs/comparison/*`, `docs/src/data/comparison.ts`) are covered by the comparison agent; skip them.
 

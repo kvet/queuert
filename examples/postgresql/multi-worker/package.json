@@ -1,0 +1,26 @@
+{
+  "name": "example-postgresql-multi-worker",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating multiple workers sharing the same PostgreSQL database for distributed job processing.",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/postgres": "workspace:*",
+    "@queuert/testcontainers": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
+    "example-postgresql-notify-postgres-js": "workspace:*",
+    "example-postgresql-state-postgres-js": "workspace:*",
+    "postgres": "3.4.9",
+    "queuert": "workspace:*"
+  }
+}

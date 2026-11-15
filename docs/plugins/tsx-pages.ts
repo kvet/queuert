@@ -201,7 +201,7 @@ export const extractRegion = (
 };
 
 export type ExampleSource = {
-  /** `examples/<example>` or `packages/<package>`, the directory `file` is relative to. */
+  /** `examples/<example>` (or `examples/<stack>/<example>`) or `packages/<package>`, the directory `file` is relative to. */
   root: { kind: "example" | "package"; name: string };
   file: string;
   path: string;
@@ -227,8 +227,7 @@ export const readExampleSource = (
   const path = join(directory, root.name, attributes.file);
   if (
     relative(join(directory, root.name), path).startsWith("..") ||
-    root.name.includes("/") ||
-    root.name.startsWith(".")
+    root.name.split("/").some((segment) => segment === "" || segment.startsWith("."))
   ) {
     throw new Error(`<ExampleCode> file escapes ${top}/: ${root.name}/${attributes.file}`);
   }
@@ -243,10 +242,62 @@ export const readExampleSource = (
   };
 };
 
+/**
+ * Reads the file an `<ExampleCode example|package file region lang title />` names. `attribute`
+ * returns a static string attribute of the element, so `.tsx` pages and MDX pages share it.
+ */
+export const readExampleCode = (
+  attribute: (name: string) => string | undefined,
+  page: string,
+  directories: { examples?: string; packages?: string } = {},
+): { title: string | undefined; source: ExampleSource } => {
+  const example = attribute("example");
+  const packageName = attribute("package");
+  const file = attribute("file");
+  if ((example === undefined) === (packageName === undefined) || file === undefined) {
+    throw new Error(
+      `${page}: <ExampleCode> needs a static file and exactly one of example or package`,
+    );
+  }
+  return {
+    title: attribute("title"),
+    source: readExampleSource(
+      {
+        root:
+          example === undefined
+            ? { kind: "package", name: packageName! }
+            : { kind: "example", name: example },
+        file,
+        region: attribute("region"),
+        lang: attribute("lang"),
+      },
+      directories,
+    ),
+  };
+};
+
+/** The props the build fills in on `<ExampleCode>`: the region is resolved into `code` and `html`. */
+export const exampleCodeProps = async (
+  source: ExampleSource,
+  title: string | undefined,
+): Promise<Record<string, string>> => ({
+  lang: source.lang,
+  [source.root.kind]: source.root.name,
+  file: source.file,
+  ...(title === undefined ? {} : { title }),
+  code: source.code,
+  html: await highlight(source.code, source.lang),
+});
+
 export const transformPage = async (
   source: string,
   file: string,
-  options: { examplesDirectory?: string; packagesDirectory?: string } = {},
+  options: {
+    examplesDirectory?: string;
+    packagesDirectory?: string;
+    /** Fill `<ExampleCode>` only, for a route outside the content directory. */
+    exampleCodeOnly?: boolean;
+  } = {},
 ): Promise<{ code: string; map: SourceMap; headings: PageHeading[]; dependencies: string[] }> => {
   const program = parsePage(source, file);
   const output = new MagicString(source);
@@ -265,6 +316,7 @@ export const transformPage = async (
     JSXElement: (element) => {
       const name = elementName(element);
       const depth = Number(/^h([2-4])$/.exec(name ?? "")?.[1]);
+      if (options.exampleCodeOnly && name !== "ExampleCode") return;
       if (depth && element.closingElement) {
         const text = childrenText(element.children).replace(/\s+/g, " ").trim();
         const existingId = stringAttribute(element, "id");
@@ -280,29 +332,12 @@ export const transformPage = async (
         return;
       }
       if (name === "ExampleCode" && !attributeOf(element, "html")) {
-        const example = stringAttribute(element, "example");
-        const packageName = stringAttribute(element, "package");
-        const exampleFile = stringAttribute(element, "file");
-        if ((example === undefined) === (packageName === undefined) || exampleFile === undefined) {
-          throw new Error(
-            `${file}: <ExampleCode> needs a static file and exactly one of example or package`,
-          );
-        }
         exampleBlocks.push({
           element,
-          title: stringAttribute(element, "title"),
-          source: readExampleSource(
-            {
-              root:
-                example === undefined
-                  ? { kind: "package", name: packageName! }
-                  : { kind: "example", name: example },
-              file: exampleFile,
-              region: stringAttribute(element, "region"),
-              lang: stringAttribute(element, "lang"),
-            },
-            { examples: options.examplesDirectory, packages: options.packagesDirectory },
-          ),
+          ...readExampleCode((attribute) => stringAttribute(element, attribute), file, {
+            examples: options.examplesDirectory,
+            packages: options.packagesDirectory,
+          }),
         });
         return;
       }
@@ -327,18 +362,14 @@ export const transformPage = async (
   }
 
   for (const { element, title, source: example } of exampleBlocks) {
-    const attributes = [
-      `lang=${jsxString(example.lang)}`,
-      `${example.root.kind}=${jsxString(example.root.name)}`,
-      `file=${jsxString(example.file)}`,
-      ...(title === undefined ? [] : [`title=${jsxString(title)}`]),
-      `code=${jsxString(example.code)}`,
-      `html=${jsxString(await highlight(example.code, example.lang))}`,
-    ];
+    const props = await exampleCodeProps(example, title);
+    const attributes = Object.entries(props).map(([name, value]) => `${name}=${jsxString(value)}`);
     output.overwrite(element.start, element.end, `<ExampleCode ${attributes.join(" ")} />`);
   }
 
-  output.append(`\nexport const headings = ${JSON.stringify(headings)};\n`);
+  if (!options.exampleCodeOnly) {
+    output.append(`\nexport const headings = ${JSON.stringify(headings)};\n`);
+  }
   return {
     code: output.toString(),
     map: output.generateMap({ hires: true, source: file }),
@@ -380,13 +411,23 @@ export const readPageMeta = (source: string, file: string): PageMeta => {
   throw new Error(`${file}: expected \`export const meta = { title: "…" }\``);
 };
 
-export const tsxPages = (options: { contentDirectory: string }): Plugin => ({
+export const tsxPages = (options: {
+  contentDirectory: string;
+  /** Routes outside the content directory that embed `<ExampleCode>`. */
+  exampleCodeRoutes: string[];
+}): Plugin => ({
   name: "queuert:tsx-pages",
   enforce: "pre",
   async transform(source, id) {
     const [file = id] = id.split("?");
-    if (!file.startsWith(options.contentDirectory) || !file.endsWith(".tsx")) return;
-    const { code, map, dependencies } = await transformPage(source, file);
+    const exampleCodeOnly = options.exampleCodeRoutes.includes(file);
+    if (
+      !exampleCodeOnly &&
+      (!file.startsWith(options.contentDirectory) || !file.endsWith(".tsx"))
+    ) {
+      return;
+    }
+    const { code, map, dependencies } = await transformPage(source, file, { exampleCodeOnly });
     for (const dependency of dependencies) this.addWatchFile(dependency);
     return { code, map };
   },

@@ -4,7 +4,7 @@
 
 import { createPgNotifyAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import { createPostgresJsNotifyProvider } from "example-notify-postgres-postgres-js/provider";
+import { createPostgresJsNotifyProvider } from "example-postgresql-notify-postgres-js/provider";
 import postgres from "postgres";
 import {
   createClient,

@@ -96,15 +96,15 @@ const Page = () => (
     </p>
     <Tabs syncKey="logger">
       <TabItem label="Console">
-        <ExampleCode example="log-console" file="src/index.ts" region="client" />
+        <ExampleCode example="log/console" file="src/index.ts" region="client" />
       </TabItem>
       <TabItem label="Pino">
-        <ExampleCode example="log-pino" file="src/log.ts" />
-        <ExampleCode example="log-pino" file="src/index.ts" region="client" />
+        <ExampleCode example="log/pino" file="src/log.ts" />
+        <ExampleCode example="log/pino" file="src/index.ts" region="client" />
       </TabItem>
       <TabItem label="Winston">
-        <ExampleCode example="log-winston" file="src/log.ts" />
-        <ExampleCode example="log-winston" file="src/index.ts" region="client" />
+        <ExampleCode example="log/winston" file="src/log.ts" />
+        <ExampleCode example="log/winston" file="src/index.ts" region="client" />
       </TabItem>
     </Tabs>
 
@@ -159,7 +159,7 @@ const Page = () => (
     <FieldList items={validationEntries} idPrefix="log" />
 
     <h2>Examples</h2>
-    <ExampleRows title="Loggers" names={["log-console", "log-pino", "log-winston"]} />
+    <ExampleRows title="Loggers" names={["log/console", "log/pino", "log/winston"]} />
   </>
 );
 

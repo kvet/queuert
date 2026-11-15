@@ -57,7 +57,7 @@ type FindNonJsonValueDeep<T, TSeen = never> = [T] extends [never]
  * surfaces at the call site of the consumer.
  *
  * Codec adapters use this to constrain their **stored** type — the form their
- * encoders return — while leaving the runtime type free, as `examples/codec-zod`
+ * encoders return — while leaving the runtime type free, as `examples/validation/codec-zod`
  * does with its schemas' input types:
  *
  * ```ts

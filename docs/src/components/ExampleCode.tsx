@@ -7,13 +7,14 @@ const repositoryBlobUrl = "https://github.com/kvet/queuert/blob/main/";
 
 /**
  * A file (or a `// #region <name>` of it) from `examples/<example>/` or `packages/<package>/`,
- * read and highlighted at build time by the tsx-pages plugin. Pages write
+ * read and highlighted at build time: by the tsx-pages plugin on `.tsx` pages and the home page, and
+ * by a remark step in `plugins/mdx.ts` on MDX pages. Pages write
  * `<ExampleCode example="…" file="…" region="…" />` (or `package="redis"` for library source);
- * the plugin fills in `lang`, `code` and `html`.
+ * the build fills in `lang`, `code` and `html`.
  * Files longer than 30 lines scroll inside their box, so per-driver tabs stay a readable height.
  */
 export const ExampleCode = (props: {
-  /** A directory of `examples/`. Exactly one of `example` and `package` is set. */
+  /** A directory of `examples/`, such as `postgresql/state-pg`. Exactly one of `example` and `package` is set. */
   example?: string;
   /** A directory of `packages/`, for library source such as SQL or scripts. */
   package?: string;
@@ -25,7 +26,7 @@ export const ExampleCode = (props: {
   html?: string;
 }) => {
   if (props.code === undefined || props.html === undefined || props.lang === undefined) {
-    throw new Error(`<ExampleCode file="${props.file}"> was not compiled by the tsx-pages plugin`);
+    throw new Error(`<ExampleCode file="${props.file}"> was not compiled at build time`);
   }
   const path = () =>
     props.example === undefined

@@ -1,0 +1,8 @@
+{
+  "extends": "@queuert/tsconfig/base",
+  "compilerOptions": {
+    "types": ["bun"]
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

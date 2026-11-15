@@ -1,87 +1,15 @@
-export type ExampleCategory =
-  | "state"
-  | "notify"
-  | "patterns"
-  | "logging"
-  | "validation"
-  | "observability";
-
-export type ExamplePageSlug =
-  | "state-adapters"
-  | "notify-adapters"
-  | "validation"
-  | "logging-observability"
-  | "building-chains"
-  | "scheduling"
-  | "reliability"
-  | "app-structure"
-  | "operations";
-
 export type ExampleService = "PostgreSQL" | "MySQL" | "Redis" | "Redis Cluster" | "NATS";
 
 export type Example = {
   name: string;
-  category: ExampleCategory;
-  page: ExamplePageSlug;
   label: string;
   description: string;
   runtime: "Node.js" | "Bun";
   services: ExampleService[];
   files: string[];
-  scenarios?: string[];
   commands?: { label: string; script: string }[];
-  requires?: string;
   guide?: { title: string; href: string };
 };
-
-export const examplePages: { slug: ExamplePageSlug; title: string; summary: string }[] = [
-  {
-    slug: "state-adapters",
-    title: "State Adapters",
-    summary:
-      "One example per PostgreSQL, SQLite, MySQL / MariaDB and Redis driver or ORM, and a custom adapter.",
-  },
-  {
-    slug: "notify-adapters",
-    title: "Notify Adapters",
-    summary: "Redis, Redis Cluster, PostgreSQL LISTEN/NOTIFY, NATS and a custom adapter.",
-  },
-  {
-    slug: "validation",
-    title: "Validation",
-    summary: "Validation adapters backed by Zod, Valibot, TypeBox and ArkType.",
-  },
-  {
-    slug: "logging-observability",
-    title: "Logging & Observability",
-    summary: "Console, Pino and Winston logging, OpenTelemetry, and the dashboard.",
-  },
-  {
-    slug: "building-chains",
-    title: "Building Chains",
-    summary: "Chain patterns, blockers, awaiting and workerless completion.",
-  },
-  {
-    slug: "scheduling",
-    title: "Scheduling",
-    summary: "Recurring jobs, deduplication and rescheduling.",
-  },
-  {
-    slug: "reliability",
-    title: "Reliability",
-    summary: "Error recovery, error handling, timeouts and abort signals.",
-  },
-  {
-    slug: "app-structure",
-    title: "App Structure",
-    summary: "Feature slices and attempt middleware.",
-  },
-  {
-    slug: "operations",
-    title: "Operations",
-    summary: "Multiple workers, prioritization, queries, chain deletion and cleanup.",
-  },
-];
 
 const statePostgres = {
   title: "PostgreSQL State Adapter",
@@ -100,14 +28,6 @@ const notifyPostgres = {
 const notifyRedis = { title: "Redis Notify Adapter", href: "/integrations/notify-adapters/redis/" };
 const notifyNats = { title: "NATS Notify Adapter", href: "/integrations/notify-adapters/nats/" };
 const notifyIpc = { title: "IPC Notify Adapter", href: "/integrations/notify-adapters/ipc/" };
-const stateCustom = {
-  title: "Custom State Adapter",
-  href: "/integrations/state-adapters/custom/",
-};
-const notifyCustom = {
-  title: "Custom Notify Adapter",
-  href: "/integrations/notify-adapters/custom/",
-};
 const validationAdapters = {
   title: "Validation",
   href: "/integrations/validation/",
@@ -119,9 +39,7 @@ const stateProviderFiles = [...providerFiles, "src/migrations.ts"];
 
 export const examples: Example[] = [
   {
-    name: "state-postgres-pg",
-    category: "state",
-    page: "state-adapters",
+    name: "postgresql/state-pg",
     label: "pg (node-postgres)",
     description:
       "PostgreSQL state storage via @queuert/postgres with the pg (node-postgres) driver — job creation and completion inside application transactions.",
@@ -131,9 +49,7 @@ export const examples: Example[] = [
     guide: statePostgres,
   },
   {
-    name: "state-postgres-postgres-js",
-    category: "state",
-    page: "state-adapters",
+    name: "postgresql/state-postgres-js",
     label: "postgres.js",
     description:
       "PostgreSQL state storage via @queuert/postgres with postgres.js — job creation and completion inside application transactions.",
@@ -143,9 +59,7 @@ export const examples: Example[] = [
     guide: statePostgres,
   },
   {
-    name: "state-postgres-drizzle",
-    category: "state",
-    page: "state-adapters",
+    name: "postgresql/state-drizzle",
     label: "Drizzle ORM",
     description:
       "PostgreSQL state storage via @queuert/postgres with Drizzle ORM — job creation and completion inside application transactions.",
@@ -155,9 +69,7 @@ export const examples: Example[] = [
     guide: statePostgres,
   },
   {
-    name: "state-postgres-kysely",
-    category: "state",
-    page: "state-adapters",
+    name: "postgresql/state-kysely",
     label: "Kysely",
     description:
       "PostgreSQL state storage via @queuert/postgres with Kysely — job creation and completion inside application transactions.",
@@ -167,9 +79,7 @@ export const examples: Example[] = [
     guide: statePostgres,
   },
   {
-    name: "state-postgres-mikro-orm",
-    category: "state",
-    page: "state-adapters",
+    name: "postgresql/state-mikro-orm",
     label: "MikroORM",
     description:
       "PostgreSQL state storage via @queuert/postgres with MikroORM — commit and rollback callbacks from MikroORM's transaction events, so calls take `{ em }` alone.",
@@ -179,9 +89,7 @@ export const examples: Example[] = [
     guide: statePostgres,
   },
   {
-    name: "state-postgres-prisma",
-    category: "state",
-    page: "state-adapters",
+    name: "postgresql/state-prisma",
     label: "Prisma",
     description:
       "PostgreSQL state storage via @queuert/postgres with Prisma ORM — job creation and completion inside application transactions.",
@@ -191,9 +99,7 @@ export const examples: Example[] = [
     guide: statePostgres,
   },
   {
-    name: "state-postgres-knex",
-    category: "state",
-    page: "state-adapters",
+    name: "postgresql/state-knex",
     label: "Knex",
     description:
       "PostgreSQL state storage via @queuert/postgres with Knex — job creation and completion inside application transactions.",
@@ -203,9 +109,7 @@ export const examples: Example[] = [
     guide: statePostgres,
   },
   {
-    name: "state-postgres-bun-sql",
-    category: "state",
-    page: "state-adapters",
+    name: "postgresql/state-bun-sql",
     label: "Bun.SQL",
     description:
       "PostgreSQL state storage via @queuert/postgres using Bun's built-in SQL client — job creation and completion inside application transactions, no external PostgreSQL dependencies.",
@@ -215,9 +119,7 @@ export const examples: Example[] = [
     guide: statePostgres,
   },
   {
-    name: "state-postgres-multi-worker",
-    category: "state",
-    page: "operations",
+    name: "postgresql/multi-worker",
     label: "multiple workers",
     description:
       "Three worker processes (forked from the main process) share the same PostgreSQL database and compete for jobs — the main process creates orders and their chains in one transaction, and each order is processed by whichever worker acquires its job first.",
@@ -227,9 +129,7 @@ export const examples: Example[] = [
     guide: { title: "Horizontal Scaling", href: "/guides/horizontal-scaling/" },
   },
   {
-    name: "state-sqlite-multi-worker",
-    category: "state",
-    page: "operations",
+    name: "sqlite/multi-worker",
     label: "multiple workers on SQLite",
     description:
       "Three worker processes (forked from the main process) share one SQLite database file in WAL mode and compete for jobs, waking each other through the IPC notify adapter — the main process creates orders and their chains in one better-sqlite3 transaction.",
@@ -239,9 +139,7 @@ export const examples: Example[] = [
     guide: { title: "Horizontal Scaling", href: "/guides/horizontal-scaling/" },
   },
   {
-    name: "state-sqlite-better-sqlite3",
-    category: "state",
-    page: "state-adapters",
+    name: "sqlite/state-better-sqlite3",
     label: "better-sqlite3",
     description:
       "SQLite state storage via @queuert/sqlite with the better-sqlite3 driver through a synchronous SqliteStateProvider — job creation and completion inside better-sqlite3's own db.transaction, with no lock.",
@@ -251,9 +149,7 @@ export const examples: Example[] = [
     guide: stateSqlite,
   },
   {
-    name: "state-sqlite-node-sqlite",
-    category: "state",
-    page: "state-adapters",
+    name: "sqlite/state-node-sqlite",
     label: "node:sqlite",
     description:
       "SQLite state storage via @queuert/sqlite using Node's built-in node:sqlite module through a synchronous SqliteStateProvider — no external SQLite dependencies, and job creation and completion inside a BEGIN/COMMIT transaction with no lock.",
@@ -263,9 +159,7 @@ export const examples: Example[] = [
     guide: stateSqlite,
   },
   {
-    name: "state-sqlite-drizzle",
-    category: "state",
-    page: "state-adapters",
+    name: "sqlite/state-drizzle",
     label: "Drizzle ORM",
     description:
       "SQLite state storage via @queuert/sqlite with Drizzle ORM through a synchronous SqliteStateProvider — job creation and completion inside Drizzle's synchronous transaction over better-sqlite3, with no lock.",
@@ -275,9 +169,7 @@ export const examples: Example[] = [
     guide: stateSqlite,
   },
   {
-    name: "state-sqlite-kysely",
-    category: "state",
-    page: "state-adapters",
+    name: "sqlite/state-kysely",
     label: "Kysely",
     description:
       "SQLite state storage via @queuert/sqlite with Kysely — job creation and completion inside application transactions. Kysely's better-sqlite3 dialect uses a size-1 connection pool that already serializes writers, so no external lock is needed, for client calls or for the transaction a handler passes to complete.",
@@ -287,9 +179,7 @@ export const examples: Example[] = [
     guide: stateSqlite,
   },
   {
-    name: "state-sqlite-mikro-orm",
-    category: "state",
-    page: "state-adapters",
+    name: "sqlite/state-mikro-orm",
     label: "MikroORM",
     description:
       "SQLite state storage via @queuert/sqlite with MikroORM — commit and rollback callbacks from MikroORM's transaction events, so calls take `{ em }` alone. MikroORM's SQLite driver holds its one better-sqlite3 connection for the whole transaction, so no external lock is needed.",
@@ -299,9 +189,7 @@ export const examples: Example[] = [
     guide: stateSqlite,
   },
   {
-    name: "state-sqlite-prisma",
-    category: "state",
-    page: "state-adapters",
+    name: "sqlite/state-prisma",
     label: "Prisma",
     description:
       "SQLite state storage via @queuert/sqlite with Prisma ORM — job creation and completion inside application transactions, with createAsyncRwLock() for write serialization: the handler holds the same lock around the transaction it passes to complete.",
@@ -311,9 +199,7 @@ export const examples: Example[] = [
     guide: stateSqlite,
   },
   {
-    name: "state-sqlite-knex",
-    category: "state",
-    page: "state-adapters",
+    name: "sqlite/state-knex",
     label: "Knex",
     description:
       "SQLite state storage via @queuert/sqlite with Knex — job creation and completion inside application transactions. Knex's better-sqlite3 dialect uses a size-1 connection pool that already serializes writers, so no external lock is needed, for client calls or for the transaction a handler passes to complete.",
@@ -323,9 +209,7 @@ export const examples: Example[] = [
     guide: stateSqlite,
   },
   {
-    name: "state-sqlite-bun-sqlite",
-    category: "state",
-    page: "state-adapters",
+    name: "sqlite/state-bun-sqlite",
     label: "bun:sqlite",
     description:
       "SQLite state storage via @queuert/sqlite using Bun's built-in bun:sqlite module through a synchronous SqliteStateProvider — no external SQLite dependencies, and job creation and completion inside bun:sqlite's db.transaction with no lock.",
@@ -335,9 +219,7 @@ export const examples: Example[] = [
     guide: stateSqlite,
   },
   {
-    name: "state-sqlite-bun-sql",
-    category: "state",
-    page: "state-adapters",
+    name: "sqlite/state-bun-sql",
     label: "Bun.SQL",
     description:
       "SQLite state storage via @queuert/sqlite using Bun's built-in SQL client in its sqlite:// mode — no external SQLite dependencies. The handler holds the provider's createAsyncRwLock() write lock around the transaction it passes to complete.",
@@ -347,9 +229,7 @@ export const examples: Example[] = [
     guide: stateSqlite,
   },
   {
-    name: "state-mysql-mysql2",
-    category: "state",
-    page: "state-adapters",
+    name: "mysql/state-mysql2",
     label: "mysql2",
     description:
       "MySQL state storage via @queuert/mysql with the mysql2 driver — job creation and completion inside application transactions, with every transaction at READ COMMITTED.",
@@ -359,9 +239,87 @@ export const examples: Example[] = [
     guide: stateMysql,
   },
   {
-    name: "state-redis-ioredis",
-    category: "state",
-    page: "state-adapters",
+    name: "mysql/state-mariadb",
+    label: "mariadb",
+    description:
+      "MariaDB state storage via @queuert/mysql with the official mariadb connector — job creation and completion inside application transactions, with every transaction at READ COMMITTED.",
+    runtime: "Node.js",
+    services: ["MySQL"],
+    files: stateProviderFiles,
+    guide: stateMysql,
+  },
+  {
+    name: "mysql/state-drizzle",
+    label: "Drizzle ORM",
+    description:
+      "MySQL state storage via @queuert/mysql with Drizzle ORM — job creation and completion inside application transactions.",
+    runtime: "Node.js",
+    services: ["MySQL"],
+    files: [...stateProviderFiles, "src/schema.ts"],
+    guide: stateMysql,
+  },
+  {
+    name: "mysql/state-kysely",
+    label: "Kysely",
+    description:
+      "MySQL state storage via @queuert/mysql with Kysely — job creation and completion inside application transactions.",
+    runtime: "Node.js",
+    services: ["MySQL"],
+    files: [...stateProviderFiles, "src/database.ts"],
+    guide: stateMysql,
+  },
+  {
+    name: "mysql/state-mikro-orm",
+    label: "MikroORM",
+    description:
+      "MySQL state storage via @queuert/mysql with MikroORM — commit and rollback callbacks from MikroORM's transaction events, so calls take `{ em }` alone.",
+    runtime: "Node.js",
+    services: ["MySQL"],
+    files: providerFiles,
+    guide: stateMysql,
+  },
+  {
+    name: "mysql/state-prisma",
+    label: "Prisma",
+    description:
+      "MySQL state storage via @queuert/mysql with Prisma ORM and its MariaDB driver adapter — job creation and completion inside application transactions.",
+    runtime: "Node.js",
+    services: ["MySQL"],
+    files: ["src/provider.ts", "src/index.ts", "src/migrations.ts", "prisma/schema.prisma"],
+    guide: stateMysql,
+  },
+  {
+    name: "mysql/state-knex",
+    label: "Knex",
+    description:
+      "MySQL state storage via @queuert/mysql with Knex — job creation and completion inside application transactions.",
+    runtime: "Node.js",
+    services: ["MySQL"],
+    files: stateProviderFiles,
+    guide: stateMysql,
+  },
+  {
+    name: "mysql/state-bun-sql",
+    label: "Bun.SQL",
+    description:
+      "MySQL state storage via @queuert/mysql using Bun's built-in SQL client in its MySQL mode — job creation and completion inside application transactions, no external MySQL dependencies.",
+    runtime: "Bun",
+    services: ["MySQL"],
+    files: stateProviderFiles,
+    guide: stateMysql,
+  },
+  {
+    name: "mysql/multi-worker",
+    label: "multiple workers on MySQL",
+    description:
+      "Three worker processes (forked from the main process) share one MySQL database and compete for jobs, finding new work by polling because MySQL has no notify adapter — the main process creates orders and their chains in one transaction.",
+    runtime: "Node.js",
+    services: ["MySQL"],
+    files: ["src/index.ts", "src/worker.ts"],
+    guide: { title: "Horizontal Scaling", href: "/guides/horizontal-scaling/" },
+  },
+  {
+    name: "redis/state-ioredis",
     label: "ioredis",
     description:
       "Experimental Redis state storage via @queuert/redis with the ioredis client — a chain created in an optimistic transaction, with its side effect in onTransactionCommit because the callback may run more than once.",
@@ -371,9 +329,7 @@ export const examples: Example[] = [
     guide: stateRedis,
   },
   {
-    name: "state-redis-redis",
-    category: "state",
-    page: "state-adapters",
+    name: "redis/state-redis",
     label: "node-redis",
     description:
       "Experimental Redis state storage via @queuert/redis with the node-redis client — a chain created in an optimistic transaction, with its side effect in onTransactionCommit because the callback may run more than once.",
@@ -383,21 +339,17 @@ export const examples: Example[] = [
     guide: stateRedis,
   },
   {
-    name: "state-custom-memory",
-    category: "state",
-    page: "state-adapters",
-    label: "custom · in memory",
+    name: "redis/multi-worker",
+    label: "multiple workers on Redis",
     description:
-      "A StateAdapter written from scratch over plain Maps, with transactions run one at a time on a copy of the state, validated by the stateAdapterConformanceCases and stateAdapterEndToEndConformanceCases from queuert/conformance.",
+      "Three worker processes (forked from the main process) share one Redis instance for state and compete for jobs, waking each other through the Redis notify adapter — the main process creates a chain per order in one optimistic transaction.",
     runtime: "Node.js",
-    services: [],
-    files: ["src/state-adapter.ts", "src/state-adapter.spec.ts", "src/index.ts"],
-    guide: stateCustom,
+    services: ["Redis"],
+    files: ["src/index.ts", "src/worker.ts"],
+    guide: { title: "Horizontal Scaling", href: "/guides/horizontal-scaling/" },
   },
   {
-    name: "notify-redis-ioredis",
-    category: "notify",
-    page: "notify-adapters",
+    name: "postgresql/notify-redis-ioredis",
     label: "Redis · ioredis",
     description: "Redis pub/sub notifications via @queuert/redis with the ioredis client.",
     runtime: "Node.js",
@@ -406,9 +358,7 @@ export const examples: Example[] = [
     guide: notifyRedis,
   },
   {
-    name: "notify-redis-redis",
-    category: "notify",
-    page: "notify-adapters",
+    name: "postgresql/notify-redis-redis",
     label: "Redis · node-redis",
     description: "Redis pub/sub notifications via @queuert/redis with the node-redis client.",
     runtime: "Node.js",
@@ -417,9 +367,7 @@ export const examples: Example[] = [
     guide: notifyRedis,
   },
   {
-    name: "notify-redis-cluster-ioredis",
-    category: "notify",
-    page: "notify-adapters",
+    name: "postgresql/notify-redis-cluster-ioredis",
     label: "Redis Cluster · ioredis",
     description: "Redis notifications against a Redis Cluster through an ioredis cluster client.",
     runtime: "Node.js",
@@ -428,9 +376,7 @@ export const examples: Example[] = [
     guide: notifyRedis,
   },
   {
-    name: "notify-redis-cluster-node-redis",
-    category: "notify",
-    page: "notify-adapters",
+    name: "postgresql/notify-redis-cluster-node-redis",
     label: "Redis Cluster · node-redis",
     description: "Redis notifications against a Redis Cluster through a node-redis cluster client.",
     runtime: "Node.js",
@@ -439,9 +385,7 @@ export const examples: Example[] = [
     guide: notifyRedis,
   },
   {
-    name: "notify-redis-bun",
-    category: "notify",
-    page: "notify-adapters",
+    name: "postgresql/notify-redis-bun",
     label: "Redis · Bun",
     description:
       "Redis pub/sub notifications via @queuert/redis using Bun's built-in RedisClient — no external Redis dependencies.",
@@ -451,9 +395,7 @@ export const examples: Example[] = [
     guide: notifyRedis,
   },
   {
-    name: "notify-postgres-pg",
-    category: "notify",
-    page: "notify-adapters",
+    name: "postgresql/notify-pg",
     label: "LISTEN/NOTIFY · pg",
     description:
       "PostgreSQL LISTEN/NOTIFY via @queuert/postgres with the pg (node-postgres) client.",
@@ -463,9 +405,7 @@ export const examples: Example[] = [
     guide: notifyPostgres,
   },
   {
-    name: "notify-postgres-postgres-js",
-    category: "notify",
-    page: "notify-adapters",
+    name: "postgresql/notify-postgres-js",
     label: "LISTEN/NOTIFY · postgres.js",
     description: "PostgreSQL LISTEN/NOTIFY via @queuert/postgres with the postgres-js client.",
     runtime: "Node.js",
@@ -474,9 +414,7 @@ export const examples: Example[] = [
     guide: notifyPostgres,
   },
   {
-    name: "notify-postgres-bun-sql",
-    category: "notify",
-    page: "notify-adapters",
+    name: "postgresql/notify-bun-sql",
     label: "LISTEN/NOTIFY · Bun.SQL",
     description:
       "PostgreSQL LISTEN/NOTIFY via @queuert/postgres using Bun's built-in SQL client — no external PostgreSQL dependencies.",
@@ -486,9 +424,7 @@ export const examples: Example[] = [
     guide: notifyPostgres,
   },
   {
-    name: "notify-nats-transport-node",
-    category: "notify",
-    page: "notify-adapters",
+    name: "postgresql/notify-nats",
     label: "NATS",
     description: "NATS core pub/sub notifications.",
     runtime: "Node.js",
@@ -497,9 +433,7 @@ export const examples: Example[] = [
     guide: notifyNats,
   },
   {
-    name: "notify-ipc",
-    category: "notify",
-    page: "notify-adapters",
+    name: "ipc/notify",
     label: "IPC",
     description:
       "IPC notifications via @queuert/ipc between a main process and a forked worker process sharing one SQLite database file through a synchronous SqliteStateProvider.",
@@ -509,289 +443,7 @@ export const examples: Example[] = [
     guide: notifyIpc,
   },
   {
-    name: "notify-custom-memory",
-    category: "notify",
-    page: "notify-adapters",
-    label: "custom · in memory",
-    description:
-      "A NotifyAdapter written from scratch that delivers notifications to listeners in the same process, validated by the notifyAdapterConformanceCases and notifyAdapterEndToEndConformanceCases from queuert/conformance.",
-    runtime: "Node.js",
-    services: [],
-    files: ["src/notify-adapter.ts", "src/notify-adapter.spec.ts", "src/index.ts"],
-    guide: notifyCustom,
-  },
-  {
-    name: "showcase-onboarding",
-    category: "patterns",
-    page: "building-chains",
-    label: "onboarding",
-    description:
-      "The home page's provision-account → send-welcome-email → sync-to-crm chain, runnable end to end with Drizzle.",
-    runtime: "Node.js",
-    services: ["PostgreSQL"],
-    files: ["src/index.ts"],
-    scenarios: ["Typed continueWith", "Transactional createChain", "complete in your transaction"],
-  },
-  {
-    name: "showcase-chain-patterns",
-    category: "patterns",
-    page: "building-chains",
-    label: "continueWith",
-    description: "Chain execution patterns through a subscription lifecycle.",
-    runtime: "Node.js",
-    services: ["PostgreSQL"],
-    files: ["src/index.ts"],
-    scenarios: ["Linear", "Branched", "Loops", "Go-to"],
-    guide: { title: "Chain Patterns", href: "/guides/chain-patterns/" },
-  },
-  {
-    name: "showcase-blockers",
-    category: "patterns",
-    page: "building-chains",
-    label: "blockers",
-    description: "Jobs that depend on other chains completing before they start.",
-    runtime: "Node.js",
-    services: ["PostgreSQL"],
-    files: ["src/index.ts"],
-    scenarios: ["Fan-out/fan-in", "Fixed slots", "Blocker by ID"],
-    guide: { title: "Job Blockers", href: "/guides/job-blockers/" },
-  },
-  {
-    name: "showcase-chain-awaiting",
-    category: "patterns",
-    page: "building-chains",
-    label: "awaitChain",
-    description: "Waiting for chain completion using polling and notification.",
-    runtime: "Node.js",
-    services: ["PostgreSQL"],
-    files: ["src/index.ts"],
-    scenarios: ["Basic awaiting", "Parallel awaiting", "Timeout handling", "Abort signal"],
-    guide: { title: "Awaiting Chains", href: "/guides/chain-awaiting/" },
-  },
-  {
-    name: "showcase-workerless",
-    category: "patterns",
-    page: "building-chains",
-    label: "completeChain",
-    description: "Completing jobs externally without a worker, via completeChain.",
-    runtime: "Node.js",
-    services: ["PostgreSQL"],
-    files: ["src/index.ts"],
-    scenarios: [
-      "Approval workflow: an external API completes the job.",
-      "Deferred start with early completion: a scheduled timeout that an early action can preempt.",
-    ],
-    guide: { title: "Completing Without a Worker", href: "/guides/workerless-completion/" },
-  },
-  {
-    name: "showcase-scheduling",
-    category: "patterns",
-    page: "scheduling",
-    label: "schedule",
-    description: "Recurring job patterns without external cron.",
-    runtime: "Node.js",
-    services: ["PostgreSQL"],
-    files: ["src/index.ts"],
-    scenarios: [
-      "Recurring jobs that start a new chain with a scheduled delay.",
-      "Deduplication of recurring job instances.",
-      "Triggering a future-scheduled job early with rescheduleJob.",
-      "Rescheduling from a handler with complete({ reschedule }).",
-    ],
-    guide: { title: "Scheduling", href: "/guides/scheduling/" },
-  },
-  {
-    name: "showcase-slices",
-    category: "patterns",
-    page: "app-structure",
-    label: "feature slices",
-    description:
-      "Job types and processors organized in feature slices and merged into one client and worker, with cross-slice blockers.",
-    runtime: "Node.js",
-    services: ["PostgreSQL"],
-    files: [
-      "src/slice-orders-definitions.ts",
-      "src/slice-orders-processors.ts",
-      "src/slice-notifications-definitions.ts",
-      "src/slice-notifications-processors.ts",
-      "src/client.ts",
-      "src/index.ts",
-    ],
-    scenarios: [
-      "Independent slices: each slice's chains run in isolation.",
-      "Fire-and-forget: an order processor starts a notification chain from the other slice.",
-      "Cross-slice blockers: external references let one slice declare blockers from another.",
-    ],
-    guide: { title: "Feature Slices", href: "/guides/slices/" },
-  },
-  {
-    name: "showcase-middleware",
-    category: "patterns",
-    page: "app-structure",
-    label: "attemptMiddleware",
-    description:
-      "A multi-tenant billing worker whose cross-cutting concerns live in AttemptMiddleware rather than in each handler: an attempt-scoped log, the tenant row loaded before the handler runs, and a meter() that records billable units in the handler's transaction.",
-    runtime: "Node.js",
-    services: ["PostgreSQL"],
-    files: ["src/index.ts"],
-    scenarios: [
-      "Happy path: logging, tenant loading and metering wrap each handler.",
-      "Failed attempt: the first send-receipt attempt fails after metering inside its complete transaction; the usage record rolls back and the unit committed earlier is deduplicated instead of billed twice.",
-    ],
-    guide: { title: "Job Attempt Middleware", href: "/guides/middleware/" },
-  },
-  {
-    name: "showcase-error-recovery",
-    category: "patterns",
-    page: "reliability",
-    label: "error recovery",
-    description: "Queuert's engine-level error recovery guarantees.",
-    runtime: "Node.js",
-    services: ["PostgreSQL"],
-    files: ["src/index.ts"],
-    scenarios: [
-      "CHECK constraint violation in the handler's transaction: rolls back together with complete.",
-      "A throw after complete inside the transaction: everything rolls back.",
-      "A throw after the transaction committed: the completion is kept.",
-      "A failed external call before the transaction opens.",
-      "lastAttemptError inspection on retry.",
-    ],
-    guide: { title: "Job Processing Reliability", href: "/how-it-works/processing-reliability/" },
-  },
-  {
-    name: "showcase-error-handling",
-    category: "patterns",
-    page: "reliability",
-    label: "errors",
-    description: "Error handling patterns in chains.",
-    runtime: "Node.js",
-    services: ["PostgreSQL"],
-    files: ["src/index.ts"],
-    scenarios: [
-      "Discriminated unions",
-      "Compensation pattern",
-      "Automatic backoff on thrown errors with lastAttemptError",
-    ],
-    guide: { title: "Error Handling", href: "/guides/error-handling/" },
-  },
-  {
-    name: "showcase-timeouts",
-    category: "patterns",
-    page: "reliability",
-    label: "lease",
-    description: "Timeout patterns for job processing.",
-    runtime: "Node.js",
-    services: ["PostgreSQL"],
-    files: ["src/index.ts"],
-    scenarios: [
-      "Cooperative timeout via AbortController composed with the job signal.",
-      "A job that outlasts the worker lease and completes while the heartbeat renews it.",
-    ],
-    guide: { title: "Timeouts", href: "/guides/timeouts/" },
-  },
-  {
-    name: "showcase-signals",
-    category: "patterns",
-    page: "reliability",
-    label: "signal",
-    description: "Abort signal patterns for job processing.",
-    runtime: "Node.js",
-    services: ["PostgreSQL"],
-    files: ["src/index.ts"],
-    scenarios: [
-      "Graceful shutdown: the handler stops on signal and completes with partial results.",
-      "External completion via completeChain: the running handler stops and the worker discards its attempt.",
-    ],
-    guide: { title: "Worker Runner", href: "/how-it-works/worker-runner/" },
-  },
-  {
-    name: "showcase-multiworker-prioritization",
-    category: "patterns",
-    page: "operations",
-    label: "partitioned workers",
-    description:
-      "Reserving worker capacity for an urgent workload by partitioning job types across workers. Queuert has no built-in priority field — prioritization is a consequence of giving an urgent workload its own worker whose slots cannot be consumed by bulk work.",
-    runtime: "Node.js",
-    services: ["PostgreSQL"],
-    files: ["src/index.ts"],
-    scenarios: [
-      "Reserved capacity: the urgent worker is isolated from the bulk backlog.",
-      "Cross-worker chain handoff.",
-    ],
-    guide: { title: "Prioritization", href: "/guides/prioritization/" },
-  },
-  {
-    name: "showcase-queries",
-    category: "patterns",
-    page: "operations",
-    label: "queries",
-    description: "Read-only query methods for inspecting chains, jobs and workers.",
-    runtime: "Node.js",
-    services: ["PostgreSQL"],
-    files: ["src/index.ts"],
-    scenarios: [
-      "Single lookups with type narrowing",
-      "Batch lookups",
-      "Type discovery",
-      "Per-status type counts",
-      "Paginated lists",
-      "Jobs within a chain ordered by chain index",
-      "Tail job of a batch of chains",
-      "Blocker queries from both directions",
-      "Worker lookups, counts and lists",
-    ],
-    guide: { title: "Job, Chain & Worker Queries", href: "/guides/queries/" },
-  },
-  {
-    name: "showcase-chain-deletion",
-    category: "patterns",
-    page: "operations",
-    label: "deleteChains",
-    description: "Deleting chains with blocker safety checks.",
-    runtime: "Node.js",
-    services: ["PostgreSQL"],
-    files: ["src/index.ts"],
-    scenarios: [
-      "Simple deletion, and idempotent re-deletion with deleteChain",
-      "Blocker safety",
-      "Co-deletion",
-    ],
-    guide: { title: "Chain Deletion", href: "/guides/chain-deletion/" },
-  },
-  {
-    name: "showcase-cleanup",
-    category: "patterns",
-    page: "operations",
-    label: "cleanup job",
-    description:
-      "Automatic cleanup of completed chains implemented as a Queuert job type — batched deletion with cursor pagination, and idempotent rescheduling via deduplication.",
-    runtime: "Node.js",
-    services: ["PostgreSQL"],
-    files: ["src/index.ts"],
-    guide: { title: "Cleanup", href: "/guides/cleanup/" },
-  },
-  {
-    name: "showcase-application-migrations",
-    category: "patterns",
-    page: "operations",
-    label: "createPgMigrator",
-    description:
-      "Running your application's own migrations with the experimental migrator from @queuert/postgres.",
-    runtime: "Node.js",
-    services: ["PostgreSQL"],
-    files: ["src/index.ts"],
-    scenarios: [
-      "Transactional and non-transactional migrations, including a batched backfill",
-      "Several processes migrating at once",
-      "An after hook that logs every run",
-      "Reverting with migrateTo, down to a named migration and then with migrateTo(null)",
-    ],
-    guide: { title: "Application Migrations", href: "/guides/application-migrations/" },
-  },
-  {
-    name: "log-console",
-    category: "logging",
-    page: "logging-observability",
+    name: "log/console",
     label: "createConsoleLog",
     description: "Queuert's built-in createConsoleLog() for simple console output.",
     runtime: "Node.js",
@@ -800,9 +452,7 @@ export const examples: Example[] = [
     guide: logging,
   },
   {
-    name: "log-pino",
-    category: "logging",
-    page: "logging-observability",
+    name: "log/pino",
     label: "Pino",
     description:
       "Pino integration for structured logging, with per-job contextual loggers injected via attemptMiddleware.",
@@ -812,9 +462,7 @@ export const examples: Example[] = [
     guide: logging,
   },
   {
-    name: "log-winston",
-    category: "logging",
-    page: "logging-observability",
+    name: "log/winston",
     label: "Winston",
     description:
       "Winston integration for structured logging, with per-job contextual loggers injected via attemptMiddleware.",
@@ -824,9 +472,7 @@ export const examples: Example[] = [
     guide: logging,
   },
   {
-    name: "validation-zod",
-    category: "validation",
-    page: "validation",
+    name: "validation/zod",
     label: "Zod",
     description:
       "Custom validation adapter backed by Zod — covers nominal (by type name) and structural (by input shape) reference validation.",
@@ -836,9 +482,7 @@ export const examples: Example[] = [
     guide: validationAdapters,
   },
   {
-    name: "validation-valibot",
-    category: "validation",
-    page: "validation",
+    name: "validation/valibot",
     label: "Valibot",
     description:
       "Custom validation adapter backed by Valibot — covers nominal (by type name) and structural (by input shape) reference validation.",
@@ -848,9 +492,7 @@ export const examples: Example[] = [
     guide: validationAdapters,
   },
   {
-    name: "validation-typebox",
-    category: "validation",
-    page: "validation",
+    name: "validation/typebox",
     label: "TypeBox",
     description:
       "Custom validation adapter backed by TypeBox — covers nominal (by type name) and structural (by input shape) reference validation.",
@@ -860,9 +502,7 @@ export const examples: Example[] = [
     guide: validationAdapters,
   },
   {
-    name: "validation-arktype",
-    category: "validation",
-    page: "validation",
+    name: "validation/arktype",
     label: "ArkType",
     description:
       "Custom validation adapter backed by ArkType — covers nominal (by type name) and structural (by input shape) reference validation.",
@@ -872,9 +512,7 @@ export const examples: Example[] = [
     guide: validationAdapters,
   },
   {
-    name: "codec-zod",
-    category: "validation",
-    page: "validation",
+    name: "validation/codec-zod",
     label: "Zod codecs",
     description:
       "Zod 4 codec adapter — carries a Date through a chain while storing it as an ISO string, so handlers and client reads see runtime types and the database stays JSON-safe.",
@@ -884,9 +522,7 @@ export const examples: Example[] = [
     guide: validationAdapters,
   },
   {
-    name: "codec-superjson",
-    category: "validation",
-    page: "validation",
+    name: "validation/codec-superjson",
     label: "superjson",
     description:
       "superjson codec adapter — one codec for every job type carries Date, Map, Set and bigint through a chain, with job types declared as plain TypeScript types.",
@@ -896,29 +532,20 @@ export const examples: Example[] = [
     guide: validationAdapters,
   },
   {
-    name: "observability-otel",
-    category: "observability",
-    page: "logging-observability",
+    name: "observability/otel",
     label: "@queuert/otel",
     description: "@queuert/otel wiring for distributed tracing and metrics, viewed in otel-tui.",
     runtime: "Node.js",
     services: [],
     files: ["src/observability.ts", "src/index.ts"],
-    scenarios: [
-      "A single job, a chain of continuations, and a fan-out/fan-in with blockers.",
-      "Work in the handler's own transactions, a retried job, and a workerless completion.",
-    ],
     commands: [
       { label: "Terminal 1: OTLP receiver", script: "tui" },
       { label: "Terminal 2: example", script: "start" },
     ],
-    requires: "otel-tui",
     guide: { title: "OpenTelemetry", href: "/integrations/opentelemetry/" },
   },
   {
-    name: "dashboard",
-    category: "observability",
-    page: "logging-observability",
+    name: "observability/dashboard",
     label: "@queuert/dashboard",
     description:
       "@queuert/dashboard embedded as a fetch handler with Node's built-in HTTP server. Run the populator to generate chains, jobs and workers, browse them through the web UI.",
@@ -949,14 +576,13 @@ export const exampleUrl = (name: string) =>
 export const exampleFileUrl = (name: string, file: string) =>
   `https://github.com/kvet/queuert/blob/main/examples/${name}/${file}`;
 
-export const exampleHref = (example: Example) => `/examples/${example.page}/#${example.name}`;
-
-export const examplePageHref = (slug: ExamplePageSlug) => `/examples/${slug}/`;
+/** The example's directory under `examples/` with `/` replaced by `-`: its anchor id and package name suffix. */
+export const exampleSlug = (name: string) => name.replaceAll("/", "-");
 
 export const exampleCommands = (example: Example): { label?: string; command: string }[] =>
   (example.commands ?? [{ script: "start" }]).map((command) => ({
     label: "label" in command ? command.label : undefined,
-    command: `pnpm --filter example-${example.name} ${command.script}`,
+    command: `pnpm --filter example-${exampleSlug(example.name)} ${command.script}`,
   }));
 
 export const findExample = (name: string): Example => {

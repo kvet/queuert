@@ -25,7 +25,7 @@ const Page = () => (
     <p>Requires NATS 2.2 or later.</p>
 
     <h2 id="setup">Setup</h2>
-    <ExampleCode example="notify-nats-transport-node" file="src/index.ts" region="setup" />
+    <ExampleCode example="postgresql/notify-nats" file="src/index.ts" region="setup" />
     <p>
       The connection and the notify adapter are held with <code>await using</code>, so when the
       scope ends the notify adapter closes before the connection, in the{" "}
@@ -57,11 +57,7 @@ const Page = () => (
       and is a working template. To run it under another test runner, see{" "}
       <A href="/integrations/notify-adapters/custom/#conformance">Custom Notify Adapter</A>.
     </p>
-    <ExampleCode
-      example="notify-nats-transport-node"
-      file="src/adapter.spec.ts"
-      region="conformance"
-    />
+    <ExampleCode example="postgresql/notify-nats" file="src/adapter.spec.ts" region="conformance" />
 
     <h2 id="subjects">Subjects</h2>
     <p>
@@ -102,7 +98,7 @@ const Page = () => (
     </p>
 
     <h2 id="examples">Examples</h2>
-    <ExampleRows title="@queuert/nats" names={["notify-nats-transport-node"]} />
+    <ExampleRows title="@queuert/nats" names={["postgresql/notify-nats"]} />
   </>
 );
 

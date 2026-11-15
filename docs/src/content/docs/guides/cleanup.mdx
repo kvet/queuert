@@ -1,0 +1,66 @@
+---
+title: Cleanup
+description: How to implement automatic cleanup of completed chains.
+sidebar:
+  order: 15
+---
+
+Without cleanup, the job table grows unboundedly as completed chains accumulate. This guide shows how to implement cleanup as a regular Queuert job — listing completed chains older than a cutoff date, deleting them in batches using cursor pagination, and scheduling the next run.
+
+## Define a Cleanup Job Type
+
+Cleanup is an entry job type with no input and no output; each run schedules the next one as a new chain:
+
+<ExampleCode example="guides" file="src/cleanup.ts" region="job-types" />
+
+## Write the Processor
+
+The processor lists the completed chains of every type in batches, deletes each batch in its own transaction, and completes by scheduling the next run:
+
+<ExampleCode example="guides" file="src/cleanup.ts" region="processor" />
+
+The example sets `CLEANUP_RETENTION_MS` to `0`, `CLEANUP_BATCH_SIZE` to `2` and `CLEANUP_INTERVAL_MS` to one minute so it finishes in a moment; a production deployment keeps chains for days, deletes around 100 chains per batch and runs hourly.
+
+Key patterns used:
+
+- **Retention cutoff** — `CLEANUP_RETENTION_MS` controls how long completed chains are kept before deletion
+- **Per-type iteration** — iterates over all chain type names so each type's completed chains are cleaned up independently
+- **Status-filtered listing** — `status: "completed"` with `orderBy: "completedAt"` pushes filtering to the database and orders by completion time, so the oldest-completed chains are deleted first
+- **Independent chains only** — `independent: true` skips chains that a job in another chain still references as a blocker, which [`deleteChains` rejects](../chain-deletion/#blocker-safety)
+- **Cursor pagination** — processes chains in bounded batches using `listChains` cursor, preventing unbounded memory usage
+- **Stabilization loop** — repeats the full pass until a round deletes zero chains, so chains that become independent after their dependents are removed get cleaned up in subsequent rounds
+- **Batched transactions** — each batch of deletions runs in its own short transaction, so the handler never holds a single long-lived transaction
+- **Fenced batches** — `fence` at the start of each batch transaction keeps the attempt's ownership until that batch commits, so once the attempt is lost its next batch throws before deleting anything; see [`fence`](/queuert/how-it-works/job-processing/#fence)
+- **Graceful shutdown** — checks `signal.aborted` before each batch; when the worker is stopping, reschedules the job immediately so a fresh worker can resume cleanup
+- **`deduplication`** with `scope: "running"` — ensures only one cleanup chain is active at a time
+- **Complete before scheduling** — `complete({ output: null })` applies the completion inside the same transaction, so the next run is created against an already-completed chain and does not deduplicate against the one finishing
+- **`schedule`** — defers the next run by `CLEANUP_INTERVAL_MS`
+
+## Merge and Start
+
+Compose the cleanup slice with your application slices by passing arrays. The client takes both job type registries:
+
+<ExampleCode example="guides" file="src/cleanup.ts" region="merge-client" />
+
+The worker runner takes both processor registries:
+
+<ExampleCode example="guides" file="src/cleanup.ts" region="merge-worker" />
+
+## Schedule the First Run
+
+Schedule the initial cleanup at application startup. Deduplication makes this idempotent: while a cleanup chain is running, including a next run that is scheduled but not yet started, calling it again returns that chain:
+
+<ExampleCode example="guides" file="src/cleanup.ts" region="schedule-first-run" />
+
+After the first run completes, the cleanup job automatically schedules its next run.
+
+## Customization Ideas
+
+Since this is your own job type, you can adapt the logic freely:
+
+- **Per-type retention** — filter by `typeName` and apply different cutoff dates
+- **Archive instead of delete** — copy chain data to an archive table before deleting
+- **Metrics** — emit the number of deleted chains to your observability system
+- **Alerting** — when the deletion count exceeds a threshold, throw from the handler so the attempt is rescheduled, or emit an alert
+
+See [examples/guides/src/cleanup.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/cleanup.ts) for the runnable code. See also [Scheduling](../scheduling/) for recurring job patterns, [Chain Deletion](../chain-deletion/) for blocker safety, and [Feature Slices](../slices/) for merging registries.

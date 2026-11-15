@@ -4,7 +4,7 @@
 
 import { createRedisStateAdapter } from "@queuert/redis";
 import { RedisContainer } from "@testcontainers/redis";
-import { createNodeRedisStateProvider } from "example-state-redis-redis/provider";
+import { createNodeRedisStateProvider } from "example-redis-state-redis/provider";
 import { createClient, createWorkerRunner, createProcessors } from "queuert";
 import { type RedisClientType, createClient as createRedisClient } from "redis";
 

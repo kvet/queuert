@@ -4,7 +4,7 @@
 
 import { createRedisNotifyAdapter } from "@queuert/redis";
 import { RedisContainer } from "@testcontainers/redis";
-import { createNodeRedisNotifyProvider } from "example-notify-redis-redis/provider";
+import { createNodeRedisNotifyProvider } from "example-postgresql-notify-redis-redis/provider";
 import {
   createClient,
   createWorkerRunner,

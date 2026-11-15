@@ -1,0 +1,168 @@
+/**
+ * Runtime Validation with ArkType Example
+ *
+ * This example demonstrates how to use ArkType for runtime validation of job types.
+ * It shows:
+ * 1. Creating an ArkType-based job type jobTypes
+ * 2. Nominal reference validation (by type name)
+ * 3. Structural reference validation (by input shape)
+ */
+
+import { createSqliteStateAdapter } from "@queuert/sqlite";
+import { type } from "arktype";
+import Database from "better-sqlite3";
+import { createBetterSqlite3StateProvider } from "example-sqlite-state-better-sqlite3/provider";
+import { createClient, createWorkerRunner, createProcessors } from "queuert";
+
+import { createArkTypeJobTypes } from "./arktype-adapter.ts";
+
+// #region usage
+// Define job types with ArkType schemas
+const jobTypes = createArkTypeJobTypes({
+  // Entry point with nominal continuation validation
+  "fetch-data": {
+    entry: true,
+    input: type({
+      url: "string.url",
+      "headers?": "Record<string, string>",
+    }),
+    // Nominal validation: validates by type name
+    continueWith: type({
+      typeName: "'process-data'",
+    }),
+  },
+
+  // Continuation job
+  "process-data": {
+    input: type({
+      data: "unknown",
+    }),
+    output: type({
+      processed: "boolean",
+      itemCount: "number",
+    }),
+  },
+
+  // Entry point with structural blocker validation
+  "batch-process": {
+    entry: true,
+    input: type({
+      batchId: "string",
+    }),
+    output: type({
+      success: "boolean",
+    }),
+    // Structural validation: any blocker with { token: string } input is valid
+    blockers: type({
+      input: { token: "string" },
+    }).array(),
+  },
+
+  // Auth job - can be used as blocker due to structural match
+  auth: {
+    entry: true,
+    input: type({
+      token: "string",
+    }),
+    output: type({
+      userId: "string",
+    }),
+  },
+});
+// #endregion
+
+// Create queuert client with the jobTypes
+using drivers = new DisposableStack();
+const db = drivers.adopt(new Database(":memory:"), (db) => {
+  db.close();
+});
+using stateAdapter = createSqliteStateAdapter({
+  stateProvider: createBetterSqlite3StateProvider({ db }),
+});
+stateAdapter.migrateToLatest();
+
+const client = createClient({ stateAdapter, jobTypes });
+
+// Create and start worker runner with job type processors
+await using workerRunner = createWorkerRunner({
+  client,
+  processors: createProcessors({
+    client,
+    jobTypes,
+    processors: {
+      "fetch-data": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`Fetching data from ${job.input.url}`);
+          const data = { items: [1, 2, 3], source: job.input.url };
+
+          return stateAdapter.withTransaction((ctx) =>
+            complete({
+              ...ctx,
+              continueWith: {
+                typeName: "process-data",
+                input: { data },
+              },
+            }),
+          );
+        },
+      },
+      "process-data": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log("Processing data:", job.input.data);
+          const data = job.input.data as { items: number[] };
+
+          return stateAdapter.withTransaction((ctx) =>
+            complete({
+              ...ctx,
+              output: {
+                processed: true,
+                itemCount: data.items?.length ?? 0,
+              },
+            }),
+          );
+        },
+      },
+      "batch-process": {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`Processing batch ${job.input.batchId}`);
+          console.log("Blockers completed:", job.blockers.length);
+
+          return stateAdapter.withTransaction((ctx) =>
+            complete({ ...ctx, output: { success: true } }),
+          );
+        },
+      },
+      auth: {
+        attemptHandler: async ({ job, complete }) => {
+          console.log(`Authenticating with token: ${job.input.token.substring(0, 8)}...`);
+
+          return stateAdapter.withTransaction((ctx) =>
+            complete({
+              ...ctx,
+              output: {
+                userId: `user-${job.input.token.substring(0, 4)}`,
+              },
+            }),
+          );
+        },
+      },
+    },
+  }),
+});
+
+await workerRunner.start();
+
+// Run a chain
+console.log("\n=== Running fetch-data chain ===");
+const chain = stateAdapter.withTransaction((ctx) =>
+  client.createChain({
+    ...ctx,
+    typeName: "fetch-data",
+    input: { url: "https://api.example.com/data" },
+  }),
+);
+
+const result = await client.awaitChain(chain, { timeoutMs: 5000 });
+console.log("Chain completed:", result.output);
+
+console.log("\n=== Done ===");

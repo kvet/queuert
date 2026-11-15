@@ -1,0 +1,56 @@
+---
+title: Chain Deletion
+description: Delete chains with blocker safety.
+sidebar:
+  order: 13
+---
+
+import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/diagram";
+
+Chains can be deleted using `deleteChains` (plural) or `deleteChain` (singular). All jobs in the chain, its head job and continuations, are removed together:
+
+<ExampleCode example="guides" file="src/chain-deletion.ts" region="delete" />
+
+When a deleted chain has a running job, its `complete` throws `JobNotFoundError`. The attempt is also notified as lost, and its handler's `signal` aborts once the notification reaches the worker runner, which happens when the runner was built from the deleting client or both share a notify adapter. If the attempt is inside a [fenced](/queuert/how-it-works/job-processing/#fence) transaction, the delete waits for it to end, except on Redis, where the transaction that commits second runs again rather than waiting.
+
+Use `deleteChain` to target a single chain — it returns the deleted chain or `undefined` if no chain with that ID exists. `deleteChains` silently skips missing IDs and returns the chains that were actually deleted. Both calls are idempotent: deleting the same chain again returns `undefined` from `deleteChain` and `[]` from `deleteChains`:
+
+<ExampleCode example="guides" file="src/chain-deletion.ts" region="delete-single" />
+
+## Blocker Safety
+
+<Diagram label="Two fetch-data chains block generate-report; deleting a fetch-data chain alone is rejected, deleting all three together succeeds">
+  <Group title="one deleteChains call" dashed>
+    <Flow>
+      <Rows spine="end" columns="auto minmax(2.5rem, auto)">
+        <Flow>
+          <Node status="completed">fetch-data #1</Node>
+          <Arrow head="none" />
+        </Flow>
+        <Flow>
+          <Node status="completed">fetch-data #2</Node>
+          <Arrow head="none" />
+        </Flow>
+      </Rows>
+      <Node status="completed">generate-report</Node>
+    </Flow>
+  </Group>
+</Diagram>
+
+Before deleting, the system checks whether any external chain depends on the target chains as blockers. "External" means the dependent job's own chain is not in the deletion set. This prevents orphaning blocked chains that would never unblock. Deleting a `fetch-data` chain on its own is rejected with `BlockerReferenceError`, because `generate-report` still references it:
+
+<ExampleCode example="guides" file="src/chain-deletion.ts" region="blocker-safety" />
+
+## Deleting a Chain with Its Blockers
+
+Deletion never follows blocker relationships on its own. To remove a chain together with the chains it waits on, collect its blocker chains with `getJobBlockers` and pass them in the same `deleteChains` call:
+
+<ExampleCode example="guides" file="src/chain-deletion.ts" region="co-delete" />
+
+`getJobBlockers` takes a job ID: a chain's head job has the chain's ID, and a continuation declared with its own `blockers` has to be queried separately (list the chain's jobs with `listChainJobs`). Repeat the lookup on each blocker chain to reach blockers of blockers. If any chain in the set is still a blocker of a job outside it — for example, a blocker shared with another report — the call throws `BlockerReferenceError` and deletes nothing; leave that chain out, or add its dependents to the set.
+
+## What Gets Deleted
+
+Given a list of `ids`, the operation deletes all jobs in each chain (every job where `job.chainId` matches a provided ID, including the head and continuations), together with the blocker references those jobs hold on other chains. References pointing at a deleted chain from a job outside the deletion set are never removed — they make the whole deletion fail.
+
+See [examples/guides/src/chain-deletion.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/chain-deletion.ts) for the runnable code. See also [Tx Hooks](../tx-hooks/) and [Job Blockers](../job-blockers/).

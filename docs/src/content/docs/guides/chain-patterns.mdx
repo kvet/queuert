@@ -14,54 +14,33 @@ Chains support various execution patterns via `continueWith`:
 - [Loop](#loops) — `continueWith` returns the same type until a terminal output
 - [Go-to](#go-to) — `continueWith` jumps to a different type, skipping intermediates
 
+A subscription lifecycle uses all four. Each job type lists the types it may continue with, and a type that declares `output` can end the chain:
+
+<ExampleCode example="guides" file="src/chain-patterns.ts" region="types" />
+
 ## Linear
 
-<Diagram label="Linear chain: create-subscription continues with activate-trial">
+<Diagram label="Linear chain: activate-trial continues with trial-decision">
   <Flow>
-    <Node>create-subscription</Node>
-    <Arrow label="continueWith" />
     <Node>activate-trial</Node>
+    <Arrow label="continueWith" />
+    <Node>trial-decision</Node>
   </Flow>
 </Diagram>
 
-Jobs execute one after another: `create-subscription -> activate-trial`
+Jobs execute one after another: `activate-trial` marks the subscription as on trial and continues with `trial-decision` in the same transaction:
 
-```ts
-const jobTypes = defineJobTypes<{
-  'create-subscription': {
-    entry: true;
-    input: { userId: string; planId: string };
-    continueWith: { typeName: 'activate-trial' };
-  };
-  'activate-trial': {
-    input: { subscriptionId: number; trialDays: number };
-    continueWith: { typeName: 'trial-decision' };
-  };
-}>();
-
-// In processor
-'create-subscription': {
-  attemptHandler: async ({ job, complete }) => {
-    return withTxHooks(async (txHooks) => sql.begin(async (txSql) => {
-      const [sub] = await txSql`INSERT INTO subscriptions ... RETURNING id`;
-      return complete({ txSql, txHooks, continueWith: {
-        typeName: "activate-trial",
-        input: { subscriptionId: sub.id, trialDays: 7 },
-      }});
-    }));
-  },
-},
-```
+<ExampleCode example="guides" file="src/chain-patterns.ts" region="linear" />
 
 ## Branched
 
-<Diagram label="Branched chain: trial-decision continues with either convert-to-paid or expire-trial">
+<Diagram label="Branched chain: trial-decision continues with either charge-billing or expire-trial">
   <Flow>
     <Node>trial-decision</Node>
     <Rows spine>
       <Flow>
         <Arrow />
-        <Node>convert-to-paid</Node>
+        <Node>charge-billing</Node>
       </Flow>
       <Flow>
         <Arrow />
@@ -71,27 +50,9 @@ const jobTypes = defineJobTypes<{
   </Flow>
 </Diagram>
 
-Jobs conditionally continue to different types: `trial-decision -> convert-to-paid | expire-trial`
+`trial-decision` declares a union in `continueWith` and picks one branch at runtime: a subscription with a card on file goes to billing, the rest expire:
 
-```ts
-'trial-decision': {
-  input: { subscriptionId: number };
-  continueWith: { typeName: 'convert-to-paid' | 'expire-trial' };  // Union type
-};
-
-// In processor - choose path based on condition
-'trial-decision': {
-  attemptHandler: async ({ job, complete }) => {
-    const shouldConvert = userWantsToConvert;
-    return withTxHooks(async (txHooks) => sql.begin(async (txSql) =>
-      complete({ txSql, txHooks, continueWith: {
-        typeName: shouldConvert ? "convert-to-paid" : "expire-trial",
-        input: { subscriptionId: job.input.subscriptionId },
-      }}),
-    ));
-  },
-},
-```
+<ExampleCode example="guides" file="src/chain-patterns.ts" region="branched" />
 
 ## Loops
 
@@ -105,33 +66,9 @@ Jobs conditionally continue to different types: `trial-decision -> convert-to-pa
   </Flow>
 </Diagram>
 
-Jobs continue to the same type: `charge-billing -> charge-billing -> ... -> done`
+`charge-billing` lists itself in `continueWith`, so each cycle continues with the next one until the last cycle completes with its terminal output. The first `if` is the jump covered in [Go-to](#go-to):
 
-```ts
-const jobTypes = defineJobTypes<{
-  'charge-billing': {
-    input: { subscriptionId: number; cycle: number };
-    output: { finalCycle: number; totalCharged: number };  // Terminal output
-    continueWith: { typeName: 'charge-billing' };  // Self-reference for looping
-  };
-}>();
-
-// In processor - loop or terminate with output
-'charge-billing': {
-  attemptHandler: async ({ job, complete }) => {
-    await chargePayment(job.input.subscriptionId);
-    return withTxHooks(async (txHooks) => sql.begin(async (txSql) => {
-      if (job.input.cycle < MAX_CYCLES) {
-        return complete({ txSql, txHooks, continueWith: {
-          typeName: "charge-billing",
-          input: { subscriptionId: job.input.subscriptionId, cycle: job.input.cycle + 1 },
-        }});
-      }
-      return complete({ txSql, txHooks, output: { finalCycle: job.input.cycle, totalCharged: calculateTotal() } });
-    }));
-  },
-},
-```
+<ExampleCode example="guides" file="src/chain-patterns.ts" region="loop" />
 
 ## Go-to
 
@@ -145,42 +82,12 @@ const jobTypes = defineJobTypes<{
   </Flow>
 </Diagram>
 
-Jobs jump to a different type mid-chain: `charge-billing -> cancel-subscription`
+Because `charge-billing` also lists `cancel-subscription`, any cycle can jump out of the loop. When the subscriber asked to cancel, the job continues with `cancel-subscription` and skips the remaining cycles:
 
-```ts
-const jobTypes = defineJobTypes<{
-  'charge-billing': {
-    input: { subscriptionId: number; cycle: number };
-    output: { finalCycle: number; totalCharged: number };
-    continueWith: { typeName: 'charge-billing' | 'cancel-subscription' };  // Loop or jump
-  };
-  'cancel-subscription': {
-    input: { subscriptionId: number; reason: string };
-    output: { cancelledAt: string };
-  };
-}>();
-
-// In processor - jump to cancel when max cycles reached
-'charge-billing': {
-  attemptHandler: async ({ job, complete }) => {
-    return withTxHooks(async (txHooks) => sql.begin(async (txSql) => {
-      if (job.input.cycle >= MAX_CYCLES) {
-        return complete({ txSql, txHooks, continueWith: {
-          typeName: "cancel-subscription",
-          input: { subscriptionId: job.input.subscriptionId, reason: "max_billing_cycles_reached" },
-        }});
-      }
-      return complete({ txSql, txHooks, continueWith: {
-        typeName: "charge-billing",
-        input: { subscriptionId: job.input.subscriptionId, cycle: job.input.cycle + 1 },
-      }});
-    }));
-  },
-},
-```
+<ExampleCode example="guides" file="src/chain-patterns.ts" region="go-to" />
 
 ## Continuation References
 
 All examples above use **nominal references** — `{ typeName: "..." }`. Queuert also supports **structural references** (`{ input: {...} }`) that match any job type with a compatible input shape, enabling loose coupling. See [Job Type References](/queuert/how-it-works/job-type-references/) for details and examples.
 
-See [examples/showcase-chain-patterns](https://github.com/kvet/queuert/tree/main/examples/showcase-chain-patterns) for a complete working example demonstrating all four patterns through a subscription lifecycle workflow. See also [Job Blockers](../job-blockers/) for parallel dependencies and [Chain Model](/queuert/how-it-works/chain-model/) reference.
+See [examples/guides/src/chain-patterns.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/chain-patterns.ts) for the runnable code. See also [Job Blockers](../job-blockers/) for parallel dependencies and [Chain Model](/queuert/how-it-works/chain-model/) for how chains and their jobs are modelled.

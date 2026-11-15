@@ -1,0 +1,298 @@
+import { createSqliteStateAdapter } from "@queuert/sqlite";
+import Database from "better-sqlite3";
+import { createBetterSqlite3StateProvider } from "example-sqlite-state-better-sqlite3/provider";
+import { createClient, createWorkerRunner, createProcessors } from "queuert";
+import {
+  type ValidationAdapterConformanceContext,
+  validationAdapterConformanceCases,
+} from "queuert/conformance";
+import { describe, expect, test } from "vitest";
+import { z } from "zod";
+
+import { createZodCodecJobTypes } from "./zod-codec-adapter.ts";
+
+const zDate = z.codec(z.iso.datetime(), z.date(), {
+  decode: (iso) => new Date(iso),
+  encode: (date) => date.toISOString(),
+});
+
+const buildJobTypes = () =>
+  createZodCodecJobTypes({
+    remind: {
+      entry: true,
+      input: z.object({ sendAt: zDate }),
+      output: z.object({ sentAt: zDate }),
+    },
+  });
+
+const createStateAdapter = () => {
+  const stateAdapter = createSqliteStateAdapter({
+    stateProvider: createBetterSqlite3StateProvider({
+      db: new Database(":memory:"),
+    }),
+  });
+  stateAdapter.migrateToLatest();
+  return stateAdapter;
+};
+
+test("stores the encoded form and hands the runtime form to readers", () => {
+  const jobTypes = buildJobTypes();
+  using stateAdapter = createStateAdapter();
+  const client = createClient({ stateAdapter, jobTypes });
+
+  const sendAt = new Date("2024-06-01T09:00:00.000Z");
+  const chain = stateAdapter.withTransaction((ctx) =>
+    client.createChain({ ...ctx, typeName: "remind", input: { sendAt } }),
+  );
+
+  const [stored] = stateAdapter.getJobs({ jobIds: [chain.id] });
+  expect(stored?.input).toEqual({ sendAt: "2024-06-01T09:00:00.000Z" });
+
+  const job = client.getJob({ id: chain.id, typeName: "remind" });
+  expect(job?.input.sendAt).toBeInstanceOf(Date);
+});
+
+test("round-trips a Date through the worker and back out of a client read", async () => {
+  const jobTypes = buildJobTypes();
+  using stateAdapter = createStateAdapter();
+  const client = createClient({ stateAdapter, jobTypes });
+
+  const sentAt = new Date("2024-07-04T12:00:00.000Z");
+
+  await using workerRunner = createWorkerRunner({
+    client,
+    processors: createProcessors({
+      client,
+      jobTypes,
+      processors: {
+        remind: {
+          attemptHandler: async ({ job, complete }) => {
+            expect(job.input.sendAt).toBeInstanceOf(Date);
+            return stateAdapter.withTransaction((ctx) => complete({ ...ctx, output: { sentAt } }));
+          },
+        },
+      },
+    }),
+  });
+
+  const chain = stateAdapter.withTransaction((ctx) =>
+    client.createChain({
+      ...ctx,
+      typeName: "remind",
+      input: { sendAt: new Date("2024-06-01T09:00:00.000Z") },
+    }),
+  );
+
+  await workerRunner.start();
+  const result = await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 10 });
+
+  expect(result.output.sentAt).toEqual(sentAt);
+
+  const [stored] = stateAdapter.getJobs({ jobIds: [chain.id] });
+  expect(stored?.output).toEqual({ sentAt: "2024-07-04T12:00:00.000Z" });
+});
+
+test("rejects a schema whose encoded form is not JSON-serializable", () => {
+  createZodCodecJobTypes(
+    // @ts-expect-error z.date() persists a Date — it needs a codec to lower it to a string
+    {
+      remind: {
+        entry: true,
+        input: z.object({ sendAt: z.date() }),
+        output: z.object({ ok: z.boolean() }),
+      },
+    },
+  );
+});
+
+test("validates structural blockers against the runtime form", () => {
+  const jobTypes = createZodCodecJobTypes({
+    remind: {
+      entry: true,
+      input: z.object({ sendAt: zDate }),
+      output: z.object({ sentAt: zDate }),
+    },
+    digest: {
+      entry: true,
+      input: z.null(),
+      output: z.null(),
+      blockers: z.array(z.object({ input: z.object({ sendAt: z.date() }) })),
+    },
+  });
+  using stateAdapter = createStateAdapter();
+  const client = createClient({ stateAdapter, jobTypes });
+
+  const digest = stateAdapter.withTransaction((ctx) => {
+    const remind = client.createChain({
+      ...ctx,
+      typeName: "remind",
+      input: { sendAt: new Date("2024-06-01T09:00:00.000Z") },
+    });
+    return client.createChain({
+      ...ctx,
+      typeName: "digest",
+      input: null,
+      blockers: [{ id: remind.id }],
+    });
+  });
+
+  expect(digest.status).toBe("running");
+});
+
+describe("zod codec adapter conformance", () => {
+  const context: ValidationAdapterConformanceContext = {
+    basic: {
+      buildEntry: () =>
+        createZodCodecJobTypes({
+          main: {
+            entry: true,
+            input: z.object({ id: z.string() }),
+            output: z.object({ ok: z.boolean() }),
+          },
+        }),
+      buildNonEntry: () =>
+        createZodCodecJobTypes({
+          internal: {
+            input: z.object({ id: z.string() }),
+            output: z.object({ ok: z.boolean() }),
+          },
+        }),
+      buildContinuationOnly: () =>
+        createZodCodecJobTypes({
+          main: {
+            entry: true,
+            input: z.object({ id: z.string() }),
+            continueWith: z.object({ typeName: z.literal("next") }),
+          },
+          next: {
+            input: z.object({ data: z.string() }),
+            output: z.object({ done: z.boolean() }),
+          },
+        }),
+    },
+    continuations: {
+      buildNominal: () =>
+        createZodCodecJobTypes({
+          step1: {
+            entry: true,
+            input: z.object({ id: z.string() }),
+            continueWith: z.object({ typeName: z.literal("step2") }),
+          },
+          step2: {
+            input: z.object({ data: z.unknown() }),
+            output: z.object({ done: z.boolean() }),
+          },
+        }),
+      buildStructural: () =>
+        createZodCodecJobTypes({
+          router: {
+            entry: true,
+            input: z.object({ route: z.string() }),
+            continueWith: z.object({ input: z.object({ payload: z.string() }) }),
+          },
+          handler: {
+            input: z.object({ payload: z.string() }),
+            output: z.object({ handled: z.boolean() }),
+          },
+        }),
+    },
+    blockers: {
+      buildNominal: () =>
+        createZodCodecJobTypes({
+          main: {
+            entry: true,
+            input: z.object({ id: z.string() }),
+            output: z.object({ done: z.boolean() }),
+            blockers: z.array(z.object({ typeName: z.literal("auth") })),
+          },
+          auth: {
+            entry: true,
+            input: z.object({ token: z.string() }),
+            output: z.object({ userId: z.string() }),
+          },
+        }),
+      buildStructural: () =>
+        createZodCodecJobTypes({
+          main: {
+            entry: true,
+            input: z.object({ id: z.string() }),
+            output: z.object({ done: z.boolean() }),
+            blockers: z.array(z.object({ input: z.object({ token: z.string() }) })),
+          },
+          auth: {
+            entry: true,
+            input: z.object({ token: z.string() }),
+            output: z.object({ userId: z.string() }),
+          },
+        }),
+    },
+    external: {
+      buildWithExternalSlice: () => {
+        const notifications = createZodCodecJobTypes({
+          "notifications.send-notification": {
+            entry: true,
+            input: z.object({ userId: z.string(), message: z.string() }),
+            output: z.object({ sentAt: z.string() }),
+          },
+        });
+        return createZodCodecJobTypes(
+          {
+            "orders.place-order": {
+              entry: true,
+              input: z.object({ userId: z.string() }),
+              continueWith: z.object({ typeName: z.literal("orders.confirm-order") }),
+            },
+            "orders.confirm-order": {
+              input: z.object({ orderId: z.number() }),
+              output: z.object({ confirmedAt: z.string() }),
+              blockers: z.tuple([
+                z.object({ typeName: z.literal("notifications.send-notification") }),
+              ]),
+            },
+          },
+          notifications,
+        );
+      },
+      buildWithExternalSlices: () => {
+        const notifications = createZodCodecJobTypes({
+          "notifications.send-notification": {
+            entry: true,
+            input: z.object({ userId: z.string(), message: z.string() }),
+            output: z.object({ sentAt: z.string() }),
+          },
+        });
+        const payments = createZodCodecJobTypes({
+          "payments.charge": {
+            entry: true,
+            input: z.object({ amount: z.number() }),
+            output: z.object({ receiptId: z.string() }),
+          },
+        });
+        return createZodCodecJobTypes(
+          {
+            "orders.place-order": {
+              entry: true,
+              input: z.object({ userId: z.string() }),
+              continueWith: z.object({ typeName: z.literal("orders.confirm-order") }),
+            },
+            "orders.confirm-order": {
+              input: z.object({ orderId: z.number() }),
+              output: z.object({ confirmedAt: z.string() }),
+              blockers: z.tuple([
+                z.object({ typeName: z.literal("notifications.send-notification") }),
+                z.object({ typeName: z.literal("payments.charge") }),
+              ]),
+            },
+          },
+          [notifications, payments] as const,
+        );
+      },
+    },
+  };
+
+  for (const conformanceCase of validationAdapterConformanceCases) {
+    test(conformanceCase.title, async () => {
+      await conformanceCase.run(context);
+    });
+  }
+});

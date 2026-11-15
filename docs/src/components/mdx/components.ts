@@ -6,6 +6,7 @@ import {
   ApiFieldType,
   ApiSection,
 } from "../api/ApiFields.tsx";
+import { ExampleCode } from "../ExampleCode.tsx";
 import { Aside } from "./Aside.tsx";
 import { Code } from "./Code.tsx";
 import { SourceLink } from "./SourceLink.tsx";
@@ -20,6 +21,7 @@ export const mdxComponents = {
   ApiSection,
   Aside,
   Code,
+  ExampleCode,
   SourceLink,
   TableCell,
   TableRow,

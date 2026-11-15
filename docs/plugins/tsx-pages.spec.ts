@@ -183,9 +183,46 @@ describe("ExampleCode", () => {
     expect(code).toContain('code={"const script = 1;"}');
   });
 
+  it("reads an example nested in a stack directory", async () => {
+    mkdirSync(join(examplesDirectory, "postgresql/state-demo/src"), { recursive: true });
+    writeFileSync(
+      join(examplesDirectory, "postgresql/state-demo/src/index.ts"),
+      "// #region usage\nconst nested = 1;\n// #endregion\n",
+    );
+    const { code } = await transformPage(
+      page(
+        '    <ExampleCode example="postgresql/state-demo" file="src/index.ts" region="usage" />',
+      ),
+      file,
+      { examplesDirectory },
+    );
+    expect(code).toContain('code={"const nested = 1;"}');
+  });
+
+  it("fills only ExampleCode on a route outside the content directory", async () => {
+    const { code } = await transformPage(
+      page(
+        [
+          "    <h2>{props.title}</h2>",
+          '    <ExampleCode example="state-demo" file="src/index.ts" region="usage" />',
+        ].join("\n"),
+      ),
+      "/routes/index.tsx",
+      { examplesDirectory, exampleCodeOnly: true },
+    );
+    expect(code).toContain("    <h2>{props.title}</h2>\n");
+    expect(code).toContain('code={"const x = 1;"}');
+    expect(code).not.toContain("export const headings");
+  });
+
   it("rejects paths outside the examples directory", async () => {
     await expect(
       transformPage(page('    <ExampleCode example=".." file="secret.ts" />'), file, {
+        examplesDirectory,
+      }),
+    ).rejects.toThrow("escapes examples/");
+    await expect(
+      transformPage(page('    <ExampleCode example="postgresql/.." file="secret.ts" />'), file, {
         examplesDirectory,
       }),
     ).rejects.toThrow("escapes examples/");

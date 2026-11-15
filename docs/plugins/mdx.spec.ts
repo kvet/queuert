@@ -1,3 +1,7 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { compile } from "@mdx-js/mdx";
 import { VFile } from "vfile";
 import { describe, expect, it } from "vitest";
@@ -327,5 +331,53 @@ describe("API pages", () => {
     expect(output).not.toContain("Error.constructor");
     expect(output).not.toContain('title="Returns"');
     expect(output).not.toContain("Experimental");
+  });
+});
+
+describe("ExampleCode in MDX", () => {
+  const examplesDirectory = mkdtempSync(join(tmpdir(), "examples-"));
+  mkdirSync(join(examplesDirectory, "guides/src"), { recursive: true });
+  writeFileSync(
+    join(examplesDirectory, "guides/src/queries.ts"),
+    "// #region lookups\nconst chain = 1;\n// #endregion\n",
+  );
+
+  const compileWithExamples = async (
+    value: string,
+    onExampleSources?: (page: string, sources: string[]) => void,
+  ) =>
+    String(
+      await compile(
+        new VFile({ path: `${contentDirectory}/guides/a.mdx`, value }),
+        mdxOptions({ contentDirectory, base: "/queuert/", examplesDirectory, onExampleSources }),
+      ),
+    );
+
+  it("fills the region's code and highlighted html at build time", async () => {
+    const reports: [string, string[]][] = [];
+    const output = await compileWithExamples(
+      '<ExampleCode example="guides" file="src/queries.ts" region="lookups" />',
+      (page, sources) => reports.push([page, sources]),
+    );
+
+    expect(output).toContain('lang="ts" example="guides" file="src/queries.ts"');
+    expect(output).toContain('code="const chain = 1;"');
+    expect(output).toContain("--shiki-token-keyword");
+    expect(output).not.toContain("region=");
+    expect(reports).toEqual([
+      [`${contentDirectory}/guides/a.mdx`, [join(examplesDirectory, "guides/src/queries.ts")]],
+    ]);
+  });
+
+  it("rejects an attribute that is not a string literal", async () => {
+    await expect(
+      compileWithExamples('<ExampleCode example="guides" file={"src/queries.ts"} />'),
+    ).rejects.toThrow("<ExampleCode> file must be a string literal");
+  });
+
+  it("rejects a spread left over from the import form", async () => {
+    await expect(
+      compileWithExamples('<ExampleCode example="guides" file="src/queries.ts" {...snippet} />'),
+    ).rejects.toThrow("<ExampleCode> takes only string attributes");
   });
 });

@@ -15,76 +15,33 @@ A slice consists of two files: definitions and processors.
 
 <FileTree>
 - src/
-  - **slice-orders-definitions.ts**
-  - **slice-orders-processors.ts**
-  - slice-notifications-definitions.ts
-  - slice-notifications-processors.ts
+  - **slice-notifications-definitions.ts**
+  - **slice-notifications-processors.ts**
+  - slice-orders-definitions.ts
+  - slice-orders-processors.ts
   - client.ts
   - index.ts
 </FileTree>
 
 **Definitions** declare the job types for a feature:
 
-```ts title="slice-orders-definitions.ts"
-import { defineJobTypes } from "queuert";
-
-export const orderJobTypes = defineJobTypes<{
-  "orders.create": { entry: true; input: { userId: string }; output: { orderId: string } };
-  "orders.fulfill": { input: { orderId: string }; output: { fulfilled: boolean } };
-}>();
-```
+<ExampleCode example="guides-slices" file="src/slice-notifications-definitions.ts" />
 
 **Processors** implement the handlers, typed against the slice's definitions:
 
-```ts title="slice-orders-processors.ts"
-import { createProcessors, withTxHooks } from "queuert";
-import { client, sql } from "./client.js";
-import { orderJobTypes } from "./slice-orders-definitions.js";
-
-export const orderProcessors = createProcessors({
-  client,
-  jobTypes: orderJobTypes,
-  processors: {
-    "orders.create": {
-      attemptHandler: async ({ job, complete }) =>
-        withTxHooks(async (txHooks) =>
-          sql.begin(async (txSql) => complete({ txSql, txHooks, continueWith: { typeName: "orders.fulfill", input: { orderId: "123" } } })),
-        ),
-    },
-    "orders.fulfill": {
-      attemptHandler: async ({ job, complete }) =>
-        withTxHooks(async (txHooks) =>
-          sql.begin(async (txSql) => complete({ txSql, txHooks, output: { fulfilled: true } })),
-        ),
-    },
-  },
-});
-```
+<ExampleCode example="guides-slices" file="src/slice-notifications-processors.ts" />
 
 `createProcessors` type-checks each handler against the slice's own definitions (plus any external defs it declares), then returns a `Processors` that's plugged into `createWorkerRunner`.
 
 ## Composing Slices
 
-At the application level, pass arrays of slices directly to `createClient` and `createWorkerRunner`:
+At the application level, pass an array of slices to `createClient`:
 
-```ts
-import { createClient, createWorkerRunner } from "queuert";
-import { orderJobTypes } from "./slice-orders-definitions.js";
-import { orderProcessors } from "./slice-orders-processors.js";
-import { notificationJobTypes } from "./slice-notifications-definitions.js";
-import { notificationProcessors } from "./slice-notifications-processors.js";
+<ExampleCode example="guides-slices" file="src/client.ts" />
 
-const client = createClient({
-  stateAdapter,
-  notifyAdapter,
-  jobTypes: [orderJobTypes, notificationJobTypes],
-});
+and an array of their processors to `createWorkerRunner`:
 
-const workerRunner = createWorkerRunner({
-  client,
-  processors: [orderProcessors, notificationProcessors],
-});
-```
+<ExampleCode example="guides-slices" file="src/index.ts" region="worker" />
 
 Both fields accept a single slice or an array of slices. When an array is passed, duplicate type/processor keys are detected:
 
@@ -95,38 +52,20 @@ To run a slice's job types on different workers, split its registry with `pickPr
 
 ## Cross-Slice References
 
-When a slice needs to reference job types from another slice — for example, declaring a blocker from the notifications domain — use the optional `TExternal` type parameter on `defineJobTypes`:
+When a slice needs to reference job types from another slice — here, `orders.confirm-order` waits for a notification from the notifications slice — use the optional `TExternal` type parameter on `defineJobTypes`:
 
-```ts title="slice-orders-definitions.ts"
-import { type JobTypeDefinitions, defineJobTypes } from "queuert";
-import { type notificationJobTypes } from "./slice-notifications-definitions.js";
+<ExampleCode example="guides-slices" file="src/slice-orders-definitions.ts" />
 
-export const orderJobTypes = defineJobTypes<
-  {
-    "orders.place": {
-      entry: true;
-      input: { userId: string };
-      continueWith: { typeName: "orders.confirm" };
-    };
-    "orders.confirm": {
-      input: { orderId: string };
-      output: { confirmed: boolean };
-      blockers: [{ typeName: "notifications.send" }];
-    };
-  },
-  // External types — available for blocker reference validation, not owned by this slice
-  JobTypeDefinitions<typeof notificationJobTypes>
->();
-```
-
-- `T` (first parameter) = owned definitions — these become the registry's phantom type
-- `TExternal` (second parameter) = read-only reference context, defaults to `Record<never, never>`
+- The first parameter, `T`, holds the owned definitions, which become the registry's phantom type
+- The second parameter, `TExternal`, is the read-only reference context and defaults to `Record<never, never>`
 - `blockers` validates against entry types in `T & TExternal`
 - The registry's phantom type remains `T` only — `TExternal` types are not included
 
 This eliminates the need for "workflow slices" that duplicate type definitions just to make blocker references type-check. When slices are passed as an array to `createClient`, all references resolve against the full set of definitions.
 
-When writing processors that reference types from another slice, nothing special is needed — the client already exposes every slice's types, so `continueWith` and blockers resolve against the full set.
+Processors that reference types from another slice need nothing special: the client already exposes every slice's types, so `orders.place-order` creates a `notifications.send-notification` chain and passes it as the blocker of its continuation, and `orders.confirm-order` reads the notification's typed output from `job.blockers`:
+
+<ExampleCode example="guides-slices" file="src/slice-orders-processors.ts" />
 
 ## Naming Convention
 
@@ -136,13 +75,9 @@ When writing processors that reference types from another slice, nothing special
 </Aside>
 
 ```
-orders.create-order
-orders.fulfill-order
+orders.place-order
+orders.confirm-order
 notifications.send-notification
 ```
 
-## See Also
-
-- [Utilities](/queuert/api/core/readme/) — API reference for `defineJobTypes`, `createJobTypes`, `createProcessors`, `pickProcessors`, `omitProcessors`
-- [Chain Patterns](../chain-patterns/) — continuation references and patterns
-- [showcase-slices example](https://github.com/kvet/queuert/blob/main/examples/showcase-slices/src/index.ts) — full runnable example
+See [examples/guides-slices](https://github.com/kvet/queuert/tree/main/examples/guides-slices/src) for the runnable code. See also [Chain Patterns](../chain-patterns/) for continuation patterns and the [API reference](/queuert/api/core/readme/) for `defineJobTypes`, `createJobTypes`, `createProcessors`, `pickProcessors` and `omitProcessors`.

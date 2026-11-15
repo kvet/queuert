@@ -8,7 +8,12 @@ import GithubSlugger from "github-slugger";
 import type { Element, ElementContent, Root as HastRoot } from "hast";
 import { toString as hastToString } from "hast-util-to-string";
 import type { ListItem, PhrasingContent, Root as MdastRoot, RootContent, Table } from "mdast";
-import type { MdxJsxAttribute, MdxJsxFlowElement, MdxJsxFlowElementHast } from "mdast-util-mdx-jsx";
+import type {
+  MdxJsxAttribute,
+  MdxJsxFlowElement,
+  MdxJsxFlowElementHast,
+  MdxJsxTextElement,
+} from "mdast-util-mdx-jsx";
 import type { MdxjsEsmHast } from "mdast-util-mdxjs-esm";
 import { toString as mdastToString } from "mdast-util-to-string";
 import remarkFrontmatter from "remark-frontmatter";
@@ -17,6 +22,7 @@ import { SKIP, visit } from "unist-util-visit";
 import type { VFile } from "vfile";
 
 import { highlight } from "./highlight.ts";
+import { exampleCodeProps, readExampleCode } from "./tsx-pages.ts";
 
 export const pageSlug = (file: string): string =>
   file
@@ -171,6 +177,48 @@ const remarkImageImports = () => (tree: MdastRoot) => {
   });
   tree.children.unshift(...(imports as unknown as RootContent[]));
 };
+
+/**
+ * Fills each `<ExampleCode example|package file region />` with the file's code and highlighted
+ * html, the same way the tsx-pages plugin does for `.tsx` pages, and reports the files it read.
+ */
+const remarkExampleCode =
+  (options: {
+    examplesDirectory?: string;
+    onExampleSources?: (page: string, sources: string[]) => void;
+  }) =>
+  async (tree: MdastRoot, file: VFile) => {
+    const elements: (MdxJsxFlowElement | MdxJsxTextElement)[] = [];
+    visit(tree, ["mdxJsxFlowElement", "mdxJsxTextElement"], (node) => {
+      if ((node as MdxJsxFlowElement).name === "ExampleCode") {
+        elements.push(node as MdxJsxFlowElement | MdxJsxTextElement);
+      }
+    });
+    const sources: string[] = [];
+    for (const element of elements) {
+      if (element.attributes.some((attribute) => attribute.type !== "mdxJsxAttribute")) {
+        throw new Error(`${file.path}: <ExampleCode> takes only string attributes`);
+      }
+      const { title, source } = readExampleCode(
+        (name) => {
+          const found = element.attributes.find(
+            (attribute) => attribute.type === "mdxJsxAttribute" && attribute.name === name,
+          );
+          if (found !== undefined && typeof found.value !== "string") {
+            throw new Error(`${file.path}: <ExampleCode> ${name} must be a string literal`);
+          }
+          return found?.value as string | undefined;
+        },
+        file.path,
+        { examples: options.examplesDirectory },
+      );
+      sources.push(source.path);
+      element.attributes = Object.entries(await exampleCodeProps(source, title)).map(
+        ([name, value]) => attribute(name, value),
+      );
+    }
+    options.onExampleSources?.(file.path, sources);
+  };
 
 const headingText = (node: RootContent | undefined): string | undefined =>
   node?.type === "heading" ? mdastToString(node) : undefined;
@@ -670,6 +718,10 @@ const recmaIntrinsicElements = () => (tree: Program) => {
 export const mdxOptions = (options: {
   contentDirectory: string;
   base: string;
+  /** Overrides `examples/` for `<ExampleCode example>`, for tests. */
+  examplesDirectory?: string;
+  /** Called on every compile of `page` with the example and package files its `<ExampleCode>`s read. */
+  onExampleSources?: (page: string, sources: string[]) => void;
 }): CompileOptions => ({
   jsx: true,
   jsxImportSource: "solid-js",
@@ -682,6 +734,7 @@ export const mdxOptions = (options: {
     [remarkApiPages, options],
     [remarkTables, options],
     remarkImageImports,
+    [remarkExampleCode, options],
     remarkStripTitle,
     [remarkRelativeLinks, options],
   ],

@@ -1,5 +1,5 @@
 import { createPgStateAdapter } from "@queuert/postgres";
-import { createPostgresJsStateProvider } from "example-state-postgres-postgres-js/provider";
+import { createPostgresJsStateProvider } from "example-postgresql-state-postgres-js/provider";
 import postgres from "postgres";
 import { noopNotifyAdapter } from "queuert/conformance-internal";
 

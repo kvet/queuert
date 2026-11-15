@@ -4,7 +4,10 @@ import { dirname } from "node:path";
 import { createPgStateAdapter } from "@queuert/postgres";
 import { loadStateDump } from "@queuert/postgres/conformance-internal";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import { type PgPoolContext, createPgPoolStateProvider } from "example-state-postgres-pg/provider";
+import {
+  type PgPoolContext,
+  createPgPoolStateProvider,
+} from "example-postgresql-state-pg/provider";
 import { Pool } from "pg";
 import {
   generateStateDump,

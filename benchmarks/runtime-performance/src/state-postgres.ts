@@ -4,7 +4,7 @@
 
 import { createPgStateAdapter } from "@queuert/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import { createPostgresJsStateProvider } from "example-state-postgres-postgres-js/provider";
+import { createPostgresJsStateProvider } from "example-postgresql-state-postgres-js/provider";
 import postgres from "postgres";
 import { createClient, createWorkerRunner, createProcessors, withTxHooks } from "queuert";
 

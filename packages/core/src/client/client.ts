@@ -278,8 +278,8 @@ export type Client<
 
   /**
    * Delete a single chain by ID. Returns the deleted chain, or `undefined` if no
-   * chain with that ID exists. A running job's attempt is notified as lost, so with a notify
-   * adapter its handler's `signal` aborts, and its `complete` throws {@link JobNotFoundError}.
+   * chain with that ID exists. A running job's `complete` throws {@link JobNotFoundError}, and its
+   * attempt is notified as lost, so with a notify adapter its handler's `signal` aborts.
    *
    * @throws {@link BlockerReferenceError} if external jobs depend on it.
    */
@@ -293,9 +293,9 @@ export type Client<
   ) => ModeResult<TMode, ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName> | undefined>;
 
   /**
-   * Delete chains by ID. Missing IDs are silently skipped. A running job's attempt is notified
-   * as lost, so with a notify adapter its handler's `signal` aborts, and its `complete` throws
-   * {@link JobNotFoundError}.
+   * Delete chains by ID. Missing IDs are silently skipped. A running job's `complete` throws
+   * {@link JobNotFoundError}, and its attempt is notified as lost, so with a notify adapter its
+   * handler's `signal` aborts.
    *
    * @throws {@link BlockerReferenceError} if external jobs depend on them.
    */

@@ -3,10 +3,12 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, test } from "vitest";
 
-import { type ExampleService, examplePages, examples } from "./examples.ts";
+import { type ExampleService, exampleSlug, examples } from "./examples.ts";
 
 const examplesDirectory = fileURLToPath(new URL("../../../examples/", import.meta.url));
-const pagesDirectory = fileURLToPath(new URL("../content/docs/examples/", import.meta.url));
+const integrationsDirectory = fileURLToPath(
+  new URL("../content/docs/integrations/", import.meta.url),
+);
 
 const sourceOf = (name: string): string =>
   readdirSync(`${examplesDirectory}${name}/src`, { recursive: true, encoding: "utf8" })
@@ -21,13 +23,6 @@ const containerHelpers: Record<ExampleService, RegExp> = {
   "Redis Cluster": /\bacquireRedisCluster\(/,
   NATS: /\bacquireNats\(/,
 };
-
-test("lists every example directory that has a package.json, and nothing else", () => {
-  const directories = readdirSync(examplesDirectory).filter((name) =>
-    existsSync(`${examplesDirectory}${name}/package.json`),
-  );
-  expect(examples.map((example) => example.name).toSorted()).toEqual(directories.toSorted());
-});
 
 describe.each(examples)("$name", (example) => {
   const packageJson = JSON.parse(
@@ -49,21 +44,17 @@ describe.each(examples)("$name", (example) => {
   });
 
   test("runs scripts the package defines, under its package name", () => {
-    expect(packageJson.name).toBe(`example-${example.name}`);
+    expect(packageJson.name).toBe(`example-${exampleSlug(example.name)}`);
     for (const { script } of example.commands ?? [{ script: "start" }]) {
       expect(packageJson.scripts[script], script).toBeDefined();
     }
     expect(packageJson.scripts.start?.startsWith("bun ")).toBe(example.runtime === "Bun");
   });
 
-  test("appears on its examples page", () => {
-    const page = readFileSync(`${pagesDirectory}${example.page}.tsx`, "utf8");
-    expect(page).toContain(`"${example.name}"`);
+  test("appears on an integrations page", () => {
+    const pages = readdirSync(integrationsDirectory, { recursive: true, encoding: "utf8" })
+      .filter((file) => file.endsWith(".tsx"))
+      .map((file) => readFileSync(`${integrationsDirectory}${file}`, "utf8"));
+    expect(pages.some((page) => page.includes(`"${example.name}"`))).toBe(true);
   });
-});
-
-test("every examples page has a content file", () => {
-  for (const page of examplePages) {
-    expect(existsSync(`${pagesDirectory}${page.slug}.tsx`), page.slug).toBe(true);
-  }
 });

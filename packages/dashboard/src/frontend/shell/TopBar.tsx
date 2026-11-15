@@ -80,12 +80,15 @@ export const TopBar = () => {
         <LogoIcon size={20} class="text-brand" />
         <span>Queuert</span>
       </A>
-      <span
-        class="hidden rounded-xs border border-border px-1.5 py-px font-mono text-[11px] text-fg-muted sm:inline-block"
-        title="@queuert/dashboard version"
+      <a
+        href={`${DOCS_URL}changelog/`}
+        target="_blank"
+        rel="noopener"
+        class="inline-block rounded-xs border border-border px-1.5 py-px font-mono text-[11px] text-fg-muted hover:border-border-strong hover:text-fg"
+        title="@queuert/dashboard version: release notes (opens in a new tab)"
       >
         v{__DASHBOARD_VERSION__}
-      </span>
+      </a>
       <nav class="ml-4 hidden items-center gap-0.5 sm:flex" aria-label="Main">
         <For each={navItems}>
           {(item) => (

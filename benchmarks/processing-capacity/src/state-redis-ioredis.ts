@@ -1,5 +1,5 @@
 import { createRedisStateAdapter } from "@queuert/redis";
-import { createIoredisStateProvider } from "example-state-redis-ioredis/provider";
+import { createIoredisStateProvider } from "example-redis-state-ioredis/provider";
 import { Redis } from "ioredis";
 import { noopNotifyAdapter } from "queuert/conformance-internal";
 

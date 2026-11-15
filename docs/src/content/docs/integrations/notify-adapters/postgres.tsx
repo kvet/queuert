@@ -31,22 +31,22 @@ const Page = () => (
           The provider owns a dedicated LISTEN client taken from the pool, so it implements{" "}
           <code>close</code>.
         </p>
-        <ExampleCode example="notify-postgres-pg" file="src/provider.ts" />
-        <ExampleCode example="notify-postgres-pg" file="src/index.ts" region="setup" />
+        <ExampleCode example="postgresql/notify-pg" file="src/provider.ts" />
+        <ExampleCode example="postgresql/notify-pg" file="src/index.ts" region="setup" />
       </TabItem>
       <TabItem label="postgres.js">
         <p>
           A pass-through provider; it omits <code>close</code>.
         </p>
-        <ExampleCode example="notify-postgres-postgres-js" file="src/provider.ts" />
-        <ExampleCode example="notify-postgres-postgres-js" file="src/index.ts" region="setup" />
+        <ExampleCode example="postgresql/notify-postgres-js" file="src/provider.ts" />
+        <ExampleCode example="postgresql/notify-postgres-js" file="src/index.ts" region="setup" />
       </TabItem>
       <TabItem label="Bun SQL" badge="Bun">
         <p>
           A pass-through provider; it omits <code>close</code>.
         </p>
-        <ExampleCode example="notify-postgres-bun-sql" file="src/provider.ts" />
-        <ExampleCode example="notify-postgres-bun-sql" file="src/index.ts" region="setup" />
+        <ExampleCode example="postgresql/notify-bun-sql" file="src/provider.ts" />
+        <ExampleCode example="postgresql/notify-bun-sql" file="src/index.ts" region="setup" />
       </TabItem>
     </Tabs>
     <p>
@@ -120,21 +120,21 @@ const Page = () => (
     <Tabs syncKey="postgres-driver">
       <TabItem label="pg">
         <ExampleCode
-          example="notify-postgres-pg"
+          example="postgresql/notify-pg"
           file="src/provider.spec.ts"
           region="conformance"
         />
       </TabItem>
       <TabItem label="postgres.js">
         <ExampleCode
-          example="notify-postgres-postgres-js"
+          example="postgresql/notify-postgres-js"
           file="src/provider.spec.ts"
           region="conformance"
         />
       </TabItem>
       <TabItem label="Bun SQL" badge="Bun">
         <ExampleCode
-          example="notify-postgres-bun-sql"
+          example="postgresql/notify-bun-sql"
           file="src/provider.spec.ts"
           region="conformance"
         />
@@ -176,7 +176,7 @@ const Page = () => (
     <h2 id="examples">Examples</h2>
     <ExampleRows
       title="@queuert/postgres · notify"
-      names={["notify-postgres-pg", "notify-postgres-postgres-js", "notify-postgres-bun-sql"]}
+      names={["postgresql/notify-pg", "postgresql/notify-postgres-js", "postgresql/notify-bun-sql"]}
     />
   </>
 );

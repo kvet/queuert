@@ -30,24 +30,32 @@ const Page = () => (
     <p>Each example's notify provider and adapter:</p>
     <Tabs syncKey="redis-driver">
       <TabItem label="node-redis">
-        <ExampleCode example="notify-redis-redis" file="src/provider.ts" />
-        <ExampleCode example="notify-redis-redis" file="src/index.ts" region="setup" />
+        <ExampleCode example="postgresql/notify-redis-redis" file="src/provider.ts" />
+        <ExampleCode example="postgresql/notify-redis-redis" file="src/index.ts" region="setup" />
       </TabItem>
       <TabItem label="ioredis">
-        <ExampleCode example="notify-redis-ioredis" file="src/provider.ts" />
-        <ExampleCode example="notify-redis-ioredis" file="src/index.ts" region="setup" />
+        <ExampleCode example="postgresql/notify-redis-ioredis" file="src/provider.ts" />
+        <ExampleCode example="postgresql/notify-redis-ioredis" file="src/index.ts" region="setup" />
       </TabItem>
       <TabItem label="Bun" badge="Bun">
-        <ExampleCode example="notify-redis-bun" file="src/provider.ts" />
-        <ExampleCode example="notify-redis-bun" file="src/index.ts" region="setup" />
+        <ExampleCode example="postgresql/notify-redis-bun" file="src/provider.ts" />
+        <ExampleCode example="postgresql/notify-redis-bun" file="src/index.ts" region="setup" />
       </TabItem>
       <TabItem label="node-redis cluster">
-        <ExampleCode example="notify-redis-cluster-node-redis" file="src/provider.ts" />
-        <ExampleCode example="notify-redis-cluster-node-redis" file="src/index.ts" region="setup" />
+        <ExampleCode example="postgresql/notify-redis-cluster-node-redis" file="src/provider.ts" />
+        <ExampleCode
+          example="postgresql/notify-redis-cluster-node-redis"
+          file="src/index.ts"
+          region="setup"
+        />
       </TabItem>
       <TabItem label="ioredis cluster">
-        <ExampleCode example="notify-redis-cluster-ioredis" file="src/provider.ts" />
-        <ExampleCode example="notify-redis-cluster-ioredis" file="src/index.ts" region="setup" />
+        <ExampleCode example="postgresql/notify-redis-cluster-ioredis" file="src/provider.ts" />
+        <ExampleCode
+          example="postgresql/notify-redis-cluster-ioredis"
+          file="src/index.ts"
+          region="setup"
+        />
       </TabItem>
     </Tabs>
     <p>
@@ -122,31 +130,35 @@ const Page = () => (
     <Tabs syncKey="redis-driver">
       <TabItem label="node-redis">
         <ExampleCode
-          example="notify-redis-redis"
+          example="postgresql/notify-redis-redis"
           file="src/provider.spec.ts"
           region="conformance"
         />
       </TabItem>
       <TabItem label="ioredis">
         <ExampleCode
-          example="notify-redis-ioredis"
+          example="postgresql/notify-redis-ioredis"
           file="src/provider.spec.ts"
           region="conformance"
         />
       </TabItem>
       <TabItem label="Bun" badge="Bun">
-        <ExampleCode example="notify-redis-bun" file="src/provider.spec.ts" region="conformance" />
+        <ExampleCode
+          example="postgresql/notify-redis-bun"
+          file="src/provider.spec.ts"
+          region="conformance"
+        />
       </TabItem>
       <TabItem label="node-redis cluster">
         <ExampleCode
-          example="notify-redis-cluster-node-redis"
+          example="postgresql/notify-redis-cluster-node-redis"
           file="src/provider.spec.ts"
           region="conformance"
         />
       </TabItem>
       <TabItem label="ioredis cluster">
         <ExampleCode
-          example="notify-redis-cluster-ioredis"
+          example="postgresql/notify-redis-cluster-ioredis"
           file="src/provider.spec.ts"
           region="conformance"
         />
@@ -211,11 +223,11 @@ const Page = () => (
     <ExampleRows
       title="@queuert/redis"
       names={[
-        "notify-redis-redis",
-        "notify-redis-ioredis",
-        "notify-redis-bun",
-        "notify-redis-cluster-node-redis",
-        "notify-redis-cluster-ioredis",
+        "postgresql/notify-redis-redis",
+        "postgresql/notify-redis-ioredis",
+        "postgresql/notify-redis-bun",
+        "postgresql/notify-redis-cluster-node-redis",
+        "postgresql/notify-redis-cluster-ioredis",
       ]}
     />
   </>

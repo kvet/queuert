@@ -1,0 +1,14 @@
+# PostgreSQL State Adapter (Drizzle ORM)
+
+PostgreSQL state storage via `@queuert/postgres` with Drizzle ORM — job creation and completion inside application transactions.
+
+It also runs the application's own migrations (`src/migrations.ts`) with the experimental `createPgMigrator`: a transactional table creation, then non-transactional migrations for a concurrent index, a backfill in batches and a row-by-row rewrite, through Drizzle.
+
+## Running
+
+```bash
+pnpm install
+pnpm --filter example-postgresql-state-drizzle start
+```
+
+Requires Docker (uses testcontainers to start PostgreSQL).

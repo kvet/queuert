@@ -1,0 +1,28 @@
+{
+  "name": "example-mysql-state-mariadb",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating the MySQL state adapter on MariaDB with the mariadb connector.",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "exports": {
+    "./provider": "./src/provider.ts"
+  },
+  "scripts": {
+    "start": "node src/index.ts",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/mysql": "workspace:*",
+    "@queuert/testcontainers": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
+    "mariadb": "3.5.5",
+    "queuert": "workspace:*"
+  }
+}

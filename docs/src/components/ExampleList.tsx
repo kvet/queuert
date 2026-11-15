@@ -4,15 +4,10 @@ import { For, type JSX, Show } from "solid-js";
 
 import {
   type Example,
-  type ExampleCategory,
-  type ExamplePageSlug,
   exampleCommands,
   exampleFileUrl,
-  exampleHref,
-  examplePageHref,
-  examplePages,
+  exampleSlug,
   exampleUrl,
-  examples,
   findExample,
 } from "../data/examples.ts";
 import { CopyButton } from "./CopyButton.tsx";
@@ -81,67 +76,11 @@ const FileLinks = (props: { example: Example }) => (
   </span>
 );
 
-const ExampleRow = (props: { example: Example; listGuide?: string; showGuide?: boolean }) => (
-  <Row href={exampleUrl(props.example.name)} label={`${props.example.name} on GitHub`}>
-    <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 leading-6">
-      <span class="font-medium break-all text-fg">{props.example.name}</span>{" "}
-      <ExampleChips example={props.example} />
-    </div>
-    <span class="flex items-center gap-1 text-xs text-fg-subtle">
-      GitHub <ExternalLinkIcon size={12} />
-    </span>
-    <SubLine tone="muted" class="leading-5">
-      {props.example.description}
-      <Show
-        when={
-          props.showGuide && props.example.guide?.href !== props.listGuide
-            ? props.example.guide
-            : undefined
-        }
-      >
-        {(guide) => (
-          <>
-            {" "}
-            <A href={guide().href} class={`${linkClass} whitespace-nowrap`}>
-              {guide().title} guide →
-            </A>
-          </>
-        )}
-      </Show>
-    </SubLine>
-  </Row>
-);
-
 const commonGuide = (items: Example[]) => {
   const guides = items.flatMap((example) => (example.guide ? [example.guide] : []));
   return guides.find(
     (guide) =>
       guides.filter((candidate) => candidate.href === guide.href).length > items.length / 2,
-  );
-};
-
-export const ExampleList = (props: { category: ExampleCategory; title: JSX.Element }) => {
-  const items = examples.filter((example) => example.category === props.category);
-  const listGuide = commonGuide(items);
-  return (
-    <Box
-      title={props.title}
-      actions={
-        listGuide && (
-          <A href={listGuide.href} class="unstyled text-accent-fg hover:underline">
-            {listGuide.title} guide →
-          </A>
-        )
-      }
-      class="my-6"
-      bodyClass=""
-    >
-      <ul class="row-list divide-y divide-border">
-        <For each={items}>
-          {(example) => <ExampleRow example={example} listGuide={listGuide?.href} showGuide />}
-        </For>
-      </ul>
-    </Box>
   );
 };
 
@@ -164,10 +103,10 @@ export const ExampleRows = (props: { names: string[]; title: JSX.Element }) => {
       <ul class="row-list divide-y divide-border">
         <For each={items}>
           {(example) => (
-            <Row id={example.name} class="scroll-mt-20 py-3!">
+            <Row id={exampleSlug(example.name)} class="scroll-mt-20 py-3!">
               <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 leading-6">
                 <a
-                  href={`#${example.name}`}
+                  href={`#${exampleSlug(example.name)}`}
                   class="font-mono unstyled font-medium break-all text-fg no-underline hover:text-accent-fg"
                 >
                   {example.name}
@@ -201,108 +140,3 @@ export const ExampleRows = (props: { names: string[]; title: JSX.Element }) => {
     </Box>
   );
 };
-
-export const ExampleDetail = (props: { name: string }) => {
-  const example = findExample(props.name);
-  const needs = [
-    ...(example.runtime === "Bun" ? ["Bun"] : []),
-    ...example.services.map((service) => `Docker (${service} via testcontainers)`),
-    ...(example.requires ? [example.requires] : []),
-  ];
-  return (
-    <>
-      <p>{example.description}</p>
-      <Show when={example.scenarios}>
-        {(scenarios) => (
-          <ol>
-            <For each={scenarios()}>{(scenario) => <li>{scenario}</li>}</For>
-          </ol>
-        )}
-      </Show>
-      <Box
-        title={example.name}
-        actions={<GitHubLink name={example.name} />}
-        class="my-6"
-        bodyClass=""
-      >
-        <dl class="m-0 divide-y divide-border text-sm">
-          <div class="grid gap-x-4 gap-y-1 px-4 py-2.5 sm:grid-cols-[6rem_minmax(0,1fr)]">
-            <dt class="text-fg-subtle">Run</dt>
-            <dd class="m-0 flex min-w-0 flex-col gap-1.5">
-              <For each={exampleCommands(example)}>
-                {(command) => <Command command={command.command} label={command.label} />}
-              </For>
-            </dd>
-          </div>
-          <Show when={needs.length > 0}>
-            <div class="grid gap-x-4 gap-y-1 px-4 py-2.5 sm:grid-cols-[6rem_minmax(0,1fr)]">
-              <dt class="text-fg-subtle">Needs</dt>
-              <dd class="m-0 text-fg">{needs.join(", ")}</dd>
-            </div>
-          </Show>
-          <div class="grid gap-x-4 gap-y-1 px-4 py-2.5 sm:grid-cols-[6rem_minmax(0,1fr)]">
-            <dt class="text-fg-subtle">Files</dt>
-            <dd class="m-0 min-w-0">
-              <FileLinks example={example} />
-            </dd>
-          </div>
-          <Show when={example.guide}>
-            {(guide) => (
-              <div class="grid gap-x-4 gap-y-1 px-4 py-2.5 sm:grid-cols-[6rem_minmax(0,1fr)]">
-                <dt class="text-fg-subtle">Guide</dt>
-                <dd class="m-0">
-                  <A href={guide().href} class={linkClass}>
-                    {guide().title} →
-                  </A>
-                </dd>
-              </div>
-            )}
-          </Show>
-        </dl>
-      </Box>
-    </>
-  );
-};
-
-export const ExamplePageCards = (props: { slugs: ExamplePageSlug[] }) => (
-  <ul class="row-list my-6 grid gap-4 sm:grid-cols-2">
-    <For each={props.slugs.map((slug) => examplePages.find((page) => page.slug === slug)!)}>
-      {(page) => {
-        const items = examples.filter((example) => example.page === page.slug);
-        return (
-          <li
-            id={page.slug}
-            class="relative scroll-mt-20 rounded-xs border border-border p-4 hover:border-border-strong"
-          >
-            <div class="flex items-baseline justify-between gap-3">
-              <A
-                href={examplePageHref(page.slug)}
-                class="unstyled font-medium text-fg no-underline after:absolute after:inset-0 hover:text-accent-fg"
-              >
-                {page.title}
-              </A>
-              <span class="shrink-0 text-xs text-fg-subtle">
-                {items.length} {items.length === 1 ? "example" : "examples"}
-              </span>
-            </div>
-            <p class="m-0 mt-1 text-sm leading-6 text-fg-muted">{page.summary}</p>
-            <div class="mt-3 flex flex-wrap gap-1.5">
-              <For each={items}>
-                {(example) => (
-                  <Chip
-                    mono
-                    href={exampleHref(example)}
-                    link={A}
-                    class="unstyled relative z-10 no-underline"
-                  >
-                    {example.name}
-                  </Chip>
-                )}
-              </For>
-            </div>
-          </li>
-        );
-      }}
-    </For>
-  </ul>
-);

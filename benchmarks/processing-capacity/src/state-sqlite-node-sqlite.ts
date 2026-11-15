@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 
 import { createSqliteStateAdapter } from "@queuert/sqlite";
-import { createNodeSqliteStateProvider } from "example-state-sqlite-node-sqlite/provider";
+import { createNodeSqliteStateProvider } from "example-sqlite-state-node-sqlite/provider";
 import { noopNotifyAdapter } from "queuert/conformance-internal";
 
 import { runSyncBenchmark } from "./utils.ts";

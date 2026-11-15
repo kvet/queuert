@@ -1,0 +1,31 @@
+{
+  "name": "example-observability-dashboard",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating the @queuert/dashboard web UI with SQLite.",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "exports": {
+    "./scenarios": "./src/scenarios.ts"
+  },
+  "scripts": {
+    "dashboard": "pnpm --filter '@queuert/dashboard' build && node src/dashboard.ts",
+    "dashboard:mounted": "pnpm --filter '@queuert/dashboard' build && node src/dashboard-mounted.ts",
+    "start": "node src/populator.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/dashboard": "workspace:*",
+    "@queuert/sqlite": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
+    "@types/better-sqlite3": "9.6.0",
+    "better-sqlite3": "13.0.3",
+    "example-sqlite-state-better-sqlite3": "workspace:*",
+    "queuert": "workspace:*"
+  }
+}

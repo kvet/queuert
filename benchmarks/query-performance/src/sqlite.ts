@@ -4,7 +4,7 @@ import { dirname } from "node:path";
 import { createSqliteStateAdapter } from "@queuert/sqlite";
 import { loadStateDump } from "@queuert/sqlite/conformance-internal";
 import Database from "better-sqlite3";
-import { createBetterSqlite3StateProvider } from "example-state-sqlite-better-sqlite3/provider";
+import { createBetterSqlite3StateProvider } from "example-sqlite-state-better-sqlite3/provider";
 import {
   generateStateDump,
   observabilityCoverageGroups,

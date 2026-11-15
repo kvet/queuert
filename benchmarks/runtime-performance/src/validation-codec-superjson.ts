@@ -2,7 +2,7 @@
  * Job Type Registry Measurement: superjson codec adapter
  */
 
-import { createSuperjsonJobTypes } from "example-codec-superjson/adapter";
+import { createSuperjsonJobTypes } from "example-validation-codec-superjson/adapter";
 
 import { type OrderJobTypes, runValidationBenchmark } from "./validation.ts";
 

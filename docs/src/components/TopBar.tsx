@@ -13,7 +13,7 @@ import corePackage from "queuert/package.json";
 import { For, Show, createEffect, createSignal, on } from "solid-js";
 import { Portal } from "solid-js/web";
 
-import { sectionForPath, siteSections } from "../docs/sections.ts";
+import { sectionForPath, topBarSections } from "../docs/sections.ts";
 import { theme } from "../theme.ts";
 import { GitHubIcon } from "./icons.tsx";
 import { openSearch } from "./Search.tsx";
@@ -44,7 +44,7 @@ export const TopBar = () => {
           <Portal>
             <div class="fixed inset-x-0 top-14 bottom-0 z-40 overflow-y-auto border-t border-border bg-bg px-4 pt-3 pb-10 lg:hidden">
               <div class="mb-5 flex flex-wrap gap-1 border-b border-border pb-3" role="tablist">
-                <For each={siteSections}>
+                <For each={topBarSections}>
                   {(section) => (
                     <button
                       type="button"
@@ -81,13 +81,13 @@ export const TopBar = () => {
       </A>
       <A
         href="/changelog/"
-        class="font-mono hidden rounded-xs border border-border px-1.5 py-px text-[11px] text-fg-muted hover:border-border-strong hover:text-fg sm:inline-block"
+        class="font-mono inline-block rounded-xs border border-border px-1.5 py-px text-[11px] text-fg-muted hover:border-border-strong hover:text-fg"
         title="Latest release notes"
       >
         v{corePackage.version}
       </A>
       <nav class="ml-4 hidden items-center gap-0.5 lg:flex" aria-label="Sections">
-        <For each={siteSections}>
+        <For each={topBarSections}>
           {(section) => (
             <TopBarNavLink href={section.href} active={activeSection()?.id === section.id} link={A}>
               {section.label}

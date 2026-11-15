@@ -30,12 +30,12 @@ const Page = () => (
     </p>
     <p>
       This adapter from{" "}
-      <A href="/examples/notify-adapters/#notify-custom-memory">
-        <code>notify-custom-memory</code>
-      </A>{" "}
+      <a href="https://github.com/kvet/queuert/tree/main/examples/custom/notify-memory">
+        <code>custom/notify-memory</code>
+      </a>{" "}
       delivers notifications to listeners in the same process and passes every case:
     </p>
-    <ExampleCode example="notify-custom-memory" file="src/notify-adapter.ts" region="adapter" />
+    <ExampleCode example="custom/notify-memory" file="src/notify-adapter.ts" region="adapter" />
 
     <h2 id="conformance">Conformance</h2>
     <p>
@@ -54,7 +54,7 @@ const Page = () => (
       adapter from it and closes it when the case ends:
     </p>
     <ExampleCode
-      example="notify-custom-memory"
+      example="custom/notify-memory"
       file="src/notify-adapter.spec.ts"
       region="conformance"
     />

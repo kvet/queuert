@@ -106,91 +106,91 @@ const Page = () => (
     </p>
     <Tabs syncKey="sqlite-driver">
       <TabItem label="better-sqlite3">
-        <ExampleCode example="state-sqlite-better-sqlite3" file="src/provider.ts" />
+        <ExampleCode example="sqlite/state-better-sqlite3" file="src/provider.ts" />
         <ExampleCode
-          example="state-sqlite-better-sqlite3"
+          example="sqlite/state-better-sqlite3"
           file="src/index.ts"
           region="adapter"
           title="src/index.ts"
         />
       </TabItem>
       <TabItem label="node:sqlite">
-        <ExampleCode example="state-sqlite-node-sqlite" file="src/provider.ts" />
+        <ExampleCode example="sqlite/state-node-sqlite" file="src/provider.ts" />
         <ExampleCode
-          example="state-sqlite-node-sqlite"
+          example="sqlite/state-node-sqlite"
           file="src/index.ts"
           region="adapter"
           title="src/index.ts"
         />
       </TabItem>
       <TabItem label="bun:sqlite" badge="Bun">
-        <ExampleCode example="state-sqlite-bun-sqlite" file="src/provider.ts" />
+        <ExampleCode example="sqlite/state-bun-sqlite" file="src/provider.ts" />
         <ExampleCode
-          example="state-sqlite-bun-sqlite"
+          example="sqlite/state-bun-sqlite"
           file="src/index.ts"
           region="adapter"
           title="src/index.ts"
         />
       </TabItem>
       <TabItem label="Bun SQL" badge="Bun">
-        <ExampleCode example="state-sqlite-bun-sql" file="src/provider.ts" />
+        <ExampleCode example="sqlite/state-bun-sql" file="src/provider.ts" />
         <ExampleCode
-          example="state-sqlite-bun-sql"
+          example="sqlite/state-bun-sql"
           file="src/index.ts"
           region="adapter"
           title="src/index.ts"
         />
       </TabItem>
       <TabItem label="Drizzle">
-        <ExampleCode example="state-sqlite-drizzle" file="src/provider.ts" />
+        <ExampleCode example="sqlite/state-drizzle" file="src/provider.ts" />
         <ExampleCode
-          example="state-sqlite-drizzle"
+          example="sqlite/state-drizzle"
           file="src/index.ts"
           region="adapter"
           title="src/index.ts"
         />
       </TabItem>
       <TabItem label="Kysely">
-        <ExampleCode example="state-sqlite-kysely" file="src/provider.ts" />
+        <ExampleCode example="sqlite/state-kysely" file="src/provider.ts" />
         <ExampleCode
-          example="state-sqlite-kysely"
+          example="sqlite/state-kysely"
           file="src/index.ts"
           region="adapter"
           title="src/index.ts"
         />
       </TabItem>
       <TabItem label="Prisma">
-        <ExampleCode example="state-sqlite-prisma" file="src/provider.ts" />
+        <ExampleCode example="sqlite/state-prisma" file="src/provider.ts" />
         <ExampleCode
-          example="state-sqlite-prisma"
+          example="sqlite/state-prisma"
           file="src/index.ts"
           region="adapter"
           title="src/index.ts"
         />
       </TabItem>
       <TabItem label="Knex">
-        <ExampleCode example="state-sqlite-knex" file="src/provider.ts" />
+        <ExampleCode example="sqlite/state-knex" file="src/provider.ts" />
         <ExampleCode
-          example="state-sqlite-knex"
+          example="sqlite/state-knex"
           file="src/index.ts"
           region="adapter"
           title="src/index.ts"
         />
       </TabItem>
       <TabItem label="MikroORM">
-        <ExampleCode example="state-sqlite-mikro-orm" file="src/provider.ts" />
+        <ExampleCode example="sqlite/state-mikro-orm" file="src/provider.ts" />
         <p>
           <code>skipTables</code> keeps MikroORM's schema diff from dropping Queuert's tables, which{" "}
           <code>migrateToLatest()</code> manages:
         </p>
         <ExampleCode
-          example="state-sqlite-mikro-orm"
+          example="sqlite/state-mikro-orm"
           file="src/index.ts"
           region="orm"
           title="src/index.ts"
         />
         <ExampleCode
-          example="state-sqlite-mikro-orm"
+          example="sqlite/state-mikro-orm"
           file="src/index.ts"
           region="adapter"
           title="src/index.ts"
@@ -285,7 +285,7 @@ const Page = () => (
     <Tabs syncKey="sqlite-driver">
       <TabItem label="better-sqlite3">
         <ExampleCode
-          example="state-sqlite-better-sqlite3"
+          example="sqlite/state-better-sqlite3"
           file="src/provider.spec.ts"
           region="conformance"
           title="src/provider.spec.ts"
@@ -293,7 +293,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="node:sqlite">
         <ExampleCode
-          example="state-sqlite-node-sqlite"
+          example="sqlite/state-node-sqlite"
           file="src/provider.spec.ts"
           region="conformance"
           title="src/provider.spec.ts"
@@ -301,7 +301,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="bun:sqlite" badge="Bun">
         <ExampleCode
-          example="state-sqlite-bun-sqlite"
+          example="sqlite/state-bun-sqlite"
           file="src/provider.spec.ts"
           region="conformance"
           title="src/provider.spec.ts"
@@ -309,7 +309,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="Bun SQL" badge="Bun">
         <ExampleCode
-          example="state-sqlite-bun-sql"
+          example="sqlite/state-bun-sql"
           file="src/provider.spec.ts"
           region="conformance"
           title="src/provider.spec.ts"
@@ -317,7 +317,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="Drizzle">
         <ExampleCode
-          example="state-sqlite-drizzle"
+          example="sqlite/state-drizzle"
           file="src/provider.spec.ts"
           region="conformance"
           title="src/provider.spec.ts"
@@ -325,7 +325,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="Kysely">
         <ExampleCode
-          example="state-sqlite-kysely"
+          example="sqlite/state-kysely"
           file="src/provider.spec.ts"
           region="conformance"
           title="src/provider.spec.ts"
@@ -333,7 +333,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="Prisma">
         <ExampleCode
-          example="state-sqlite-prisma"
+          example="sqlite/state-prisma"
           file="src/provider.spec.ts"
           region="conformance"
           title="src/provider.spec.ts"
@@ -341,7 +341,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="Knex">
         <ExampleCode
-          example="state-sqlite-knex"
+          example="sqlite/state-knex"
           file="src/provider.spec.ts"
           region="conformance"
           title="src/provider.spec.ts"
@@ -349,7 +349,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="MikroORM">
         <ExampleCode
-          example="state-sqlite-mikro-orm"
+          example="sqlite/state-mikro-orm"
           file="src/provider.spec.ts"
           region="conformance"
           title="src/provider.spec.ts"
@@ -375,7 +375,7 @@ const Page = () => (
     <Tabs syncKey="sqlite-driver">
       <TabItem label="better-sqlite3">
         <ExampleCode
-          example="state-sqlite-better-sqlite3"
+          example="sqlite/state-better-sqlite3"
           file="src/index.ts"
           region="create-chain"
           title="src/index.ts"
@@ -383,7 +383,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="node:sqlite">
         <ExampleCode
-          example="state-sqlite-node-sqlite"
+          example="sqlite/state-node-sqlite"
           file="src/index.ts"
           region="create-chain"
           title="src/index.ts"
@@ -391,7 +391,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="bun:sqlite" badge="Bun">
         <ExampleCode
-          example="state-sqlite-bun-sqlite"
+          example="sqlite/state-bun-sqlite"
           file="src/index.ts"
           region="create-chain"
           title="src/index.ts"
@@ -399,7 +399,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="Bun SQL" badge="Bun">
         <ExampleCode
-          example="state-sqlite-bun-sql"
+          example="sqlite/state-bun-sql"
           file="src/index.ts"
           region="create-chain"
           title="src/index.ts"
@@ -407,7 +407,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="Drizzle">
         <ExampleCode
-          example="state-sqlite-drizzle"
+          example="sqlite/state-drizzle"
           file="src/index.ts"
           region="create-chain"
           title="src/index.ts"
@@ -415,7 +415,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="Kysely">
         <ExampleCode
-          example="state-sqlite-kysely"
+          example="sqlite/state-kysely"
           file="src/index.ts"
           region="create-chain"
           title="src/index.ts"
@@ -423,7 +423,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="Prisma">
         <ExampleCode
-          example="state-sqlite-prisma"
+          example="sqlite/state-prisma"
           file="src/index.ts"
           region="create-chain"
           title="src/index.ts"
@@ -431,7 +431,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="Knex">
         <ExampleCode
-          example="state-sqlite-knex"
+          example="sqlite/state-knex"
           file="src/index.ts"
           region="create-chain"
           title="src/index.ts"
@@ -439,7 +439,7 @@ const Page = () => (
       </TabItem>
       <TabItem label="MikroORM">
         <ExampleCode
-          example="state-sqlite-mikro-orm"
+          example="sqlite/state-mikro-orm"
           file="src/index.ts"
           region="create-chain"
           title="src/index.ts"
@@ -513,16 +513,16 @@ const Page = () => (
     <ExampleRows
       title="@queuert/sqlite"
       names={[
-        "state-sqlite-better-sqlite3",
-        "state-sqlite-node-sqlite",
-        "state-sqlite-bun-sqlite",
-        "state-sqlite-bun-sql",
-        "state-sqlite-drizzle",
-        "state-sqlite-kysely",
-        "state-sqlite-prisma",
-        "state-sqlite-knex",
-        "state-sqlite-mikro-orm",
-        "state-sqlite-multi-worker",
+        "sqlite/state-better-sqlite3",
+        "sqlite/state-node-sqlite",
+        "sqlite/state-bun-sqlite",
+        "sqlite/state-bun-sql",
+        "sqlite/state-drizzle",
+        "sqlite/state-kysely",
+        "sqlite/state-prisma",
+        "sqlite/state-knex",
+        "sqlite/state-mikro-orm",
+        "sqlite/multi-worker",
       ]}
     />
     <p>

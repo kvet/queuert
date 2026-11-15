@@ -3,7 +3,7 @@
  */
 
 import { createMysqlStateAdapter } from "@queuert/mysql";
-import { createMysql2PoolStateProvider } from "example-state-mysql-mysql2/provider";
+import { createMysql2PoolStateProvider } from "example-mysql-state-mysql2/provider";
 import { type Pool, createPool } from "mysql2/promise";
 import { createClient, createWorkerRunner, createProcessors } from "queuert";
 import { GenericContainer, Wait } from "testcontainers";

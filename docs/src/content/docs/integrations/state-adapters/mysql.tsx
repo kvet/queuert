@@ -19,7 +19,7 @@ import { TabItem, Tabs } from "../../../../components/mdx/Tabs.tsx";
 
 export const meta = {
   title: "MySQL / MariaDB State Adapter",
-  description: "Store chains, jobs and workers in MySQL or MariaDB with mysql2.",
+  description: "Store chains, jobs and workers in MySQL or MariaDB.",
 };
 
 const options = (): FieldItem[] => [
@@ -144,7 +144,28 @@ const Page = () => (
       syncKey="mysql-driver"
       anchor="setup"
       groups={[
-        { label: "Drivers", items: [{ name: "mysql2", tab: "mysql2", packages: "mysql2" }] },
+        {
+          label: "Drivers",
+          items: [
+            { name: "mysql2", tab: "mysql2", packages: "mysql2" },
+            { name: "mariadb", tab: "mariadb", packages: "mariadb" },
+            { name: "Bun SQL", tab: "Bun SQL", packages: "built into Bun", badge: "Bun" },
+          ],
+        },
+        {
+          label: "ORMs and query builders",
+          items: [
+            { name: "Drizzle", tab: "Drizzle", packages: "drizzle-orm · mysql2" },
+            { name: "Kysely", tab: "Kysely", packages: "kysely · mysql2" },
+            {
+              name: "Prisma",
+              tab: "Prisma",
+              packages: "@prisma/client · @prisma/adapter-mariadb",
+            },
+            { name: "Knex", tab: "Knex", packages: "knex · mysql2" },
+            { name: "MikroORM", tab: "MikroORM", packages: "@mikro-orm/mysql · kysely" },
+          ],
+        },
       ]}
     />
 
@@ -165,9 +186,82 @@ const Page = () => (
     </p>
     <Tabs syncKey="mysql-driver">
       <TabItem label="mysql2">
-        <ExampleCode example="state-mysql-mysql2" file="src/provider.ts" />
+        <ExampleCode example="mysql/state-mysql2" file="src/provider.ts" />
         <ExampleCode
-          example="state-mysql-mysql2"
+          example="mysql/state-mysql2"
+          file="src/index.ts"
+          region="adapter"
+          title="src/index.ts"
+        />
+      </TabItem>
+      <TabItem label="mariadb">
+        <ExampleCode example="mysql/state-mariadb" file="src/provider.ts" />
+        <ExampleCode
+          example="mysql/state-mariadb"
+          file="src/index.ts"
+          region="adapter"
+          title="src/index.ts"
+        />
+      </TabItem>
+      <TabItem label="Bun SQL" badge="Bun">
+        <ExampleCode example="mysql/state-bun-sql" file="src/provider.ts" />
+        <ExampleCode
+          example="mysql/state-bun-sql"
+          file="src/index.ts"
+          region="adapter"
+          title="src/index.ts"
+        />
+      </TabItem>
+      <TabItem label="Drizzle">
+        <ExampleCode example="mysql/state-drizzle" file="src/provider.ts" />
+        <ExampleCode
+          example="mysql/state-drizzle"
+          file="src/index.ts"
+          region="adapter"
+          title="src/index.ts"
+        />
+      </TabItem>
+      <TabItem label="Kysely">
+        <ExampleCode example="mysql/state-kysely" file="src/provider.ts" />
+        <ExampleCode
+          example="mysql/state-kysely"
+          file="src/index.ts"
+          region="adapter"
+          title="src/index.ts"
+        />
+      </TabItem>
+      <TabItem label="Prisma">
+        <ExampleCode example="mysql/state-prisma" file="src/provider.ts" />
+        <ExampleCode
+          example="mysql/state-prisma"
+          file="src/index.ts"
+          region="adapter"
+          title="src/index.ts"
+        />
+      </TabItem>
+      <TabItem label="Knex">
+        <ExampleCode example="mysql/state-knex" file="src/provider.ts" />
+        <ExampleCode
+          example="mysql/state-knex"
+          file="src/index.ts"
+          region="adapter"
+          title="src/index.ts"
+        />
+      </TabItem>
+      <TabItem label="MikroORM">
+        <ExampleCode example="mysql/state-mikro-orm" file="src/provider.ts" />
+        <p>
+          <code>skipTables</code> keeps MikroORM's schema diff from dropping Queuert's tables, which{" "}
+          <code>migrateToLatest()</code> manages:
+        </p>
+        <ExampleCode
+          example="mysql/state-mikro-orm"
+          file="src/index.ts"
+          region="orm"
+          title="src/index.ts"
+        />
+        <ExampleCode
+          example="mysql/state-mikro-orm"
           file="src/index.ts"
           region="adapter"
           title="src/index.ts"
@@ -193,8 +287,8 @@ const Page = () => (
     <h2>State provider</h2>
     <p>
       A <code>MysqlStateProvider</code> bridges your database client with the adapter: the adapter
-      runs all its SQL and transactions through it. The Setup tab is a complete provider for mysql2;
-      to use another client, implement the same members:
+      runs all its SQL and transactions through it. Each Setup tab is a complete provider for its
+      driver or ORM; to use another client, implement the same members:
     </p>
     <FieldList
       title="MysqlStateProvider"
@@ -202,9 +296,10 @@ const Page = () => (
       items={stateProviderMembers("mysql")}
     />
     <p>
-      mysql2 keeps no transaction flag, so the example's <code>isTransaction</code> tracks the
-      connections its <code>withTransaction</code> opened. It keys on the connection rather than the
-      context object, because Queuert passes copies of the context back to the provider.
+      mysql2 and the mariadb connector keep no transaction flag, so their examples'{" "}
+      <code>isTransaction</code> tracks the connections its <code>withTransaction</code> opened. It
+      keys on the connection rather than the context object, because Queuert passes copies of the
+      context back to the provider.
     </p>
 
     <h2 id="testing-your-provider">Testing your provider</h2>
@@ -222,7 +317,63 @@ const Page = () => (
     <Tabs syncKey="mysql-driver">
       <TabItem label="mysql2">
         <ExampleCode
-          example="state-mysql-mysql2"
+          example="mysql/state-mysql2"
+          file="src/provider.spec.ts"
+          region="conformance"
+          title="src/provider.spec.ts"
+        />
+      </TabItem>
+      <TabItem label="mariadb">
+        <ExampleCode
+          example="mysql/state-mariadb"
+          file="src/provider.spec.ts"
+          region="conformance"
+          title="src/provider.spec.ts"
+        />
+      </TabItem>
+      <TabItem label="Bun SQL" badge="Bun">
+        <ExampleCode
+          example="mysql/state-bun-sql"
+          file="src/provider.spec.ts"
+          region="conformance"
+          title="src/provider.spec.ts"
+        />
+      </TabItem>
+      <TabItem label="Drizzle">
+        <ExampleCode
+          example="mysql/state-drizzle"
+          file="src/provider.spec.ts"
+          region="conformance"
+          title="src/provider.spec.ts"
+        />
+      </TabItem>
+      <TabItem label="Kysely">
+        <ExampleCode
+          example="mysql/state-kysely"
+          file="src/provider.spec.ts"
+          region="conformance"
+          title="src/provider.spec.ts"
+        />
+      </TabItem>
+      <TabItem label="Prisma">
+        <ExampleCode
+          example="mysql/state-prisma"
+          file="src/provider.spec.ts"
+          region="conformance"
+          title="src/provider.spec.ts"
+        />
+      </TabItem>
+      <TabItem label="Knex">
+        <ExampleCode
+          example="mysql/state-knex"
+          file="src/provider.spec.ts"
+          region="conformance"
+          title="src/provider.spec.ts"
+        />
+      </TabItem>
+      <TabItem label="MikroORM">
+        <ExampleCode
+          example="mysql/state-mikro-orm"
           file="src/provider.spec.ts"
           region="conformance"
           title="src/provider.spec.ts"
@@ -285,7 +436,20 @@ const Page = () => (
     <SchemaIndexes dialect="mysql" />
 
     <h2>Examples</h2>
-    <ExampleRows title="@queuert/mysql" names={["state-mysql-mysql2"]} />
+    <ExampleRows
+      title="@queuert/mysql"
+      names={[
+        "mysql/state-mysql2",
+        "mysql/state-mariadb",
+        "mysql/state-bun-sql",
+        "mysql/state-drizzle",
+        "mysql/state-kysely",
+        "mysql/state-prisma",
+        "mysql/state-knex",
+        "mysql/state-mikro-orm",
+        "mysql/multi-worker",
+      ]}
+    />
     <p>
       The API reference for every export is in <A href="/api/mysql/readme/">@queuert/mysql</A>.
     </p>

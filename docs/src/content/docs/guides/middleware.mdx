@@ -1,0 +1,60 @@
+---
+title: Job Attempt Middleware
+description: Wrap job attempts with cross-cutting logic — tracing, resource injection, audit, contextual logging.
+sidebar:
+  order: 19
+---
+
+`AttemptMiddleware` wraps a **job attempt** — the attempt handler, from the moment the worker acquires the job until the handler returns its `complete` result. Middleware lets you add cross-cutting logic (tracing spans, contextual loggers, audit trails, shared resources) without touching each individual handler.
+
+A middleware has a single hook, `wrapHandler`, which wraps the whole attempt handler. It receives a `next(ctx)` call that yields the inner layer; the object passed to `next` is merged into the `attemptHandler` options, and its type flows into the handler signature. `wrapHandler` returns `next`'s result — the handler's `complete` result — because its return type requires a finished job. The worker does not inspect the returned value; an attempt counts as completed once its `complete` commits.
+
+See the [`AttemptMiddleware` API reference](/queuert/api/core/type-aliases/attemptmiddleware/) for the full type definition.
+
+## Use Cases
+
+### Cross-Cutting Around the Whole Attempt
+
+Use for concerns that span the full attempt: tracing spans, contextual loggers, per-job resources, error classification. `tracing` gives each attempt a trace ID and records a span with the attempt's outcome:
+
+<ExampleCode example="guides" file="src/middleware.ts" region="tracing" />
+
+A failing attempt propagates through `next()` — the middleware can observe, log, or enrich the error. After the middleware chain unwinds, the engine catches the error, reschedules the job, and returns normally. Always re-throw the error so the engine can handle it; swallowing the error without a committed `complete` still fails the attempt.
+
+### Load Shared Data Before the Handler
+
+Use when you want to load a resource once per attempt and make it available to the handler. `loadTenant` reads the tenant of every job before its handler runs. The middleware runs outside any transaction, so it reads through your database client directly.
+
+<ExampleCode example="guides" file="src/middleware.ts" region="load-tenant" />
+
+Middleware is not tied to a job type, so `job.input` is `unknown` — narrow it (or validate it) before use.
+
+### Inject Helpers Used in the Handler's Transaction
+
+Use to inject helpers that write alongside `complete` — audit recorders, usage meters. The handler owns the transaction, so the helper takes the transaction context from the handler. `audit` records an event for the current job through that transaction:
+
+<ExampleCode example="guides" file="src/middleware.ts" region="audit" />
+
+The handler receives every injected value typed: `traceId`, `tenant` and `audit` sit next to `job` and `complete`. It writes the audit event and the invoice in the transaction that calls `complete`:
+
+<ExampleCode example="guides" file="src/middleware.ts" region="issue-invoice" />
+
+Because the helper writes through the handler's transaction, its rows commit with the job — and roll back with it if `complete` throws or the transaction fails. In the example the first attempt fails to write the invoice, so its audit event rolls back too, and the next attempt records the event once.
+
+## Composition and Order
+
+Middleware is declared on the processor registry, not the worker. Multiple middlewares compose as an onion; the first middleware's "before" runs outermost:
+
+<ExampleCode example="guides" file="src/middleware.ts" region="registries" />
+
+For an `issue-invoice` attempt the order is `tracing` before → `loadTenant` before → `audit` before → handler → `audit` after → `loadTenant` after → `tracing` after. Each `next(ctx)` call accumulates ctx for inner layers. The handler's final ctx is the intersection of all injected ctxs.
+
+## Sharing Middleware Across Registries
+
+To share a common set of middleware across multiple registries (e.g. multiple [slices](/queuert/guides/slices/) merged into one worker), list them inline at each call site, as `billingProcessors` and `notificationProcessors` above do with `tracing` and `loadTenant`. The worker runs both registries:
+
+<ExampleCode example="guides" file="src/middleware.ts" region="worker" />
+
+Per slice, handler ctx types reflect the actual middleware list for that registry — so `audit` is visible in billing handlers but not notification handlers. Inline literals narrow tuple inference automatically; no `as const` is required.
+
+See [examples/guides/src/middleware.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/middleware.ts) for the runnable code. See also [Feature Slices](/queuert/guides/slices/) for splitting workflows across registries and the [`AttemptMiddleware` API reference](/queuert/api/core/type-aliases/attemptmiddleware/).

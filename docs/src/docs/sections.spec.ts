@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
 
 import { pageSlug } from "../../plugins/mdx.ts";
-import { sectionForPath, siteSections } from "./sections.ts";
+import { sectionForPath, siteSections, topBarSections } from "./sections.ts";
 
 const contentDirectory = fileURLToPath(new URL("../content/docs", import.meta.url));
 
@@ -117,5 +117,18 @@ describe("sectionForPath", () => {
     expect(sectionForPath("/")).toBeUndefined();
     expect(sectionForPath("/no-such-page/")).toBeUndefined();
     expect(sectionForPath("/guides/no-such-guide/")).toBeUndefined();
+  });
+});
+
+describe("topBarSections", () => {
+  it("lists every section but the changelog", () => {
+    expect(topBarSections.map((section) => section.id)).toEqual([
+      "docs",
+      "integrations",
+      "api",
+      "compare",
+      "benchmarks",
+      "blog",
+    ]);
   });
 });

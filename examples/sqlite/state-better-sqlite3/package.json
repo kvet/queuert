@@ -1,0 +1,28 @@
+{
+  "name": "example-sqlite-state-better-sqlite3",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating the SQLite state adapter with better-sqlite3 driver.",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "exports": {
+    "./provider": "./src/provider.ts"
+  },
+  "scripts": {
+    "start": "node src/index.ts",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/sqlite": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
+    "@types/better-sqlite3": "9.6.0",
+    "better-sqlite3": "13.0.3",
+    "queuert": "workspace:*"
+  }
+}

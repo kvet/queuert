@@ -1,0 +1,19 @@
+{
+  "name": "example-mysql-multi-worker",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating multiple worker processes sharing one MySQL database.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/mysql": "workspace:*",
+    "@queuert/testcontainers": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
+    "example-mysql-state-mysql2": "workspace:*",
+    "mysql2": "3.24.6",
+    "queuert": "workspace:*"
+  }
+}

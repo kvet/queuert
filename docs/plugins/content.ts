@@ -1,5 +1,5 @@
 import { glob, readFile } from "node:fs/promises";
-import { extname, join } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import mdx from "@mdx-js/rollup";
@@ -7,13 +7,14 @@ import type { Plugin, ViteDevServer } from "vite";
 import { parse as parseYaml } from "yaml";
 
 import { changelog } from "./changelog.ts";
-import { highlight } from "./highlight.ts";
 import { mdxOptions, pageSlug } from "./mdx.ts";
 import { searchIndex } from "./search-index.ts";
-import { extractRegion, readPageMeta, tsxPages } from "./tsx-pages.ts";
+import { readPageMeta, tsxPages } from "./tsx-pages.ts";
 import { typedoc } from "./typedoc.ts";
 
 export const contentDirectory = fileURLToPath(new URL("../src/content/docs", import.meta.url));
+
+const homeRoute = fileURLToPath(new URL("../src/routes/index.tsx", import.meta.url));
 
 const starlightShim = fileURLToPath(new URL("../src/components/mdx/starlight.ts", import.meta.url));
 const diagramModule = fileURLToPath(
@@ -22,9 +23,6 @@ const diagramModule = fileURLToPath(
 
 const pagesId = "virtual:docs-pages";
 const resolvedPagesId = `\0${pagesId}`;
-/** `file.ts?highlight` (whole file) or `file.ts?region=<name>&highlight` (one `// #region`). */
-const highlightQuery = /\?(?:region=([\w-]+)&)?highlight$/;
-const highlightPrefix = "\0highlight:";
 
 const apiKinds: Record<string, string> = {
   classes: "Class",
@@ -138,56 +136,53 @@ const invalidateOnContentChange = (server: ViteDevServer, ids: string[]) => {
   });
 };
 
-export const content = (options: { base: string }): Plugin[] => [
-  typedoc(),
-  tsxPages({ contentDirectory }),
-  {
-    enforce: "pre",
-    ...mdx({
-      ...mdxOptions({ contentDirectory, base: options.base }),
-      include: `${contentDirectory}/**/*.{md,mdx}`,
-    }),
-  },
-  {
-    name: "queuert:content-aliases",
-    enforce: "pre",
-    resolveId: (id, importer) => {
-      if (!importer?.startsWith(contentDirectory)) return;
-      if (id === "@astrojs/starlight/components") return starlightShim;
-      if (/^(\.\.\/)+components\/diagram$/.test(id)) return diagramModule;
+export const content = (options: { base: string }): Plugin[] => {
+  const exampleSources = new Map<string, string[]>();
+  return [
+    typedoc(),
+    tsxPages({ contentDirectory, exampleCodeRoutes: [homeRoute] }),
+    {
+      enforce: "pre",
+      ...mdx({
+        ...mdxOptions({
+          contentDirectory,
+          base: options.base,
+          onExampleSources: (page, sources) => {
+            exampleSources.set(page, sources);
+          },
+        }),
+        include: `${contentDirectory}/**/*.{md,mdx}`,
+      }),
     },
-  },
-  {
-    name: "queuert:docs-pages",
-    resolveId: (id) => (id === pagesId ? resolvedPagesId : undefined),
-    load: async (id) =>
-      id === resolvedPagesId ? `export default ${JSON.stringify(await readPages())};` : undefined,
-    configureServer: (server) => {
-      invalidateOnContentChange(server, [resolvedPagesId]);
+    {
+      // Runs after the MDX compile above, so an edit to an embedded example reloads the page.
+      name: "queuert:mdx-example-sources",
+      enforce: "pre",
+      transform(_, id) {
+        for (const source of exampleSources.get(id.split("?")[0] ?? id) ?? []) {
+          this.addWatchFile(source);
+        }
+      },
     },
-  },
-  {
-    name: "queuert:highlight",
-    enforce: "pre",
-    async resolveId(id, importer) {
-      const match = highlightQuery.exec(id);
-      if (!match) return;
-      const resolved = await this.resolve(id.slice(0, match.index), importer);
-      // The region goes before the path: a `#` or `?` suffix would not survive the dev server's URLs.
-      return resolved ? `${highlightPrefix}${match[1] ?? ""}:${resolved.id}` : undefined;
+    {
+      name: "queuert:content-aliases",
+      enforce: "pre",
+      resolveId: (id, importer) => {
+        if (!importer?.startsWith(contentDirectory)) return;
+        if (id === "@astrojs/starlight/components") return starlightShim;
+        if (/^(\.\.\/)+components\/diagram$/.test(id)) return diagramModule;
+      },
     },
-    async load(id) {
-      if (!id.startsWith(highlightPrefix)) return;
-      const rest = id.slice(highlightPrefix.length);
-      const separator = rest.indexOf(":");
-      const region = rest.slice(0, separator) || undefined;
-      const file = rest.slice(separator + 1);
-      this.addWatchFile(file);
-      const code = extractRegion(await readFile(file, "utf8"), region, file).trimEnd();
-      const lang = extname(file).slice(1);
-      return `export default ${JSON.stringify({ code, lang, html: await highlight(code, lang) })};`;
+    {
+      name: "queuert:docs-pages",
+      resolveId: (id) => (id === pagesId ? resolvedPagesId : undefined),
+      load: async (id) =>
+        id === resolvedPagesId ? `export default ${JSON.stringify(await readPages())};` : undefined,
+      configureServer: (server) => {
+        invalidateOnContentChange(server, [resolvedPagesId]);
+      },
     },
-  },
-  changelog(),
-  searchIndex({ base: options.base, contentDirectory, readPages }),
-];
+    changelog(),
+    searchIndex({ base: options.base, contentDirectory, readPages }),
+  ];
+};

@@ -1,0 +1,16 @@
+{
+  "name": "example-guides",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "for guide in src/*.ts; do node \"$guide\" || exit 1; done",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "queuert": "workspace:*"
+  },
+  "devDependencies": {
+    "@queuert/tsconfig": "workspace:*"
+  }
+}

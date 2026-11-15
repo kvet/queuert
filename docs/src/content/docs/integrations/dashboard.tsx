@@ -29,15 +29,23 @@ const Page = () => (
         </li>
         <li>
           <p>Create the dashboard with your Queuert client:</p>
-          <ExampleCode example="dashboard" file="src/dashboard.ts" region="dashboard" />
+          <ExampleCode
+            example="observability/dashboard"
+            file="src/dashboard.ts"
+            region="dashboard"
+          />
         </li>
         <li>
           <p>Mount it on your server:</p>
-          <ExampleCode example="dashboard" file="src/dashboard.ts" region="server" />
+          <ExampleCode example="observability/dashboard" file="src/dashboard.ts" region="server" />
           <p>
             When mounting at a sub-path, set <code>basePath</code>:
           </p>
-          <ExampleCode example="dashboard" file="src/dashboard-mounted.ts" region="base-path" />
+          <ExampleCode
+            example="observability/dashboard"
+            file="src/dashboard-mounted.ts"
+            region="base-path"
+          />
         </li>
       </ol>
     </Steps>
@@ -118,7 +126,7 @@ const Page = () => (
       The dashboard does not include authentication or authorization. To restrict access, add
       middleware before the dashboard handler:
     </p>
-    <ExampleCode example="dashboard" file="src/dashboard-mounted.ts" region="auth" />
+    <ExampleCode example="observability/dashboard" file="src/dashboard-mounted.ts" region="auth" />
 
     <h2>Content Security Policy</h2>
     <p>
@@ -266,7 +274,7 @@ const Page = () => (
     </p>
 
     <h2>Examples</h2>
-    <ExampleRows title="Examples" names={["dashboard"]} />
+    <ExampleRows title="Examples" names={["observability/dashboard"]} />
   </>
 );
 

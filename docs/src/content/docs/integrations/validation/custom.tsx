@@ -45,7 +45,7 @@ const Page = () => (
       declared, before any case runs. The suite drives no test runner: register one test per case
       and run it against the context. The Zod example's spec:
     </p>
-    <ExampleCode example="validation-zod" file="src/zod-adapter.spec.ts" />
+    <ExampleCode example="validation/zod" file="src/zod-adapter.spec.ts" />
     <p>
       The exact phantom shape each builder must produce is encoded in the{" "}
       <a href="https://github.com/kvet/queuert/blob/main/packages/core/src/conformance.validation-adapter/types.ts">

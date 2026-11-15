@@ -33,11 +33,11 @@ const Page = () => (
 
     <h2>Setup</h2>
     <p>Create the observability adapter with your OTEL meter and tracer:</p>
-    <ExampleCode example="observability-otel" file="src/observability.ts" region="adapter" />
+    <ExampleCode example="observability/otel" file="src/observability.ts" region="adapter" />
     <p>
       Pass it as the <code>observabilityAdapter</code> option when creating your client:
     </p>
-    <ExampleCode example="observability-otel" file="src/index.ts" region="client" />
+    <ExampleCode example="observability/otel" file="src/index.ts" region="client" />
 
     <h2>Configuration</h2>
     <FieldList
@@ -82,7 +82,7 @@ const Page = () => (
     />
 
     <h2>Examples</h2>
-    <ExampleRows title="OpenTelemetry" names={["observability-otel"]} />
+    <ExampleRows title="OpenTelemetry" names={["observability/otel"]} />
   </>
 );
 

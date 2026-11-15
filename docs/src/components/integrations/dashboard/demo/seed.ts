@@ -1,4 +1,8 @@
-import { createIdGenerator, jobTypes, populateScenarios } from "example-dashboard/scenarios";
+import {
+  createIdGenerator,
+  jobTypes,
+  populateScenarios,
+} from "example-observability-dashboard/scenarios";
 import {
   type Client,
   createClient,

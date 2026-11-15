@@ -1,15 +1,7 @@
 type SiteGroup = { label: string; slugs: string[] };
 
 export type SiteSection = {
-  id:
-    | "docs"
-    | "integrations"
-    | "examples"
-    | "api"
-    | "compare"
-    | "benchmarks"
-    | "blog"
-    | "changelog";
+  id: "docs" | "integrations" | "api" | "compare" | "benchmarks" | "blog" | "changelog";
   label: string;
   href: string;
   groups: SiteGroup[];
@@ -113,33 +105,6 @@ export const siteSections: SiteSection[] = [
     ],
   },
   {
-    id: "examples",
-    label: "Examples",
-    href: "/examples/",
-    groups: [
-      { label: "Overview", slugs: ["examples"] },
-      {
-        label: "Integrations",
-        slugs: [
-          "examples/state-adapters",
-          "examples/notify-adapters",
-          "examples/validation",
-          "examples/logging-observability",
-        ],
-      },
-      {
-        label: "Showcases",
-        slugs: [
-          "examples/building-chains",
-          "examples/scheduling",
-          "examples/reliability",
-          "examples/app-structure",
-          "examples/operations",
-        ],
-      },
-    ],
-  },
-  {
     id: "api",
     label: "API",
     href: "/api/",
@@ -209,6 +174,9 @@ export const siteSections: SiteSection[] = [
 
 export const sectionById = (id: SiteSection["id"]): SiteSection =>
   siteSections.find((section) => section.id === id)!;
+
+/** The sections the top bar lists. The changelog is reached from the version badge instead. */
+export const topBarSections = siteSections.filter((section) => section.id !== "changelog");
 
 export const sectionForPath = (pathname: string): SiteSection | undefined => {
   const path = pathname.replace(/^\/+/, "");
