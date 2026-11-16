@@ -1,6 +1,6 @@
 # MongoDB adapter
 
-Add `@queuert/mongodb`: a state adapter and a notify adapter for MongoDB replica sets, with providers that join the user's `ClientSession` so chains are created and completed in the same transaction as their domain writes. MongoDB transactions run at snapshot isolation, with no lock waits, no `SKIP LOCKED` and no savepoints. The adapter therefore applies the write-based bookkeeping of `design/pg-isolation-levels.md` and the chain/job split of `design/chain-table.md` from its first release, and adds a retry helper for user transactions.
+Add `@queuert/mongodb`: a state adapter and a notify adapter for MongoDB replica sets, with providers that join the user's `ClientSession` so chains are created and completed in the same transaction as their domain writes. MongoDB transactions run at snapshot isolation, with no lock waits, no `SKIP LOCKED` and no savepoints. The adapter therefore applies the write-based bookkeeping of `design/isolation-levels.md` and the chain/job split of `design/chain-table.md` from its first release, and adds a retry helper for user transactions.
 
 ## Goals
 
@@ -95,7 +95,7 @@ MongoDB transactions behave like PostgreSQL REPEATABLE READ, with first-writer-w
 
 ### Rule: every invariant is a write-write conflict on a shared document
 
-The rule from `design/pg-isolation-levels.md`, with one MongoDB addition: **the write must change the document**. In the spike a `$set: { hasDependents: true }` on a document where it was already `true` reported `modifiedCount: 0` and produced no conflict. Every write that exists to produce a conflict is a `$inc` of a `lockSeq` field.
+The rule from `design/isolation-levels.md`, with one MongoDB addition: **the write must change the document**. In the spike a `$set: { hasDependents: true }` on a document where it was already `true` reported `modifiedCount: 0` and produced no conflict. Every write that exists to produce a conflict is a `$inc` of a `lockSeq` field.
 
 | Invariant                                           | Shared document            | Writer A                                                 | Writer B                                        |
 | --------------------------------------------------- | -------------------------- | -------------------------------------------------------- | ----------------------------------------------- |
@@ -310,7 +310,7 @@ The fence tables of the PostgreSQL adapter's [write fence](../docs/src/content/d
 From the spike (single node, laptop; compare rows, not absolutes):
 
 - **Claims**: about 1,850 jobs/s with 8 workers on the transactional design, against 3,600 for the ungated autocommit variant.
-- **Hot blocker**: 16 concurrent transactions attaching dependents to one blocker chain fall from 2,867 to about 450 transactions/s once the attach writes the chain (`$inc`), with a p99 of 475 ms and up to 15 attempts. This is the price of correctness at snapshot isolation; PostgreSQL REPEATABLE READ pays the same (`design/pg-isolation-levels.md`: 4.5% 40001 on hot blockers), only with fewer retries because it waits first. Fan-in to one popular blocker chain is the workload to warn about in the docs.
+- **Hot blocker**: 16 concurrent transactions attaching dependents to one blocker chain fall from 2,867 to about 450 transactions/s once the attach writes the chain (`$inc`), with a p99 of 475 ms and up to 15 attempts. This is the price of correctness at snapshot isolation; PostgreSQL REPEATABLE READ pays the same (`design/isolation-levels.md`: 4.5% 40001 on hot blockers), only with fewer retries because it waits first. Fan-in to one popular blocker chain is the workload to warn about in the docs.
 - **Batches**: `insertMany` of 10,000 jobs in a transaction 279 ms; a pipeline `updateMany` of 2,000 dependents 54 ms, of 50,000 2.1 s.
 
 Replication latency (`w: majority` across three nodes), failover and multi-node clock skew were not measured; the benchmark package's MongoDB setup should use a three-node replica set.
@@ -339,10 +339,10 @@ Replication latency (`w: majority` across three nodes), failover and multi-node 
 3. `withMongoTransaction`, the notify adapter, examples, docs.
 4. Query-performance benchmark and the three-node throughput run; decide whether the autocommit claim and its orphan sweep are worth a follow-up.
 
-The adapter does not wait on `design/chain-table.md` or `design/pg-isolation-levels.md`: it implements today's contract, with chain documents and counters internal to it. When core adopts `hasDependents` on `completeJobs` results and separate chain ids, the MongoDB adapter maps them directly.
+The adapter does not wait on `design/chain-table.md` or `design/isolation-levels.md`: it implements today's contract, with chain documents and counters internal to it. When core adopts `hasDependents` on `completeJobs` results and separate chain ids, the MongoDB adapter maps them directly.
 
 ## Related designs
 
-- **PostgreSQL isolation levels** (`design/pg-isolation-levels.md`): the rule and counters this adapter uses from the start.
+- **Isolation levels** (`design/isolation-levels.md`): the rule and counters this adapter uses from the start.
 - **Chain table** (`design/chain-table.md`): the chain/job split, here as two collections.
 - **Unbounded blockers** (`design/unbounded-blockers.md`): would move the embedded `blockers` array into its own collection, since the array is bounded by `maxBlockersPerJob` and a 16 MB document.
