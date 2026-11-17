@@ -7,10 +7,15 @@ import type { BaseTxContext } from "queuert";
  *
  * - `undefined_table` — error 1146 (`ER_NO_SUCH_TABLE`), with the missing table's qualified name as
  *   the server reports it (`Table '<database>.<table>' doesn't exist`).
+ * - `transaction_conflict` — error 1213 (`ER_LOCK_DEADLOCK`) or 1020 (`ER_CHECKREAD`, raised by
+ *   MariaDB's `innodb_snapshot_isolation`). The adapter retries these in the transactions and
+ *   statements it runs without a caller's transaction.
  *
  * @experimental
  */
-export type MysqlErrorClassification = { kind: "undefined_table"; tableName: string };
+export type MysqlErrorClassification =
+  | { kind: "undefined_table"; tableName: string }
+  | { kind: "transaction_conflict" };
 
 /**
  * MySQL and MariaDB state provider interface.
@@ -28,10 +33,10 @@ export type MysqlErrorClassification = { kind: "undefined_table"; tableName: str
  */
 export type MysqlStateProvider<TTxContext extends BaseTxContext> = {
   /**
-   * Executes a callback within a database transaction at READ COMMITTED: issues
-   * `SET TRANSACTION ISOLATION LEVEL READ COMMITTED` and then `START TRANSACTION` on the same
-   * connection with nothing between them, commits on success, rolls back on error, and releases
-   * the connection.
+   * Executes a callback within a database transaction at the connection's isolation level: issues
+   * `START TRANSACTION`, commits on success, rolls back on error, and releases the connection. The
+   * adapter may call it again after a `transaction_conflict` error, so it must open a fresh
+   * transaction on every call.
    */
   withTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 

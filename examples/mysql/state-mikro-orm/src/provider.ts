@@ -1,9 +1,4 @@
-import {
-  type EntityManager,
-  IsolationLevel,
-  type MikroORM,
-  type Transaction,
-} from "@mikro-orm/mysql";
+import type { EntityManager, MikroORM, Transaction } from "@mikro-orm/mysql";
 import type { MysqlStateProvider } from "@queuert/mysql";
 import { CompiledQuery, type Kysely } from "kysely";
 import { type TxHooks, createTxHooks } from "queuert";
@@ -75,13 +70,10 @@ export const createMikroOrmMysqlStateProvider = ({
     withTransaction: async (fn) => {
       let transaction: Transaction = undefined;
       try {
-        return await orm.em.transactional(
-          async (em) => {
-            transaction = em.getTransactionContext();
-            return fn({ em });
-          },
-          { isolationLevel: IsolationLevel.READ_COMMITTED },
-        );
+        return await orm.em.transactional(async (em) => {
+          transaction = em.getTransactionContext();
+          return fn({ em });
+        });
       } catch (error) {
         if (transaction !== undefined) takeSettler(transaction)?.rollback();
         throw error;
@@ -96,6 +88,9 @@ export const createMikroOrmMysqlStateProvider = ({
     },
     classifyError: ({ error }) => {
       const driverError = error as { errno?: unknown; message?: unknown } | undefined;
+      if (driverError?.errno === 1213 || driverError?.errno === 1020) {
+        return { kind: "transaction_conflict" };
+      }
       if (driverError?.errno !== 1146) return undefined;
       const tableName = /Table '([^']+)' doesn't exist/.exec(String(driverError.message))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };

@@ -1,10 +1,6 @@
 import { afterAll, beforeAll, describe, test } from "bun:test";
 
-import {
-  createPgNotifyProviderConformanceContext,
-  type NotifyAdapterConformanceContext,
-  pgNotifyProviderConformanceCases,
-} from "@queuert/postgres/conformance";
+import { createPgNotifyProviderConformanceContext } from "@queuert/postgres/conformance";
 import { acquirePostgres, type AcquiredPostgres } from "@queuert/testcontainers";
 import { SQL } from "bun";
 
@@ -14,14 +10,13 @@ import { createBunSqlNotifyProvider } from "./provider.ts";
 describe("postgresql/notify-bun-sql provider conformance", () => {
   let pg: AcquiredPostgres;
   let sql: SQL;
-  let context: NotifyAdapterConformanceContext;
+  const { context, cases } = createPgNotifyProviderConformanceContext({
+    createNotifyProvider: async () => createBunSqlNotifyProvider({ sql }),
+  });
 
   beforeAll(async () => {
     pg = await acquirePostgres("postgres:18", import.meta.url);
     sql = new SQL(pg.connectionString, { max: 10 });
-    context = createPgNotifyProviderConformanceContext({
-      createNotifyProvider: async () => createBunSqlNotifyProvider({ sql }),
-    });
   }, 60_000);
 
   afterAll(async () => {
@@ -29,7 +24,7 @@ describe("postgresql/notify-bun-sql provider conformance", () => {
     await pg[Symbol.asyncDispose]();
   });
 
-  for (const conformanceCase of pgNotifyProviderConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run(context);
     });

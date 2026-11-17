@@ -1,10 +1,5 @@
 import { MikroORM } from "@mikro-orm/sqlite";
-import {
-  asyncSqliteStateProviderConformanceCases,
-  createSqliteStateProviderConformanceContext,
-  type SqliteStateProviderConformanceContext,
-  sqliteStateProviderConformanceCases,
-} from "@queuert/sqlite/conformance";
+import { createSqliteStateProviderConformanceContext } from "@queuert/sqlite/conformance";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { createMikroOrmSqliteStateProvider, type MikroOrmSqliteContext } from "./provider.ts";
@@ -27,21 +22,17 @@ afterAll(async () => {
 
 // #region conformance
 describe("sqlite/state-mikro-orm provider conformance", () => {
-  let context: SqliteStateProviderConformanceContext;
-
-  beforeAll(async () => {
-    context = await createSqliteStateProviderConformanceContext({
-      createStateProvider: async () => stateProvider,
-      withNonTransactionContext: async (fn) => fn({ em: orm.em.fork() }),
-      withSavepoint: async (txCtx, fn) =>
-        (txCtx as MikroOrmSqliteContext).em.transactional(async (em) => fn({ em })),
-    });
+  const { context, cases } = createSqliteStateProviderConformanceContext({
+    mode: "async",
+    createStateProvider: async () => stateProvider,
+    withNonTransactionContext: async (fn) => fn({ em: orm.em.fork() }),
+    withSavepoint: async (txCtx, fn) =>
+      (txCtx as MikroOrmSqliteContext).em.transactional(async (em) => fn({ em })),
   });
 
-  for (const conformanceCase of [
-    ...sqliteStateProviderConformanceCases,
-    ...asyncSqliteStateProviderConformanceCases,
-  ]) {
+  beforeAll(async () => {});
+
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run(context);
     });

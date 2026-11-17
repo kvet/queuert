@@ -14,11 +14,29 @@ export const pgNotifyProviderConformanceGroups: ConformanceGroup<NotifyAdapterCo
   notifyAdapterBaseGroups;
 
 /**
- * Prepares the context the {@link pgNotifyProviderConformanceCases} run against: each case gets its
- * own notify adapter over a new provider, on channels of its own. The test file still owns the
- * provider's resources and releases them itself.
+ * Prepares every notify adapter contract case, run through `createPgNotifyAdapter` over a provider,
+ * and the context they run against: each case gets its own notify adapter over a new provider, on
+ * channels of its own. The test file still owns the provider's resources and releases them itself.
+ * Works with any test runner.
  *
  * @param options - Context configuration.
+ *
+ * @example
+ * ```ts
+ * import { afterAll, test } from "vitest";
+ *
+ * const pool = new Pool({ connectionString });
+ * const { context, cases } = createPgNotifyProviderConformanceContext({
+ *   createNotifyProvider: async () => createPgPoolNotifyProvider({ pool }),
+ * });
+ * afterAll(async () => pool.end());
+ *
+ * for (const conformanceCase of cases) {
+ *   test(conformanceCase.title, async () => {
+ *     await conformanceCase.run(context);
+ *   });
+ * }
+ * ```
  */
 export const createPgNotifyProviderConformanceContext = ({
   createNotifyProvider,
@@ -29,36 +47,17 @@ export const createPgNotifyProviderConformanceContext = ({
    * client connections.
    */
   createNotifyProvider: () => Promise<PgNotifyProvider>;
-}): NotifyAdapterConformanceContext => ({
-  // A channel prefix per adapter keeps one case's notifications away from the next.
-  createNotifyAdapter: async () =>
-    createPgNotifyAdapter({
-      notifyProvider: await createNotifyProvider(),
-      channelPrefix: `queuert_conformance_${randomUUID().slice(0, 8)}`,
-    }),
+}): {
+  context: NotifyAdapterConformanceContext;
+  cases: ConformanceTestCase<NotifyAdapterConformanceContext>[];
+} => ({
+  context: {
+    // A channel prefix per adapter keeps one case's notifications away from the next.
+    createNotifyAdapter: async () =>
+      createPgNotifyAdapter({
+        notifyProvider: await createNotifyProvider(),
+        channelPrefix: `queuert_conformance_${randomUUID().slice(0, 8)}`,
+      }),
+  },
+  cases: toConformanceTestCases(pgNotifyProviderConformanceGroups),
 });
-
-/**
- * Every notify adapter contract case, run through `createPgNotifyAdapter` over a provider. Run them
- * one per test in your own test file against a context from {@link
- * createPgNotifyProviderConformanceContext}. Works with any test runner.
- *
- * @example
- * ```ts
- * import { afterAll, test } from "vitest";
- *
- * const pool = new Pool({ connectionString });
- * const context = createPgNotifyProviderConformanceContext({
- *   createNotifyProvider: async () => createPgPoolNotifyProvider({ pool }),
- * });
- * afterAll(async () => pool.end());
- *
- * for (const conformanceCase of pgNotifyProviderConformanceCases) {
- *   test(conformanceCase.title, async () => {
- *     await conformanceCase.run(context);
- *   });
- * }
- * ```
- */
-export const pgNotifyProviderConformanceCases: ConformanceTestCase<NotifyAdapterConformanceContext>[] =
-  toConformanceTestCases(pgNotifyProviderConformanceGroups);

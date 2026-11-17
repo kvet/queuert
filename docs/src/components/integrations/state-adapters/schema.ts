@@ -128,6 +128,12 @@ export const schemaTables: Record<SchemaDialect, SchemaTable[]> = {
           head: true,
           description: "Set once a job_blocker row references the chain; never cleared",
         },
+        {
+          name: "blockers_remaining",
+          type: "integer",
+          description:
+            "Number of the job's job_blocker rows whose blocker chain is not completed; meaningful on blocked jobs",
+        },
       ],
     },
     {
@@ -467,6 +473,12 @@ export const schemaTables: Record<SchemaDialect, SchemaTable[]> = {
           type: "BOOLEAN",
           head: true,
           description: "Set once a job_blocker row references the chain; never cleared",
+        },
+        {
+          name: "blockers_remaining",
+          type: "INT",
+          description:
+            "Number of the job's job_blocker rows whose blocker chain is not completed; meaningful on blocked jobs",
         },
       ],
     },

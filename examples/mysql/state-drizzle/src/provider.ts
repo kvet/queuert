@@ -40,9 +40,7 @@ export const createDrizzleMysqlStateProvider = <TSchema extends Record<string, u
 
   return {
     withTransaction: async (cb) =>
-      withTxHooks(async (txHooks) =>
-        db.transaction(async (tx) => cb({ tx, txHooks }), { isolationLevel: "read committed" }),
-      ),
+      withTxHooks(async (txHooks) => db.transaction(async (tx) => cb({ tx, txHooks }))),
     isTransaction: (txCtx) => txCtx.tx instanceof MySqlTransaction,
     onTransactionCommit: (txCtx, callback) => {
       txCtx.txHooks.onCommit(callback);
@@ -52,10 +50,14 @@ export const createDrizzleMysqlStateProvider = <TSchema extends Record<string, u
     },
     classifyError: ({ error }) => {
       type DriverError = { errno?: unknown; message?: unknown; cause?: DriverError };
-      const driverError = [
+      const candidates = [
         error as DriverError | undefined,
         (error as DriverError | undefined)?.cause,
-      ].find((candidate) => candidate?.errno === 1146);
+      ];
+      if (candidates.some((candidate) => candidate?.errno === 1213 || candidate?.errno === 1020)) {
+        return { kind: "transaction_conflict" };
+      }
+      const driverError = candidates.find((candidate) => candidate?.errno === 1146);
       if (driverError === undefined) return undefined;
       const tableName = /Table '([^']+)' doesn't exist/.exec(String(driverError.message))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };

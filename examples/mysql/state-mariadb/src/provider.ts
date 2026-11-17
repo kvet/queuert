@@ -30,7 +30,6 @@ export const createMariadbPoolStateProvider = ({
         const connection = await pool.getConnection();
         const txCtx: MariadbPoolContext = { connection, txHooks };
         try {
-          await connection.query("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
           await connection.beginTransaction();
           openTransactions.add(connection);
           const result = await cb(txCtx);
@@ -63,6 +62,9 @@ export const createMariadbPoolStateProvider = ({
           const tableName = /Table '([^']+)' doesn't exist/.exec(String(driverError.message))?.[1];
           return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
         }
+        case 1020:
+        case 1213:
+          return { kind: "transaction_conflict" };
         default:
           return undefined;
       }

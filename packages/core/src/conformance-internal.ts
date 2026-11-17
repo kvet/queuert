@@ -25,6 +25,8 @@ export {
   stateAdapterAsyncGroups,
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
+  stateAdapterNonLockingReadGroups,
+  stateAdapterGapLockFreeGroups,
   stateAdapterCountCapGroups,
   stateAdapterSavepointGroups,
   stateAdapterSchemaFenceConcurrentTransactionGroups,

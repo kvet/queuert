@@ -41,9 +41,7 @@ export const createBunSqlStateProvider = ({
 
   return {
     withTransaction: async (cb) =>
-      withTxHooks(async (txHooks) =>
-        sql.begin("isolation level read committed", async (txSql) => cb({ txSql, txHooks })),
-      ),
+      withTxHooks(async (txHooks) => sql.begin(async (txSql) => cb({ txSql, txHooks }))),
     isTransaction: (txCtx) => typeof txCtx.txSql.savepoint === "function",
     onTransactionCommit: (txCtx, callback) => {
       txCtx.txHooks.onCommit(callback);
@@ -53,6 +51,7 @@ export const createBunSqlStateProvider = ({
     },
     classifyError: ({ error }) => {
       const driverError = error as { errno?: unknown; message?: unknown } | undefined;
+      if (driverError?.errno === "40001") return { kind: "transaction_conflict" };
       if (driverError?.errno !== "42P01") return undefined;
       const tableName = /relation "([^"]+)" does not exist/.exec(String(driverError.message))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };

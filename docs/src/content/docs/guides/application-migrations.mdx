@@ -99,12 +99,14 @@ The copied migrations count as applied when their names match, and the copy is a
 
 ## Testing a Provider
 
-`@queuert/postgres/conformance` exports `pgMigratorConformanceCases` and `createPgMigratorConformanceContext`, and `@queuert/sqlite/conformance` and `@queuert/mysql/conformance` the SQLite and MySQL equivalents. They run the migrator over your state provider: history, transactional and non-transactional migrations, reverts and the lease. Over a synchronous SQLite provider, `sqliteMigratorConformanceCases` run the same cases synchronously, and the lease cases pass without running, against a context `createSqliteMigratorConformanceContext` builds from it. Register one test per case with any test runner:
+`@queuert/postgres/conformance` exports `createPgMigratorConformanceContext`, and `@queuert/sqlite/conformance` and `@queuert/mysql/conformance` the SQLite and MySQL equivalents. It returns the cases that run the migrator over your state provider (history, transactional and non-transactional migrations, reverts and the lease) and the context they run against. Over a synchronous SQLite provider, the cases from `createSqliteMigratorConformanceContext` run synchronously, and the lease cases pass without running. Register one test per case with any test runner:
 
 ```ts
-const context = createPgMigratorConformanceContext({ stateProvider });
+const { context, cases } = createPgMigratorConformanceContext({
+  createStateProvider: () => stateProvider,
+});
 
-for (const conformanceCase of pgMigratorConformanceCases) {
+for (const conformanceCase of cases) {
   test(conformanceCase.title, async () => {
     await conformanceCase.run(context);
   });

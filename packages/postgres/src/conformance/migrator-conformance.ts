@@ -11,8 +11,8 @@ import { createPgMigratorStore } from "../migration-store/migration-store.pg.ts"
 import type { PgStateProvider } from "../state-provider/state-provider.pg.ts";
 
 /**
- * The context the {@link pgMigratorConformanceCases} run against. Get it from
- * {@link createPgMigratorConformanceContext} and pass it to every case unchanged.
+ * The context the cases from {@link createPgMigratorConformanceContext} run against. Pass it
+ * to every case unchanged.
  *
  * @experimental
  */
@@ -25,67 +25,74 @@ export const pgMigratorConformanceGroups: ConformanceGroup<PgMigratorConformance
 ];
 
 /**
- * Prepares the context the {@link pgMigratorConformanceCases} run against, with
- * the store `createPgMigrator` uses over `stateProvider`. The cases create tables named
+ * Prepares the cases that check `createPgMigrator` over a provider (its history, transactional and
+ * non-transactional migrations, reverts and lease) and the context they run against, with the
+ * store `createPgMigrator` uses over the provider. The cases create tables named
  * `conformance_<random>_*`, the history and lease tables in `public` and the others in the
  * provider's default schema, and drop them when they end.
  *
  * @experimental
  * @param options - Context configuration.
- */
-export const createPgMigratorConformanceContext = ({
-  stateProvider,
-}: {
-  /** The provider under test, over a database the cases may create tables in. */
-  stateProvider: PgStateProvider<any>;
-}): PgMigratorConformanceContext => ({
-  createMigrationStore: ({ migrationTableName, lockTableName }) =>
-    createPgMigratorStore({ stateProvider, migrationTableName, lockTableName }),
-  executeSql: async (sql, txCtx) => {
-    await stateProvider.executeSql({
-      txCtx,
-      sql,
-      params: [],
-      paramTypes: {},
-      columnTypes: {},
-      readOnly: false,
-    });
-  },
-  countRows: async (table) => {
-    const [row] = (await stateProvider.executeSql({
-      sql: `SELECT CAST(count(*) AS integer) AS count FROM ${table}`,
-      params: [],
-      paramTypes: {},
-      columnTypes: { count: "number" },
-      readOnly: true,
-    })) as { count: number }[];
-    return row.count;
-  },
-});
-
-/**
- * Cases that check `createPgMigrator` over a provider: its history, transactional and
- * non-transactional migrations, reverts and lease. Run them one per test in your own test file
- * against a context from {@link createPgMigratorConformanceContext}. Works with any test runner.
- *
- * @experimental
  *
  * @example
  * ```ts
- * import { afterAll, test } from "vitest";
+ * import { afterAll, beforeAll, test } from "vitest";
  *
- * const pool = new Pool({ connectionString });
- * const context = createPgMigratorConformanceContext({
- *   stateProvider: createPgPoolStateProvider({ pool }),
+ * let pool: Pool;
+ * const { context, cases } = createPgMigratorConformanceContext({
+ *   createStateProvider: () => createPgPoolStateProvider({ pool }),
+ * });
+ * beforeAll(() => {
+ *   pool = new Pool({ connectionString });
  * });
  * afterAll(async () => pool.end());
  *
- * for (const conformanceCase of pgMigratorConformanceCases) {
+ * for (const conformanceCase of cases) {
  *   test(conformanceCase.title, async () => {
  *     await conformanceCase.run(context);
  *   });
  * }
  * ```
  */
-export const pgMigratorConformanceCases: ConformanceTestCase<PgMigratorConformanceContext>[] =
-  toConformanceTestCases(pgMigratorConformanceGroups);
+export const createPgMigratorConformanceContext = ({
+  createStateProvider,
+}: {
+  /**
+   * Creates the provider under test, over a database the cases may create tables in. Called once,
+   * when the first case runs.
+   */
+  createStateProvider: () => PgStateProvider<any>;
+}): {
+  context: PgMigratorConformanceContext;
+  cases: ConformanceTestCase<PgMigratorConformanceContext>[];
+} => {
+  let stateProvider: PgStateProvider<any> | undefined;
+  const provider = (): PgStateProvider<any> => (stateProvider ??= createStateProvider());
+  return {
+    context: {
+      createMigrationStore: ({ migrationTableName, lockTableName }) =>
+        createPgMigratorStore({ stateProvider: provider(), migrationTableName, lockTableName }),
+      executeSql: async (sql, txCtx) => {
+        await provider().executeSql({
+          txCtx,
+          sql,
+          params: [],
+          paramTypes: {},
+          columnTypes: {},
+          readOnly: false,
+        });
+      },
+      countRows: async (table) => {
+        const [row] = (await provider().executeSql({
+          sql: `SELECT CAST(count(*) AS integer) AS count FROM ${table}`,
+          params: [],
+          paramTypes: {},
+          columnTypes: { count: "number" },
+          readOnly: true,
+        })) as { count: number }[];
+        return row.count;
+      },
+    },
+    cases: toConformanceTestCases(pgMigratorConformanceGroups),
+  };
+};

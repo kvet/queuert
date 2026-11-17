@@ -20,7 +20,9 @@ const it = baseIt
     { auto: true },
     detectResourceLeaks({ additionalAllowedTypes: TESTCONTAINERS_RESOURCE_TYPES }),
   )
-  .extend("conformance", { scope: "file" }, async ({ pool }) => createEndToEndContext(pool));
+  .extend("conformance", { scope: "file" }, async ({ pool }) =>
+    createEndToEndContext(pool, "READ COMMITTED"),
+  );
 
 // NOTE: hack for vitest plugin
 baseIt("index");

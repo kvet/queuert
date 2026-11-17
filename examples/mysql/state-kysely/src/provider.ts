@@ -12,10 +12,7 @@ export const createKyselyMysqlStateProvider = <TDatabase>({
   return {
     withTransaction: async (cb) =>
       withTxHooks(async (txHooks) =>
-        db
-          .transaction()
-          .setIsolationLevel("read committed")
-          .execute(async (txDb) => cb({ db: txDb, txHooks })),
+        db.transaction().execute(async (txDb) => cb({ db: txDb, txHooks })),
       ),
     isTransaction: (txCtx) => txCtx.db.isTransaction,
     onTransactionCommit: (txCtx, callback) => {
@@ -31,6 +28,9 @@ export const createKyselyMysqlStateProvider = <TDatabase>({
           const tableName = /Table '([^']+)' doesn't exist/.exec(String(driverError.message))?.[1];
           return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
         }
+        case 1020:
+        case 1213:
+          return { kind: "transaction_conflict" };
         default:
           return undefined;
       }

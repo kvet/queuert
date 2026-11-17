@@ -20,7 +20,7 @@ const it = baseIt.extend("conformance", { scope: "file" }, async ({}, { onCleanu
   });
   return createRedisStateProviderConformanceContext({
     createStateProvider: async () => createNodeRedisStateProvider({ client }),
-  });
+  }).context;
 });
 
 // NOTE: hack for vitest plugin

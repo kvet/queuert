@@ -7,6 +7,7 @@ import {
   stateAdapterAsyncGroups,
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
+  stateAdapterGapLockFreeGroups,
 } from "queuert/conformance-internal";
 import { it as baseIt, describe, expect } from "vitest";
 
@@ -116,9 +117,10 @@ for (const { image, dialect, connectionOptions } of acquired) {
     return createMysqlStateProviderConformanceContext({
       createStateProvider: async () => createValidatingProvider(pool, violations),
       dialect,
+      isolationLevel: "REPEATABLE READ",
       withNonTransactionContext: withMysql2PoolNonTransactionContext(pool),
       withSavepoint: withMysql2PoolSavepoint,
-    });
+    }).context;
   });
 
   describe(`${image} SQL contract`, () => {
@@ -127,7 +129,9 @@ for (const { image, dialect, connectionOptions } of acquired) {
       groups: [
         ...stateAdapterBaseGroups,
         ...stateAdapterAsyncGroups,
-        ...stateAdapterConcurrentTransactionGroups,
+        ...stateAdapterConcurrentTransactionGroups.filter(
+          (group) => !stateAdapterGapLockFreeGroups.includes(group),
+        ),
       ],
     });
 

@@ -35,9 +35,10 @@ const it = baseIt
   .extend("conformance", { scope: "file" }, async ({ pool, notifyPool }) =>
     createEndToEndContext(
       pool,
+      "READ COMMITTED",
       createPgNotifyProviderConformanceContext({
         createNotifyProvider: async () => createPgPoolNotifyProvider({ pool: notifyPool }),
-      }).createNotifyAdapter,
+      }).context.createNotifyAdapter,
     ),
   );
 

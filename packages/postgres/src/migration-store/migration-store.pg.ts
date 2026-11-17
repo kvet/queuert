@@ -53,6 +53,12 @@ const unrecordMigrationStatement = sql(
   /* sql */ `DELETE FROM {{migration_table}} WHERE name = $1`,
   { id: "unrecordMigration", params: [t.string()], columns: {} },
 );
+const readCommittedStatement = sql(/* sql */ `SET TRANSACTION ISOLATION LEVEL READ COMMITTED`, {
+  id: "setMigrationTransactionReadCommitted",
+  params: [],
+  columns: {},
+  readOnly: true,
+});
 const serializeMigrationTransactionStatement = sql(
   /* sql */ `DO $$ BEGIN PERFORM pg_advisory_xact_lock(hashtext('{{lock_table}}'), 0); END $$`,
   { id: "serializeMigrationTransaction", params: [], columns: {}, readOnly: true },
@@ -122,6 +128,7 @@ export const createPgMigrationStore = <TTxContext extends BaseTxContext>({
   const getAppliedMigrationsSql = applyTemplate(getAppliedMigrationsStatement);
   const recordMigrationSql = applyTemplate(recordMigrationStatement);
   const unrecordMigrationSql = applyTemplate(unrecordMigrationStatement);
+  const readCommittedSql = applyTemplate(readCommittedStatement);
   const serializeMigrationTransactionSql = applyTemplate(serializeMigrationTransactionStatement);
   const createMigrationLockTableSql = applyTemplate(createMigrationLockTableStatement);
   const acquireMigrationLockSql = applyTemplate(acquireMigrationLockStatement);
@@ -135,6 +142,7 @@ export const createPgMigrationStore = <TTxContext extends BaseTxContext>({
         return;
       }
       await stateProvider.withTransaction(async (txCtx) => {
+        await exec({ txCtx, sql: readCommittedSql });
         await exec({ txCtx, sql: serializeMigrationTransactionSql });
         const [found] = await exec({ txCtx, sql: findMigrationObjectsSql });
         if (createSchema && !found.schema_exists) {
@@ -150,6 +158,7 @@ export const createPgMigrationStore = <TTxContext extends BaseTxContext>({
     },
     runInTransaction: async (fn) =>
       stateProvider.withTransaction(async (txCtx) => {
+        await exec({ txCtx, sql: readCommittedSql });
         await exec({ txCtx, sql: serializeMigrationTransactionSql });
         return fn(txCtx);
       }),
@@ -163,17 +172,23 @@ export const createPgMigrationStore = <TTxContext extends BaseTxContext>({
     unrecordMigration: async (txCtx, name) => {
       await exec({ txCtx, sql: unrecordMigrationSql, params: [name] });
     },
-    acquireMigrationLock: async (ownerId, ttlMs) => {
-      const rows = await exec({ sql: acquireMigrationLockSql, params: [ownerId, ttlMs] });
-      return rows.length > 0;
-    },
-    extendMigrationLock: async (ownerId, ttlMs) => {
-      const rows = await exec({ sql: extendMigrationLockSql, params: [ownerId, ttlMs] });
-      return rows.length > 0;
-    },
-    releaseMigrationLock: async (ownerId) => {
-      await exec({ sql: releaseMigrationLockSql, params: [ownerId] });
-    },
+    acquireMigrationLock: async (ownerId, ttlMs) =>
+      stateProvider.withTransaction(async (txCtx) => {
+        await exec({ txCtx, sql: readCommittedSql });
+        const rows = await exec({ txCtx, sql: acquireMigrationLockSql, params: [ownerId, ttlMs] });
+        return rows.length > 0;
+      }),
+    extendMigrationLock: async (ownerId, ttlMs) =>
+      stateProvider.withTransaction(async (txCtx) => {
+        await exec({ txCtx, sql: readCommittedSql });
+        const rows = await exec({ txCtx, sql: extendMigrationLockSql, params: [ownerId, ttlMs] });
+        return rows.length > 0;
+      }),
+    releaseMigrationLock: async (ownerId) =>
+      stateProvider.withTransaction(async (txCtx) => {
+        await exec({ txCtx, sql: readCommittedSql });
+        await exec({ txCtx, sql: releaseMigrationLockSql, params: [ownerId] });
+      }),
   };
 };
 

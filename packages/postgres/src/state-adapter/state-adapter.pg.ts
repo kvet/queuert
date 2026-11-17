@@ -1,6 +1,7 @@
 import type { UUID } from "node:crypto";
 
 import { createLatch } from "@queuert/helpers/latch";
+import { sleep } from "@queuert/helpers/sleep";
 import {
   type DataType,
   type InferColumns,
@@ -79,6 +80,7 @@ type DbJob = {
   trace_context: string | null;
 
   has_dependents: boolean;
+  blockers_remaining: number;
 };
 
 type DbWorker = {
@@ -250,12 +252,39 @@ CREATE TABLE {{schema}}.{{table_prefix}}schema_fence_v1 (id integer PRIMARY KEY)
         sql(/* sql */ `SET LOCAL lock_timeout = '5000ms'`),
         sql(/* sql */ `
 ALTER TABLE {{schema}}.{{table_prefix}}job
-  ADD COLUMN has_dependents boolean NOT NULL DEFAULT false`),
+  ADD COLUMN has_dependents boolean NOT NULL DEFAULT false,
+  ADD COLUMN blockers_remaining integer NOT NULL DEFAULT 0`),
         sql(/* sql */ `
 UPDATE {{schema}}.{{table_prefix}}job h
 SET has_dependents = true
 WHERE h.chain_index = 0
   AND h.id IN (SELECT jb.blocked_by_chain_id FROM {{schema}}.{{table_prefix}}job_blocker jb)`),
+        sql(/* sql */ `
+UPDATE {{schema}}.{{table_prefix}}job j
+SET blockers_remaining = c.blockers_remaining
+FROM (
+  SELECT jb.job_id, count(*)::integer AS blockers_remaining
+  FROM {{schema}}.{{table_prefix}}job_blocker jb
+  LEFT JOIN {{schema}}.{{table_prefix}}job h ON h.id = jb.blocked_by_chain_id
+  WHERE h.chain_status IS DISTINCT FROM 'completed'
+  GROUP BY jb.job_id
+) c
+WHERE j.id = c.job_id AND j.status = 'blocked'`),
+        sql(/* sql */ `
+UPDATE {{schema}}.{{table_prefix}}job
+SET status = 'pending',
+  scheduled_at = GREATEST(scheduled_at, now())
+WHERE status = 'blocked' AND blockers_remaining = 0`),
+        sql(/* sql */ `
+UPDATE {{schema}}.{{table_prefix}}job j
+SET status = 'pending',
+  attempt_at = NULL,
+  attempt_by = NULL,
+  attempt_token = NULL
+WHERE j.status = 'running'
+  AND NOT EXISTS (
+    SELECT 1 FROM {{schema}}.{{table_prefix}}worker w WHERE w.id = j.attempt_by
+  )`),
         sql(/* sql */ `
 CREATE INDEX {{table_prefix}}chain_has_dependents_idx
 ON {{schema}}.{{table_prefix}}job (type_name, created_at)
@@ -311,6 +340,7 @@ const DB_JOB_COLUMNS = [
   "chain_trace_context",
   "trace_context",
   "has_dependents",
+  "blockers_remaining",
 ] as const;
 
 const jobColumnsSelect = (alias: string): string =>
@@ -419,7 +449,9 @@ const mapDbBlockerToStateBlockedJob = (row: DbBlocker): Omit<StateBlockedJob, "j
  * Create a state adapter backed by PostgreSQL 14+. Returns the adapter with a
  * `migrateToLatest()` method for schema migrations.
  *
- * Queuert supports only READ COMMITTED (the default).
+ * Every transaction may run at READ COMMITTED, REPEATABLE READ or SERIALIZABLE, mixed freely.
+ * The adapter retries serialization failures (`40001`) in the transactions and statements it runs
+ * itself; transactions passed to Queuert raise them to the caller.
  *
  * @param options - PostgreSQL state adapter configuration.
  * @throws Error if `schema`, `tablePrefix`, `jobIdType` or `workerIdType` is not a valid SQL
@@ -557,6 +589,7 @@ export const createPgStateAdapter = <
     chain_trace_context: t["string?"](),
     trace_context: t["string?"](),
     has_dependents: t.boolean(),
+    blockers_remaining: t.number(),
   } as const satisfies Record<(typeof DB_JOB_COLUMNS)[number], DataType>;
 
   const dbChainColumns = {
@@ -612,6 +645,22 @@ export const createPgStateAdapter = <
     );
   };
 
+  const retryOwnWork = async <T>(fn: () => Promise<T>): Promise<T> => {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await fn();
+      } catch (error) {
+        if (
+          attempt >= 5 ||
+          stateProvider.classifyError({ error })?.kind !== "transaction_conflict"
+        ) {
+          throw error;
+        }
+        await sleep(27.5, { jitterMs: 45 });
+      }
+    }
+  };
+
   const execute = async <
     TParams extends readonly DataType[],
     TColumns extends Record<string, DataType>,
@@ -620,8 +669,8 @@ export const createPgStateAdapter = <
     typedSql: TypedSql<TParams, TColumns>,
     params: [...InferParams<TParams>],
   ): Promise<InferColumns<TColumns>[]> => {
-    try {
-      return (await stateProvider.executeSql({
+    const run = async () =>
+      (await stateProvider.executeSql({
         txCtx,
         id: typedSql.id,
         sql: typedSql.sql,
@@ -630,6 +679,8 @@ export const createPgStateAdapter = <
         columnTypes: extractColumnTypes(typedSql.columns),
         readOnly: typedSql.readOnly,
       })) as InferColumns<TColumns>[];
+    try {
+      return await (txCtx === undefined ? retryOwnWork(run) : run());
     } catch (error) {
       if (isFenceError(error)) {
         throw new SchemaFencedError(
@@ -690,7 +741,7 @@ WHERE id = ANY($1::{{worker_id_type}}[])${locked ? "\nORDER BY id\nFOR UPDATE" :
   return {
     config,
 
-    withTransaction: stateProvider.withTransaction,
+    withTransaction: async (fn) => retryOwnWork(async () => stateProvider.withTransaction(fn)),
 
     isTransaction: stateProvider.isTransaction,
 
@@ -1258,12 +1309,13 @@ SELECT
           "startJobAttempts",
           `
 WITH live_worker AS (
-  SELECT w.id
-  FROM {{schema}}.{{table_prefix}}worker w
+  UPDATE {{schema}}.{{table_prefix}}worker w
+  SET lease_until = w.lease_until
   WHERE w.id = $2::{{worker_id_type}}
     AND w.token = $4::uuid
     AND w.lease_until > statement_timestamp()
-  FOR KEY SHARE
+    AND ${FENCE_GUARD}
+  RETURNING w.id
 ),
 acquired_jobs AS (
   SELECT j.id
@@ -1408,26 +1460,33 @@ inserted_blockers AS (
   WHERE ${FENCE_GUARD}
   RETURNING job_id, blocked_by_chain_id
 ),
-has_incomplete_blockers AS (
-  SELECT DISTINCT d.job_id
+incomplete_blocker_counts AS (
+  SELECT d.job_id, count(*)::integer AS blockers_remaining
   FROM input_data d
   JOIN locked_blocker_heads h ON h.id = d.blocked_by_chain_id
   WHERE h.chain_status = 'running'
+  GROUP BY d.job_id
 ),
 update_targets AS (
   SELECT id FROM locked_blocker_heads
   UNION
-  SELECT job_id FROM has_incomplete_blockers
+  SELECT job_id FROM incomplete_blocker_counts
 ),
 updated_jobs AS (
   UPDATE {{schema}}.{{table_prefix}}job j
   SET status = CASE
-      WHEN j.status = 'pending' AND j.id IN (SELECT job_id FROM has_incomplete_blockers)
+      WHEN j.status = 'pending' AND c.job_id IS NOT NULL
       THEN 'blocked' ELSE j.status END,
+    blockers_remaining = CASE
+      WHEN c.job_id IS NULL THEN j.blockers_remaining
+      WHEN j.status = 'pending' THEN c.blockers_remaining
+      WHEN j.status = 'blocked' THEN j.blockers_remaining + c.blockers_remaining
+      ELSE j.blockers_remaining END,
     has_dependents = j.has_dependents OR j.id IN (SELECT id FROM locked_blocker_heads)
   FROM update_targets t
+  LEFT JOIN incomplete_blocker_counts c ON c.job_id = t.id
   WHERE j.id = t.id
-    AND (j.status = 'pending' OR j.id IN (SELECT id FROM locked_blocker_heads))
+    AND (j.status IN ('pending', 'blocked') OR j.id IN (SELECT id FROM locked_blocker_heads))
     AND ${FENCE_GUARD}
   RETURNING j.*
 ),
@@ -1515,58 +1574,35 @@ ORDER BY b.index ASC
     },
 
     unblockJobs: async ({ txCtx, blockedByChainId }) => {
-      const [lockResult] = await execute(
-        txCtx,
-        prepared(
-          "lockBlockedJobs",
-          `
-WITH locked_blocked_dependents AS (
-  SELECT j.id
-  FROM {{schema}}.{{table_prefix}}job j
-  WHERE j.id IN (
-    SELECT DISTINCT jb.job_id
-    FROM {{schema}}.{{table_prefix}}job_blocker jb
-    WHERE jb.blocked_by_chain_id = $1
-  )
-  AND j.status = 'blocked'
-  ORDER BY j.id
-  FOR UPDATE
-)
-SELECT
-  EXISTS (
-    SELECT 1 FROM {{schema}}.{{table_prefix}}job_blocker jb
-    WHERE jb.blocked_by_chain_id = $1
-  ) AS has_dependents
-FROM (SELECT count(*) FROM locked_blocked_dependents) AS all_blocked_dependents_locked
-`,
-          { params: [idDataType], columns: { has_dependents: t.boolean() } },
-        ),
-        [blockedByChainId],
-      );
-      if (!lockResult.has_dependents) return [];
-
       const [result] = await execute(
         txCtx,
         prepared(
           "unblockJobs",
           `
-WITH updated AS (
+WITH dependent_blocker_counts AS MATERIALIZED (
+  SELECT jb.job_id, count(*)::integer AS blocker_count
+  FROM {{schema}}.{{table_prefix}}job_blocker jb
+  WHERE jb.blocked_by_chain_id = $1
+  GROUP BY jb.job_id
+),
+locked_dependents AS MATERIALIZED (
+  SELECT j.id, c.blocker_count
+  FROM {{schema}}.{{table_prefix}}job j
+  JOIN dependent_blocker_counts c ON c.job_id = j.id
+  WHERE j.status = 'blocked'
+  ORDER BY j.id
+  FOR UPDATE OF j
+),
+updated AS (
   UPDATE {{schema}}.{{table_prefix}}job j
-  SET status = 'pending',
-    scheduled_at = GREATEST(j.scheduled_at, statement_timestamp())
-  WHERE j.id IN (
-      SELECT jb.job_id
-      FROM {{schema}}.{{table_prefix}}job_blocker jb
-      WHERE jb.blocked_by_chain_id = $1
-    )
+  SET blockers_remaining = j.blockers_remaining - l.blocker_count,
+    status = CASE WHEN j.blockers_remaining - l.blocker_count <= 0 THEN 'pending' ELSE j.status END,
+    scheduled_at = CASE
+      WHEN j.blockers_remaining - l.blocker_count <= 0
+      THEN GREATEST(j.scheduled_at, statement_timestamp()) ELSE j.scheduled_at END
+  FROM locked_dependents l
+  WHERE j.id = l.id
     AND j.status = 'blocked'
-    AND NOT EXISTS (
-      SELECT 1
-      FROM {{schema}}.{{table_prefix}}job_blocker jb
-      LEFT JOIN {{schema}}.{{table_prefix}}job h ON h.id = jb.blocked_by_chain_id
-      WHERE jb.job_id = j.id
-        AND h.chain_status IS DISTINCT FROM 'completed'
-    )
     AND ${FENCE_GUARD}
   RETURNING j.*
 ),

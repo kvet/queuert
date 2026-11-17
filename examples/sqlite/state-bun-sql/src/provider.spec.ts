@@ -2,12 +2,8 @@ import { afterAll, beforeAll, describe, test } from "bun:test";
 
 import { createAsyncRwLock } from "@queuert/sqlite";
 import {
-  asyncSqliteStateProviderConformanceCases,
   createSqliteMigratorConformanceContext,
   createSqliteStateProviderConformanceContext,
-  type SqliteStateProviderConformanceContext,
-  sqliteMigratorConformanceCases,
-  sqliteStateProviderConformanceCases,
 } from "@queuert/sqlite/conformance";
 import { SQL } from "bun";
 
@@ -17,23 +13,19 @@ import { createBunSqlSqliteStateProvider } from "./provider.ts";
 describe("sqlite/state-bun-sql provider conformance", () => {
   const sql = new SQL("sqlite://:memory:");
   const lock = createAsyncRwLock();
-  let context: SqliteStateProviderConformanceContext;
-
-  beforeAll(async () => {
-    context = await createSqliteStateProviderConformanceContext({
-      createStateProvider: async () => createBunSqlSqliteStateProvider({ sql, lock }),
-      withNonTransactionContext: async (fn) => fn({ txSql: sql }),
-    });
+  const { context, cases } = createSqliteStateProviderConformanceContext({
+    mode: "async",
+    createStateProvider: async () => createBunSqlSqliteStateProvider({ sql, lock }),
+    withNonTransactionContext: async (fn) => fn({ txSql: sql }),
   });
+
+  beforeAll(async () => {});
 
   afterAll(async () => {
     await sql.close();
   });
 
-  for (const conformanceCase of [
-    ...sqliteStateProviderConformanceCases,
-    ...asyncSqliteStateProviderConformanceCases,
-  ]) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run(context);
     });
@@ -43,15 +35,16 @@ describe("sqlite/state-bun-sql provider conformance", () => {
 
 describe("sqlite/state-bun-sql migrator conformance", () => {
   const sql = new SQL("sqlite://:memory:");
-  const context = createSqliteMigratorConformanceContext({
-    stateProvider: createBunSqlSqliteStateProvider({ sql, lock: createAsyncRwLock() }),
+  const { context, cases } = createSqliteMigratorConformanceContext({
+    mode: "async",
+    createStateProvider: () => createBunSqlSqliteStateProvider({ sql, lock: createAsyncRwLock() }),
   });
 
   afterAll(async () => {
     await sql.close();
   });
 
-  for (const conformanceCase of sqliteMigratorConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run(context);
     });

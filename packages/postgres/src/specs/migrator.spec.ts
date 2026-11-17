@@ -85,6 +85,63 @@ const it = baseIt.extend("database", async ({}, { onCleanup }) => {
 });
 
 describe("createPgMigrator", () => {
+  for (const sessionLevel of ["repeatable read", "serializable"]) {
+    it(
+      `runs migrations at READ COMMITTED under a ${sessionLevel} session default`,
+      { timeout: 30_000 },
+      async ({ database: { connectionString } }) => {
+        const pool = new Pool({
+          connectionString,
+          options: `-c default_transaction_isolation=${sessionLevel.replace(" ", "\\ ")}`,
+        });
+        try {
+          const provider = createPgPoolProvider({ pool });
+          const levels: unknown[] = [];
+          const migrator = createPgMigrator({
+            stateProvider: provider,
+            migrations: [
+              {
+                name: "report_isolation",
+                up: async (txCtx) => {
+                  levels.push(
+                    ...(await provider.executeSql({
+                      txCtx,
+                      sql: "SELECT current_setting('transaction_isolation') AS level",
+                      params: [],
+                      paramTypes: {},
+                      columnTypes: {},
+                      readOnly: true,
+                    })),
+                  );
+                },
+                down: async () => {},
+              },
+            ],
+          });
+
+          expect(await migrator.migrateToLatest()).toEqual(
+            result({ applied: ["report_isolation"] }),
+          );
+          expect(levels).toEqual([{ level: "read committed" }]);
+          expect(
+            await provider.withTransaction(async (txCtx) =>
+              provider.executeSql({
+                txCtx,
+                sql: "SELECT current_setting('transaction_isolation') AS level",
+                params: [],
+                paramTypes: {},
+                columnTypes: {},
+                readOnly: true,
+              }),
+            ),
+          ).toEqual([{ level: sessionLevel }]);
+        } finally {
+          await pool.end();
+        }
+      },
+    );
+  }
+
   it(
     "applies every migration type and reverts them all, last first",
     { timeout: 120_000 },

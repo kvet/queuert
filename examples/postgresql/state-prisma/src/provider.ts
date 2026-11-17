@@ -13,7 +13,7 @@ type PrismaDriverAdapterError = {
 export type PrismaLikeClient = {
   $transaction: <T>(
     fn: (prisma: any) => Promise<T>,
-    options: { isolationLevel: "ReadCommitted" },
+    options?: Record<string, unknown>,
   ) => Promise<T>;
   $queryRawUnsafe: (sql: string, ...params: unknown[]) => Promise<unknown[]>;
   $executeRawUnsafe: (sql: string, ...params: unknown[]) => Promise<unknown>;
@@ -29,9 +29,7 @@ export const createPrismaPgStateProvider = <TPrisma extends PrismaLikeClient>({
   return {
     withTransaction: async (cb) =>
       withTxHooks(async (txHooks) =>
-        prisma.$transaction(async (prisma: TPrisma) => cb({ prisma, txHooks }), {
-          isolationLevel: "ReadCommitted",
-        }),
+        prisma.$transaction(async (prisma: TPrisma) => cb({ prisma, txHooks })),
       ),
     // Prisma hides `$connect` on the interactive transaction client.
     isTransaction: (txCtx) => !("$connect" in txCtx.prisma),
@@ -44,6 +42,7 @@ export const createPrismaPgStateProvider = <TPrisma extends PrismaLikeClient>({
     classifyError: ({ error }) => {
       const cause = (error as PrismaDriverAdapterError | undefined)?.meta?.driverAdapterError
         ?.cause;
+      if (cause?.originalCode === "40001") return { kind: "transaction_conflict" };
       if (cause?.originalCode !== "42P01") return undefined;
       const tableName =
         typeof cause.table === "string"

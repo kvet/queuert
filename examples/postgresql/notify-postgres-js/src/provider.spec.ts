@@ -1,8 +1,4 @@
-import {
-  createPgNotifyProviderConformanceContext,
-  type NotifyAdapterConformanceContext,
-  pgNotifyProviderConformanceCases,
-} from "@queuert/postgres/conformance";
+import { createPgNotifyProviderConformanceContext } from "@queuert/postgres/conformance";
 import { acquirePostgres, type AcquiredPostgres } from "@queuert/testcontainers";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, test } from "vitest";
@@ -13,14 +9,13 @@ import { createPostgresJsNotifyProvider } from "./provider.ts";
 describe("postgresql/notify-postgres-js provider conformance", () => {
   let pg: AcquiredPostgres;
   let sql: postgres.Sql;
-  let context: NotifyAdapterConformanceContext;
+  const { context, cases } = createPgNotifyProviderConformanceContext({
+    createNotifyProvider: async () => createPostgresJsNotifyProvider({ sql }),
+  });
 
   beforeAll(async () => {
     pg = await acquirePostgres("postgres:18", import.meta.url);
     sql = postgres(pg.connectionString, { max: 10 });
-    context = createPgNotifyProviderConformanceContext({
-      createNotifyProvider: async () => createPostgresJsNotifyProvider({ sql }),
-    });
   }, 60_000);
 
   afterAll(async () => {
@@ -28,7 +23,7 @@ describe("postgresql/notify-postgres-js provider conformance", () => {
     await pg[Symbol.asyncDispose]();
   });
 
-  for (const conformanceCase of pgNotifyProviderConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run(context);
     });

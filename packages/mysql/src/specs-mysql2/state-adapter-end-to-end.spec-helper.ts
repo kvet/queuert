@@ -25,6 +25,7 @@ import {
   type Mysql2PoolProvider,
   createMysql2PoolProvider,
 } from "../state-provider/state-provider.mysql2-pool.ts";
+import type { MysqlIsolationLevel } from "./state-adapter-conformance.spec-helper.ts";
 
 type EndToEndContext = EndToEndSavepointContext &
   EndToEndPoisonTransactionContext &
@@ -79,14 +80,16 @@ const POISON_SQL = "SELECT 1 FROM nonexistent_table_queuert_poison_xyz";
 export const createEndToEndContext = async (
   pool: Pool,
   dialect: "mysql" | "mariadb",
+  isolationLevel: MysqlIsolationLevel,
   createNotifyAdapter: EndToEndContext["createNotifyAdapter"],
 ): Promise<EndToEndContext> => ({
-  ...(await createMysqlStateProviderConformanceContext({
+  ...createMysqlStateProviderConformanceContext({
     createStateProvider: async () => createMysql2PoolProvider({ pool }),
     dialect,
+    isolationLevel,
     withNonTransactionContext: withMysql2PoolNonTransactionContext(pool),
     withSavepoint: withMysql2PoolSavepoint,
-  })),
+  }).context,
   withSavepoint: withMysql2PoolSavepoint,
   createNotifyAdapter,
   poisonTransaction: async (txCtx) => {

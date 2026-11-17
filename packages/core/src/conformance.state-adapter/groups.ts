@@ -2,6 +2,7 @@ import type { ConformanceGroup } from "../conformance/runner.ts";
 import {
   addJobsBlockersGroup,
   addJobsBlockersConcurrentTransactionsGroup,
+  addJobsBlockersNonLockingReadsGroup,
 } from "./cases/add-jobs-blockers.ts";
 import { closeGroup } from "./cases/close.ts";
 import { completeJobsGroup } from "./cases/complete-jobs.ts";
@@ -61,6 +62,8 @@ import {
   startJobAttemptGroup,
   startJobAttemptHeldTransactionGroup,
   startJobAttemptConcurrentTransactionsGroup,
+  startJobAttemptNonLockingReadsGroup,
+  startJobAttemptGapLockFreeGroup,
 } from "./cases/start-job-attempt.ts";
 import { startWorkerGroup } from "./cases/start-worker.ts";
 import { stopWorkerGroup } from "./cases/stop-worker.ts";
@@ -126,8 +129,17 @@ export const stateAdapterAsyncGroups: ConformanceGroup<StateAdapterConformanceCo
   startJobAttemptHeldTransactionGroup,
 ];
 
+export const stateAdapterNonLockingReadGroups: ConformanceGroup<StateAdapterConformanceContext>[] =
+  [addJobsBlockersNonLockingReadsGroup, startJobAttemptNonLockingReadsGroup];
+
+export const stateAdapterGapLockFreeGroups: ConformanceGroup<StateAdapterConformanceContext>[] = [
+  startJobAttemptGapLockFreeGroup,
+];
+
 export const stateAdapterConcurrentTransactionGroups: ConformanceGroup<StateAdapterConformanceContext>[] =
   [
+    ...stateAdapterNonLockingReadGroups,
+    ...stateAdapterGapLockFreeGroups,
     withTransactionConcurrentTransactionsGroup,
     getChainsConcurrentTransactionsGroup,
     getJobsConcurrentTransactionsGroup,

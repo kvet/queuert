@@ -34,6 +34,7 @@ const jobColumns = {
   attempt_at: TIMESTAMP,
   chain_completed_at: TIMESTAMP,
   has_dependents: "TINYINT",
+  blockers_remaining: "INT",
 };
 
 const blockerColumns = {
@@ -88,9 +89,18 @@ export const loadStateDump = async <TTxContext extends BaseTxContext>(
   };
 
   const referencedChainIds = new Set(dump.blockers.map((blocker) => blocker.blockedByChainId));
+  const completedChainIds = new Set(
+    dump.chains.filter((chain) => chain.status === "completed").map((chain) => chain.id),
+  );
+  const blockersRemaining = new Map<string, number>();
+  for (const blocker of dump.blockers) {
+    if (completedChainIds.has(blocker.blockedByChainId)) continue;
+    blockersRemaining.set(blocker.jobId, (blockersRemaining.get(blocker.jobId) ?? 0) + 1);
+  }
   await insertRows("job", jobColumns, dump.jobs, (job) => ({
     ...mapRow.job(job),
     has_dependents: job.chainIndex === 0 && referencedChainIds.has(job.id) ? 1 : 0,
+    blockers_remaining: job.status === "blocked" ? (blockersRemaining.get(job.id) ?? 0) : 0,
   }));
   await insertRows("job_blocker", blockerColumns, dump.blockers, mapRow.blocker);
   await insertRows("worker", workerColumns, dump.workers, mapRow.worker);

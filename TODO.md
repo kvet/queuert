@@ -1,7 +1,6 @@
 # Short term
 
 - [TASK] Revisit the `independent` naming — the `listChains` filter (client, state adapter, dashboard) means "no blocker row references this chain", which the name does not say; pick a name in line with `has_dependents` / `hasDependents`.
-- [TASK] PostgreSQL and MySQL/MariaDB REPEATABLE READ and SERIALIZABLE. Blocks the next release: `blockers_remaining` and its backfill join the unreleased `002_blocker_counters` (no `003`, no `schema_fence_v3`) on both adapters. Providers stop pinning READ COMMITTED on both, so Queuert's own transactions and standalone statements run at the pool's default level; only migrations stay pinned. See `design/isolation-levels.md`.
 - [EPIC] MongoDB adapter. See `design/mongodb-adapter.md`.
 - [TASK] Support numeric job and worker IDs — `TJobId` and `TWorkerId` extend `string`, so an `INTEGER`/`bigint` `jobIdType` or `workerIdType` is accepted by the adapters but its IDs still have to round-trip as strings. Allow `number`/`bigint` ID types end to end, including making the `State*` entity types (`StateJobInfo`, `StateChainInfo`, `StateJobBlockerInfo`, `StateWorkerInfo`, …) generic over `TJobId`/`TWorkerId` instead of using `string`.
 - [TASK] Best-effort `rescheduleJobs` — today it fails the whole batch if any job is not pending, so apps hand-roll "wake a sleeping chain" loops (`listChainJobs` + `rescheduleJob` + catch `JobNotReschedulableError`). Add an option such as `skipNotReschedulable: true` that returns a per-job outcome (`rescheduled` / `not-pending` / `completed`) instead of throwing.

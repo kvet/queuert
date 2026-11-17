@@ -3,10 +3,6 @@ import { afterAll, beforeAll, describe, test } from "bun:test";
 import {
   createMysqlMigratorConformanceContext,
   createMysqlStateProviderConformanceContext,
-  type MysqlMigratorConformanceContext,
-  type MysqlStateProviderConformanceContext,
-  mysqlMigratorConformanceCases,
-  mysqlStateProviderConformanceCases,
 } from "@queuert/mysql/conformance";
 import { acquireMysql, type MysqlConnectionOptions } from "@queuert/testcontainers";
 import { SQL } from "bun";
@@ -28,23 +24,23 @@ const createSql = ({ host, port, user, password, database }: MysqlConnectionOpti
 // #region conformance
 describe("mysql/state-bun-sql provider conformance", () => {
   let sql: SQL;
-  let context: MysqlStateProviderConformanceContext;
+  const { context, cases } = createMysqlStateProviderConformanceContext({
+    createStateProvider: async () => createBunSqlStateProvider({ sql }),
+    dialect: "mysql",
+    isolationLevel: "REPEATABLE READ",
+    withNonTransactionContext: async (fn) => fn({ txSql: sql }),
+  });
 
   beforeAll(async () => {
     const { connectionOptions } = await acquireMysql("mysql:26", import.meta.url);
     sql = createSql(connectionOptions);
-    context = await createMysqlStateProviderConformanceContext({
-      createStateProvider: async () => createBunSqlStateProvider({ sql }),
-      dialect: "mysql",
-      withNonTransactionContext: async (fn) => fn({ txSql: sql }),
-    });
   }, 120_000);
 
   afterAll(async () => {
     await sql.close();
   });
 
-  for (const conformanceCase of mysqlStateProviderConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run(context);
     });
@@ -54,21 +50,20 @@ describe("mysql/state-bun-sql provider conformance", () => {
 
 describe("mysql/state-bun-sql migrator conformance", () => {
   let sql: SQL;
-  let context: MysqlMigratorConformanceContext;
+  const { context, cases } = createMysqlMigratorConformanceContext({
+    createStateProvider: () => createBunSqlStateProvider({ sql }),
+  });
 
   beforeAll(async () => {
     const { connectionOptions } = await acquireMysql("mysql:26", `${import.meta.url}#migrator`);
     sql = createSql(connectionOptions);
-    context = createMysqlMigratorConformanceContext({
-      stateProvider: createBunSqlStateProvider({ sql }),
-    });
   }, 120_000);
 
   afterAll(async () => {
     await sql.close();
   });
 
-  for (const conformanceCase of mysqlMigratorConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run(context);
     });

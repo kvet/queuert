@@ -16,8 +16,8 @@ const it = baseIt.extend("conformance", { scope: "file" }, async ({}, { onCleanu
   const pool = new Pool({ connectionString: pg.connectionString, idleTimeoutMillis: 0 });
   onCleanup(async () => pool.end());
   return createPgMigratorConformanceContext({
-    stateProvider: createPgPoolProvider({ pool }),
-  });
+    createStateProvider: () => createPgPoolProvider({ pool }),
+  }).context;
 });
 
 // NOTE: hack for vitest plugin

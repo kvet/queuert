@@ -22,7 +22,7 @@ const it = baseIt.extend("conformance", { scope: "file" }, async ({}, { onCleanu
   });
   return createRedisNotifyProviderConformanceContext({
     createNotifyProvider: async () => createIoredisNotifyProvider({ client, subscribeClient }),
-  });
+  }).context;
 });
 
 // NOTE: hack for vitest plugin

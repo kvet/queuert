@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 
 import { assertRejects } from "@queuert/helpers/assert-rejects";
 import {
-  andThen,
   dynamicSyncAsync,
   type MaybePromise,
   syncAsync,
@@ -28,9 +27,8 @@ import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.
 import type { SqliteStateProvider } from "../state-provider/state-provider.sqlite.ts";
 
 /**
- * The context the {@link sqliteStateProviderConformanceCases} run against, over a provider of
- * either mode. Get it from {@link createSqliteStateProviderConformanceContext} and pass it to every
- * case unchanged.
+ * The context the cases from {@link createSqliteStateProviderConformanceContext} run against, over
+ * a provider of either mode. Pass it to every case unchanged.
  */
 export type SqliteStateProviderConformanceContext = SchemaFenceConformanceContext &
   SavepointConformanceContext & {
@@ -318,6 +316,11 @@ const ddl = { params: [], paramTypes: {}, columnTypes: {}, readOnly: false };
  */
 type SqliteStateProviderConformanceOptions<TMode extends Mode = "async"> = {
   /**
+   * The provider's mode: `"sync"` for a {@link SqliteStateProvider} with `sync: true`, `"async"`
+   * otherwise. The cases that hold a transaction open across an `await` run only in `"async"`.
+   */
+  mode: TMode;
+  /**
    * Creates the provider under test, over a database the suite may create tables in. Each
    * case's adapter gets its own provider and closes it when the case ends, so closing one must
    * not release resources the next one needs, such as the pool or the database connection.
@@ -355,18 +358,28 @@ type SqliteStateProviderConformanceOptions<TMode extends Mode = "async"> = {
   stateAdapterOptions?: Omit<Parameters<typeof createSqliteStateAdapter>[0], "stateProvider">;
 };
 
-const prepareContext = syncAsync(function* (
-  {
-    createStateProvider,
-    withNonTransactionContext,
-    withSavepoint,
-    stateAdapterOptions,
-  }: SqliteStateProviderConformanceOptions<"sync"> | SqliteStateProviderConformanceOptions,
-  firstStateProvider: SqliteStateProvider<any, Mode>,
-) {
-  const sync = firstStateProvider.sync === true;
+const buildContext = ({
+  mode,
+  createStateProvider,
+  withNonTransactionContext,
+  withSavepoint,
+  stateAdapterOptions,
+}:
+  | SqliteStateProviderConformanceOptions<"sync">
+  | SqliteStateProviderConformanceOptions): SqliteStateProviderConformanceContext => {
+  const sync = mode === "sync";
   const tablePrefix = stateAdapterOptions?.tablePrefix ?? "queuert_";
-  const createModeStateProvider = sync ? createStateProvider : async () => createStateProvider();
+  const checkMode = <T extends SqliteStateProvider<any, Mode>>(stateProvider: T): T => {
+    if ((stateProvider.sync === true) !== sync) {
+      throw new TypeError(
+        `createSqliteStateProviderConformanceContext: createStateProvider returned a ${stateProvider.sync === true ? "sync" : "async"} provider, but mode is "${mode}"`,
+      );
+    }
+    return stateProvider;
+  };
+  const createModeStateProvider: () => MaybePromise<SqliteStateProvider<any, Mode>> = sync
+    ? () => checkMode(createStateProvider() as SqliteStateProvider<any, Mode>)
+    : async () => checkMode(await createStateProvider());
   const createStateAdapter = (stateProvider: SqliteStateProvider<any, Mode>) =>
     createSqliteStateAdapter({ ...stateAdapterOptions, stateProvider });
 
@@ -379,7 +392,20 @@ const prepareContext = syncAsync(function* (
     }
   });
 
+  let migrated = false;
+  const migrate = syncAsync(function* () {
+    if (migrated) return;
+    const migratingStateAdapter = createStateAdapter(yield* step(createModeStateProvider()));
+    try {
+      yield* step(migratingStateAdapter.migrateToLatest());
+    } finally {
+      yield* step(migratingStateAdapter.close());
+    }
+    migrated = true;
+  });
+
   const createCaseStateAdapter = syncAsync(function* () {
+    yield* migrate.steps();
     const stateProvider = yield* step(createModeStateProvider());
     const stateAdapter = createStateAdapter(stateProvider);
     try {
@@ -396,6 +422,7 @@ const prepareContext = syncAsync(function* (
   });
 
   const withWritesFenced = syncAsync(function* (fn: () => MaybePromise<unknown>) {
+    yield* migrate.steps();
     yield* executeDdl.steps(`DROP TABLE ${tablePrefix}schema_fence_v2`);
     try {
       return yield* step(fn());
@@ -407,7 +434,7 @@ const prepareContext = syncAsync(function* (
   });
 
   const createDisposableStateProvider = syncAsync(function* () {
-    const stateProvider = yield* step(createStateProvider());
+    const stateProvider = checkMode(yield* step(createStateProvider()));
     return {
       ...stateProvider,
       [Symbol.asyncDispose]: async () => {
@@ -416,14 +443,7 @@ const prepareContext = syncAsync(function* (
     };
   });
 
-  const migratingStateAdapter = createStateAdapter(firstStateProvider);
-  try {
-    yield* step(migratingStateAdapter.migrateToLatest());
-  } finally {
-    yield* step(migratingStateAdapter.close());
-  }
-
-  const context: SqliteStateProviderConformanceContext = {
+  return {
     createStateProvider: sync
       ? createDisposableStateProvider.sync
       : createDisposableStateProvider.async,
@@ -433,79 +453,51 @@ const prepareContext = syncAsync(function* (
     withWritesFenced: <T>(fn: () => MaybePromise<T>) =>
       (sync ? withWritesFenced.sync(fn) : withWritesFenced.async(fn)) as MaybePromise<T>,
   };
-  return context;
-});
+};
 
 /**
- * Prepares the context the {@link sqliteStateProviderConformanceCases} run against: migrates the schema once through a
- * provider from `createStateProvider`. Each case then builds its own adapter over a new provider
- * from it, with the tables cleared. Call it once the database is ready, such as in `beforeAll`;
- * the test file owns the database and releases it itself.
- *
- * The context follows the provider's mode: for a {@link SqliteStateProvider} with `sync: true` it is
- * returned directly, and for an async provider it comes as a promise.
+ * Prepares the state adapter contract cases for a provider and the context they run against. The
+ * cases are every state adapter contract case, run through `createSqliteStateAdapter` over the
+ * provider in its `mode`, plus checks of the provider's `classifyError`. Over a provider with
+ * `sync: true` they also check its own contract: results without a promise, commit, rollback,
+ * `isTransaction`, and an autocommit statement that throws inside an open transaction; in `"async"`
+ * mode they add the cases that hold a transaction open across an `await`. The context migrates the
+ * schema once, before the first case, through a provider from `createStateProvider`; each case then
+ * builds its own adapter over a new provider from it, with the tables cleared. The test file owns
+ * the database and releases it itself. Works with any test runner.
  *
  * @param options - Context configuration.
- */
-export function createSqliteStateProviderConformanceContext(
-  options: SqliteStateProviderConformanceOptions<"sync">,
-): SqliteStateProviderConformanceContext;
-export function createSqliteStateProviderConformanceContext(
-  options: SqliteStateProviderConformanceOptions,
-): Promise<SqliteStateProviderConformanceContext>;
-export function createSqliteStateProviderConformanceContext(
-  options: SqliteStateProviderConformanceOptions<"sync"> | SqliteStateProviderConformanceOptions,
-): MaybePromise<SqliteStateProviderConformanceContext> {
-  return andThen(options.createStateProvider(), (firstStateProvider) =>
-    firstStateProvider.sync === true
-      ? prepareContext.sync(options, firstStateProvider)
-      : prepareContext.async(options, firstStateProvider),
-  );
-}
-
-/**
- * Every state adapter contract case, run through `createSqliteStateAdapter` over the provider in
- * its mode, plus checks of the provider's `classifyError`. Over a provider with `sync: true` they
- * also check its own contract: results without a promise, commit, rollback, `isTransaction`, and
- * an autocommit statement that throws inside an open transaction. Run them one per test in your own test
- * file against a context from {@link createSqliteStateProviderConformanceContext}; an async
- * provider also runs {@link asyncSqliteStateProviderConformanceCases}. Works with any test runner.
  *
  * @example
  * ```ts
- * import { after, before, test } from "node:test";
+ * import { after, test } from "node:test";
  *
  * const client = createClient({ url: ":memory:" });
  * const lock = createAsyncRwLock();
- * let context: SqliteStateProviderConformanceContext;
- * before(async () => {
- *   context = await createSqliteStateProviderConformanceContext({
- *     createStateProvider: async () => createLibsqlStateProvider({ client, lock }),
- *     withNonTransactionContext: async (fn) => fn({ client }),
- *   });
+ * const { context, cases } = createSqliteStateProviderConformanceContext({
+ *   mode: "async",
+ *   createStateProvider: async () => createLibsqlStateProvider({ client, lock }),
+ *   withNonTransactionContext: async (fn) => fn({ client }),
  * });
  * after(() => client.close());
  *
- * for (const conformanceCase of [
- *   ...sqliteStateProviderConformanceCases,
- *   ...asyncSqliteStateProviderConformanceCases,
- * ]) {
+ * for (const conformanceCase of cases) {
  *   void test(conformanceCase.title, async () => {
  *     await conformanceCase.run(context);
  *   });
  * }
  * ```
  */
-export const sqliteStateProviderConformanceCases: ConformanceTestCase<SqliteStateProviderConformanceContext>[] =
-  toConformanceTestCases([
+export const createSqliteStateProviderConformanceContext = (
+  options: SqliteStateProviderConformanceOptions<"sync"> | SqliteStateProviderConformanceOptions,
+): {
+  context: SqliteStateProviderConformanceContext;
+  cases: ConformanceTestCase<SqliteStateProviderConformanceContext>[];
+} => ({
+  context: buildContext(options),
+  cases: toConformanceTestCases([
     ...sqliteStateProviderConformanceGroups,
     ...sqliteSyncStateProviderConformanceGroups,
-  ]);
-
-/**
- * The state adapter contract cases that hold a transaction open across an `await`, run through
- * `createSqliteStateAdapter` over the provider. Only an async provider can pass them; it runs them
- * next to {@link sqliteStateProviderConformanceCases}.
- */
-export const asyncSqliteStateProviderConformanceCases: ConformanceTestCase<SqliteStateProviderConformanceContext>[] =
-  toConformanceTestCases(stateAdapterAsyncGroups);
+    ...(options.mode === "async" ? stateAdapterAsyncGroups : []),
+  ]),
+});

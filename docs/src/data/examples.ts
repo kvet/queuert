@@ -232,7 +232,7 @@ export const examples: Example[] = [
     name: "mysql/state-mysql2",
     label: "mysql2",
     description:
-      "MySQL state storage via @queuert/mysql with the mysql2 driver — job creation and completion inside application transactions, with every transaction at READ COMMITTED.",
+      "MySQL state storage via @queuert/mysql with the mysql2 driver — job creation and completion inside application transactions.",
     runtime: "Node.js",
     services: ["MySQL"],
     files: stateProviderFiles,
@@ -242,7 +242,7 @@ export const examples: Example[] = [
     name: "mysql/state-mariadb",
     label: "mariadb",
     description:
-      "MariaDB state storage via @queuert/mysql with the official mariadb connector — job creation and completion inside application transactions, with every transaction at READ COMMITTED.",
+      "MariaDB state storage via @queuert/mysql with the official mariadb connector — job creation and completion inside application transactions.",
     runtime: "Node.js",
     services: ["MySQL"],
     files: stateProviderFiles,

@@ -25,6 +25,7 @@ import {
   type PgPoolProvider,
   createPgPoolProvider,
 } from "../state-provider/state-provider.pg-pool.ts";
+import type { PgIsolationLevel } from "./state-adapter-conformance.spec-helper.ts";
 
 const createFlakyStateAdapter = (
   pool: Pool,
@@ -67,15 +68,17 @@ const createFlakyStateAdapter = (
 
 export const createEndToEndContext = async (
   pool: Pool,
+  isolationLevel: PgIsolationLevel,
   createNotifyAdapter?: EndToEndSavepointContext["createNotifyAdapter"],
 ): Promise<
   EndToEndSavepointContext & EndToEndPoisonTransactionContext & EndToEndFlakyDbContext
 > => ({
-  ...(await createPgStateProviderConformanceContext({
+  ...createPgStateProviderConformanceContext({
     createStateProvider: async () => createPgPoolProvider({ pool }),
+    isolationLevel,
     withNonTransactionContext: withPgPoolNonTransactionContext(pool),
     withSavepoint: withPgPoolSavepoint,
-  })),
+  }).context,
   withSavepoint: withPgPoolSavepoint,
   createNotifyAdapter,
   poisonTransaction: async (txCtx) => {

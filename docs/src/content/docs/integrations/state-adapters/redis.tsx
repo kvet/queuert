@@ -418,8 +418,7 @@ const Page = () => (
       No transaction ever waits for a lock. Where PostgreSQL would make a second transaction wait
       for the first, the Redis adapter lets both run and the one that commits second runs again. In
       the conformance cases that check a wait, each outcome matches some order of the two
-      transactions; those cases are left out of the suite and listed in{" "}
-      <code>redisStateAdapterLockWaitCaseNames</code>.
+      transactions; those cases are left out of the suite.
     </p>
 
     <h2 id="migrations">Migrations</h2>
@@ -509,12 +508,13 @@ const Page = () => (
     <h2 id="testing-your-provider">Testing your provider</h2>
     <p>
       <code>@queuert/redis/conformance</code> checks a provider you write.{" "}
-      <code>redisStateProviderConformanceCases</code> are checks of the <code>eval</code> contract
-      followed by every state adapter case the Redis adapter meets, including checks of its write
-      fence. <code>createRedisStateProviderConformanceContext</code> takes a{" "}
-      <code>createStateProvider</code> factory; each case builds its own adapter over a new provider
-      under a key prefix of its own, migrates it, and closes it when it ends. The suite drives no
-      test runner: your test file owns the client in its own hooks and registers one test per case:
+      <code>createRedisStateProviderConformanceContext</code> returns the <code>cases</code>, checks
+      of the <code>eval</code> contract followed by every state adapter case the Redis adapter
+      meets, including checks of its write fence, and the <code>context</code> they run against. It
+      takes a <code>createStateProvider</code> factory; each case builds its own adapter over a new
+      provider under a key prefix of its own, migrates it, and closes it when it ends. The suite
+      drives no test runner: your test file owns the client in its own hooks and registers one test
+      per case:
     </p>
     <Tabs syncKey="redis-driver">
       <TabItem label="node-redis">

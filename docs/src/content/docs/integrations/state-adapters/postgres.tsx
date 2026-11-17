@@ -215,19 +215,18 @@ const Page = () => (
     <h2 id="testing-your-provider">Testing your provider</h2>
     <p>
       <code>@queuert/postgres/conformance</code> checks a provider you write.{" "}
-      <code>pgStateProviderConformanceCases</code> are every case a state adapter must pass, the
-      cases that hold two transactions open at once, checks of the schema write fence, and checks
-      that <code>classifyError</code> names a missing table.{" "}
-      <code>createPgStateProviderConformanceContext</code> prepares the context they run against: it
-      takes a <code>createStateProvider</code> factory and a <code>withNonTransactionContext</code>{" "}
-      that runs a callback with a context outside any transaction, and migrates the schema once. An
-      optional <code>withSavepoint</code> runs a callback in a savepoint of a transaction, opened
-      the way your application opens one, and passes it the savepoint's context; when you give it,
-      the cases check that <code>onTransactionCommit</code> and <code>onTransactionRollback</code>{" "}
-      follow savepoints. Each case then builds its own adapter over a new provider from your
-      factory, with the tables cleared, and closes both when it ends. The suite drives no test
-      runner: your test file owns the database in its own hooks and registers one test per case, as
-      each example does:
+      <code>createPgStateProviderConformanceContext</code> returns the <code>cases</code>, every
+      case a state adapter must pass, the cases that hold two transactions open at once, checks of
+      the schema write fence, and checks that <code>classifyError</code> names a missing table, and
+      the <code>context</code> they run against: it takes a <code>createStateProvider</code> factory
+      and a <code>withNonTransactionContext</code> that runs a callback with a context outside any
+      transaction, and migrates the schema once, before the first case. An optional{" "}
+      <code>withSavepoint</code> runs a callback in a savepoint of a transaction, opened the way
+      your application opens one, and passes it the savepoint's context; when you give it, the cases
+      check that <code>onTransactionCommit</code> and <code>onTransactionRollback</code> follow
+      savepoints. Each case then builds its own adapter over a new provider from your factory, with
+      the tables cleared, and closes both when it ends. The suite drives no test runner: your test
+      file owns the database in its own hooks and registers one test per case, as each example does:
     </p>
     <Tabs syncKey="postgres-driver">
       <TabItem label="pg">
@@ -301,13 +300,44 @@ const Page = () => (
 
     <h2>Isolation level</h2>
     <p>
-      Queuert supports only READ COMMITTED, PostgreSQL's default isolation level. This covers every
-      transaction Queuert writes in, including the ones you pass to <code>complete</code> and to
-      client methods. Its conditional and multi-statement writes, such as <code>unblockJobs</code>{" "}
-      locking the blocked jobs and then recomputing their blockers, rely on each statement taking a
-      fresh snapshot after it waits on a row lock. Every provider above opens its transactions with
-      the level stated, so a server or role whose <code>default_transaction_isolation</code> is
-      higher cannot change it; open the transactions you pass to Queuert the same way.
+      Queuert supports READ COMMITTED, REPEATABLE READ and SERIALIZABLE for every transaction that
+      touches its tables, set as the session default (<code>default_transaction_isolation</code>) or
+      per transaction, and transactions at different levels can run side by side. Every invariant
+      that spans two transactions, such as a dependent's count of incomplete blockers, is kept by
+      writing a shared row, so at READ COMMITTED the second writer waits and re-reads, and at the
+      stricter levels it fails with a serialization failure instead of committing a stale read.
+    </p>
+    <p>
+      The provider opens transactions with a plain <code>BEGIN</code>, so Queuert's own transactions
+      and statements run at the level of the connection they use. Migrations always run at READ
+      COMMITTED.
+    </p>
+    <p>
+      At REPEATABLE READ and SERIALIZABLE, a transaction you pass to <code>complete</code> or to a
+      client method can fail with a serialization failure (<code>40001</code>). A failed{" "}
+      <code>complete</code> fails the attempt like any other error, so the job is rescheduled with
+      backoff; a client method throws it to you. Retry the transaction with fresh{" "}
+      <code>txHooks</code> for each try, or wrap each try in <code>txHooks.retryBoundary</code>; see{" "}
+      <A href="/guides/tx-hooks/#drivers-that-rerun-the-callback">
+        Drivers that rerun the callback
+      </A>
+      . Queuert retries the transactions and statements it runs itself, up to five attempts.
+    </p>
+    <p>The stricter levels cost throughput where many transactions write the same rows:</p>
+    <ul>
+      <li>
+        Attaching many dependents to the same blocker chain makes the attaching transactions
+        conflict on the blocker's head job, and about half of them retry.
+      </li>
+      <li>
+        Workers that claim jobs of one type conflict on the rows another worker claimed after their
+        snapshot. In our measurements with eight workers, REPEATABLE READ roughly halves claim
+        throughput and SERIALIZABLE cuts it by about three quarters.
+      </li>
+    </ul>
+    <p>
+      To keep your own transactions at a stricter level without these costs, give the pool Queuert
+      uses a READ COMMITTED default and raise the level per transaction in your own code.
     </p>
 
     <h2>Write fence</h2>

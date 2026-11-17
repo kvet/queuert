@@ -19,20 +19,17 @@ export const createBunSqlStateProvider = ({
 
   const classifyError: MysqlStateProvider<BunSqlContext>["classifyError"] = ({ error }) => {
     const driverError = error as { errno?: unknown; message?: unknown } | undefined;
+    if (driverError?.errno === 1213 || driverError?.errno === 1020) {
+      return { kind: "transaction_conflict" };
+    }
     if (driverError?.errno !== 1146) return undefined;
     const tableName = /Table '([^']+)' doesn't exist/.exec(String(driverError.message))?.[1];
     return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
   };
 
   return {
-    // MySQL's START TRANSACTION takes no isolation level, so the level is set on a reserved
-    // connection just before `begin` opens the transaction on it.
     withTransaction: async (cb) =>
-      withTxHooks(async (txHooks) => {
-        using reserved = await sql.reserve();
-        await reserved`SET TRANSACTION ISOLATION LEVEL READ COMMITTED`;
-        return await reserved.begin(async (txSql) => cb({ txSql, txHooks }));
-      }),
+      withTxHooks(async (txHooks) => sql.begin(async (txSql) => cb({ txSql, txHooks }))),
     isTransaction: (txCtx) => typeof txCtx.txSql.savepoint === "function",
     onTransactionCommit: (txCtx, callback) => {
       txCtx.txHooks.onCommit(callback);
@@ -49,7 +46,8 @@ export const createBunSqlStateProvider = ({
           params,
         );
       } catch (error) {
-        if (classifyError({ error }) !== undefined) missingTableFailures.set(query, failures + 1);
+        if (classifyError({ error })?.kind === "undefined_table")
+          missingTableFailures.set(query, failures + 1);
         throw error;
       }
     },

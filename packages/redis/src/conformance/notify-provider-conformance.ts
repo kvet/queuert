@@ -14,11 +14,33 @@ export const redisNotifyProviderConformanceGroups: ConformanceGroup<NotifyAdapte
   notifyAdapterBaseGroups;
 
 /**
- * Prepares the context the {@link redisNotifyProviderConformanceCases} run against: a notify
- * adapter per case over a new provider, on channels of its own. The test file still owns the
- * provider's resources and releases them itself.
+ * Prepares every notify adapter contract case, run through `createRedisNotifyAdapter` over a
+ * provider, and the context they run against: a notify adapter per case over a new provider, on
+ * channels of its own. The test file still owns the provider's resources and releases them itself.
+ * Works with any test runner.
  *
  * @param options - Context configuration.
+ *
+ * @example
+ * ```ts
+ * import { afterAll, test } from "vitest";
+ *
+ * const client = new Redis(url);
+ * const subscribeClient = new Redis(url);
+ * const { context, cases } = createRedisNotifyProviderConformanceContext({
+ *   createNotifyProvider: async () => createIoredisNotifyProvider({ client, subscribeClient }),
+ * });
+ * afterAll(async () => {
+ *   await client.quit();
+ *   await subscribeClient.quit();
+ * });
+ *
+ * for (const conformanceCase of cases) {
+ *   test(conformanceCase.title, async () => {
+ *     await conformanceCase.run(context);
+ *   });
+ * }
+ * ```
  */
 export const createRedisNotifyProviderConformanceContext = ({
   createNotifyProvider,
@@ -29,40 +51,17 @@ export const createRedisNotifyProviderConformanceContext = ({
    * client connections.
    */
   createNotifyProvider: () => Promise<RedisNotifyProvider>;
-}): NotifyAdapterConformanceContext => ({
-  // A channel prefix per adapter keeps one case's notifications away from the next.
-  createNotifyAdapter: async () =>
-    createRedisNotifyAdapter({
-      notifyProvider: await createNotifyProvider(),
-      channelPrefix: `queuert:conformance:${randomUUID()}`,
-    }),
+}): {
+  context: NotifyAdapterConformanceContext;
+  cases: ConformanceTestCase<NotifyAdapterConformanceContext>[];
+} => ({
+  context: {
+    // A channel prefix per adapter keeps one case's notifications away from the next.
+    createNotifyAdapter: async () =>
+      createRedisNotifyAdapter({
+        notifyProvider: await createNotifyProvider(),
+        channelPrefix: `queuert:conformance:${randomUUID()}`,
+      }),
+  },
+  cases: toConformanceTestCases(redisNotifyProviderConformanceGroups),
 });
-
-/**
- * Every notify adapter contract case, run through `createRedisNotifyAdapter` over a provider. Run
- * them one per test in your own test file against a context from {@link
- * createRedisNotifyProviderConformanceContext}. Works with any test runner.
- *
- * @example
- * ```ts
- * import { afterAll, test } from "vitest";
- *
- * const client = new Redis(url);
- * const subscribeClient = new Redis(url);
- * const context = createRedisNotifyProviderConformanceContext({
- *   createNotifyProvider: async () => createIoredisNotifyProvider({ client, subscribeClient }),
- * });
- * afterAll(async () => {
- *   await client.quit();
- *   await subscribeClient.quit();
- * });
- *
- * for (const conformanceCase of redisNotifyProviderConformanceCases) {
- *   test(conformanceCase.title, async () => {
- *     await conformanceCase.run(context);
- *   });
- * }
- * ```
- */
-export const redisNotifyProviderConformanceCases: ConformanceTestCase<NotifyAdapterConformanceContext>[] =
-  toConformanceTestCases(redisNotifyProviderConformanceGroups);

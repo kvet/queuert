@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { assertRejects } from "@queuert/helpers/assert-rejects";
 import { sleep } from "@queuert/helpers/sleep";
-import { dynamicSyncAsync, syncAsync, resource, step } from "@queuert/sync-async";
+import { dynamicSyncAsync, resource, step, syncAsync } from "@queuert/sync-async";
 
 import { runInModeOf } from "../../conformance/adapters.ts";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
@@ -544,7 +544,6 @@ export const deleteChainsConcurrentTransactionsGroup: ConformanceGroup<StateAdap
         name: "sees a blocker reference committed while it waited on the head lock",
         run: async ({ createStateAdapter }) => {
           await using stateAdapter = await createStateAdapter();
-
           const [blockerChain] = await stateAdapter.withTransaction((txCtx) =>
             stateAdapter.createJobs({
               txCtx,
@@ -614,7 +613,6 @@ export const deleteChainsConcurrentTransactionsGroup: ConformanceGroup<StateAdap
         name: "deletes a continuation committed while it waited on the head lock",
         run: async ({ createStateAdapter }) => {
           await using stateAdapter = await createStateAdapter();
-
           const [stateChain] = await stateAdapter.withTransaction((txCtx) =>
             stateAdapter.createJobs({
               txCtx,

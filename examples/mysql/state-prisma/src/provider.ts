@@ -13,7 +13,7 @@ type PrismaDriverAdapterError = {
 export type PrismaLikeClient = {
   $transaction: <T>(
     fn: (prisma: any) => Promise<T>,
-    options: { isolationLevel: "ReadCommitted" },
+    options?: Record<string, unknown>,
   ) => Promise<T>;
   $queryRawUnsafe: (sql: string, ...params: unknown[]) => Promise<unknown[]>;
 };
@@ -28,9 +28,7 @@ export const createPrismaMysqlStateProvider = <TPrisma extends PrismaLikeClient>
   return {
     withTransaction: async (cb) =>
       withTxHooks(async (txHooks) =>
-        prisma.$transaction(async (prisma: TPrisma) => cb({ prisma, txHooks }), {
-          isolationLevel: "ReadCommitted",
-        }),
+        prisma.$transaction(async (prisma: TPrisma) => cb({ prisma, txHooks })),
       ),
     // Prisma hides `$connect` on the interactive transaction client.
     isTransaction: (txCtx) => !("$connect" in txCtx.prisma),
@@ -43,6 +41,9 @@ export const createPrismaMysqlStateProvider = <TPrisma extends PrismaLikeClient>
     classifyError: ({ error }) => {
       const cause = (error as PrismaDriverAdapterError | undefined)?.meta?.driverAdapterError
         ?.cause;
+      if (cause?.originalCode === "1213" || cause?.originalCode === "1020") {
+        return { kind: "transaction_conflict" };
+      }
       if (cause?.originalCode !== "1146") return undefined;
       const tableName = /Table '([^']+)' doesn't exist/.exec(String(cause.originalMessage))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };

@@ -9,6 +9,8 @@ import {
   stateAdapterAsyncGroups,
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
+  stateAdapterNonLockingReadGroups,
+  stateAdapterGapLockFreeGroups,
   stateAdapterSavepointGroups,
   stateAdapterSchemaFenceConcurrentTransactionGroups,
   stateAdapterSchemaFenceGroups,
@@ -19,22 +21,23 @@ import { createMysqlStateAdapter } from "../state-adapter/state-adapter.mysql.ts
 import type { MysqlStateProvider } from "../state-provider/state-provider.mysql.ts";
 
 /**
- * The context the {@link mysqlStateProviderConformanceCases} run against. Get it from
- * {@link createMysqlStateProviderConformanceContext} and pass it to every case unchanged.
+ * The context the cases from {@link createMysqlStateProviderConformanceContext} run against. Pass
+ * it to every case unchanged.
  *
  * @experimental
  */
 export type MysqlStateProviderConformanceContext = SchemaFenceConformanceContext &
   SavepointConformanceContext & {
     createStateProvider: () => Promise<MysqlStateProvider<any>>;
+    isolationLevel: "READ COMMITTED" | "REPEATABLE READ" | "SERIALIZABLE";
   };
 
 export const isolationLevelGroup: ConformanceGroup<MysqlStateProviderConformanceContext> = {
   name: "isolationLevel",
   cases: [
     {
-      name: "withTransaction opens transactions at READ COMMITTED",
-      run: async ({ createStateProvider }) => {
+      name: "withTransaction opens transactions at the declared isolation level",
+      run: async ({ createStateProvider, isolationLevel }) => {
         const stateProvider = await createStateProvider();
         const query = async (sql: string, txCtx?: unknown) =>
           stateProvider.executeSql({
@@ -64,7 +67,7 @@ export const isolationLevelGroup: ConformanceGroup<MysqlStateProviderConformance
             }
           });
           assert.equal(rows.length, 1);
-          assert.equal((rows[0] as { level: unknown }).level, "READ COMMITTED");
+          assert.equal((rows[0] as { level: unknown }).level, isolationLevel);
         } finally {
           await query("DROP TABLE IF EXISTS queuert_conformance_probe");
           await stateProvider.close?.();
@@ -86,17 +89,51 @@ export const mysqlStateProviderConformanceGroups: ConformanceGroup<MysqlStatePro
   ];
 
 /**
- * Prepares the context the {@link mysqlStateProviderConformanceCases} run against: migrates the
- * schema once through a provider from `createStateProvider`. Each case then builds its own adapter
- * over a new provider from it, with the tables cleared.
+ * Prepares the state adapter contract cases for a provider and the context they run against. The
+ * cases are every state adapter contract case run through `createMysqlStateAdapter` over a
+ * provider, for the isolation level the provider's transactions run at. The context migrates the
+ * schema once, before the first case, through a provider from `createStateProvider`; each case
+ * then builds its own adapter over a new provider from it, with the tables cleared. Works with any
+ * test runner.
  *
  * @param options - Context configuration.
  *
+ * @example
+ * ```ts
+ * import { afterAll, beforeAll, test } from "vitest";
+ *
+ * let pool: Pool;
+ * const { context, cases } = createMysqlStateProviderConformanceContext({
+ *   createStateProvider: async () => createMysql2PoolStateProvider({ pool }),
+ *   dialect: "mysql",
+ *   isolationLevel: "REPEATABLE READ",
+ *   withNonTransactionContext: async (fn) => {
+ *     const connection = await pool.getConnection();
+ *     try {
+ *       return await fn({ connection });
+ *     } finally {
+ *       connection.release();
+ *     }
+ *   },
+ * });
+ * beforeAll(async () => {
+ *   pool = createPool(connectionOptions);
+ * });
+ * afterAll(async () => pool.end());
+ *
+ * for (const conformanceCase of cases) {
+ *   test(conformanceCase.title, async () => {
+ *     await conformanceCase.run(context);
+ *   });
+ * }
+ * ```
+ *
  * @experimental
  */
-export const createMysqlStateProviderConformanceContext = async ({
+export const createMysqlStateProviderConformanceContext = ({
   createStateProvider,
   dialect,
+  isolationLevel,
   withNonTransactionContext,
   withSavepoint,
   stateAdapterOptions,
@@ -105,6 +142,15 @@ export const createMysqlStateProviderConformanceContext = async ({
   createStateProvider: () => Promise<MysqlStateProvider<any>>;
   /** The server the provider connects to. */
   dialect: "mysql" | "mariadb";
+  /**
+   * The isolation level the provider's transactions run at: the server's default
+   * (`transaction_isolation`, REPEATABLE READ unless configured) or the level the provider sets.
+   * The suite checks that transactions run at it. Above READ COMMITTED, a claim on a drained queue
+   * takes gap locks, so the case that checks a producer does not wait on it is left out. At
+   * SERIALIZABLE, InnoDB turns every plain read inside a transaction into a share lock, so the cases
+   * that rely on such a read taking no lock are left out too.
+   */
+  isolationLevel: "READ COMMITTED" | "REPEATABLE READ" | "SERIALIZABLE";
   /** Runs the callback with a context of the provider's shape that is not inside a transaction. */
   withNonTransactionContext: <T>(fn: (txCtx: any) => Promise<T>) => Promise<T>;
   /** Runs `fn` in a savepoint of `txCtx`'s transaction, opened the way the application opens one. */
@@ -118,7 +164,10 @@ export const createMysqlStateProviderConformanceContext = async ({
     Parameters<typeof createMysqlStateAdapter<any, string, string>>[0],
     "stateProvider" | "dialect"
   >;
-}): Promise<MysqlStateProviderConformanceContext> => {
+}): {
+  context: MysqlStateProviderConformanceContext;
+  cases: ConformanceTestCase<MysqlStateProviderConformanceContext>[];
+} => {
   const tables = `${stateAdapterOptions?.schema === undefined ? "" : `${stateAdapterOptions.schema}.`}${stateAdapterOptions?.tablePrefix ?? "queuert_"}`;
   const executeStatements = async (statements: string[]): Promise<void> => {
     const stateProvider = await createStateProvider();
@@ -137,50 +186,78 @@ export const createMysqlStateProviderConformanceContext = async ({
     }
   };
 
-  {
-    await using stateAdapter = createMysqlStateAdapter({
-      ...stateAdapterOptions,
-      stateProvider: await createStateProvider(),
-      dialect,
-    });
-    await stateAdapter.migrateToLatest();
-  }
-
-  return {
-    createStateProvider,
-    withNonTransactionContext,
-    withSavepoint,
-    createStateAdapter: async () => {
-      await executeStatements([
-        `DELETE FROM ${tables}job_blocker`,
-        `DELETE FROM ${tables}job`,
-        `DELETE FROM ${tables}worker`,
-      ]);
-      return createMysqlStateAdapter({
+  let migrated: Promise<void> | undefined;
+  const migrate = async (): Promise<void> => {
+    migrated ??= (async () => {
+      await using stateAdapter = createMysqlStateAdapter({
         ...stateAdapterOptions,
         stateProvider: await createStateProvider(),
         dialect,
       });
-    },
-    withWritesFenced: async (fn) => {
-      await executeStatements([`DROP TABLE ${tables}schema_fence_v2`]);
-      try {
-        return await fn();
-      } finally {
+      await stateAdapter.migrateToLatest();
+    })();
+    return migrated;
+  };
+  const skippedGroups = new Set<unknown>([
+    ...(isolationLevel === "READ COMMITTED" ? [] : stateAdapterGapLockFreeGroups),
+    ...(isolationLevel === "SERIALIZABLE" ? stateAdapterNonLockingReadGroups : []),
+  ]);
+
+  return {
+    context: {
+      createStateProvider,
+      isolationLevel,
+      withNonTransactionContext,
+      withSavepoint,
+      createStateAdapter: async () => {
+        await migrate();
+        const stateProvider = await createStateProvider();
+        try {
+          const query = async (sql: string) =>
+            stateProvider.executeSql({
+              sql,
+              params: [],
+              paramTypes: {},
+              columnTypes: { id: "string" },
+              readOnly: true,
+            });
+          assert.deepEqual(
+            [
+              ...(await query(
+                `SELECT DISTINCT h.id FROM ${tables}job_blocker jb JOIN ${tables}job h ON h.id = jb.blocked_by_chain_id WHERE h.has_dependents = FALSE`,
+              )),
+            ],
+            [],
+            "every head a blocker row references has has_dependents set",
+          );
+        } finally {
+          await stateProvider.close?.();
+        }
         await executeStatements([
-          `CREATE TABLE ${tables}schema_fence_v2 (id INT NOT NULL PRIMARY KEY) ENGINE=InnoDB`,
+          `DELETE FROM ${tables}job_blocker`,
+          `DELETE FROM ${tables}job`,
+          `DELETE FROM ${tables}worker`,
         ]);
-      }
+        return createMysqlStateAdapter({
+          ...stateAdapterOptions,
+          stateProvider: await createStateProvider(),
+          dialect,
+        });
+      },
+      withWritesFenced: async (fn) => {
+        await migrate();
+        await executeStatements([`DROP TABLE ${tables}schema_fence_v2`]);
+        try {
+          return await fn();
+        } finally {
+          await executeStatements([
+            `CREATE TABLE ${tables}schema_fence_v2 (id INT NOT NULL PRIMARY KEY) ENGINE=InnoDB`,
+          ]);
+        }
+      },
     },
+    cases: toConformanceTestCases(
+      mysqlStateProviderConformanceGroups.filter((group) => !skippedGroups.has(group)),
+    ),
   };
 };
-
-/**
- * Every state adapter contract case, run through `createMysqlStateAdapter` over a provider. Run
- * them one per test in your own test file against a context from
- * {@link createMysqlStateProviderConformanceContext}. Works with any test runner.
- *
- * @experimental
- */
-export const mysqlStateProviderConformanceCases: ConformanceTestCase<MysqlStateProviderConformanceContext>[] =
-  toConformanceTestCases(mysqlStateProviderConformanceGroups);

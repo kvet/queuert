@@ -27,22 +27,6 @@ export const stateProviderMembers = (dialect: "postgres" | "sqlite" | "mysql"): 
         transaction context representing an active transaction. A provider that carries{" "}
         <code>txHooks</code> in its context creates them here with <code>withTxHooks</code>, around
         the transaction, so they flush after COMMIT.
-        {dialect === "mysql" ? (
-          <>
-            {" "}
-            It runs <code>SET TRANSACTION ISOLATION LEVEL READ COMMITTED</code> and then{" "}
-            <code>START TRANSACTION</code> on the same connection, with nothing between them; see{" "}
-            <a href="#isolation-level">Isolation level</a>.
-          </>
-        ) : dialect === "postgres" ? (
-          <>
-            {" "}
-            It states READ COMMITTED explicitly (<code>BEGIN ISOLATION LEVEL READ COMMITTED</code>,
-            or the client's isolation-level option), so a higher{" "}
-            <code>default_transaction_isolation</code> cannot apply; see{" "}
-            <a href="#isolation-level">Isolation level</a>.
-          </>
-        ) : null}
       </>
     ),
   },
@@ -139,6 +123,24 @@ export const stateProviderMembers = (dialect: "postgres" | "sqlite" | "mysql"): 
         , and <code>undefined</code> for any other error, or when it cannot read the table name. The
         adapter uses it to turn a write that hit a dropped <a href="#write-fence">write fence</a>{" "}
         into <code>SchemaFencedError</code>.
+        {dialect === "postgres" ? (
+          <>
+            {" "}
+            It also returns <code>{'{ kind: "transaction_conflict" }'}</code> for a serialization
+            failure (SQLSTATE <code>40001</code>); the adapter retries its own transactions and
+            statements on it (see <a href="#isolation-level">Isolation level</a>). A provider that
+            does not report it gets no retries.
+          </>
+        ) : dialect === "mysql" ? (
+          <>
+            {" "}
+            It also returns <code>{'{ kind: "transaction_conflict" }'}</code> for a deadlock (
+            <code>errno</code> 1213) or a MariaDB snapshot-isolation conflict (<code>errno</code>{" "}
+            1020); the adapter retries its own transactions and statements on it (see{" "}
+            <a href="#isolation-level">Isolation level</a>). A provider that does not report it gets
+            no retries.
+          </>
+        ) : null}
       </>
     ),
   },

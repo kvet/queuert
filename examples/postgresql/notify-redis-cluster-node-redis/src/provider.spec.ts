@@ -1,8 +1,4 @@
-import {
-  createRedisNotifyProviderConformanceContext,
-  type NotifyAdapterConformanceContext,
-  redisNotifyProviderConformanceCases,
-} from "@queuert/redis/conformance";
+import { createRedisNotifyProviderConformanceContext } from "@queuert/redis/conformance";
 import { acquireRedisCluster, type AcquiredRedisCluster } from "@queuert/testcontainers";
 import { createCluster, type RedisClusterType } from "redis";
 import { afterAll, beforeAll, describe, test } from "vitest";
@@ -14,7 +10,10 @@ describe("notify-redis-cluster-node-redis provider conformance", () => {
   let rc: AcquiredRedisCluster;
   let cluster: RedisClusterType;
   let subscribeCluster: RedisClusterType;
-  let context: NotifyAdapterConformanceContext;
+  const { context, cases } = createRedisNotifyProviderConformanceContext({
+    createNotifyProvider: async () =>
+      createNodeRedisClusterNotifyProvider({ cluster, subscribeCluster }),
+  });
 
   beforeAll(async () => {
     rc = await acquireRedisCluster("redis:8");
@@ -22,10 +21,6 @@ describe("notify-redis-cluster-node-redis provider conformance", () => {
     subscribeCluster = createCluster({ rootNodes: rc.rootNodes });
     await cluster.connect();
     await subscribeCluster.connect();
-    context = createRedisNotifyProviderConformanceContext({
-      createNotifyProvider: async () =>
-        createNodeRedisClusterNotifyProvider({ cluster, subscribeCluster }),
-    });
   }, 60_000);
 
   afterAll(async () => {
@@ -34,7 +29,7 @@ describe("notify-redis-cluster-node-redis provider conformance", () => {
     await rc[Symbol.asyncDispose]();
   });
 
-  for (const conformanceCase of redisNotifyProviderConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run(context);
     });

@@ -5,11 +5,7 @@ import { fileURLToPath } from "node:url";
 import { PrismaPg } from "@prisma/adapter-pg";
 import {
   createPgMigratorConformanceContext,
-  type PgMigratorConformanceContext,
   createPgStateProviderConformanceContext,
-  type PgStateProviderConformanceContext,
-  pgMigratorConformanceCases,
-  pgStateProviderConformanceCases,
 } from "@queuert/postgres/conformance";
 import { acquirePostgres, type AcquiredPostgres } from "@queuert/testcontainers";
 import { afterAll, beforeAll, describe, test } from "vitest";
@@ -29,7 +25,11 @@ type PrismaLike = {
 describe("postgresql/state-prisma provider conformance", () => {
   let pg: AcquiredPostgres;
   let prisma: PrismaLike;
-  let context: PgStateProviderConformanceContext;
+  const { context, cases } = createPgStateProviderConformanceContext({
+    isolationLevel: "READ COMMITTED",
+    createStateProvider: async () => createPrismaPgStateProvider<PrismaLike>({ prisma }),
+    withNonTransactionContext: async (fn) => fn({ prisma }),
+  });
 
   beforeAll(async () => {
     pg = await acquirePostgres("postgres:18", import.meta.url);
@@ -41,10 +41,6 @@ describe("postgresql/state-prisma provider conformance", () => {
     const { PrismaClient } = await import("../prisma/generated/prisma/client.ts");
     const prismaAdapter = new PrismaPg({ connectionString: pg.connectionString });
     prisma = new PrismaClient({ adapter: prismaAdapter });
-    context = await createPgStateProviderConformanceContext({
-      createStateProvider: async () => createPrismaPgStateProvider<PrismaLike>({ prisma }),
-      withNonTransactionContext: async (fn) => fn({ prisma }),
-    });
   }, 60_000);
 
   afterAll(async () => {
@@ -52,7 +48,7 @@ describe("postgresql/state-prisma provider conformance", () => {
     await pg[Symbol.asyncDispose]();
   });
 
-  for (const conformanceCase of pgStateProviderConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run(context);
     });
@@ -63,7 +59,9 @@ describe("postgresql/state-prisma provider conformance", () => {
 describe("postgresql/state-prisma migrator conformance", () => {
   let pg: AcquiredPostgres;
   let prisma: PrismaLike;
-  let context: PgMigratorConformanceContext;
+  const { context, cases } = createPgMigratorConformanceContext({
+    createStateProvider: () => createPrismaPgStateProvider<PrismaLike>({ prisma }),
+  });
 
   beforeAll(async () => {
     pg = await acquirePostgres("postgres:18", `${import.meta.url}#migrator`);
@@ -75,9 +73,6 @@ describe("postgresql/state-prisma migrator conformance", () => {
     const { PrismaClient } = await import("../prisma/generated/prisma/client.ts");
     const prismaAdapter = new PrismaPg({ connectionString: pg.connectionString });
     prisma = new PrismaClient({ adapter: prismaAdapter });
-    context = createPgMigratorConformanceContext({
-      stateProvider: createPrismaPgStateProvider<PrismaLike>({ prisma }),
-    });
   }, 60_000);
 
   afterAll(async () => {
@@ -85,7 +80,7 @@ describe("postgresql/state-prisma migrator conformance", () => {
     await pg[Symbol.asyncDispose]();
   });
 
-  for (const conformanceCase of pgMigratorConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run(context);
     });

@@ -110,15 +110,6 @@ const requirements = (): FieldItem[] => [
 
 const providerRequirements = (): FieldItem[] => [
   {
-    name: "READ COMMITTED transactions",
-    description: (
-      <>
-        <code>withTransaction</code> opens every transaction at READ COMMITTED; see{" "}
-        <a href="#isolation-level">Isolation level</a>.
-      </>
-    ),
-  },
-  {
     name: "Single statements",
     description: (
       <>
@@ -305,14 +296,18 @@ const Page = () => (
     <h2 id="testing-your-provider">Testing your provider</h2>
     <p>
       <code>@queuert/mysql/conformance</code> checks a provider you write.{" "}
-      <code>mysqlStateProviderConformanceCases</code> are every case a state adapter must pass, the
-      cases that hold two transactions open at once, and checks of the schema write fence.{" "}
-      <code>createMysqlStateProviderConformanceContext</code> prepares the context they run against:
-      it takes a <code>createStateProvider</code> factory, the <code>dialect</code>, and a{" "}
+      <code>createMysqlStateProviderConformanceContext</code> returns the <code>cases</code>, every
+      case a state adapter must pass, the cases that hold two transactions open at once, and checks
+      of the schema write fence, and the <code>context</code> they run against: it takes a{" "}
+      <code>createStateProvider</code> factory, the <code>dialect</code>, and a{" "}
       <code>withNonTransactionContext</code> that runs a callback with a context outside any
-      transaction, and migrates the schema once. An optional <code>withSavepoint</code> adds the
-      savepoint cases, as on <A href="/integrations/state-adapters/postgres/">PostgreSQL</A>. Your
-      test file owns the database in its own hooks and registers one test per case:
+      transaction, and migrates the schema once, before the first case. Pass{" "}
+      <code>isolationLevel: "SERIALIZABLE"</code> when your provider's transactions run at
+      SERIALIZABLE: InnoDB then turns plain reads inside a transaction into share locks, and the
+      cases that rely on such a read taking no lock are left out. An optional{" "}
+      <code>withSavepoint</code> adds the savepoint cases, as on{" "}
+      <A href="/integrations/state-adapters/postgres/">PostgreSQL</A>. Your test file owns the
+      database in its own hooks and registers one test per case:
     </p>
     <Tabs syncKey="mysql-driver">
       <TabItem label="mysql2">
@@ -386,13 +381,48 @@ const Page = () => (
 
     <h2>Isolation level</h2>
     <p>
-      Queuert supports only READ COMMITTED. This covers every transaction Queuert writes in,
-      including the ones you pass to <code>complete</code> and to client methods. InnoDB's default
-      is REPEATABLE READ, so open the transactions you pass to Queuert with{" "}
-      <code>SET TRANSACTION ISOLATION LEVEL READ COMMITTED</code>, as the provider's{" "}
-      <code>withTransaction</code> does. At REPEATABLE READ, a claim on a drained queue takes gap
-      locks that stall every insert of a new due job until it commits.
+      Queuert supports READ COMMITTED, REPEATABLE READ (InnoDB's default) and SERIALIZABLE for every
+      transaction that touches its tables, set as the session default (
+      <code>transaction_isolation</code>) or per transaction, and transactions at different levels
+      can run side by side. Every invariant that spans two transactions, such as a dependent's count
+      of incomplete blockers, is kept by writing a shared row, and every read that drives such a
+      write is a locking read, which sees the latest committed rows at any level.
     </p>
+    <p>
+      The provider sets no isolation level, so Queuert's own transactions and statements run at the
+      level of the connection they use, and so do migrations: each migration transaction first locks
+      the migration table, and InnoDB takes a transaction's snapshot at its first plain read, so a
+      migration never reads rows from before it waited for that lock.
+    </p>
+    <p>
+      At SERIALIZABLE, concurrent writes to the same rows can fail a transaction you pass to Queuert
+      with a deadlock (<code>1213</code>), and on MariaDB 11.6 and later at REPEATABLE READ or
+      SERIALIZABLE, with <code>innodb_snapshot_isolation</code> on (its default), with{" "}
+      <code>1020</code>. Both roll back the whole transaction and fail the Queuert call; see{" "}
+      <a href="#lock-errors">Lock errors</a>. Retry the transaction with fresh <code>txHooks</code>{" "}
+      for each try, or wrap each try in <code>txHooks.retryBoundary</code>; see{" "}
+      <A href="/guides/tx-hooks/#drivers-that-rerun-the-callback">
+        Drivers that rerun the callback
+      </A>
+      . Queuert retries the transactions and statements it runs itself on both errors, up to five
+      attempts.
+    </p>
+    <ul>
+      <li>
+        A claim locks the due jobs it takes with <code>FOR UPDATE SKIP LOCKED</code>. At REPEATABLE
+        READ and SERIALIZABLE, a claim on a drained queue takes gap locks that stall every insert of
+        a new due job until it commits. At SERIALIZABLE, InnoDB also turns every plain read inside a
+        transaction into a shared lock, so a read you run inside your own transaction waits on rows
+        another transaction is writing. To avoid both, give the pool Queuert uses a READ COMMITTED
+        default and raise the level per transaction in your own code.
+      </li>
+      <li>
+        On MariaDB 11.6 and later, <code>1020</code> also fails transactions that interleave
+        harmlessly, such as a completion that commits while another transaction attaches a dependent
+        to the same chain. Running the transactions you pass to Queuert at READ COMMITTED, or
+        setting <code>innodb_snapshot_isolation=OFF</code>, avoids it.
+      </li>
+    </ul>
 
     <h2>Lock errors</h2>
     <p>

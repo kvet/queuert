@@ -26,7 +26,7 @@ const it = baseIt
     detectResourceLeaks({ additionalAllowedTypes: TESTCONTAINERS_RESOURCE_TYPES }),
   )
   .extend("conformance", { scope: "file" }, async ({ pool }) =>
-    createEndToEndContext(pool, async () => noopNotifyAdapter),
+    createEndToEndContext(pool, "READ COMMITTED", async () => noopNotifyAdapter),
   );
 
 // NOTE: hack for vitest plugin

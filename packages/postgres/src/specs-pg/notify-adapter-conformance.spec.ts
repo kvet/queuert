@@ -20,7 +20,7 @@ const it = baseIt
     onCleanup(async () => pool.end());
     return createPgNotifyProviderConformanceContext({
       createNotifyProvider: async () => createPgPoolNotifyProvider({ pool }),
-    });
+    }).context;
   })
   .extend(
     "resourceLeakCheck",

@@ -127,7 +127,9 @@ const defineMysqlMigrationSuite = async ({
       const adapter = database.createAdapter();
       await adapter.migrateToLatest();
       const { pool } = database;
-      await pool.query("ALTER TABLE queuert_job DROP COLUMN has_dependents");
+      await pool.query(
+        "ALTER TABLE queuert_job DROP COLUMN has_dependents, DROP COLUMN blockers_remaining",
+      );
       await pool.query("RENAME TABLE queuert_schema_fence_v2 TO queuert_schema_fence_v1");
       await pool.query("DELETE FROM queuert_migration WHERE name = '002_blocker_counters'");
 
@@ -172,6 +174,97 @@ const defineMysqlMigrationSuite = async ({
         }),
       );
       expect(completed.map((job) => job!.hasDependents)).toEqual([true, true, false]);
+    });
+
+    it("upgrades a 001_schema_v1 database, counting incomplete blockers and releasing stuck dependents and orphaned attempts", async ({
+      createDatabase,
+    }) => {
+      const database = await createDatabase();
+      const adapter = database.createAdapter();
+      await adapter.migrateToLatest();
+      const { pool } = database;
+      await pool.query(
+        "ALTER TABLE queuert_job DROP COLUMN has_dependents, DROP COLUMN blockers_remaining",
+      );
+      await pool.query("RENAME TABLE queuert_schema_fence_v2 TO queuert_schema_fence_v1");
+      await pool.query("DELETE FROM queuert_migration WHERE name = '002_blocker_counters'");
+
+      const runningBlockerId = randomUUID();
+      const completedBlockerId = randomUUID();
+      const missingBlockerId = randomUUID();
+      const mixedDependentId = randomUUID();
+      const duplicateDependentId = randomUUID();
+      const stuckDependentId = randomUUID();
+      const workerId = randomUUID();
+      const ownedJobId = randomUUID();
+      const orphanedJobId = randomUUID();
+      await pool.query(
+        `INSERT INTO queuert_worker (id, type_names, concurrency, started_at, lease_until, token)
+         VALUES ('${workerId}', JSON_ARRAY('owned'), 1, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6) + INTERVAL 1 HOUR, '${randomUUID()}')`,
+      );
+      await pool.query(
+        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status, completed_at, scheduled_at, attempt, attempt_at, attempt_by, attempt_token)
+         VALUES ('${runningBlockerId}', 'blocker', '${runningBlockerId}', 0, 'pending', 'running', NULL, UTC_TIMESTAMP(6), 0, NULL, NULL, NULL),
+                ('${completedBlockerId}', 'blocker', '${completedBlockerId}', 0, 'completed', 'completed', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), 0, NULL, NULL, NULL),
+                ('${mixedDependentId}', 'dependent', '${mixedDependentId}', 0, 'blocked', 'running', NULL, UTC_TIMESTAMP(6), 0, NULL, NULL, NULL),
+                ('${duplicateDependentId}', 'dependent', '${duplicateDependentId}', 0, 'blocked', 'running', NULL, UTC_TIMESTAMP(6), 0, NULL, NULL, NULL),
+                ('${stuckDependentId}', 'dependent', '${stuckDependentId}', 0, 'blocked', 'running', NULL, UTC_TIMESTAMP(6) - INTERVAL 1 HOUR, 0, NULL, NULL, NULL),
+                ('${ownedJobId}', 'owned', '${ownedJobId}', 0, 'running', 'running', NULL, UTC_TIMESTAMP(6), 1, UTC_TIMESTAMP(6), '${workerId}', '${randomUUID()}'),
+                ('${orphanedJobId}', 'owned', '${orphanedJobId}', 0, 'running', 'running', NULL, UTC_TIMESTAMP(6), 1, UTC_TIMESTAMP(6), '${randomUUID()}', '${randomUUID()}')`,
+      );
+      await pool.query(
+        `INSERT INTO queuert_job_blocker (job_id, blocked_by_chain_id, \`index\`)
+         VALUES ('${mixedDependentId}', '${runningBlockerId}', 0),
+                ('${mixedDependentId}', '${completedBlockerId}', 1),
+                ('${mixedDependentId}', '${missingBlockerId}', 2),
+                ('${duplicateDependentId}', '${runningBlockerId}', 0),
+                ('${duplicateDependentId}', '${runningBlockerId}', 1),
+                ('${duplicateDependentId}', '${completedBlockerId}', 2),
+                ('${stuckDependentId}', '${completedBlockerId}', 0)`,
+      );
+
+      await adapter.migrateToLatest();
+
+      const [jobs] = await pool.query<RowDataPacket[]>(
+        `SELECT id, status, blockers_remaining, attempt_by, attempt_token, attempt_at, scheduled_at >= UTC_TIMESTAMP(6) - INTERVAL 1 MINUTE AS rescheduled
+         FROM queuert_job WHERE id IN (?)`,
+        [[mixedDependentId, duplicateDependentId, stuckDependentId, ownedJobId, orphanedJobId]],
+      );
+      const byId = new Map(jobs.map((row) => [row.id as string, row]));
+      expect(byId.get(mixedDependentId)).toMatchObject({
+        status: "blocked",
+        blockers_remaining: 2,
+      });
+      expect(byId.get(duplicateDependentId)).toMatchObject({
+        status: "blocked",
+        blockers_remaining: 2,
+      });
+      expect(byId.get(stuckDependentId)).toMatchObject({ status: "pending", rescheduled: 1 });
+      expect(byId.get(ownedJobId)).toMatchObject({ status: "running", attempt_by: workerId });
+      expect(byId.get(orphanedJobId)).toMatchObject({
+        status: "pending",
+        attempt_by: null,
+        attempt_token: null,
+        attempt_at: null,
+      });
+
+      await adapter.withTransaction(async (txCtx) => {
+        await adapter.completeJobs({ txCtx, jobs: [{ jobId: runningBlockerId, output: null }] });
+        await adapter.unblockJobs({ txCtx, blockedByChainId: runningBlockerId });
+      });
+      const [afterCompletion] = await pool.query<RowDataPacket[]>(
+        "SELECT id, status, blockers_remaining FROM queuert_job WHERE id IN (?) ORDER BY id",
+        [[mixedDependentId, duplicateDependentId]],
+      );
+      expect(new Map(afterCompletion.map((row) => [row.id, row]))).toEqual(
+        new Map([
+          [mixedDependentId, { id: mixedDependentId, status: "blocked", blockers_remaining: 1 }],
+          [
+            duplicateDependentId,
+            { id: duplicateDependentId, status: "pending", blockers_remaining: 0 },
+          ],
+        ]),
+      );
     });
   });
 };

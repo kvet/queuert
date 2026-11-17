@@ -2,7 +2,7 @@
 
 MySQL state storage via `@queuert/mysql` using Bun's built-in [`SQL`](https://bun.com/docs/runtime/sql) client — job creation and completion inside application transactions, no external MySQL dependencies.
 
-MySQL's `START TRANSACTION` takes no isolation level, so `sql.begin` opens transactions at the server's default, REPEATABLE READ. The provider's `withTransaction` reserves a connection, sets READ COMMITTED for its next transaction and begins it there: open the transactions you pass to Queuert with it. MySQL 8.4+ authenticates with `caching_sha2_password`, so a connection without TLS needs `allowPublicKeyRetrieval: true`.
+The provider's `withTransaction` sets no isolation level, so its transactions run at the server's default, REPEATABLE READ. MySQL 8.4+ authenticates with `caching_sha2_password`, so a connection without TLS needs `allowPublicKeyRetrieval: true`.
 
 ## Running
 

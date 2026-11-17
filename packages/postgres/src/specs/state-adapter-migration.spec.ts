@@ -475,6 +475,142 @@ describe("upgrading from 001_schema_v1", () => {
   );
 
   it(
+    "counts the incomplete blockers of blocked jobs, and moves stuck dependents and orphaned attempts to pending",
+    { timeout: 30_000 },
+    async ({ database: { provider, adapter } }) => {
+      await migrateToInstall(provider);
+      const runningBlockerId = randomUUID();
+      const completedBlockerId = randomUUID();
+      const secondRunningBlockerId = randomUUID();
+      const waitingId = randomUUID();
+      const duplicateId = randomUUID();
+      const stuckId = randomUUID();
+      const orphanedId = randomUUID();
+      const attemptedId = randomUUID();
+      const workerId = randomUUID();
+      await query(
+        provider,
+        `INSERT INTO queuert_worker (id, type_names, concurrency, lease_until, token)
+         VALUES ('${workerId}', ARRAY['attempted'], 1, now() + interval '1 hour', gen_random_uuid())`,
+      );
+      await query(
+        provider,
+        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status, scheduled_at, attempt, attempt_at, attempt_by, attempt_token)
+         VALUES ('${runningBlockerId}', 'blocker', '${runningBlockerId}', 0, 'pending', 'running', now(), 0, NULL, NULL, NULL),
+                ('${completedBlockerId}', 'blocker', '${completedBlockerId}', 0, 'completed', 'completed', now(), 1, NULL, NULL, NULL),
+                ('${secondRunningBlockerId}', 'blocker', '${secondRunningBlockerId}', 0, 'pending', 'running', now(), 0, NULL, NULL, NULL),
+                ('${waitingId}', 'dependent', '${waitingId}', 0, 'blocked', 'running', now(), 0, NULL, NULL, NULL),
+                ('${duplicateId}', 'dependent', '${duplicateId}', 0, 'blocked', 'running', now(), 0, NULL, NULL, NULL),
+                ('${stuckId}', 'dependent', '${stuckId}', 0, 'blocked', 'running', now() - interval '1 hour', 0, NULL, NULL, NULL),
+                ('${orphanedId}', 'orphaned', '${orphanedId}', 0, 'running', 'running', now(), 1, now(), '${randomUUID()}', gen_random_uuid()),
+                ('${attemptedId}', 'attempted', '${attemptedId}', 0, 'running', 'running', now(), 1, now(), '${workerId}', gen_random_uuid())`,
+      );
+      await query(
+        provider,
+        `INSERT INTO queuert_job_blocker (job_id, blocked_by_chain_id, "index")
+         VALUES ('${waitingId}', '${runningBlockerId}', 0),
+                ('${waitingId}', '${completedBlockerId}', 1),
+                ('${waitingId}', '${secondRunningBlockerId}', 2),
+                ('${duplicateId}', '${runningBlockerId}', 0),
+                ('${duplicateId}', '${runningBlockerId}', 1),
+                ('${duplicateId}', '${completedBlockerId}', 2),
+                ('${stuckId}', '${completedBlockerId}', 0),
+                ('${stuckId}', '${completedBlockerId}', 1)`,
+      );
+
+      expect(await adapter.migrateToLatest()).toEqual({
+        applied: [BLOCKER_COUNTERS],
+        skipped: [INSTALL],
+        reverted: [],
+        unrecognized: [],
+      });
+
+      expect(
+        await query(
+          provider,
+          `SELECT j.id, j.status, j.blockers_remaining, j.attempt_by IS NULL AS attempt_cleared,
+             j.attempt_token IS NULL AS token_cleared, j.scheduled_at >= now() - interval '1 minute' AS scheduled_recently,
+             (SELECT count(*)::integer FROM queuert_job_blocker jb
+              LEFT JOIN queuert_job h ON h.id = jb.blocked_by_chain_id
+              WHERE jb.job_id = j.id AND h.chain_status IS DISTINCT FROM 'completed') AS recomputed
+           FROM queuert_job j
+           WHERE j.id IN ('${waitingId}', '${duplicateId}', '${stuckId}', '${orphanedId}', '${attemptedId}')
+           ORDER BY j.type_name, j.id`,
+        ),
+      ).toEqual(
+        expect.arrayContaining([
+          {
+            id: waitingId,
+            status: "blocked",
+            blockers_remaining: 2,
+            attempt_cleared: true,
+            token_cleared: true,
+            scheduled_recently: true,
+            recomputed: 2,
+          },
+          {
+            id: duplicateId,
+            status: "blocked",
+            blockers_remaining: 2,
+            attempt_cleared: true,
+            token_cleared: true,
+            scheduled_recently: true,
+            recomputed: 2,
+          },
+          {
+            id: stuckId,
+            status: "pending",
+            blockers_remaining: 0,
+            attempt_cleared: true,
+            token_cleared: true,
+            scheduled_recently: true,
+            recomputed: 0,
+          },
+          {
+            id: orphanedId,
+            status: "pending",
+            blockers_remaining: 0,
+            attempt_cleared: true,
+            token_cleared: true,
+            scheduled_recently: true,
+            recomputed: 0,
+          },
+          {
+            id: attemptedId,
+            status: "running",
+            blockers_remaining: 0,
+            attempt_cleared: false,
+            token_cleared: false,
+            scheduled_recently: true,
+            recomputed: 0,
+          },
+        ]),
+      );
+
+      await adapter.withTransaction(async (txCtx) => {
+        await adapter.completeJobs({
+          txCtx,
+          jobs: [{ jobId: runningBlockerId, output: null }],
+        });
+        return adapter.unblockJobs({ txCtx, blockedByChainId: runningBlockerId });
+      });
+      await adapter.withTransaction(async (txCtx) => {
+        await adapter.completeJobs({
+          txCtx,
+          jobs: [{ jobId: secondRunningBlockerId, output: null }],
+        });
+        return adapter.unblockJobs({ txCtx, blockedByChainId: secondRunningBlockerId });
+      });
+      expect(
+        await query(
+          provider,
+          `SELECT id, status FROM queuert_job WHERE id IN ('${waitingId}', '${duplicateId}') ORDER BY id`,
+        ),
+      ).toEqual([waitingId, duplicateId].toSorted().map((id) => ({ id, status: "pending" })));
+    },
+  );
+
+  it(
     "replaces the write fence of 001_schema_v1 with its own",
     { timeout: 120_000 },
     async ({ database: { provider, adapter } }) => {

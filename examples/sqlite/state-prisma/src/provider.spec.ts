@@ -7,13 +7,8 @@ import { fileURLToPath } from "node:url";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { createAsyncRwLock } from "@queuert/sqlite";
 import {
-  asyncSqliteStateProviderConformanceCases,
   createSqliteMigratorConformanceContext,
-  type SqliteMigratorConformanceContext,
   createSqliteStateProviderConformanceContext,
-  type SqliteStateProviderConformanceContext,
-  sqliteMigratorConformanceCases,
-  sqliteStateProviderConformanceCases,
 } from "@queuert/sqlite/conformance";
 import { afterAll, beforeAll, describe, test } from "vitest";
 
@@ -27,7 +22,11 @@ describe("sqlite/state-prisma provider conformance", () => {
   const tempDir = mkdtempSync(join(tmpdir(), "queuert-sqlite-prisma-spec-"));
   let prisma: PrismaClient;
   const lock = createAsyncRwLock();
-  let context: SqliteStateProviderConformanceContext;
+  const { context, cases } = createSqliteStateProviderConformanceContext({
+    mode: "async",
+    createStateProvider: async () => createPrismaSqliteStateProvider({ prisma, lock }),
+    withNonTransactionContext: async (fn) => fn({ prisma }),
+  });
 
   beforeAll(async () => {
     const dbPath = join(tempDir, "test.db");
@@ -36,10 +35,6 @@ describe("sqlite/state-prisma provider conformance", () => {
     const { PrismaClient } = await import("../prisma/generated/prisma/client.ts");
     const prismaAdapter = new PrismaBetterSqlite3({ url: `file:${dbPath}` });
     prisma = new PrismaClient({ adapter: prismaAdapter });
-    context = await createSqliteStateProviderConformanceContext({
-      createStateProvider: async () => createPrismaSqliteStateProvider({ prisma, lock }),
-      withNonTransactionContext: async (fn) => fn({ prisma }),
-    });
   }, 60_000);
 
   afterAll(async () => {
@@ -47,10 +42,7 @@ describe("sqlite/state-prisma provider conformance", () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  for (const conformanceCase of [
-    ...sqliteStateProviderConformanceCases,
-    ...asyncSqliteStateProviderConformanceCases,
-  ]) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run(context);
     });
@@ -61,15 +53,16 @@ describe("sqlite/state-prisma provider conformance", () => {
 describe("sqlite/state-prisma migrator conformance", () => {
   const tempDir = mkdtempSync(join(tmpdir(), "queuert-sqlite-prisma-migrator-spec-"));
   let prisma: PrismaClient;
-  let context: SqliteMigratorConformanceContext;
+  const { context, cases } = createSqliteMigratorConformanceContext({
+    mode: "async",
+    createStateProvider: () =>
+      createPrismaSqliteStateProvider({ prisma, lock: createAsyncRwLock() }),
+  });
 
   beforeAll(async () => {
     const { PrismaClient } = await import("../prisma/generated/prisma/client.ts");
     const prismaAdapter = new PrismaBetterSqlite3({ url: `file:${join(tempDir, "test.db")}` });
     prisma = new PrismaClient({ adapter: prismaAdapter });
-    context = createSqliteMigratorConformanceContext({
-      stateProvider: createPrismaSqliteStateProvider({ prisma, lock: createAsyncRwLock() }),
-    });
   });
 
   afterAll(async () => {
@@ -77,7 +70,7 @@ describe("sqlite/state-prisma migrator conformance", () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  for (const conformanceCase of sqliteMigratorConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run(context);
     });

@@ -8,8 +8,13 @@ import type { BaseTxContext } from "queuert";
  * - `undefined_table` — SQLSTATE `42P01`, with the missing relation's name as the server reports it
  *   (`relation "<table>" does not exist`). Without the name the adapter cannot tell its fence
  *   apart from another missing table, so a provider that cannot read it returns `undefined`.
+ * - `transaction_conflict` — SQLSTATE `40001` (`serialization_failure`), raised at REPEATABLE READ
+ *   and SERIALIZABLE. The adapter retries it in the transactions and statements it runs without a
+ *   caller's transaction; a provider that does not report it leaves it unretried.
  */
-export type PgErrorClassification = { kind: "undefined_table"; tableName: string };
+export type PgErrorClassification =
+  | { kind: "undefined_table"; tableName: string }
+  | { kind: "transaction_conflict" };
 
 /**
  * PostgreSQL state provider interface.
@@ -18,17 +23,17 @@ export type PgErrorClassification = { kind: "undefined_table"; tableName: string
  * and SQL execution. Users create their own implementation to integrate with their preferred
  * client (raw `pg`, Drizzle, Prisma, etc.).
  *
- * Queuert supports only READ COMMITTED (the default).
+ * Queuert supports READ COMMITTED, REPEATABLE READ and SERIALIZABLE, as a session default or per
+ * transaction, including mixed levels.
  *
  * @typeParam TTxContext - The transaction context type containing database client/connection info
  */
 export type PgStateProvider<TTxContext extends BaseTxContext> = {
   /**
-   * Executes a callback within a database transaction at READ COMMITTED, the only isolation level
-   * Queuert supports. Acquires a connection, starts the transaction with the level stated
-   * explicitly (`BEGIN ISOLATION LEVEL READ COMMITTED`), so a server or role whose
-   * `default_transaction_isolation` is higher cannot raise it, executes the callback, commits on
-   * success, rolls back on error, and releases the connection.
+   * Executes a callback within a database transaction. Acquires a connection, starts the
+   * transaction at the connection's default isolation level (a plain `BEGIN`), executes the
+   * callback, commits on success, rolls back on error, and releases the connection. Migrations set
+   * READ COMMITTED on the transactions they open.
    */
   withTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 

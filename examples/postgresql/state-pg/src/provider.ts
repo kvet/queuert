@@ -37,7 +37,7 @@ export const createPgPoolStateProvider = ({
       withTxHooks(async (txHooks) => {
         const poolClient = await pool.connect();
         try {
-          await poolClient.query("BEGIN ISOLATION LEVEL READ COMMITTED");
+          await poolClient.query("BEGIN");
           const result = await cb({ poolClient, txHooks });
           await poolClient.query("COMMIT");
           return result;
@@ -60,6 +60,7 @@ export const createPgPoolStateProvider = ({
     },
     classifyError: ({ error }) => {
       const driverError = error as { code?: unknown; message?: unknown } | undefined;
+      if (driverError?.code === "40001") return { kind: "transaction_conflict" };
       if (driverError?.code !== "42P01") return undefined;
       const tableName = /relation "([^"]+)" does not exist/.exec(String(driverError.message))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };

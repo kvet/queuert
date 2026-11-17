@@ -1,10 +1,6 @@
 import {
   createMysqlMigratorConformanceContext,
   createMysqlStateProviderConformanceContext,
-  type MysqlMigratorConformanceContext,
-  type MysqlStateProviderConformanceContext,
-  mysqlMigratorConformanceCases,
-  mysqlStateProviderConformanceCases,
 } from "@queuert/mysql/conformance";
 import { acquireMysql } from "@queuert/testcontainers";
 import { type Pool, createPool } from "mysql2/promise";
@@ -15,30 +11,30 @@ import { createMysql2PoolStateProvider } from "./provider.ts";
 // #region conformance
 describe("mysql/state-mysql2 provider conformance", () => {
   let pool: Pool;
-  let context: MysqlStateProviderConformanceContext;
+  const { context, cases } = createMysqlStateProviderConformanceContext({
+    createStateProvider: async () => createMysql2PoolStateProvider({ pool }),
+    dialect: "mysql",
+    isolationLevel: "REPEATABLE READ",
+    withNonTransactionContext: async (fn) => {
+      const connection = await pool.getConnection();
+      try {
+        return await fn({ connection });
+      } finally {
+        connection.release();
+      }
+    },
+  });
 
   beforeAll(async () => {
     const { connectionOptions } = await acquireMysql("mysql:26", import.meta.url);
     pool = createPool({ ...connectionOptions, connectionLimit: 20 });
-    context = await createMysqlStateProviderConformanceContext({
-      createStateProvider: async () => createMysql2PoolStateProvider({ pool }),
-      dialect: "mysql",
-      withNonTransactionContext: async (fn) => {
-        const connection = await pool.getConnection();
-        try {
-          return await fn({ connection });
-        } finally {
-          connection.release();
-        }
-      },
-    });
   }, 120_000);
 
   afterAll(async () => {
     await pool.end();
   });
 
-  for (const conformanceCase of mysqlStateProviderConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run(context);
     });
@@ -48,21 +44,20 @@ describe("mysql/state-mysql2 provider conformance", () => {
 
 describe("mysql/state-mysql2 migrator conformance", () => {
   let pool: Pool;
-  let context: MysqlMigratorConformanceContext;
+  const { context, cases } = createMysqlMigratorConformanceContext({
+    createStateProvider: () => createMysql2PoolStateProvider({ pool }),
+  });
 
   beforeAll(async () => {
     const { connectionOptions } = await acquireMysql("mysql:26", `${import.meta.url}#migrator`);
     pool = createPool({ ...connectionOptions, connectionLimit: 10 });
-    context = createMysqlMigratorConformanceContext({
-      stateProvider: createMysql2PoolStateProvider({ pool }),
-    });
   }, 120_000);
 
   afterAll(async () => {
     await pool.end();
   });
 
-  for (const conformanceCase of mysqlMigratorConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run(context);
     });

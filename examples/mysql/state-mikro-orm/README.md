@@ -2,7 +2,7 @@
 
 MySQL state storage via `@queuert/mysql` with MikroORM — job creation and completion inside `em.transactional`, with commit and rollback callbacks taken from MikroORM's transaction events, so calls take `{ em }` alone and no `txHooks`.
 
-The provider's `withTransaction` opens every transaction at READ COMMITTED, the only isolation level Queuert supports; open the transactions you pass to Queuert with `em.transactional(fn, { isolationLevel: IsolationLevel.READ_COMMITTED })` too.
+The provider's `withTransaction` opens its transactions at the session default level; the example opens the transactions it passes to Queuert with `em.transactional(fn, { isolationLevel: IsolationLevel.READ_COMMITTED })`.
 
 Queuert's tables share the database with the entities, so `schemaGenerator.skipTables` keeps MikroORM's schema diff (`schema:update`, generated migrations) from dropping them; Queuert migrates them itself with `migrateToLatest()`.
 

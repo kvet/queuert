@@ -16,8 +16,8 @@ import { createRedisStateAdapter } from "../state-adapter/state-adapter.redis.ts
 import type { RedisStateProvider } from "../state-provider/state-provider.redis.ts";
 
 /**
- * The context the {@link redisStateProviderConformanceCases} run against. Get it from
- * {@link createRedisStateProviderConformanceContext} and pass it to every case unchanged.
+ * The context the cases from {@link createRedisStateProviderConformanceContext} run against. Pass
+ * it to every case unchanged.
  *
  * @experimental
  */
@@ -183,11 +183,33 @@ export const redisStateProviderEvalGroup: ConformanceGroup<RedisStateProviderCon
 };
 
 /**
- * Prepares the context the {@link redisStateProviderConformanceCases} run against: a Redis state
- * adapter per case over a new provider, under a key prefix of its own and migrated to the latest
- * schema. The test file still owns the provider's resources and releases them itself.
+ * Prepares the state adapter contract cases for a provider and the context they run against. The
+ * cases are the provider's `eval` contract followed by every state adapter contract case the Redis
+ * state adapter meets, including the checks of its schema write fence, run through
+ * `createRedisStateAdapter` over a provider. The context gives each case a Redis state adapter
+ * over a new provider, under a key prefix of its own and migrated to the latest schema. The test
+ * file still owns the provider's resources and releases them itself. Works with any test runner.
  *
  * @param options - Context configuration.
+ *
+ * @example
+ * ```ts
+ * import { afterAll, test } from "vitest";
+ *
+ * const client = new Redis(url);
+ * const { context, cases } = createRedisStateProviderConformanceContext({
+ *   createStateProvider: async () => createIoredisStateProvider({ client }),
+ * });
+ * afterAll(async () => {
+ *   await client.quit();
+ * });
+ *
+ * for (const conformanceCase of cases) {
+ *   test(conformanceCase.title, async () => {
+ *     await conformanceCase.run(context);
+ *   });
+ * }
+ * ```
  *
  * @experimental
  */
@@ -210,7 +232,10 @@ export const createRedisStateProviderConformanceContext = ({
     Parameters<typeof createRedisStateAdapter>[0],
     "stateProvider" | "keyPrefix"
   >;
-}): RedisStateProviderConformanceContext => {
+}): {
+  context: RedisStateProviderConformanceContext;
+  cases: ConformanceTestCase<RedisStateProviderConformanceContext>[];
+} => {
   const keyPrefixes = new Set<string>();
   const createStateAdapter = async () => {
     const keyPrefix = `{queuert-conformance-${randomUUID()}}:`;
@@ -243,24 +268,29 @@ export const createRedisStateProviderConformanceContext = ({
     }
   };
   return {
-    createStateProvider,
-    createStateAdapter,
-    withWritesFenced: async (fn) => {
-      await setFences("drop");
-      try {
-        return await fn();
-      } finally {
-        await setFences("lift");
-      }
+    context: {
+      createStateProvider,
+      createStateAdapter,
+      withWritesFenced: async (fn) => {
+        await setFences("drop");
+        try {
+          return await fn();
+        } finally {
+          await setFences("lift");
+        }
+      },
+      withNonTransactionContext: async (fn) => {
+        const stateAdapter = await createStateAdapter();
+        try {
+          return await fn(await stateAdapter.withTransaction(async (txCtx) => txCtx));
+        } finally {
+          await stateAdapter.close();
+        }
+      },
     },
-    withNonTransactionContext: async (fn) => {
-      const stateAdapter = await createStateAdapter();
-      try {
-        return await fn(await stateAdapter.withTransaction(async (txCtx) => txCtx));
-      } finally {
-        await stateAdapter.close();
-      }
-    },
+    cases: toConformanceTestCases<RedisStateProviderConformanceContext>(
+      redisStateProviderConformanceGroups,
+    ),
   };
 };
 
@@ -270,33 +300,3 @@ export const redisStateProviderConformanceGroups: ConformanceGroup<RedisStatePro
     ...withoutLockWaitCases([...stateAdapterBaseGroups, ...stateAdapterAsyncGroups]),
     ...stateAdapterSchemaFenceGroups,
   ];
-
-/**
- * The provider's `eval` contract followed by every state adapter contract case the Redis state
- * adapter meets, including the checks of its schema write fence, run through
- * `createRedisStateAdapter` over a provider. Run them one per test in your own test file against
- * a context from {@link createRedisStateProviderConformanceContext}. Works with any test runner.
- *
- * @example
- * ```ts
- * import { afterAll, test } from "vitest";
- *
- * const client = new Redis(url);
- * const context = createRedisStateProviderConformanceContext({
- *   createStateProvider: async () => createIoredisStateProvider({ client }),
- * });
- * afterAll(async () => {
- *   await client.quit();
- * });
- *
- * for (const conformanceCase of redisStateProviderConformanceCases) {
- *   test(conformanceCase.title, async () => {
- *     await conformanceCase.run(context);
- *   });
- * }
- * ```
- *
- * @experimental
- */
-export const redisStateProviderConformanceCases: ConformanceTestCase<RedisStateProviderConformanceContext>[] =
-  toConformanceTestCases<RedisStateProviderConformanceContext>(redisStateProviderConformanceGroups);

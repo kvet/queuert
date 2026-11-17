@@ -26,7 +26,7 @@ const it = baseIt
     });
     return createRedisNotifyProviderConformanceContext({
       createNotifyProvider: async () => createNodeRedisNotifyProvider({ client, subscribeClient }),
-    });
+    }).context;
   })
   .extend(
     "resourceLeakCheck",

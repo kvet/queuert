@@ -179,6 +179,11 @@ export type StateAdapter<
   /**
    * Runs `fn` in a transaction: commits on success, rolls back on error. In the `"sync"` mode, a
    * `fn` that returns a promise rolls the transaction back and throws.
+   *
+   * May call `fn` more than once: an adapter may roll back and run `fn` again after a
+   * serialization failure or deadlock. Each try gets its own `txCtx`, and commit callbacks
+   * registered in a try that rolled back never run. Queuert keeps every `fn` it passes free of
+   * effects outside the database, and runs its notifications and observability after commit.
    */
   withTransaction: <T>(fn: (txCtx: TTxContext) => ModeResult<TMode, T>) => ModeResult<TMode, T>;
 

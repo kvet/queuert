@@ -25,7 +25,7 @@ const it = baseIt.extend("conformance", { scope: "file" }, async ({}, { onCleanu
   return createRedisNotifyProviderConformanceContext({
     createNotifyProvider: async () =>
       createNodeRedisClusterNotifyProvider({ cluster, subscribeCluster }),
-  });
+  }).context;
 });
 
 // NOTE: hack for vitest plugin

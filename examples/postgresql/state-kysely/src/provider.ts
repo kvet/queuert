@@ -12,10 +12,7 @@ export const createKyselyPgStateProvider = <TDatabase>({
   return {
     withTransaction: async (cb) =>
       withTxHooks(async (txHooks) =>
-        db
-          .transaction()
-          .setIsolationLevel("read committed")
-          .execute(async (txDb) => cb({ db: txDb, txHooks })),
+        db.transaction().execute(async (txDb) => cb({ db: txDb, txHooks })),
       ),
     isTransaction: (txCtx) => txCtx.db.isTransaction,
     onTransactionCommit: (txCtx, callback) => {
@@ -26,6 +23,7 @@ export const createKyselyPgStateProvider = <TDatabase>({
     },
     classifyError: ({ error }) => {
       const driverError = error as { code?: unknown; message?: unknown } | undefined;
+      if (driverError?.code === "40001") return { kind: "transaction_conflict" };
       if (driverError?.code !== "42P01") return undefined;
       const tableName = /relation "([^"]+)" does not exist/.exec(String(driverError.message))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };

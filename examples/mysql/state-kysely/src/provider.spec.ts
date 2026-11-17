@@ -1,10 +1,6 @@
 import {
   createMysqlMigratorConformanceContext,
   createMysqlStateProviderConformanceContext,
-  type MysqlMigratorConformanceContext,
-  type MysqlStateProviderConformanceContext,
-  mysqlMigratorConformanceCases,
-  mysqlStateProviderConformanceCases,
 } from "@queuert/mysql/conformance";
 import { acquireMysql } from "@queuert/testcontainers";
 import { Kysely, MysqlDialect } from "kysely";
@@ -18,20 +14,19 @@ type Database = Record<string, never>;
 // #region conformance
 describe("mysql/state-kysely provider conformance", () => {
   let db: Kysely<Database>;
-  let context: MysqlStateProviderConformanceContext;
+  const { context, cases } = createMysqlStateProviderConformanceContext({
+    createStateProvider: async () => createKyselyMysqlStateProvider({ db }),
+    dialect: "mysql",
+    isolationLevel: "REPEATABLE READ",
+    withNonTransactionContext: async (fn) => fn({ db }),
+  });
 
   beforeAll(async () => {
     const { connectionOptions } = await acquireMysql("mysql:26", import.meta.url);
-    const kysely = new Kysely<Database>({
+    db = new Kysely<Database>({
       dialect: new MysqlDialect({
         pool: createPool({ ...connectionOptions, connectionLimit: 20 }),
       }),
-    });
-    db = kysely;
-    context = await createMysqlStateProviderConformanceContext({
-      createStateProvider: async () => createKyselyMysqlStateProvider({ db: kysely }),
-      dialect: "mysql",
-      withNonTransactionContext: async (fn) => fn({ db: kysely }),
     });
   }, 120_000);
 
@@ -39,7 +34,7 @@ describe("mysql/state-kysely provider conformance", () => {
     await db.destroy();
   });
 
-  for (const conformanceCase of mysqlStateProviderConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run(context);
     });
@@ -49,7 +44,9 @@ describe("mysql/state-kysely provider conformance", () => {
 
 describe("mysql/state-kysely migrator conformance", () => {
   let db: Kysely<Database>;
-  let context: MysqlMigratorConformanceContext;
+  const { context, cases } = createMysqlMigratorConformanceContext({
+    createStateProvider: () => createKyselyMysqlStateProvider({ db }),
+  });
 
   beforeAll(async () => {
     const { connectionOptions } = await acquireMysql("mysql:26", `${import.meta.url}#migrator`);
@@ -58,16 +55,13 @@ describe("mysql/state-kysely migrator conformance", () => {
         pool: createPool({ ...connectionOptions, connectionLimit: 10 }),
       }),
     });
-    context = createMysqlMigratorConformanceContext({
-      stateProvider: createKyselyMysqlStateProvider({ db }),
-    });
   }, 120_000);
 
   afterAll(async () => {
     await db.destroy();
   });
 
-  for (const conformanceCase of mysqlMigratorConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run(context);
     });

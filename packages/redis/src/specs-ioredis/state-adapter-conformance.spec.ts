@@ -24,7 +24,7 @@ const it = baseIt.extend("conformance", { scope: "file" }, async ({}, { onCleanu
   });
   return createRedisStateProviderConformanceContext({
     createStateProvider: async () => createIoredisStateProvider({ client }),
-  });
+  }).context;
 });
 
 const cappedIt = baseIt.extend("conformance", { scope: "file" }, async ({}, { onCleanup }) => {
@@ -35,7 +35,7 @@ const cappedIt = baseIt.extend("conformance", { scope: "file" }, async ({}, { on
   return createRedisStateProviderConformanceContext({
     createStateProvider: async () => createIoredisStateProvider({ client }),
     stateAdapterOptions: { countCap: 3 },
-  });
+  }).context;
 });
 
 const customOptionsIt = baseIt.extend(
@@ -52,7 +52,7 @@ const customOptionsIt = baseIt.extend(
         generateJobId: () => `job.${crypto.randomUUID()}`,
         generateWorkerId: () => `worker.${crypto.randomUUID()}`,
       },
-    });
+    }).context;
   },
 );
 
