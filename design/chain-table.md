@@ -44,7 +44,7 @@ CREATE TABLE {{schema}}.{{table_prefix}}chain (
   created_at        timestamptz NOT NULL DEFAULT now(),
   completed_at      timestamptz,
   id                {{job_id_type}} PRIMARY KEY,
-  has_dependents    boolean NOT NULL DEFAULT false,
+  blocking    boolean NOT NULL DEFAULT false,
   status            text NOT NULL DEFAULT 'running' CHECK (status IN ('running', 'completed')),
   type_name         text NOT NULL,
   deduplication_key text,
@@ -64,20 +64,20 @@ On `job`:
 - Replace `chain_index_idx ON job (chain_id, chain_index) WHERE chain_index > 0` with a full `UNIQUE (chain_id, chain_index)`: it now covers the head too, so one index serves head lookup, tail lookup and `listChainJobs`.
 - No foreign key from `job.chain_id` to `chain.id`: the check would take `FOR KEY SHARE` on the chain row for every job insert, continuations included. `deleteChains` already deletes both sides.
 
-`fillfactor = 90`: the `running → completed` flip changes indexed columns and can never be HOT, but the `has_dependents` write (once per attach, see below) touches no indexed column and can be HOT if the page has room.
+`fillfactor = 90`: the `running → completed` flip changes indexed columns and can never be HOT, but the `blocking` write (once per attach, see below) touches no indexed column and can be HOT if the page has room.
 
 ### Operations
 
-| Operation              | Rows written                                                                                    | Locks                                                                                                             |
-| ---------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `createJobs`           | 1 chain insert + 1 job insert per chain                                                         | —                                                                                                                 |
-| `startJobAttempts`     | 1 job update                                                                                    | job row only (`FOR UPDATE OF j SKIP LOCKED`), chain read by primary key                                           |
-| `continueJobs`         | 1 job update + 1 job insert; **the chain row is not touched**                                   | the continued job                                                                                                 |
-| `completeJobs`         | 1 job update + 1 chain update (`status`, `completed_at`), `RETURNING has_dependents`            | the job, the chain row                                                                                            |
-| `addJobsBlockers`      | `UPDATE chain SET has_dependents = true` per blocker, `job_blocker` inserts, 1 dependent update | blocker chain rows (by the update)                                                                                |
-| `unblockJobs`          | skipped unless `has_dependents`; then one `UPDATE job SET blockers_remaining = … - n`           | dependent job rows (by the update)                                                                                |
-| `getChains({ lock })`  | —                                                                                               | chain rows only; the head and tail are read in a following statement so READ COMMITTED sees their latest versions |
-| `completeChain` (core) | —                                                                                               | chain row, then current job, then follow `continued_to_id` (below)                                                |
+| Operation              | Rows written                                                                              | Locks                                                                                                             |
+| ---------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `createJobs`           | 1 chain insert + 1 job insert per chain                                                   | —                                                                                                                 |
+| `startJobAttempts`     | 1 job update                                                                              | job row only (`FOR UPDATE OF j SKIP LOCKED`), chain read by primary key                                           |
+| `continueJobs`         | 1 job update + 1 job insert; **the chain row is not touched**                             | the continued job                                                                                                 |
+| `completeJobs`         | 1 job update + 1 chain update (`status`, `completed_at`), `RETURNING blocking`            | the job, the chain row                                                                                            |
+| `addJobsBlockers`      | `UPDATE chain SET blocking = true` per blocker, `job_blocker` inserts, 1 dependent update | blocker chain rows (by the update)                                                                                |
+| `unblockJobs`          | skipped unless `blocking`; then one `UPDATE job SET blockers_remaining = … - n`           | dependent job rows (by the update)                                                                                |
+| `getChains({ lock })`  | —                                                                                         | chain rows only; the head and tail are read in a following statement so READ COMMITTED sees their latest versions |
+| `completeChain` (core) | —                                                                                         | chain row, then current job, then follow `continued_to_id` (below)                                                |
 
 **Lock order.** A statement or transaction that locks both takes chain rows first (ordered by id), then job rows (ordered by id). In a single statement this needs a `MATERIALIZED` CTE for the chain locks that the job scan depends on; otherwise the planner may interleave them. `startJobAttempts` uses `SKIP LOCKED` and never waits, so it is exempt; the reclaim transactions lock worker rows and job rows but never chain rows, and read chain columns by primary key.
 
@@ -100,7 +100,7 @@ It is correct because a job can only be continued by writing its own row, so onc
 
 Rule: **every invariant that pairs a read in one transaction with a write in another must be a write-write conflict on a shared row.** READ COMMITTED then waits and re-reads the latest version (EvalPlanQual); REPEATABLE READ and SERIALIZABLE raise 40001 and the caller retries. Neither reads a stale value silently.
 
-- **Attach vs completion of the blocker** share the blocker's chain row. Attaching _writes_ it (`has_dependents = true`, on every attach, not only the first), and the dependent's `blockers_remaining` is set to the number of its `job_blocker` rows whose blocker chain the update returned `running`. Completion writes the same row and gets `has_dependents` back from its own `UPDATE … RETURNING`, which is the latest version after any wait. This also restores skipping `unblockJobs` for chains without dependents, without a separate `EXISTS`.
+- **Attach vs completion of the blocker** share the blocker's chain row. Attaching _writes_ it (`blocking = true`, on every attach, not only the first), and the dependent's `blockers_remaining` is set to the number of its `job_blocker` rows whose blocker chain the update returned `running`. Completion writes the same row and gets `blocking` back from its own `UPDATE … RETURNING`, which is the latest version after any wait. This also restores skipping `unblockJobs` for chains without dependents, without a separate `EXISTS`.
 - **Two blockers of one dependent completing concurrently** share the dependent's job row: `unblockJobs` decrements `blockers_remaining` by the number of that dependent's `job_blocker` rows for the completed chain, and flips the job to `pending` when it reaches zero. It is one statement instead of today's two (`lockBlockedJobs` + `unblockJobs`), and the `NOT EXISTS` join over every blocker's chain row goes away.
 
 ### Behavior by isolation level
@@ -116,7 +116,7 @@ Results from the spike's two-connection interleavings (PostgreSQL 18):
 | RR/SER attach after the blocker's head was acquired                    | —                          | spurious 40001          | spurious 40001 | — / ok / ok                             |
 | RR/SER attach after the blocker continued                              | —                          | ok                      | ok             | — / ok / ok                             |
 
-**Residual cost: attach vs attach.** Two transactions attaching dependents to the same blocker both write its chain row. Under READ COMMITTED they serialize until the first commits, as today's exclusive head lock already does. Under REPEATABLE READ the second gets 40001 when the first committed after its snapshot; in a contention benchmark (4 attachers, 32 blockers, 2 ms between snapshot and attach) that was 7% of attach transactions under RR and 11–15% under SERIALIZABLE. If that matters for fan-out-heavy workloads, READ COMMITTED and SERIALIZABLE can attach with `FOR SHARE` once `has_dependents` is already true (RC re-reads after the wait; SSI detects the rw-conflict); REPEATABLE READ cannot, because only a write produces its conflict.
+**Residual cost: attach vs attach.** Two transactions attaching dependents to the same blocker both write its chain row. Under READ COMMITTED they serialize until the first commits, as today's exclusive head lock already does. Under REPEATABLE READ the second gets 40001 when the first committed after its snapshot; in a contention benchmark (4 attachers, 32 blockers, 2 ms between snapshot and attach) that was 7% of attach transactions under RR and 11–15% under SERIALIZABLE. If that matters for fan-out-heavy workloads, READ COMMITTED and SERIALIZABLE can attach with `FOR SHARE` once `blocking` is already true (RC re-reads after the wait; SSI detects the rw-conflict); REPEATABLE READ cannot, because only a write produces its conflict.
 
 **Worker statements.** Acquisition, lease renewal, reclaim, `stopWorker` and the fallback reschedule are autocommit statements, so they run at the session's `default_transaction_isolation`. Under REPEATABLE READ or SERIALIZABLE a single statement that meets a row changed after its snapshot raises 40001 instead of re-reading it, and `SKIP LOCKED` scans under SSI create rw-conflicts between workers; today a throwing claim stops the worker gracefully. Supporting those levels therefore needs the worker's statements pinned to READ COMMITTED (a dedicated connection setting, or treating 40001 there as an empty result), independently of the chain table. Only the transactions a user passes in (client methods, `complete`) run at the user's level.
 
@@ -125,14 +125,14 @@ Results from the spike's two-connection interleavings (PostgreSQL 18):
 - `Chain.id` is the chain's own id. The head job's id is exposed separately (`Chain.headJobId`, or head/tail jobs on `Chain` as in the "expand the Chain type" idea). `Job.chainId` keeps its meaning.
 - `createChain({ id })` assigns the **chain** id; the head job's id is always generated.
 - Code that uses a chain id as a job id — `getJob({ id: chain.id })`, `getJobs({ ids: [chain.id] })`, `getJobBlockers({ jobId: chain.id })`, `rescheduleJob({ id: chain.id })` — has to switch to the head job id. The examples (`examples/guides/src/queries.ts`, `examples/guides/src/chain-deletion.ts`) and the end-to-end conformance cases do this today.
-- State adapter contract: `createJobs` takes a `chainId` per head job; `completeJobs` returns `hasDependents`; `getChains({ lock })` no longer locks the head job (the conformance case "holds the chain lock implicitly for a single-job chain" asserts the old aliasing and changes); `unblockJobs` is counter-based.
+- State adapter contract: `createJobs` takes a `chainId` per head job; `completeJobs` returns `blocking`; `getChains({ lock })` no longer locks the head job (the conformance case "holds the chain lock implicitly for a single-job chain" asserts the old aliasing and changes); `unblockJobs` is counter-based.
 
 ## Migration
 
-### Schema (a migration after `001_schema_v1`)
+### Schema (a migration after `002_schema_v2`)
 
 1. **Transactional:** create `chain` and its indexes; add `job.blockers_remaining`.
-2. **Batched:** backfill `chain` from head rows: `id = head.id` (pre-upgrade chains keep the old equality), `has_dependents = EXISTS (job_blocker WHERE blocked_by_chain_id = head.id)`, status, timestamps, key, trace context. Repeat until no head row lacks a chain row.
+2. **Batched:** backfill `chain` from head rows: `id = head.id` (pre-upgrade chains keep the old equality), `blocking = EXISTS (job_blocker WHERE blocked_by_chain_id = head.id)`, status, timestamps, key, trace context. Repeat until no head row lacks a chain row.
 3. **Batched:** set `blockers_remaining` on `blocked` jobs to the number of their `job_blocker` rows whose blocker chain is `running`.
 4. **Non-transactional:** `CREATE UNIQUE INDEX CONCURRENTLY` on `job (chain_id, chain_index)`, then drop the partial `chain_index_idx`.
 5. **Transactional:** drop the four head-only indexes and the four `chain_*` columns on `job`.
@@ -148,7 +148,7 @@ Chains created before the upgrade keep `chain.id === head.id`, so code that conf
 
 ### Rolling deploys
 
-Step 5 removes columns that the previous release reads (`h.chain_status` in its unblock check, dedup, `listChains`). A rolling deploy with old and new workers side by side therefore needs either a stop-the-world upgrade, or an expand/contract split: release N runs steps 1–4 and also writes the head-row `chain_*` columns; release N+1 runs step 5. The first breaking migration after `001_schema_v1` already requires stopping every 0.17 process, which references no write fence, so shipping both in one major keeps a single stop-the-world upgrade.
+Step 5 removes columns that the previous release reads (`h.chain_status` in its unblock check, dedup, `listChains`). A rolling deploy with old and new workers side by side therefore needs either a stop-the-world upgrade, or an expand/contract split: release N runs steps 1–4 and also writes the head-row `chain_*` columns; release N+1 runs step 5.
 
 ## Performance
 
@@ -172,7 +172,7 @@ From a spike on a 4-CPU Docker host (PostgreSQL 18). Treat differences under abo
 
 - **processing-capacity:** within noise of stock: batched create −4%, single create −3%, processing −2% / +2%. The second insert is a small share of the end-to-end cost per chain.
 - **query-performance:** point queries are within noise, with one exception. `startJobAttempt` went from 1.6 to about 2.7 ms because that base locked job and head together (`FOR UPDATE OF h, j`), one row for a single-job chain but two rows once the chain is its own table. `dev` already locks only the job, so this does not carry over.
-- **`listChains` is 1.5–2× slower** (running/default 5 → 9 ms; running/independent 118 → 221 ms). The plan uses `chain_running_idx` as intended; the extra cost is the per-row head job lookup, since `Chain.input` comes from the head job. Worth profiling before shipping.
+- **`listChains` is 1.5–2× slower** (running/default 5 → 9 ms; running/nonBlocking 118 → 221 ms). The plan uses `chain_running_idx` as intended; the extra cost is the per-row head job lookup, since `Chain.input` comes from the head job. Worth profiling before shipping.
 
 ## Alternatives considered
 
@@ -182,11 +182,11 @@ From a spike on a 4-CPU Docker host (PostgreSQL 18). Treat differences under abo
 
 ## SQLite and in-process
 
-SQLite serializes writers, so none of the lock races apply. It adopts the same schema (`chain` table, independent ids, `blockers_remaining`, `has_dependents`) for parity and to skip the unblock statement. The in-process adapter keeps a chain map next to its job map and drops its `job.id === job.chainId` branches.
+SQLite serializes writers, so none of the lock races apply. It adopts the same schema (`chain` table, independent ids, `blockers_remaining`, `blocking`) for parity and to skip the unblock statement. The in-process adapter keeps a chain map next to its job map and drops its `job.id === job.chainId` branches.
 
 ## Related designs
 
-- **PostgreSQL isolation levels** (`design/pg-isolation-levels.md`): ships the write-based bookkeeping first, on the head job row (`job.has_dependents`, `job.blockers_remaining`); this design then moves `has_dependents` to the `chain` row.
+- **PostgreSQL isolation levels** (`design/pg-isolation-levels.md`): ships the write-based bookkeeping first, on the head job row (`job.blocking`, `job.blockers_remaining`); this design then moves `blocking` to the `chain` row.
 - **Chain identity** (`design/chain-identity.md`): the `running`-scope and `any`-scope partial unique indexes go on `chain` instead of on head job rows, next to the persisted `scope`.
 - **Unbounded blockers** (`design/unbounded-blockers.md`): the `job_blocker.blocked` flip must follow the write-based rule to be safe under REPEATABLE READ. `blockers_remaining` is a hot row for massive fan-in (every completing blocker writes the collector row), which that design's system-chain approach has to absorb.
 - **Built-in cleanup** and **truncating chains with 1k+ jobs**: the chain row carries status and identity, so completed jobs can be deleted without losing the chain.
@@ -195,10 +195,10 @@ SQLite serializes writers, so none of the lock races apply. It adopts the same s
 
 - Two-step id rollout vs. independent ids from the first release.
 - Stop-the-world vs. expand/contract for the column drop.
-- `has_dependents` as a flag written on every attach vs. a counter (a counter would also report the number of dependents).
+- `blocking` as a flag written on every attach vs. a counter (a counter would also report the number of dependents).
 - Whether `listChains` keeps returning the head job's `input`, or reads it lazily.
 
 ## Tests
 
 - Conformance (all adapters): the races in the isolation table, with two connections on PostgreSQL and run under READ COMMITTED, REPEATABLE READ and SERIALIZABLE; independent chain and head job ids; deleting a chain's jobs and its chain row together.
-- Migration: backfill of `chain`, `has_dependents` and `blockers_remaining` from a database seeded before that migration, including blocked dependents with mixed completed and running blockers; pre-upgrade chains keep `chain.id === head.id`.
+- Migration: backfill of `chain`, `blocking` and `blockers_remaining` from a database seeded before that migration, including blocked dependents with mixed completed and running blockers; pre-upgrade chains keep `chain.id === head.id`.

@@ -529,6 +529,151 @@ export const addJobsBlockersGroup: ConformanceGroup<StateAdapterConformanceConte
         );
       }),
     },
+    {
+      name: "sets blocking on each blocker chain, and every chain read reports it",
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
+
+        const [blockerChain, dependentChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "blocker", input: null },
+                { id: stateAdapter.config.generateJobId(), typeName: "dependent", input: null },
+              ],
+            }),
+          ),
+        );
+        assert.equal(blockerChain.blocking, false);
+
+        const [attached] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [
+                { jobId: dependentChain.head.id, blockedByChainIds: [blockerChain.id] },
+              ],
+            }),
+          ),
+        );
+        assert.equal(attached.blockers[0]!.blocking, true);
+        assert.equal(attached.chain.blocking, false);
+
+        const [blockerRead, dependentRead] = yield* step(
+          stateAdapter.getChains({ chainIds: [blockerChain.id, dependentChain.id] }),
+        );
+        assert.equal(blockerRead!.blocking, true);
+        assert.equal(dependentRead!.blocking, false);
+        const [blockerHead] = yield* step(stateAdapter.getJobs({ jobIds: [blockerChain.head.id] }));
+        assert.equal(blockerHead!.chain.blocking, true);
+        const blockingChains = yield* step(
+          stateAdapter.listChains({
+            typeName: "blocker",
+            blocking: true,
+            orderBy: "createdAt",
+            orderDirection: "desc",
+            page: { limit: 10 },
+          }),
+        );
+        assert.deepEqual(
+          blockingChains.items.map((chain) => chain.id),
+          [blockerChain.id],
+        );
+        const nonBlockingChains = yield* step(
+          stateAdapter.listChains({
+            typeName: "dependent",
+            blocking: false,
+            orderBy: "createdAt",
+            orderDirection: "desc",
+            page: { limit: 10 },
+          }),
+        );
+        assert.deepEqual(
+          nonBlockingChains.items.map((chain) => chain.id),
+          [dependentChain.id],
+        );
+      }),
+    },
+    {
+      name: "leaves blocking false when the attach rolls back",
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
+
+        const [blockerChain, dependentChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "blocker", input: null },
+                { id: stateAdapter.config.generateJobId(), typeName: "dependent", input: null },
+              ],
+            }),
+          ),
+        );
+
+        yield* step(
+          assertRejects(
+            () =>
+              stateAdapter.withTransaction((txCtx) =>
+                runInModeOf(
+                  stateAdapter,
+                  syncAsync(function* () {
+                    yield* step(
+                      stateAdapter.addJobsBlockers({
+                        txCtx,
+                        jobBlockers: [
+                          { jobId: dependentChain.head.id, blockedByChainIds: [blockerChain.id] },
+                        ],
+                      }),
+                    );
+                    throw new Error("Intentional rollback");
+                  }),
+                ),
+              ),
+            /Intentional rollback/,
+          ),
+        );
+
+        const [blockerRead] = yield* step(stateAdapter.getChains({ chainIds: [blockerChain.id] }));
+        assert.equal(blockerRead!.blocking, false);
+      }),
+    },
+    {
+      name: "reports blocking on a job whose own chain becomes a blocker in the same call",
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
+
+        const [upstreamChain, middleChain, downstreamChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "upstream", input: null },
+                { id: stateAdapter.config.generateJobId(), typeName: "middle", input: null },
+                { id: stateAdapter.config.generateJobId(), typeName: "downstream", input: null },
+              ],
+            }),
+          ),
+        );
+
+        const [middle, downstream] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [
+                { jobId: middleChain.head.id, blockedByChainIds: [upstreamChain.id] },
+                { jobId: downstreamChain.head.id, blockedByChainIds: [middleChain.id] },
+              ],
+            }),
+          ),
+        );
+        assert.equal(middle.chain.blocking, true);
+        assert.equal(middle.blockers[0]!.blocking, true);
+        assert.equal(downstream.chain.blocking, false);
+        assert.equal(downstream.blockers[0]!.blocking, true);
+      }),
+    },
   ],
 };
 
@@ -732,6 +877,68 @@ export const addJobsBlockersConcurrentTransactionsGroup: ConformanceGroup<StateA
             added.blockers.map((blocker) => blocker?.status),
             ["completed"],
           );
+        },
+      },
+      {
+        name: "leaves no dependent blocked when the completion of its blocker races an attach that holds the blocker",
+        run: async ({ createStateAdapter }) => {
+          await using stateAdapter = await createStateAdapter();
+
+          const [blockerChain, mainChain] = await stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "attached-blocker",
+                  input: null,
+                },
+                { id: stateAdapter.config.generateJobId(), typeName: "main", input: null },
+              ],
+            }),
+          );
+
+          const { promise: attached, resolve: signalAttached } = Promise.withResolvers<void>();
+          const { promise: attacherGate, resolve: releaseAttacher } = Promise.withResolvers<void>();
+
+          const addTx = stateAdapter.withTransaction(async (txCtx) => {
+            const result = await stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [{ jobId: mainChain.head.id, blockedByChainIds: [blockerChain.id] }],
+            });
+            signalAttached();
+            await attacherGate;
+            return result;
+          });
+
+          await attached;
+
+          const completerTx = Promise.resolve(
+            stateAdapter.withTransaction(async (txCtx) => {
+              const [completedBlocker] = await stateAdapter.completeJobs({
+                txCtx,
+                jobs: [{ jobId: blockerChain.head.id, output: null }],
+              });
+              const dependents = completedBlocker!.chain.blocking
+                ? await stateAdapter.unblockJobs({ txCtx, blockedByChainId: blockerChain.id })
+                : [];
+              return { completedBlocker: completedBlocker!, dependents };
+            }),
+          );
+
+          await sleep(LOCK_BLOCK_OBSERVATION_MS);
+          releaseAttacher();
+          await addTx;
+          const { completedBlocker, dependents } = await completerTx;
+
+          const [dependent] = await stateAdapter.getJobs({ jobIds: [mainChain.head.id] });
+          assert.equal(dependent!.status, "pending");
+          if (completedBlocker.chain.blocking) {
+            assert.deepEqual(
+              dependents.map((entry) => entry.job.status),
+              ["pending"],
+            );
+          }
         },
       },
       {

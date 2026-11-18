@@ -4,8 +4,11 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { notMeasured } from "benchmark-results/results-file";
+import { writeResultsFile } from "benchmark-results/write-results-file";
+
 import { type ServiceKind, startService } from "./services.ts";
-import { type ScenarioResult, formatRate, scenarioNames, summaryTables } from "./utils.ts";
+import { type ScenarioResult, scenarioNames, summaryTables } from "./utils.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -172,50 +175,6 @@ const readResults = async (resultFile: string): Promise<ScenarioResult[]> => {
     .map((line) => JSON.parse(line) as ScenarioResult);
 };
 
-const formatResult = (result: ScenarioResult | undefined): string => {
-  if (!result) return "-";
-  return `~${formatRate(result.count, result.durationMs)}`;
-};
-
-const formatMarkdownTable = (header: string[], rows: string[][]): string => {
-  const widths = header.map((cell, index) =>
-    Math.max(cell.length, ...rows.map((row) => row[index].length)),
-  );
-  const formatRow = (row: string[]) =>
-    `| ${row.map((cell, index) => (index === 0 ? cell.padEnd(widths[index]) : cell.padStart(widths[index]))).join(" | ")} |`;
-  const separator = `| ${widths.map((width, index) => (index === 0 ? "-".repeat(width) : `${"-".repeat(width - 1)}:`)).join(" | ")} |`;
-  return [formatRow(header), separator, ...rows.map(formatRow)].join("\n");
-};
-
-const printSummary = (resultsByBenchmark: Map<string, ScenarioResult[]>): void => {
-  for (const table of summaryTables) {
-    const rows: string[][] = [];
-    for (const { axis, title } of axes) {
-      const benchmarks = Object.entries(benchmarkModules).filter(
-        ([name, benchmarkModule]) =>
-          benchmarkModule.axis === axis &&
-          resultsByBenchmark
-            .get(name)
-            ?.some((result) => table.columns.some(({ scenario }) => scenario === result.scenario)),
-      );
-      if (benchmarks.length === 0) continue;
-      rows.push([`**${title}**`, ...table.columns.map(() => "")]);
-      for (const [name, { label }] of benchmarks) {
-        const results = resultsByBenchmark.get(name) ?? [];
-        rows.push([
-          label,
-          ...table.columns.map(({ scenario }) =>
-            formatResult(results.find((result) => result.scenario === scenario)),
-          ),
-        ]);
-      }
-    }
-    if (rows.length === 0) continue;
-    console.log(`\n### ${table.title}\n`);
-    console.log(formatMarkdownTable(["Adapter", ...table.columns.map(({ label }) => label)], rows));
-  }
-};
-
 const main = async (): Promise<void> => {
   const scenarioArgs = args.filter((a) => a.startsWith("--scenario="));
   const runs =
@@ -262,7 +221,31 @@ const main = async (): Promise<void> => {
     await rm(resultDirectory, { recursive: true, force: true });
   }
 
-  printSummary(resultsByBenchmark);
+  const content = writeResultsFile({
+    path: join(__dirname, "../results.md"),
+    title: "Processing capacity",
+    ran: toRun.length === knownFlags.length ? "all adapters" : toRun.join(", "),
+    tables: summaryTables.flatMap((table) =>
+      axes.map(({ axis, title }) => ({
+        title: `${table.title}: ${title}`,
+        columns: ["Adapter", ...table.columns.map(({ label }) => label)],
+        rows: Object.entries(benchmarkModules)
+          .filter(([, benchmarkModule]) => benchmarkModule.axis === axis)
+          .map(([name, { label }]) => [
+            label,
+            ...table.columns.map(({ scenario }) => {
+              const result = resultsByBenchmark
+                .get(name)
+                ?.find((candidate) => candidate.scenario === scenario);
+              return result === undefined
+                ? notMeasured
+                : String(Math.round(result.count / (result.durationMs / 1_000)));
+            }),
+          ]),
+      })),
+    ),
+  });
+  console.log(`\n${content}`);
   console.log(`\nTotal time: ${((performance.now() - begin) / 1_000).toFixed(0)}s`);
 };
 

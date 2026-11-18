@@ -29,6 +29,7 @@ export type DumpJobRow = Omit<
   chainCompletedAt: number | null;
   chainDeduplicationKey: string | null;
   chainTraceContext: string | null;
+  blocking: boolean;
 };
 
 export type DumpWorkerRow = Omit<StateDumpWorker, "startedAt" | "leaseUntil"> & {
@@ -95,6 +96,7 @@ export const createDumpRowMapper = (
         chainCompletedAt: shiftTime(chain?.completedAt ?? null, offsetMs),
         chainDeduplicationKey: chain?.deduplicationKey ?? null,
         chainTraceContext: chain?.traceContext ?? null,
+        blocking: chain?.blocking ?? false,
       };
     },
     worker: (worker) => ({
@@ -144,6 +146,7 @@ export const createSqlDumpRowMapper = (
         last_attempt_at: timestamp(row.lastAttemptAt),
         attempt_at: timestamp(row.attemptAt),
         chain_completed_at: timestamp(row.chainCompletedAt),
+        blocking: row.blocking,
       };
     },
     blocker: (blocker) => ({

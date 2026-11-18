@@ -28,7 +28,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
       }),
     },
     {
-      name: "listChains filters independent (excludes chains used as blockers)",
+      name: "listChains filters non-blocking (excludes chains used as blockers)",
       run: dynamicSyncAsync(function* ({ createStateAdapter }) {
         const stateAdapter = yield* resource(createStateAdapter());
 
@@ -61,17 +61,17 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
           ),
         );
 
-        const independentOnly = yield* step(
+        const nonBlockingOnly = yield* step(
           stateAdapter.listChains({
             typeName: "task",
             orderBy: "createdAt",
-            independent: true,
+            blocking: false,
             orderDirection: "desc",
             page: { limit: 10 },
           }),
         );
-        assert.equal(independentOnly.items.length, 1);
-        assert.equal(independentOnly.items[0].head.id, mainChain.head.id);
+        assert.equal(nonBlockingOnly.items.length, 1);
+        assert.equal(nonBlockingOnly.items[0].head.id, mainChain.head.id);
 
         const all = yield* step(
           stateAdapter.listChains({
@@ -704,7 +704,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
       }),
     },
     {
-      name: "listChains filters by non-independent",
+      name: "listChains filters by blocking",
       run: dynamicSyncAsync(function* ({ createStateAdapter }) {
         const stateAdapter = yield* resource(createStateAdapter());
 
@@ -735,33 +735,91 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
           ),
         );
 
-        const nonIndependent = yield* step(
+        const blockingOnly = yield* step(
           stateAdapter.listChains({
             typeName: "task",
             orderBy: "createdAt",
-            independent: false,
+            blocking: true,
             orderDirection: "desc",
             page: { limit: 10 },
           }),
         );
-        assert.equal(nonIndependent.items.length, 1);
-        assert.equal(nonIndependent.items[0].head.id, blockerChain.id);
+        assert.equal(blockingOnly.items.length, 1);
+        assert.equal(blockingOnly.items[0].head.id, blockerChain.id);
 
-        const independent = yield* step(
+        const nonBlockingOnly = yield* step(
           stateAdapter.listChains({
             typeName: "task",
             orderBy: "createdAt",
-            independent: true,
+            blocking: false,
             orderDirection: "desc",
             page: { limit: 10 },
           }),
         );
-        assert.equal(independent.items.length, 1);
-        assert.equal(independent.items[0].head.id, mainChain.id);
+        assert.equal(nonBlockingOnly.items.length, 1);
+        assert.equal(nonBlockingOnly.items[0].head.id, mainChain.id);
       }),
     },
     {
-      name: "listChains paginates non-independent chains and sees blockers added in the transaction",
+      name: "listChains counts a chain whose dependents were deleted as non-blocking",
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
+
+        const [blockerChain, dependentChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "task", input: null },
+                { id: stateAdapter.config.generateJobId(), typeName: "dependent", input: null },
+              ],
+            }),
+          ),
+        );
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [
+                { jobId: dependentChain.head.id, blockedByChainIds: [blockerChain.id] },
+              ],
+            }),
+          ),
+        );
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.deleteChains({ txCtx, chainIds: [dependentChain.id] }),
+          ),
+        );
+
+        const blockingOnly = yield* step(
+          stateAdapter.listChains({
+            typeName: "task",
+            orderBy: "createdAt",
+            blocking: true,
+            orderDirection: "desc",
+            page: { limit: 10 },
+          }),
+        );
+        assert.deepEqual(blockingOnly.items, []);
+
+        const nonBlockingOnly = yield* step(
+          stateAdapter.listChains({
+            typeName: "task",
+            orderBy: "createdAt",
+            blocking: false,
+            orderDirection: "desc",
+            page: { limit: 10 },
+          }),
+        );
+        assert.deepEqual(
+          nonBlockingOnly.items.map((chain) => chain.id),
+          [blockerChain.id],
+        );
+      }),
+    },
+    {
+      name: "listChains paginates blocking chains and sees blockers added in the transaction",
       run: dynamicSyncAsync(function* ({ createStateAdapter }) {
         const stateAdapter = yield* resource(createStateAdapter());
 
@@ -805,7 +863,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
             stateAdapter.listChains({
               typeName: "task",
               orderBy: "createdAt",
-              independent: false,
+              blocking: true,
               orderDirection: "desc",
               page: { limit: 2, cursor },
             }),
@@ -821,7 +879,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
           stateAdapter.listChains({
             typeName: "task",
             orderBy: "createdAt",
-            independent: false,
+            blocking: true,
             from: new Date(Date.now() + 3_600_000),
             orderDirection: "desc",
             page: { limit: 10 },
@@ -855,7 +913,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
                     txCtx,
                     typeName: "task",
                     orderBy: "createdAt",
-                    independent: false,
+                    blocking: true,
                     orderDirection: "desc",
                     page: { limit: 10 },
                   }),
@@ -873,7 +931,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
       }),
     },
     {
-      name: "listChains filters running by independent",
+      name: "listChains filters running by non-blocking",
       run: dynamicSyncAsync(function* ({ createStateAdapter }) {
         const stateAdapter = yield* resource(createStateAdapter());
 
@@ -944,36 +1002,36 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
           }),
         );
 
-        const independent = yield* step(
+        const nonBlockingOnly = yield* step(
           stateAdapter.listChains({
             typeName: "task",
             status: "running",
-            independent: true,
+            blocking: false,
             orderBy: "createdAt",
             orderDirection: "desc",
             page: { limit: 10 },
           }),
         );
-        assert.equal(independent.items.length, 2);
-        const independentIds = independent.items.map(({ head }) => head.id).sort();
-        assert.deepEqual(independentIds, [mainChain.id, otherChain.id].sort());
+        assert.equal(nonBlockingOnly.items.length, 2);
+        const nonBlockingIds = nonBlockingOnly.items.map(({ head }) => head.id).sort();
+        assert.deepEqual(nonBlockingIds, [mainChain.id, otherChain.id].sort());
 
-        const nonIndependent = yield* step(
+        const blockingOnly = yield* step(
           stateAdapter.listChains({
             typeName: "task",
             status: "running",
-            independent: false,
+            blocking: true,
             orderBy: "createdAt",
             orderDirection: "desc",
             page: { limit: 10 },
           }),
         );
-        assert.equal(nonIndependent.items.length, 1);
-        assert.equal(nonIndependent.items[0].head.id, blockerChain.id);
+        assert.equal(blockingOnly.items.length, 1);
+        assert.equal(blockingOnly.items[0].head.id, blockerChain.id);
       }),
     },
     {
-      name: "listChains filters running by non-independent",
+      name: "listChains filters running by blocking",
       run: dynamicSyncAsync(function* ({ createStateAdapter }) {
         const stateAdapter = yield* resource(createStateAdapter());
 
@@ -1032,7 +1090,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
           stateAdapter.listChains({
             typeName: "task",
             status: "running",
-            independent: false,
+            blocking: true,
             orderBy: "createdAt",
             orderDirection: "desc",
             page: { limit: 10 },
@@ -1112,7 +1170,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
       }),
     },
     {
-      name: "listChains filters completed by independent",
+      name: "listChains filters completed by non-blocking",
       run: dynamicSyncAsync(function* ({ createStateAdapter }) {
         const stateAdapter = yield* resource(createStateAdapter());
 
@@ -1177,36 +1235,36 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
           );
         }
 
-        const independent = yield* step(
+        const nonBlockingOnly = yield* step(
           stateAdapter.listChains({
             typeName: "task",
             status: "completed",
-            independent: true,
+            blocking: false,
             orderBy: "completedAt",
             orderDirection: "desc",
             page: { limit: 10 },
           }),
         );
-        assert.equal(independent.items.length, 2);
-        const independentIds = independent.items.map(({ head }) => head.id).sort();
-        assert.deepEqual(independentIds, [mainChain.id, otherChain.id].sort());
+        assert.equal(nonBlockingOnly.items.length, 2);
+        const nonBlockingIds = nonBlockingOnly.items.map(({ head }) => head.id).sort();
+        assert.deepEqual(nonBlockingIds, [mainChain.id, otherChain.id].sort());
 
-        const nonIndependent = yield* step(
+        const blockingOnly = yield* step(
           stateAdapter.listChains({
             typeName: "task",
             status: "completed",
-            independent: false,
+            blocking: true,
             orderBy: "completedAt",
             orderDirection: "desc",
             page: { limit: 10 },
           }),
         );
-        assert.equal(nonIndependent.items.length, 1);
-        assert.equal(nonIndependent.items[0].head.id, blockerChain.id);
+        assert.equal(blockingOnly.items.length, 1);
+        assert.equal(blockingOnly.items[0].head.id, blockerChain.id);
       }),
     },
     {
-      name: "listChains filters completed by non-independent",
+      name: "listChains filters completed by blocking",
       run: dynamicSyncAsync(function* ({ createStateAdapter }) {
         const stateAdapter = yield* resource(createStateAdapter());
 
@@ -1267,7 +1325,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
           stateAdapter.listChains({
             typeName: "task",
             status: "completed",
-            independent: false,
+            blocking: true,
             orderBy: "completedAt",
             orderDirection: "desc",
             page: { limit: 10 },

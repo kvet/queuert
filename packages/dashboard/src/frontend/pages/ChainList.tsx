@@ -15,16 +15,16 @@ import { chainKind } from "./Types.tsx";
 
 const roles = [
   { value: "", label: "All" },
-  { value: "true", label: "Independent" },
-  { value: "false", label: "Used as blocker" },
+  { value: "true", label: "Blocking" },
+  { value: "false", label: "Not blocking" },
 ] as const;
 
 const ChainListForType = (props: { typeName: string }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const status = () => CHAIN_STATUSES.find((value) => value === searchParams.status) ?? "";
-  const independentParam = () => searchParams.independent as string | undefined;
-  const independent = () => {
-    const value = independentParam();
+  const blockingParam = () => searchParams.blocking as string | undefined;
+  const blocking = () => {
+    const value = blockingParam();
     return value === "true" || value === "false" ? value === "true" : undefined;
   };
   const orderBy = () => (searchParams.orderBy ?? "") as string;
@@ -63,7 +63,7 @@ const ChainListForType = (props: { typeName: string }) => {
     () => ({
       typeName: props.typeName,
       status: status() || undefined,
-      independent: independent(),
+      blocking: blocking(),
       orderBy: effectiveOrderBy(),
       orderDirection: orderDirection(),
     }),
@@ -88,10 +88,10 @@ const ChainListForType = (props: { typeName: string }) => {
             </span>
             <Select
               label="Chain role"
-              value={independentParam() ?? ""}
+              value={blockingParam() ?? ""}
               options={roles}
               onChange={(value) => {
-                setSearchParams({ independent: value || undefined });
+                setSearchParams({ blocking: value || undefined });
               }}
             />
           </div>
@@ -108,7 +108,7 @@ const ChainListForType = (props: { typeName: string }) => {
         list={list}
         empty={
           <Switch>
-            <Match when={status() && independent() !== undefined}>
+            <Match when={status() && blocking() !== undefined}>
               <EmptyState title={`No chains of ${props.typeName} match these filters`}>
                 <button
                   type="button"
@@ -116,7 +116,7 @@ const ChainListForType = (props: { typeName: string }) => {
                   onClick={() => {
                     setSearchParams({
                       status: undefined,
-                      independent: undefined,
+                      blocking: undefined,
                       orderBy: undefined,
                     });
                   }}
@@ -138,13 +138,13 @@ const ChainListForType = (props: { typeName: string }) => {
                 </button>
               </EmptyState>
             </Match>
-            <Match when={independent() !== undefined}>
+            <Match when={blocking() !== undefined}>
               <EmptyState title={`No chains of ${props.typeName} match these filters`}>
                 <button
                   type="button"
                   class={buttonClass.secondary}
                   onClick={() => {
-                    setSearchParams({ independent: undefined });
+                    setSearchParams({ blocking: undefined });
                   }}
                 >
                   Clear filters

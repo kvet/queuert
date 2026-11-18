@@ -67,7 +67,7 @@ const cleanupProcessors = createProcessors({
                 typeName,
                 status: "completed",
                 orderBy: "completedAt",
-                independent: true,
+                blocking: false,
                 to: cutoffDate,
                 orderDirection: "asc",
                 limit: CLEANUP_BATCH_SIZE,

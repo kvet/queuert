@@ -52,7 +52,7 @@ export type SeedSentinels = {
     blockedJobIds: string[];
     blockedCount: number;
   };
-  nonIndependent: {
+  blocking: {
     chainId: string;
     count: number;
   };
@@ -118,7 +118,7 @@ export const seedConfig = {
     { blockers: 10, blockedPer: 100 },
     { blockers: 100, blockedPer: 10 },
   ],
-  nonIndependent: 200,
+  blocking: 200,
   throwawayPending: 50,
   throwawayRunning: 20,
   throwawayExpiredRunning: 20,
@@ -399,11 +399,11 @@ export const generateStateDump = ({ scale = 1 }: { scale?: number } = {}): {
     }
   }
 
-  spreadBatches(seedConfig.nonIndependent * scale, startMs, endMs, (indexes) => {
+  spreadBatches(seedConfig.blocking * scale, startMs, endMs, (indexes) => {
     transact((txCtx) =>
       stateAdapter.addJobsBlockers({
         txCtx,
-        jobBlockers: createHeads(txCtx, "seed:nonindep", indexes).map((job) => ({
+        jobBlockers: createHeads(txCtx, "seed:blocking", indexes).map((job) => ({
           jobId: job.id,
           blockedByChainIds: [fanInBlockerChainIds[0]],
         })),
@@ -730,9 +730,9 @@ export const generateStateDump = ({ scale = 1 }: { scale?: number } = {}): {
           0,
         ),
       },
-      nonIndependent: {
-        chainId: firstJobIds("seed:nonindep", "blocked")[0],
-        count: seedConfig.nonIndependent * scale,
+      blocking: {
+        chainId: firstJobIds("seed:blocking", "blocked")[0],
+        count: seedConfig.blocking * scale,
       },
       workers: {
         idleWorkerIds: seedConfig.idleWorkers.map((idleWorker) => idleWorker.id),

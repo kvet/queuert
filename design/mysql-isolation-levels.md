@@ -7,7 +7,7 @@ Today the adapter keeps blockers the way PostgreSQL does at READ COMMITTED: `unb
 - Add the counter-based blocker bookkeeping from `design/pg-isolation-levels.md` in a migration, with every read that drives a write a current read (see [Blocker counters](#blocker-counters)).
 - Run the races and the end-to-end suites at RR and SERIALIZABLE on every server, and fix what they find.
 - Handle MariaDB's snapshot-isolation error (1020) and deadlocks (1213) in the work Queuert runs itself.
-- Take the `hasDependents` contract and the `isolationVariants` conformance fixture from `design/pg-isolation-levels.md` once they land.
+- Take the `blocking` contract and the `isolationVariants` conformance fixture from `design/pg-isolation-levels.md` once they land.
 - Rewrite the "Isolation level" section of the MySQL integration page.
 
 Claims marked _(spike)_ were verified against MySQL 8.0.46, MySQL 8.4.13, MariaDB 10.11.19, MariaDB 11.4.13 and MariaDB 11.8.9 with mysql2 3.24, by a spike run before the adapter was written. The adapter itself has been tested at READ COMMITTED only.
@@ -44,10 +44,10 @@ Under load (8 connections, 200 dependents × 16 blockers, RR), the counter desig
 
 ### Blocker counters
 
-`002_blocker_counters` adds `has_dependents` and `blockers_remaining` to `job`, with the semantics of `design/pg-isolation-levels.md`, and backfills them from `job_blocker`. The rule stays the same: every invariant that pairs a read in one transaction with a write in another must be a write-write conflict on a shared row. InnoDB adds one more: every read that drives such a write is a current read.
+`002_schema_v2` (unreleased) adds `blocking` (with `chain_blocking_idx` and the move to `schema_fence_v2`); `blockers_remaining` joins the same `002` before it is released, with the semantics of `design/pg-isolation-levels.md`, and backfills it from `job_blocker`. The rule stays the same: every invariant that pairs a read in one transaction with a write in another must be a write-write conflict on a shared row. InnoDB adds one more: every read that drives such a write is a current read.
 
-- **Attach** locks the blocker heads in id order with a driven lock (`JSON_TABLE` `STRAIGHT_JOIN` `job` `FORCE INDEX (PRIMARY)`), sets `has_dependents` on heads where it is false, inserts the `job_blocker` rows, and adds to each dependent's `blockers_remaining` the number of its locked heads that are still running.
-- **Completion** reads `has_dependents` from the head row it just updated, and skips `unblockJobs` when it is false.
+- **Attach** locks the blocker heads in id order with a driven lock (`JSON_TABLE` `STRAIGHT_JOIN` `job` `FORCE INDEX (PRIMARY)`), sets `blocking` on heads where it is false, inserts the `job_blocker` rows, and adds to each dependent's `blockers_remaining` the number of its locked heads that are still running.
+- **Completion** reads `blocking` from the head row it just updated, and skips `unblockJobs` when it is false.
 - **`unblockJobs`** share-locks the `job_blocker` rows of the completed chain (a current read), then decrements `blockers_remaining` on those dependents in id order in one `UPDATE`, setting `pending` where it reaches zero. Every expression uses old values and `blockers_remaining` is assigned last, so the statement is correct under both left-to-right and simultaneous assignment.
 
 ### User transactions
@@ -91,7 +91,7 @@ Levels apply to either side of each race, mixed or not. Expected values, to be f
 ## API
 
 - No change to the client, worker or processor API.
-- Takes the state adapter contract changes from `design/pg-isolation-levels.md` (`hasDependents`, `withTransaction` may call `fn` more than once). The counters arrive in `002_blocker_counters`.
+- Takes the state adapter contract changes from `design/pg-isolation-levels.md` (`blocking`, `withTransaction` may call `fn` more than once). `blocking` and `blockers_remaining` both arrive in `002_schema_v2`.
 - Docs: the "Isolation level" section of the MySQL integration page states:
   - READ COMMITTED, REPEATABLE READ and SERIALIZABLE are supported for transactions passed to Queuert, as a session default or per transaction.
   - Transactions Queuert opens always run at READ COMMITTED, and why.
@@ -112,6 +112,6 @@ In `packages/mysql/src/specs-mysql2`, on MySQL 8.4 and MariaDB 11.4, plus MariaD
 
 ## Related designs
 
-- **PostgreSQL isolation levels** (`design/pg-isolation-levels.md`): supplies the counter semantics, the `hasDependents` contract change, the `isolationVariants` fixture and the retry bounds. This task follows it.
-- **Chain table** (`design/chain-table.md`): moves `has_dependents` to the chain row; this adapter follows in the same release.
+- **PostgreSQL isolation levels** (`design/pg-isolation-levels.md`): supplies the counter semantics, the `blocking` contract change, the `isolationVariants` fixture and the retry bounds. This task follows it.
+- **Chain table** (`design/chain-table.md`): moves `blocking` to the chain row; this adapter follows in the same release.
 - **Unbounded blockers** (`design/unbounded-blockers.md`): its `job_blocker.blocked` flip must be a current-read write here as well.

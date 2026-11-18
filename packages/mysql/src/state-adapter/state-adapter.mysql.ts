@@ -49,7 +49,7 @@ type StatementTypes = {
   readOnly?: boolean;
 };
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const SCHEMA_MIGRATION = "001_schema_v1";
 
@@ -77,6 +77,7 @@ const DB_JOB_COLUMNS = [
   "chain_deduplication_key",
   "chain_trace_context",
   "trace_context",
+  "blocking",
 ] as const;
 
 const DB_CHAIN_COLUMNS = [
@@ -87,6 +88,7 @@ const DB_CHAIN_COLUMNS = [
   "chain_completed_at",
   "chain_deduplication_key",
   "chain_trace_context",
+  "blocking",
 ] as const;
 
 const DB_TEXT_CAST_COLUMNS = new Set<string>([
@@ -172,15 +174,6 @@ const compareBy =
 
 const sortedIdsParam = (ids: string[]): string => JSON.stringify([...new Set(ids)].sort());
 
-const shuffle = <T>(items: T[]): T[] => {
-  const shuffled = [...items];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled;
-};
-
 const mapDbJobToStateJobInfo = (row: Row, prefix = ""): StateJobInfo | undefined => {
   const column = (name: (typeof DB_JOB_COLUMNS)[number]): unknown => row[`${prefix}${name}`];
   if (column("id") == null) return undefined;
@@ -215,6 +208,7 @@ const mapDbHeadToStateChainInfo = (row: Row, prefix: string): StateChainInfo => 
   createdAt: parseTimestamp(row[`${prefix}created_at`]),
   completedAt: parseNullableTimestamp(row[`${prefix}chain_completed_at`]),
   traceContext: (row[`${prefix}chain_trace_context`] as string | null) ?? null,
+  blocking: toBoolean(row[`${prefix}blocking`]),
 });
 
 const mapDbChainRowToStateChain = (row: Row): StateChain => ({
@@ -451,6 +445,7 @@ export const createMysqlStateAdapter = <
     chain_deduplication_key: t["string?"](),
     chain_trace_context: t["string?"](),
     trace_context: t["string?"](),
+    blocking: t.number(),
   };
   const dbChainColumns = prefixColumns(pickColumns(dbJobColumns, DB_CHAIN_COLUMNS), "c_");
   const dbChainRowColumns = {
@@ -664,6 +659,69 @@ WHERE j.status = 'blocked' AND {{fence_guard}}`,
       up: async () => {
         for (const statement of schemaStatements) {
           await execute(undefined, applyTemplate(sql(statement)));
+        }
+      },
+      down: async () => {
+        throw new Error("The Queuert schema cannot be reverted.");
+      },
+    },
+    {
+      name: "002_schema_v2",
+      type: "non-transactional",
+      up: async () => {
+        const [column] = await execute(
+          undefined,
+          applyTemplate(
+            sql(
+              `SELECT COUNT(*) AS count FROM information_schema.columns WHERE table_schema = ${schema === undefined ? "DATABASE()" : `'${schema}'`} AND table_name = '{{name_prefix}}job' AND column_name = 'blocking'`,
+              { columns: { count: t.number() } },
+            ),
+          ),
+          [],
+        );
+        if (Number(column.count) === 0) {
+          await execute(
+            undefined,
+            applyTemplate(
+              sql(
+                /* sql */ `ALTER TABLE {{prefix}}job ADD COLUMN blocking BOOLEAN NOT NULL DEFAULT FALSE`,
+              ),
+            ),
+            [],
+          );
+        }
+        const [index] = await execute(
+          undefined,
+          applyTemplate(
+            sql(
+              `SELECT COUNT(*) AS count FROM information_schema.statistics WHERE table_schema = ${schema === undefined ? "DATABASE()" : `'${schema}'`} AND table_name = '{{name_prefix}}job' AND index_name = '{{name_prefix}}chain_blocking_idx'`,
+              { columns: { count: t.number() } },
+            ),
+          ),
+          [],
+        );
+        if (Number(index.count) === 0) {
+          await execute(
+            undefined,
+            applyTemplate(
+              sql(
+                /* sql */ `CREATE INDEX {{name_prefix}}chain_blocking_idx ON {{prefix}}job (type_name, blocking, chain_index, created_at)`,
+              ),
+            ),
+            [],
+          );
+        }
+        for (const statement of [
+          /* sql */ `DROP TABLE IF EXISTS {{prefix}}schema_fence_v1`,
+          /* sql */ `
+UPDATE {{prefix}}job h
+SET h.blocking = TRUE
+WHERE h.chain_index = 0
+  AND h.blocking = FALSE
+  AND h.id IN (SELECT jb.blocked_by_chain_id FROM {{prefix}}job_blocker jb)`,
+          /* sql */ `CREATE TABLE IF NOT EXISTS {{prefix}}schema_fence_v2 (id INT NOT NULL PRIMARY KEY) ENGINE=InnoDB`,
+        ]) {
+          await execute(undefined, applyTemplate(sql(statement)), []);
         }
       },
       down: async () => {
@@ -1012,12 +1070,31 @@ JOIN {{prefix}}job h ON h.id = j.chain_id`,
 
     completeJobs: async ({ txCtx, jobs }) => {
       if (jobs.length === 0) return [];
-      const locked = await lockJobsForWrite(
+      const lockedRows = await execute(
         txCtx,
-        jobs.map((job) => job.jobId),
+        prepared(
+          "lockCompletedJobs",
+          `SELECT ${selectJob("j")}, ${selectChain("h", "c_")}, CAST(UTC_TIMESTAMP(6) AS CHAR) AS now FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job j FORCE INDEX (PRIMARY) ON j.id = d.id STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = j.chain_id WHERE {{fence_guard}} {{for_update:j:h}}`,
+          { params: [t.string()], columns: { ...dbJobRowColumns, now: t.string() } },
+        ),
+        [sortedIdsParam(jobs.map((job) => job.jobId))],
       );
-      const writable = jobs.filter((job) => isWritable(locked.get(job.jobId), job.attemptToken));
+      const lockedById = new Map(lockedRows.map((row) => [row.id as string, row]));
+      const writable = jobs.filter((job) => {
+        const row = lockedById.get(job.jobId);
+        return (
+          row !== undefined &&
+          isWritable(
+            {
+              status: row.status as string,
+              attemptToken: (row.attempt_token as string | null) ?? null,
+            },
+            job.attemptToken,
+          )
+        );
+      });
       if (writable.length === 0) return jobs.map(() => undefined);
+      const now = lockedRows[0].now as string;
 
       await execute(
         txCtx,
@@ -1030,18 +1107,21 @@ UPDATE JSON_TABLE(?, '$[*]' COLUMNS (
   worker_id {{worker_id_type}} PATH '$.worker_id'
 )) d
 STRAIGHT_JOIN {{prefix}}job j FORCE INDEX (PRIMARY) ON j.id = d.job_id
+LEFT JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = j.chain_id AND h.id <> j.id
 SET j.chain_status = CASE WHEN j.id = j.chain_id THEN 'completed' ELSE j.chain_status END,
-  j.chain_completed_at = CASE WHEN j.id = j.chain_id AND j.chain_completed_at IS NULL THEN UTC_TIMESTAMP(6) ELSE j.chain_completed_at END,
+  j.chain_completed_at = CASE WHEN j.id = j.chain_id THEN COALESCE(j.chain_completed_at, ?) ELSE j.chain_completed_at END,
   j.status = 'completed',
   j.last_attempt_error = NULL,
   j.attempt_at = NULL,
   j.attempt_by = NULL,
   j.attempt_token = NULL,
-  j.completed_at = UTC_TIMESTAMP(6),
+  j.completed_at = ?,
   j.completed_by = d.worker_id,
-  j.output = JSON_EXTRACT(d.output, '$')
+  j.output = JSON_EXTRACT(d.output, '$'),
+  h.chain_status = 'completed',
+  h.chain_completed_at = COALESCE(h.chain_completed_at, ?)
 WHERE {{fence_guard}}`,
-          { params: [t.string()] },
+          { params: [t.string(), t.string(), t.string(), t.string()] },
         ),
         [
           toJsonParam(
@@ -1051,31 +1131,36 @@ WHERE {{fence_guard}}`,
               worker_id: job.workerId,
             })),
           ),
+          now,
+          now,
+          now,
         ],
       );
 
-      const continuationHeadIds = writable
-        .map((job) => locked.get(job.jobId)!.chainId)
-        .filter((chainId, index) => chainId !== writable[index].jobId);
-      if (continuationHeadIds.length > 0) {
-        await execute(
-          txCtx,
-          prepared(
-            "completeChainHeads",
-            `
-UPDATE JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d
-STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.id
-SET h.chain_status = 'completed',
-  h.chain_completed_at = COALESCE(h.chain_completed_at, UTC_TIMESTAMP(6))
-WHERE {{fence_guard}}`,
-            { params: [t.string()] },
-          ),
-          [sortedIdsParam(continuationHeadIds)],
-        );
-      }
-      const completed = await readStateJobs(
-        txCtx,
-        writable.map((job) => job.jobId),
+      const completed = new Map(
+        writable.map((job) => {
+          const row = lockedById.get(job.jobId)!;
+          const isHead = row.id === row.chain_id;
+          const chainCompletedAt = row.c_chain_completed_at ?? now;
+          return [
+            job.jobId,
+            mapDbJobRowToStateJob({
+              ...row,
+              status: "completed",
+              output: stringifyOptional(job.output) ?? null,
+              last_attempt_error: null,
+              attempt_at: null,
+              attempt_by: null,
+              attempt_token: null,
+              completed_at: now,
+              completed_by: job.workerId ?? null,
+              chain_status: isHead ? "completed" : row.chain_status,
+              chain_completed_at: isHead ? chainCompletedAt : row.chain_completed_at,
+              c_chain_status: "completed",
+              c_chain_completed_at: chainCompletedAt,
+            }),
+          ];
+        }),
       );
       return jobs.map((job) => completed.get(job.jobId));
     },
@@ -1136,71 +1221,156 @@ WHERE {{fence_guard}}`,
     deleteChains: async ({ txCtx, chainIds }) => {
       if (chainIds.length === 0) return [];
       const chainIdsParam = sortedIdsParam(chainIds);
+      const heights = await execute(
+        txCtx,
+        prepared(
+          "readDeletedChainHeights",
+          `
+WITH RECURSIVE climb (origin, id, height) AS (
+  SELECT d.id, d.id, 0
+  FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d
+  UNION DISTINCT
+  SELECT jb.blocked_by_chain_id, jb.blocked_by_chain_id, 0
+  FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d
+  STRAIGHT_JOIN {{prefix}}job m FORCE INDEX ({{name_prefix}}chain_index_idx) ON m.chain_id = d.id
+  STRAIGHT_JOIN {{prefix}}job_blocker jb FORCE INDEX (PRIMARY) ON jb.job_id = m.id
+  UNION DISTINCT
+  SELECT c.origin, jb.blocked_by_chain_id, c.height + 1
+  FROM climb c
+  STRAIGHT_JOIN {{prefix}}job j FORCE INDEX ({{name_prefix}}chain_index_idx) ON j.chain_id = c.id
+  STRAIGHT_JOIN {{prefix}}job_blocker jb FORCE INDEX (PRIMARY) ON jb.job_id = j.id
+  WHERE c.height < 64
+)
+SELECT origin AS id, MAX(height) AS height FROM climb GROUP BY origin`,
+          {
+            params: [t.string(), t.string()],
+            columns: { id: jobIdDataType, height: t.number() },
+            readOnly: true,
+          },
+        ),
+        [chainIdsParam, chainIdsParam],
+      );
+      const deletedChainIds = new Set<string>(chainIds);
+      const referencedHeadIds = heights
+        .map((row) => row.id as string)
+        .filter((id) => !deletedChainIds.has(id));
+      await execute(
+        txCtx,
+        prepared(
+          "lockDeletedChainHeads",
+          `SELECT h.id FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.id WHERE h.chain_index = 0 {{for_update:h}}`,
+          { params: [t.string()], columns: { id: jobIdDataType } },
+        ),
+        [
+          JSON.stringify(
+            heights
+              .toSorted(
+                (a, b) =>
+                  Number(a.height) - Number(b.height) ||
+                  (String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0),
+              )
+              .map((row) => row.id),
+          ),
+        ],
+      );
       const members = await execute(
         txCtx,
         prepared(
           "lockDeletedChains",
-          `SELECT j.id FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job j FORCE INDEX ({{name_prefix}}chain_index_idx) ON j.chain_id = d.id {{for_update:j}}`,
-          { params: [t.string()], columns: { id: jobIdDataType } },
+          `SELECT j.id, j.chain_index, j.blocking FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job j FORCE INDEX ({{name_prefix}}chain_index_idx) ON j.chain_id = d.id {{for_update:j}}`,
+          {
+            params: [t.string()],
+            columns: { id: jobIdDataType, chain_index: t.number(), blocking: t.number() },
+          },
         ),
         [chainIdsParam],
       );
-      const externalRefs = await execute(
-        txCtx,
-        prepared(
-          "findExternalBlockerRefs",
-          `
+      const blockingChainIds = members
+        .filter((row) => Number(row.chain_index) === 0 && toBoolean(row.blocking))
+        .map((row) => row.id as string);
+      if (blockingChainIds.length > 0) {
+        const externalRefs = await execute(
+          txCtx,
+          prepared(
+            "findExternalBlockerRefs",
+            `
 SELECT jb.job_id AS b_job_id, jb.blocked_by_chain_id AS b_blocked_by_chain_id, jb.\`index\` AS b_index, jb.trace_context AS b_trace_context, ${selectJob("j")}
 FROM {{prefix}}job_blocker jb
 JOIN {{prefix}}job j ON j.id = jb.job_id
 WHERE jb.blocked_by_chain_id IN (${jobIds("blocker_list")})
   AND j.chain_id NOT IN (${jobIds("member_list")})
 ORDER BY jb.job_id, jb.\`index\``,
-          { params: [t.string(), t.string()], columns: { ...dbBlockerColumns, ...dbJobColumns } },
-        ),
-        [chainIdsParam, chainIdsParam],
-      );
-      if (externalRefs.length > 0) {
-        const refsByChainId = Map.groupBy(
-          externalRefs,
-          (row) => row.b_blocked_by_chain_id as string,
+            { params: [t.string(), t.string()], columns: { ...dbBlockerColumns, ...dbJobColumns } },
+          ),
+          [sortedIdsParam(blockingChainIds), chainIdsParam],
         );
-        return chainIds.map((chainId) =>
-          refsByChainId
-            .get(chainId)
-            ?.map((row) => mapDbBlockerRowToStateBlockedJob(row, mapDbJobToStateJobInfo(row)!)),
-        );
+        if (externalRefs.length > 0) {
+          const refsByChainId = Map.groupBy(
+            externalRefs,
+            (row) => row.b_blocked_by_chain_id as string,
+          );
+          return chainIds.map((chainId) =>
+            refsByChainId
+              .get(chainId)
+              ?.map((row) => mapDbBlockerRowToStateBlockedJob(row, mapDbJobToStateJobInfo(row)!)),
+          );
+        }
       }
 
       const chains = await readChains(txCtx, chainIds);
       if (members.length > 0) {
-        const memberIdsParam = JSON.stringify(members.map((row) => row.id));
-        await execute(
-          txCtx,
-          prepared(
-            "deleteChainBlockers",
-            `DELETE FROM {{prefix}}job_blocker WHERE job_id IN (${jobIds()}) AND {{fence_guard}}`,
-            { params: [t.string()] },
-          ),
-          [memberIdsParam],
-        );
         await execute(
           txCtx,
           prepared(
             "deleteChainJobs",
-            `DELETE FROM {{prefix}}job WHERE id IN (${jobIds()}) AND {{fence_guard}}`,
-            {
-              params: [t.string()],
-            },
+            `
+DELETE jb, j
+FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d
+STRAIGHT_JOIN {{prefix}}job j FORCE INDEX (PRIMARY) ON j.id = d.id
+LEFT JOIN {{prefix}}job_blocker jb FORCE INDEX (PRIMARY) ON jb.job_id = j.id
+WHERE {{fence_guard}}`,
+            { params: [t.string()] },
           ),
-          [memberIdsParam],
+          [sortedIdsParam(members.map((row) => row.id as string))],
         );
+        if (referencedHeadIds.length > 0) {
+          const stillReferenced = await execute(
+            txCtx,
+            prepared(
+              "findStillReferencedBlockerHeads",
+              `SELECT DISTINCT jb.blocked_by_chain_id AS id FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job_blocker jb FORCE INDEX ({{name_prefix}}job_blocker_chain_idx) ON jb.blocked_by_chain_id = d.id`,
+              { params: [t.string()], columns: { id: jobIdDataType }, readOnly: true },
+            ),
+            [sortedIdsParam(referencedHeadIds)],
+          );
+          const stillReferencedIds = new Set(stillReferenced.map((row) => row.id as string));
+          const unreferencedHeadIds = referencedHeadIds.filter((id) => !stillReferencedIds.has(id));
+          if (unreferencedHeadIds.length > 0) {
+            await execute(
+              txCtx,
+              prepared(
+                "clearUnreferencedBlockerHeads",
+                `
+UPDATE JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d
+STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.id
+SET h.blocking = FALSE
+WHERE h.blocking = TRUE AND {{fence_guard}}`,
+                { params: [t.string()] },
+              ),
+              [sortedIdsParam(unreferencedHeadIds)],
+            );
+          }
+        }
       }
-      return chainIds.map((chainId) => chains.get(chainId));
+      return chainIds.map((chainId) => {
+        const chain = chains.get(chainId);
+        return chain && { ...chain, blocking: false };
+      });
     },
 
-    startJobAttempts: async ({ txCtx, typeNames, workerId, workerToken, limit }) =>
-      withOwnTransaction(txCtx, async (txCtx) => {
+    startJobAttempts: async ({ txCtx, typeNames, workerId, workerToken, limit }) => {
+      if (typeNames.length === 0) return [];
+      return withOwnTransaction(txCtx, async (txCtx) => {
         const [liveWorker] = await execute(
           txCtx,
           prepared(
@@ -1212,24 +1382,61 @@ ORDER BY jb.job_id, jb.\`index\``,
         );
         if (!liveWorker) return [];
 
-        const pickedIds: string[] = [];
-        for (const typeName of shuffle(typeNames)) {
-          if (pickedIds.length >= limit) break;
-          const rows = await execute(
+        const pickedRows = await execute(
+          txCtx,
+          prepared(
+            `pickPendingJobs:${typeNames.length}`,
+            `${typeNames
+              .map(
+                () =>
+                  `(SELECT id, type_name, CAST(status_ts AS CHAR) AS picked_ts FROM {{prefix}}job FORCE INDEX ({{name_prefix}}job_status_idx) WHERE type_name = ? AND status = 'pending' AND status_ts <= UTC_TIMESTAMP(6) ORDER BY status_ts LIMIT ? FOR UPDATE SKIP LOCKED)`,
+              )
+              .join(" UNION ALL ")} ORDER BY picked_ts LIMIT ?`,
+            {
+              params: [...typeNames.flatMap(() => [t.string(), t.number()]), t.number()],
+              columns: { id: jobIdDataType, type_name: t.string(), picked_ts: t.string() },
+            },
+          ),
+          [
+            ...typeNames.flatMap((typeName) => [typeName, Math.ceil(limit / typeNames.length)]),
+            limit,
+          ],
+        );
+        const pickedIds = pickedRows.map((row) => row.id as string);
+        const saturatedTypeNames = typeNames.filter(
+          (typeName) =>
+            pickedRows.filter((row) => row.type_name === typeName).length ===
+            Math.ceil(limit / typeNames.length),
+        );
+        if (pickedIds.length < limit && saturatedTypeNames.length > 0) {
+          const fillRows = await execute(
             txCtx,
             prepared(
-              "pickPendingJobs",
-              `
-SELECT id FROM {{prefix}}job FORCE INDEX ({{name_prefix}}job_status_idx)
-WHERE type_name = ? AND status = 'pending' AND status_ts <= UTC_TIMESTAMP(6)
-ORDER BY status_ts
-LIMIT ?
-FOR UPDATE SKIP LOCKED`,
-              { params: [t.string(), t.number()], columns: { id: jobIdDataType } },
+              `pickMorePendingJobs:${saturatedTypeNames.length}`,
+              `${saturatedTypeNames
+                .map(
+                  () =>
+                    `(SELECT id, CAST(status_ts AS CHAR) AS picked_ts FROM {{prefix}}job FORCE INDEX ({{name_prefix}}job_status_idx) WHERE type_name = ? AND status = 'pending' AND status_ts <= UTC_TIMESTAMP(6) AND id NOT IN (${jobIds()}) ORDER BY status_ts LIMIT ? FOR UPDATE SKIP LOCKED)`,
+                )
+                .join(" UNION ALL ")} ORDER BY picked_ts LIMIT ?`,
+              {
+                params: [
+                  ...saturatedTypeNames.flatMap(() => [t.string(), t.string(), t.number()]),
+                  t.number(),
+                ],
+                columns: { id: jobIdDataType, picked_ts: t.string() },
+              },
             ),
-            [typeName, limit - pickedIds.length],
+            [
+              ...saturatedTypeNames.flatMap((typeName) => [
+                typeName,
+                JSON.stringify(pickedIds),
+                limit - pickedIds.length,
+              ]),
+              limit - pickedIds.length,
+            ],
           );
-          pickedIds.push(...rows.map((row) => row.id as string));
+          pickedIds.push(...fillRows.map((row) => row.id as string));
         }
         if (pickedIds.length === 0) return [];
 
@@ -1271,37 +1478,33 @@ WHERE j.id IN (${jobIds()})`,
           ...mapDbJobRowToStateJob(row),
           hasBlockers: toBoolean(row.has_blockers),
         }));
-      }),
+      });
+    },
 
     getStartAttemptDelayMs: async ({ txCtx, typeNames }) => {
       if (typeNames.length === 0) return null;
-      const branch = `(SELECT status_ts FROM {{prefix}}job FORCE INDEX ({{name_prefix}}job_status_idx) WHERE type_name = ? AND status = 'pending' AND status_ts > UTC_TIMESTAMP(6) ORDER BY status_ts LIMIT 1)`;
-      const [upcoming] = await execute(
+      const [next] = await execute(
         txCtx,
-        dynamic(
-          `SELECT CEIL(TIMESTAMPDIFF(MICROSECOND, UTC_TIMESTAMP(6), MIN(upcoming.status_ts)) / 1000) AS delay_ms FROM (${typeNames.map(() => branch).join(" UNION ALL ")}) upcoming`,
-          { params: typeNames.map(() => t.string()), columns: { delay_ms: t["number?"]() } },
+        prepared(
+          `getStartAttemptDelayMs:${typeNames.length}`,
+          `${[
+            ...typeNames.map(
+              () =>
+                `(SELECT 0 AS delay_ms FROM {{prefix}}job FORCE INDEX ({{name_prefix}}job_status_idx) WHERE type_name = ? AND status = 'pending' AND status_ts <= UTC_TIMESTAMP(6) ORDER BY status_ts LIMIT 1 FOR UPDATE SKIP LOCKED)`,
+            ),
+            ...typeNames.map(
+              () =>
+                `(SELECT CEIL(TIMESTAMPDIFF(MICROSECOND, UTC_TIMESTAMP(6), status_ts) / 1000) AS delay_ms FROM {{prefix}}job FORCE INDEX ({{name_prefix}}job_status_idx) WHERE type_name = ? AND status = 'pending' AND status_ts > UTC_TIMESTAMP(6) ORDER BY status_ts LIMIT 1)`,
+            ),
+          ].join(" UNION ALL ")} ORDER BY delay_ms LIMIT 1`,
+          {
+            params: [...typeNames, ...typeNames].map(() => t.string()),
+            columns: { delay_ms: t.number() },
+          },
         ),
-        typeNames,
+        [...typeNames, ...typeNames],
       );
-      for (const typeName of typeNames) {
-        const [due] = await execute(
-          txCtx,
-          prepared(
-            "probeDueJob",
-            `
-SELECT id FROM {{prefix}}job FORCE INDEX ({{name_prefix}}job_status_idx)
-WHERE type_name = ? AND status = 'pending' AND status_ts <= UTC_TIMESTAMP(6)
-ORDER BY status_ts
-LIMIT 1
-FOR UPDATE SKIP LOCKED`,
-            { params: [t.string()], columns: { id: jobIdDataType } },
-          ),
-          [typeName],
-        );
-        if (due) return 0;
-      }
-      return upcoming?.delay_ms == null ? null : Math.max(0, Number(upcoming.delay_ms));
+      return next === undefined ? null : Math.max(0, Number(next.delay_ms));
     },
 
     addJobsBlockers: async ({ txCtx, jobBlockers }) => {
@@ -1313,12 +1516,32 @@ FOR UPDATE SKIP LOCKED`,
         prepared(
           "lockBlockerHeads",
           `SELECT ${selectJob("h", "h_")} FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.id WHERE h.chain_index = 0 AND {{fence_guard}} {{for_update:h}}`,
-          { params: [t.string()], columns: prefixColumns(dbJobColumns, "h_") },
+          {
+            params: [t.string()],
+            columns: prefixColumns(dbJobColumns, "h_"),
+          },
         ),
         [sortedIdsParam(blockerChainIds)],
       );
+      const unflaggedHeadIds = headRows
+        .filter((row) => !toBoolean(row.h_blocking))
+        .map((row) => row.h_id as string);
+      if (unflaggedHeadIds.length > 0) {
+        await execute(
+          txCtx,
+          prepared(
+            "flagBlockerHeads",
+            `UPDATE JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.id SET h.blocking = TRUE WHERE {{fence_guard}}`,
+            { params: [t.string()] },
+          ),
+          [sortedIdsParam(unflaggedHeadIds)],
+        );
+      }
       const blockerChains = new Map(
-        headRows.map((row) => [row.h_id as string, mapDbHeadToStateChainInfo(row, "h_")]),
+        headRows.map((row) => [
+          row.h_id as string,
+          { ...mapDbHeadToStateChainInfo(row, "h_"), blocking: true },
+        ]),
       );
 
       const blockerRows = jobBlockers.flatMap(
@@ -1652,7 +1875,7 @@ ORDER BY w.ord`,
     listChains: async ({
       txCtx,
       typeName,
-      independent,
+      blocking,
       from,
       to,
       status,
@@ -1668,11 +1891,7 @@ ORDER BY w.ord`,
       const params: unknown[] = [typeName];
       const paramTypes: DataType[] = [t.string()];
       if (status !== undefined) conditions.push(`h.chain_status = '${status}'`);
-      if (independent !== undefined) {
-        conditions.push(
-          `(SELECT 1 FROM {{prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = h.id LIMIT 1) IS ${independent ? "" : "NOT "}NULL`,
-        );
-      }
+      if (blocking !== undefined) conditions.push(`h.blocking = ${blocking ? "TRUE" : "FALSE"}`);
       if (from) {
         conditions.push(`h.${orderColumn} >= ?`);
         params.push(formatTimestamp(from));
@@ -1693,13 +1912,15 @@ ORDER BY w.ord`,
       params.push(page.limit + 1);
       paramTypes.push(t.number());
       const pageIndex =
-        orderColumn === "created_at"
-          ? status === undefined
-            ? "chain_idx"
-            : "chain_running_idx"
-          : status === "completed"
-            ? "chain_completed_idx"
-            : undefined;
+        blocking === true
+          ? "chain_blocking_idx"
+          : orderColumn === "created_at"
+            ? status === undefined
+              ? "chain_idx"
+              : "chain_running_idx"
+            : status === "completed"
+              ? "chain_completed_idx"
+              : undefined;
 
       const rows = await execute(
         txCtx,

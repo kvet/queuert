@@ -6,6 +6,10 @@ import { FieldList, type FieldItem } from "../../../../components/FieldList.tsx"
 import { ClientTiles } from "../../../../components/integrations/ClientTiles.tsx";
 import { ExperimentalAside } from "../../../../components/integrations/ExperimentalAside.tsx";
 import {
+  mysqlIndexes,
+  mysqlTables,
+} from "../../../../components/integrations/state-adapters/mysql.schema.ts";
+import {
   SchemaIndexes,
   SchemaTables,
 } from "../../../../components/integrations/state-adapters/SchemaTables.tsx";
@@ -406,10 +410,10 @@ const Page = () => (
     <h2>Write fence</h2>
     <p>
       Every insert, update or delete of a job, a blocker or a worker references an empty{" "}
-      <code>{"{prefix}"}schema_fence_v1</code> table, the write fence of the adapter's schema
-      version. A breaking migration drops the fence tables of older versions, so code older than the
-      schema fails each write with <code>SchemaFencedError</code> and changes nothing. Reads still
-      work.
+      <code>{"{prefix}"}schema_fence_v2</code> table, the write fence of the adapter's schema
+      version. A breaking migration, such as <code>002_schema_v2</code>, drops the fence tables of
+      older versions, so code older than the schema fails each write with{" "}
+      <code>SchemaFencedError</code> and changes nothing. Reads still work.
     </p>
 
     <h2>Schema</h2>
@@ -430,10 +434,10 @@ const Page = () => (
       The migrator behind <code>migrateToLatest()</code> is exported for your own tables too; see{" "}
       <A href="/guides/application-migrations/">Application Migrations</A>.
     </p>
-    <SchemaTables dialect="mysql" />
+    <SchemaTables tables={mysqlTables} />
 
     <h2>Indexes</h2>
-    <SchemaIndexes dialect="mysql" />
+    <SchemaIndexes indexes={mysqlIndexes} />
 
     <h2>Examples</h2>
     <ExampleRows

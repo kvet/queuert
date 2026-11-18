@@ -163,12 +163,12 @@ export const createMysqlStateProviderConformanceContext = async ({
       });
     },
     withWritesFenced: async (fn) => {
-      await executeStatements([`DROP TABLE ${tables}schema_fence_v1`]);
+      await executeStatements([`DROP TABLE ${tables}schema_fence_v2`]);
       try {
         return await fn();
       } finally {
         await executeStatements([
-          `CREATE TABLE ${tables}schema_fence_v1 (id INT NOT NULL PRIMARY KEY) ENGINE=InnoDB`,
+          `CREATE TABLE ${tables}schema_fence_v2 (id INT NOT NULL PRIMARY KEY) ENGINE=InnoDB`,
         ]);
       }
     },

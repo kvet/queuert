@@ -414,6 +414,51 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
       }),
     },
     {
+      name: "fills limit from one type when the other typeNames have no due jobs",
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
+
+        const worker = yield* step(
+          stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["acquire-fill-a", "acquire-fill-b", "acquire-fill-c"],
+            concurrency: 5,
+            leaseMs: 60_000,
+          }),
+        );
+        const chains = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: Array.from({ length: 6 }, () => ({
+                id: stateAdapter.config.generateJobId(),
+                typeName: "acquire-fill-a",
+                input: null,
+              })),
+            }),
+          ),
+        );
+
+        const acquired = yield* step(
+          stateAdapter.startJobAttempts({
+            workerId: worker.id,
+            workerToken: worker.token,
+            typeNames: ["acquire-fill-a", "acquire-fill-b", "acquire-fill-c"],
+            limit: 5,
+          }),
+        );
+
+        assert.equal(acquired.length, 5);
+        assert.equal(new Set(acquired.map((job) => job.id)).size, 5);
+        for (const job of acquired) {
+          assert.equal(
+            chains.some((chain) => chain.head.id === job.id),
+            true,
+          );
+        }
+      }),
+    },
+    {
       name: "returns the acquired job's chain",
       run: dynamicSyncAsync(function* ({ createStateAdapter }) {
         const stateAdapter = yield* resource(createStateAdapter());

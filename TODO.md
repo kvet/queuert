@@ -17,9 +17,10 @@
 - [TASK] Unify workerless and worker tracing — workerless completion (`completeChain`) should create an attempt span like the worker path, eliminating the asymmetric `completeJobSpan` adapter method
 - [EPIC] Align `@queuert/otel` with OpenTelemetry messaging semantic conventions
 - [EPIC] Redis state adapter performance and open problems — claim cache, fewer index updates, lock-wait divergences, notify latency. See `design/redis-state-adapter-performance.md`.
-- [TASK] PostgreSQL REPEATABLE READ and SERIALIZABLE. See `design/pg-isolation-levels.md`.
+- [TASK] PostgreSQL REPEATABLE READ and SERIALIZABLE. `002_schema_v2` already adds `blocking` and the `blocking` contract; `blockers_remaining` and its backfill join the unreleased `002` (no `003`, no `schema_fence_v3`). See `design/pg-isolation-levels.md`.
 - [TASK] MySQL/MariaDB REPEATABLE READ and SERIALIZABLE. See `design/mysql-isolation-levels.md`.
 - [EPIC] MongoDB adapter. See `design/mongodb-adapter.md`.
+- [TASK] Lock-order race between job creation and `deleteChains` (PostgreSQL, MySQL/MariaDB) — creation locks blocker chain heads by id (`getChains({ lock: "exclusive" })`), while `deleteChains` and completion lock blocker-first by height, so a create and a delete that reference the same two blocker heads deadlock when the lower id has the higher height; creation and completion can collide the same way with non-time-ordered ids. Options: a shared lock order that does not put a recursive read on creation, or retrying on deadlock.
 - [TASK] Support numeric job and worker IDs — `TJobId` and `TWorkerId` extend `string`, so an `INTEGER`/`bigint` `jobIdType` or `workerIdType` is accepted by the adapters but its IDs still have to round-trip as strings. Allow `number`/`bigint` ID types end to end, including making the `State*` entity types (`StateJobInfo`, `StateChainInfo`, `StateJobBlockerInfo`, `StateWorkerInfo`, …) generic over `TJobId`/`TWorkerId` instead of using `string`.
 
 # Long term

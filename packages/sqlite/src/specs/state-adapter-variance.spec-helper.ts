@@ -41,7 +41,7 @@ export const varianceConformance =
       await using stateAdapter = createStateAdapter();
       await stateAdapter.migrateToLatest();
     }
-    const fenceTable = `${options.tablePrefix}schema_fence_v1`;
+    const fenceTable = `${options.tablePrefix}schema_fence_v2`;
     return {
       createStateAdapter: () => {
         db.exec(

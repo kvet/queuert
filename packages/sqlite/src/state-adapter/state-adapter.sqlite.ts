@@ -60,7 +60,6 @@ import type {
   ProviderTxContext,
   SqliteStateProvider,
 } from "../state-provider/state-provider.sqlite.ts";
-import { LEGACY_MIGRATION_NAMES, createLegacyUpgrade } from "./legacy-upgrade.sqlite.ts";
 
 const jobColumns = [
   "created_at",
@@ -86,6 +85,7 @@ const jobColumns = [
   "last_attempt_error",
   "input",
   "output",
+  "blocking",
 ] as const;
 
 const jobColumnsSelect = (alias: string): string =>
@@ -102,6 +102,7 @@ const chainColumnsSelect = (alias: string): string =>
     `${alias}.chain_completed_at AS c_completed_at`,
     `${alias}.chain_deduplication_key AS c_deduplication_key`,
     `${alias}.chain_trace_context AS c_trace_context`,
+    `${alias}.blocking AS c_blocking`,
   ].join(", ");
 
 const chainColumnsReturning = (rowRef: string): string =>
@@ -112,6 +113,7 @@ const chainColumnsReturning = (rowRef: string): string =>
     ["chain_completed_at", "c_completed_at"],
     ["chain_deduplication_key", "c_deduplication_key"],
     ["chain_trace_context", "c_trace_context"],
+    ["blocking", "c_blocking"],
   ]
     .map(
       ([column, alias]) =>
@@ -173,6 +175,7 @@ const dbJobColumns = {
   chain_deduplication_key: t["string?"](),
   chain_trace_context: t["string?"](),
   trace_context: t["string?"](),
+  blocking: t.number(),
 } as const;
 
 const dbChainColumns = {
@@ -182,6 +185,7 @@ const dbChainColumns = {
   c_completed_at: t["string?"](),
   c_deduplication_key: t["string?"](),
   c_trace_context: t["string?"](),
+  c_blocking: t["number?"](),
 } as const;
 
 const dbWorkerColumns = {
@@ -219,6 +223,7 @@ const dbChainRowColumns = {
   tail_chain_deduplication_key: t["string?"](),
   tail_chain_trace_context: t["string?"](),
   tail_trace_context: t["string?"](),
+  tail_blocking: t["number?"](),
 } as const;
 
 const dbBlockerColumns = {
@@ -233,7 +238,7 @@ type DbChainColumns = InferColumns<typeof dbChainColumns>;
 type DbWorker = InferColumns<typeof dbWorkerColumns>;
 type DbChainRow = InferColumns<typeof dbChainRowColumns>;
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const SCHEMA_MIGRATION = "001_schema_v1";
 
@@ -262,7 +267,7 @@ export function createSchemaMigrations<TTxContext>(
   execute: StatementExecutor<TTxContext, MaybePromise<unknown>>,
   mode: Mode,
 ): Migration<TTxContext, Mode>[] {
-  const up = syncAsync(function* (txCtx: TTxContext) {
+  const upSchemaV1 = syncAsync(function* (txCtx: TTxContext) {
     for (const statement of [
       sql(/* sql */ `
 CREATE TABLE {{table_prefix}}job (
@@ -367,18 +372,42 @@ CREATE TABLE {{table_prefix}}schema_fence_v1 (id INTEGER PRIMARY KEY)`),
       yield* step(execute(txCtx, statement));
     }
   });
+  const upSchemaV2 = syncAsync(function* (txCtx: TTxContext) {
+    for (const statement of [
+      sql(/* sql */ `
+ALTER TABLE {{table_prefix}}job
+  ADD COLUMN blocking INTEGER NOT NULL DEFAULT 0`),
+      sql(/* sql */ `
+UPDATE {{table_prefix}}job
+SET blocking = 1
+WHERE chain_index = 0
+  AND id IN (SELECT blocked_by_chain_id FROM {{table_prefix}}job_blocker)`),
+      sql(/* sql */ `
+CREATE INDEX {{table_prefix}}chain_blocking_idx
+ON {{table_prefix}}job (type_name, created_at)
+WHERE chain_index = 0 AND blocking = 1`),
+      sql(/* sql */ `
+CREATE TABLE {{table_prefix}}schema_fence_v2 (id INTEGER PRIMARY KEY)`),
+      sql(/* sql */ `
+DROP TABLE {{table_prefix}}schema_fence_v1`),
+    ]) {
+      yield* step(execute(txCtx, statement));
+    }
+  });
+  const down =
+    mode === "sync"
+      ? () => {
+          throw schemaNotRevertible();
+        }
+      : async () => {
+          throw schemaNotRevertible();
+        };
   return [
+    { name: SCHEMA_MIGRATION, up: mode === "sync" ? upSchemaV1.sync : upSchemaV1.async, down },
     {
-      name: SCHEMA_MIGRATION,
-      up: mode === "sync" ? up.sync : up.async,
-      down:
-        mode === "sync"
-          ? () => {
-              throw schemaNotRevertible();
-            }
-          : async () => {
-              throw schemaNotRevertible();
-            },
+      name: "002_schema_v2",
+      up: mode === "sync" ? upSchemaV2.sync : upSchemaV2.async,
+      down,
     },
   ];
 }
@@ -447,6 +476,7 @@ const mapDbHeadToStateChain = (head: DbJob): StateChainInfo => ({
   createdAt: sqliteDate(head.created_at),
   completedAt: head.chain_completed_at ? sqliteDate(head.chain_completed_at) : null,
   traceContext: head.chain_trace_context,
+  blocking: head.blocking === 1,
 });
 
 const mapDbChainColumns = (chainId: string, row: DbChainColumns): StateChainInfo => ({
@@ -457,6 +487,7 @@ const mapDbChainColumns = (chainId: string, row: DbChainColumns): StateChainInfo
   createdAt: sqliteDate(row.c_created_at!),
   completedAt: row.c_completed_at ? sqliteDate(row.c_completed_at) : null,
   traceContext: row.c_trace_context,
+  blocking: row.c_blocking === 1,
 });
 
 const mapDbJobRowToStateJob = (row: DbJob & DbChainColumns): StateJob => ({
@@ -1300,12 +1331,16 @@ WHERE head_job.id IN (SELECT value FROM json_each(?))
         );
         const chainRowById = new Map(chainRows.map((row) => [row.id, row]));
 
-        const blockerRefRows = yield* step(
-          execute(
-            txCtx,
-            prepared(
-              "getExternalBlockerDetails",
-              `
+        const blockingChainIds = chainRows.filter((row) => row.blocking === 1).map((row) => row.id);
+        const blockerRefRows =
+          blockingChainIds.length === 0
+            ? []
+            : yield* step(
+                execute(
+                  txCtx,
+                  prepared(
+                    "getExternalBlockerDetails",
+                    `
 SELECT
   jb.job_id AS blocker_job_id,
   jb.blocked_by_chain_id AS blocker_chain_id,
@@ -1317,15 +1352,15 @@ JOIN {{table_prefix}}job j ON j.id = jb.job_id
 WHERE jb.blocked_by_chain_id IN (SELECT value FROM json_each(?))
   AND j.chain_id NOT IN (SELECT value FROM json_each(?))
 `,
-              {
-                params: [t.string(), t.string()],
-                columns: { ...dbBlockerColumns, ...dbJobColumns },
-                readOnly: true,
-              },
-            ),
-            [chainIdsJson, chainIdsJson],
-          ),
-        );
+                    {
+                      params: [t.string(), t.string()],
+                      columns: { ...dbBlockerColumns, ...dbJobColumns },
+                      readOnly: true,
+                    },
+                  ),
+                  [JSON.stringify(blockingChainIds), chainIdsJson],
+                ),
+              );
 
         const blockersByChain = new Map<string, StateBlockedJob[]>();
         for (const ref of blockerRefRows) {
@@ -1348,6 +1383,38 @@ WHERE jb.blocked_by_chain_id IN (SELECT value FROM json_each(?))
 
         if (chainsToDelete.length > 0) {
           const deleteJson = JSON.stringify(chainsToDelete);
+          yield* step(
+            execute(
+              txCtx,
+              prepared(
+                "clearUnreferencedBlockerHeads",
+                `
+WITH members AS (
+  SELECT id FROM {{table_prefix}}job
+  WHERE (id IN (SELECT value FROM json_each(?)) AND chain_index = 0)
+     OR (chain_id IN (SELECT value FROM json_each(?)) AND chain_index > 0)
+)
+UPDATE {{table_prefix}}job
+SET blocking = 0
+WHERE blocking = 1
+  AND chain_index = 0
+  AND id IN (
+    SELECT blocked_by_chain_id FROM {{table_prefix}}job_blocker
+    WHERE job_id IN (SELECT id FROM members)
+  )
+  AND id NOT IN (SELECT id FROM members)
+  AND NOT EXISTS (
+    SELECT 1 FROM {{table_prefix}}job_blocker jb
+    WHERE jb.blocked_by_chain_id = {{table_prefix}}job.id
+      AND jb.job_id NOT IN (SELECT id FROM members)
+  )
+  AND ${FENCE_GUARD}
+`,
+                { params: [t.string(), t.string()], columns: {} },
+              ),
+              [deleteJson, deleteJson],
+            ),
+          );
           yield* step(
             execute(
               txCtx,
@@ -1391,7 +1458,7 @@ WHERE ((id IN (SELECT value FROM json_each(?)) AND chain_index = 0)
           if (referenced) return undefined;
           const row = chainRowById.get(chainId);
           if (!row) return undefined;
-          return mapDbChainRowToStateChain(row);
+          return { ...mapDbChainRowToStateChain(row), blocking: false };
         });
       }),
     ),
@@ -1540,8 +1607,9 @@ ORDER BY d.ord
 
         const blockerChains: (StateChainInfo | undefined)[] = blockerRows.map((row) => {
           if (row.c_type_name === null) return undefined;
-          return mapDbChainColumns(row.blocked_by_chain_id, row);
+          return { ...mapDbChainColumns(row.blocked_by_chain_id, row), blocking: true };
         });
+        const blockerHeadIds = new Set(rows.map((row) => row.blocked_by_chain_id));
 
         const blockersByJobId = new Map<string, (StateChainInfo | undefined)[]>();
         const jobIdsToBlock = new Set<string>();
@@ -1553,27 +1621,45 @@ ORDER BY d.ord
           if (chain?.status === "running") jobIdsToBlock.add(row.job_id);
         }
 
-        const jobRowById = new Map<string, DbJob & DbChainColumns>();
-        if (jobIdsToBlock.size > 0) {
-          const updated = yield* step(
-            execute(
-              txCtx,
-              prepared(
-                "updateJobsToBlocked",
-                `
+        const jobIdsToBlockJson = JSON.stringify([...jobIdsToBlock]);
+        const blockerHeadIdsJson = JSON.stringify([...blockerHeadIds]);
+        const updated = yield* step(
+          execute(
+            txCtx,
+            prepared(
+              "blockJobsAndFlagBlockerHeads",
+              `
 UPDATE {{table_prefix}}job
-SET status = 'blocked'
-WHERE id IN (SELECT value FROM json_each(?))
-  AND status = 'pending'
+SET status = CASE
+    WHEN status = 'pending' AND id IN (SELECT value FROM json_each(?)) THEN 'blocked'
+    ELSE status
+  END,
+  blocking = CASE
+    WHEN chain_index = 0 AND id IN (SELECT value FROM json_each(?)) THEN 1
+    ELSE blocking
+  END
+WHERE (
+    (status = 'pending' AND id IN (SELECT value FROM json_each(?)))
+    OR (chain_index = 0 AND blocking = 0 AND id IN (SELECT value FROM json_each(?)))
+  )
   AND ${FENCE_GUARD}
 RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}
 `,
-                { params: [t.string()], columns: { ...dbJobColumns, ...dbChainColumns } },
-              ),
-              [JSON.stringify([...jobIdsToBlock])],
+              {
+                params: [t.string(), t.string(), t.string(), t.string()],
+                columns: { ...dbJobColumns, ...dbChainColumns },
+              },
             ),
+            [jobIdsToBlockJson, blockerHeadIdsJson, jobIdsToBlockJson, blockerHeadIdsJson],
+          ),
+        );
+        const jobRowById = new Map<string, DbJob & DbChainColumns>();
+        for (const row of updated) {
+          if (!blockersByJobId.has(row.id)) continue;
+          jobRowById.set(
+            row.id,
+            blockerHeadIds.has(row.chain_id) ? { ...row, c_blocking: 1 } : row,
           );
-          for (const row of updated) jobRowById.set(row.id, row);
         }
 
         const remainingJobIds = [...blockersByJobId.keys()].filter((id) => !jobRowById.has(id));
@@ -1640,14 +1726,14 @@ ORDER BY b."index" ASC
               `
 SELECT EXISTS (
   SELECT 1 FROM {{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = ?
-) AS has_dependents
+) AS referenced
 `,
-              { params: [idDataType], columns: { has_dependents: t.number() }, readOnly: true },
+              { params: [idDataType], columns: { referenced: t.number() }, readOnly: true },
             ),
             [blockedByChainId],
           ),
         );
-        if (dependents.has_dependents === 0) return [];
+        if (dependents.referenced === 0) return [];
 
         yield* step(
           execute(
@@ -2026,7 +2112,7 @@ ORDER BY w.key
       syncAsync(function* ({
         txCtx,
         typeName,
-        independent,
+        blocking,
         from,
         to,
         status,
@@ -2050,15 +2136,7 @@ ORDER BY w.key
         params.push(typeName);
         paramTypes.push(t.string());
 
-        if (independent === true) {
-          conditions.push(
-            `NOT EXISTS (SELECT 1 FROM {{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = head_job.id)`,
-          );
-        } else if (independent === false) {
-          conditions.push(
-            `EXISTS (SELECT 1 FROM {{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = head_job.id)`,
-          );
-        }
+        if (blocking !== undefined) conditions.push(`head_job.blocking = ${blocking ? 1 : 0}`);
 
         if (from) {
           conditions.push(`head_job.${orderColumn} >= ?`);
@@ -2441,15 +2519,8 @@ ORDER BY w.key
             sync ? "sync" : "async",
           ),
           store,
-          before: createLegacyUpgrade(stateProvider, store, applyTemplate, SCHEMA_MIGRATION),
         });
-        const result = yield* step(migrator.migrateToLatest());
-        return {
-          ...result,
-          unrecognized: result.unrecognized.filter(
-            (name) => !LEGACY_MIGRATION_NAMES.includes(name),
-          ),
-        };
+        return yield* step(migrator.migrateToLatest());
       }),
     ),
   };
@@ -2483,9 +2554,6 @@ export type SqliteStateAdapter<
   ? StateAdapter<TTxContext, TJobId, TWorkerId, TMode> & {
       /**
        * Create or upgrade the schema.
-       *
-       * @throws Error if a 0.16 schema is found (upgrade it with `@queuert/sqlite` 0.17 first), or
-       * a 0.17 migration table that records migrations 0.17 did not ship.
        */
       migrateToLatest: () => ModeResult<TMode, MigrationResult>;
     }

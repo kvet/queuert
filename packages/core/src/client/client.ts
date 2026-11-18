@@ -3,10 +3,10 @@ import { raceWithSleep, setLongTimeout } from "@queuert/helpers/sleep";
 import type { IsUnion } from "@queuert/helpers/typescript";
 import {
   type MaybePromise,
-  type ModeResult,
-  syncAsync,
-  step,
   type Mode,
+  type ModeResult,
+  step,
+  syncAsync,
 } from "@queuert/sync-async";
 
 import type { ModeOf } from "../adapter-mode.ts";
@@ -39,6 +39,7 @@ import {
 } from "../errors.ts";
 import type { BaseJobTypeDefinitions } from "../job-types/job-type.ts";
 import type {
+  AnyNewJob,
   BlockerChains,
   JobTypeBlockedNames,
   JobTypeChainNames,
@@ -46,7 +47,6 @@ import type {
   JobTypeNames,
   JobTypeProperty,
   NewChain,
-  AnyNewJob,
   ResolvedChain,
   ResolvedChainJobs,
   ResolvedJob,
@@ -62,11 +62,11 @@ import type { NotifyAdapter } from "../notify-adapter/notify-adapter.ts";
 import type { Log } from "../observability-adapter/log.ts";
 import type { ObservabilityAdapter } from "../observability-adapter/observability-adapter.ts";
 import type {
-  StateAdapter,
   BaseTxContext,
   GetStateAdapterJobId,
-  GetStateAdapterWorkerId,
   GetStateAdapterTxContext,
+  GetStateAdapterWorkerId,
+  StateAdapter,
   StateChain,
   StateJob,
   StateJobInfo,
@@ -546,7 +546,7 @@ export type Client<
   >(
     options: {
       typeName: TChainTypeName;
-      independent?: boolean;
+      blocking?: boolean;
       from?: Date;
       to?: Date;
       orderDirection?: OrderDirection;
@@ -1555,7 +1555,7 @@ export const createClient = <
     >(
       options: {
         typeName: TChainTypeName;
-        independent?: boolean;
+        blocking?: boolean;
         from?: Date;
         to?: Date;
         orderDirection?: OrderDirection;
@@ -1573,7 +1573,7 @@ export const createClient = <
         syncAsync(function* () {
           const {
             typeName,
-            independent,
+            blocking,
             from,
             to,
             status,
@@ -1589,7 +1589,7 @@ export const createClient = <
             helpers.stateAdapter.listChains({
               txCtx,
               typeName,
-              independent,
+              blocking,
               from,
               to,
               status,

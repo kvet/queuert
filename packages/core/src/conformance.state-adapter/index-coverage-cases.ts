@@ -37,19 +37,19 @@ export type IndexCoverageCaseKey =
   | "listJobs/completed/cursor"
   // listChains > no status
   | "listChains/noStatus/default"
-  | "listChains/noStatus/independent"
-  | "listChains/noStatus/nonIndependent"
+  | "listChains/noStatus/nonBlocking"
+  | "listChains/noStatus/blocking"
   | "listChains/noStatus/fromTo"
   | "listChains/noStatus/cursor"
   // listChains > running
   | "listChains/running/default"
-  | "listChains/running/independent"
-  | "listChains/running/nonIndependent"
+  | "listChains/running/nonBlocking"
+  | "listChains/running/blocking"
   | "listChains/running/cursor"
   // listChains > completed
   | "listChains/completed/default"
-  | "listChains/completed/independent"
-  | "listChains/completed/nonIndependent"
+  | "listChains/completed/nonBlocking"
+  | "listChains/completed/blocking"
   | "listChains/completed/orderByCreatedAt"
   | "listChains/completed/orderByCompletedAt"
   | "listChains/completed/cursor"
@@ -664,8 +664,8 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
           ),
       },
       {
-        key: "listChains/noStatus/independent",
-        label: "+ independent",
+        key: "listChains/noStatus/nonBlocking",
+        label: "+ non-blocking",
         run: () => (stateAdapter) =>
           runInModeOf(
             stateAdapter,
@@ -675,7 +675,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
                   orderBy: "createdAt",
                   orderDirection: "desc",
                   typeName: "seed:pending:order",
-                  independent: true,
+                  blocking: false,
                   page: { limit: 20 },
                 }),
               );
@@ -683,8 +683,8 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
           ),
       },
       {
-        key: "listChains/noStatus/nonIndependent",
-        label: "+ non-independent",
+        key: "listChains/noStatus/blocking",
+        label: "+ blocking",
         run: () => (stateAdapter) =>
           runInModeOf(
             stateAdapter,
@@ -694,7 +694,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
                   orderBy: "createdAt",
                   orderDirection: "desc",
                   typeName: "seed:pending:order",
-                  independent: false,
+                  blocking: true,
                   page: { limit: 20 },
                 }),
               );
@@ -775,8 +775,8 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
           ),
       },
       {
-        key: "listChains/running/independent",
-        label: "+ independent",
+        key: "listChains/running/nonBlocking",
+        label: "+ non-blocking",
         run: () => (stateAdapter) =>
           runInModeOf(
             stateAdapter,
@@ -787,7 +787,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
                   orderDirection: "desc",
                   status: "running",
                   typeName: "seed:running:order",
-                  independent: true,
+                  blocking: false,
                   page: { limit: 20 },
                 }),
               );
@@ -795,8 +795,8 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
           ),
       },
       {
-        key: "listChains/running/nonIndependent",
-        label: "+ non-independent",
+        key: "listChains/running/blocking",
+        label: "+ blocking",
         run: () => (stateAdapter) =>
           runInModeOf(
             stateAdapter,
@@ -807,7 +807,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
                   orderDirection: "desc",
                   status: "running",
                   typeName: "seed:running:order",
-                  independent: false,
+                  blocking: true,
                   page: { limit: 20 },
                 }),
               );
@@ -868,8 +868,8 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
           ),
       },
       {
-        key: "listChains/completed/independent",
-        label: "+ independent",
+        key: "listChains/completed/nonBlocking",
+        label: "+ non-blocking",
         run: () => (stateAdapter) =>
           runInModeOf(
             stateAdapter,
@@ -880,7 +880,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
                   orderDirection: "desc",
                   status: "completed",
                   typeName: "seed:completed:order",
-                  independent: true,
+                  blocking: false,
                   page: { limit: 20 },
                 }),
               );
@@ -888,8 +888,8 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
           ),
       },
       {
-        key: "listChains/completed/nonIndependent",
-        label: "+ non-independent",
+        key: "listChains/completed/blocking",
+        label: "+ blocking",
         run: () => (stateAdapter) =>
           runInModeOf(
             stateAdapter,
@@ -900,7 +900,7 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
                   orderDirection: "desc",
                   status: "completed",
                   typeName: "seed:completed:order",
-                  independent: false,
+                  blocking: true,
                   page: { limit: 20 },
                 }),
               );

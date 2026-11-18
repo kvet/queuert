@@ -269,7 +269,6 @@ export type RedisStoreTransaction = RedisTransaction & {
   incr: (key: string, field: string, delta: number) => void;
   zscan: (key: string, options: ZscanOptions) => AsyncGenerator<ZsetMember>;
   zlastMany: (keys: string[]) => Promise<(ZsetMember | undefined)[]>;
-  zscoreMany: (key: string, members: string[]) => Promise<(number | undefined)[]>;
   zcard: (key: string) => Promise<number>;
   zcardMany: (keys: string[]) => Promise<number[]>;
   zcountMany: (requests: { key: string; min: number; max: number }[]) => Promise<number[]>;
@@ -670,20 +669,6 @@ export const createRedisTransaction = (
       return keys.map((key, index) =>
         mergeOverlay(key, parseZsetReply(replies[index]), -Infinity, Infinity).at(-1),
       );
-    },
-
-    zscoreMany: async (key, members) => {
-      if (members.length === 0) return [];
-      const overlay = zsets.get(key);
-      const remote = members.filter((member) => !overlay?.has(member));
-      const replies =
-        remote.length > 0 ? await read(remote.map((member) => ["ZSCORE", key, member])) : [];
-      const scores = new Map<string, number | null>(overlay);
-      for (const [index, member] of remote.entries()) {
-        const reply = replies[index];
-        scores.set(member, reply === null || reply === undefined ? null : Number(reply));
-      }
-      return members.map((member) => scores.get(member) ?? undefined);
     },
 
     zcard: async (key) => {

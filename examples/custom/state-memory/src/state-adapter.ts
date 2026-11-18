@@ -278,6 +278,7 @@ export const createMemoryStateAdapter = (
             createdAt: now,
             completedAt: null,
             traceContext: job.chainTraceContext ?? null,
+            blocking: false,
           };
           state.chains.set(chain.id, chain);
           state.jobs.set(job.id, newJob({ ...job, chainId: job.id, chainIndex: 0 }, now));
@@ -377,7 +378,7 @@ export const createMemoryStateAdapter = (
 
         const deleted = chainIds.map((chainId) => {
           const chain = state.chains.get(chainId);
-          return chain && toChain(state, chain);
+          return chain && { ...toChain(state, chain), blocking: false };
         });
         for (const job of state.jobs.values()) {
           if (chainIds.includes(job.chainId)) {
@@ -386,6 +387,9 @@ export const createMemoryStateAdapter = (
         }
         for (const chainId of chainIds) state.chains.delete(chainId);
         state.blockers = state.blockers.filter((blocker) => state.jobs.has(blocker.jobId));
+        for (const chain of state.chains.values()) {
+          if (chain.blocking && dependentsOf(state, chain.id).length === 0) chain.blocking = false;
+        }
         return deleted;
       }),
 
@@ -434,6 +438,7 @@ export const createMemoryStateAdapter = (
             if (chain) {
               const traceContext = blockerTraceContexts?.[index] ?? null;
               state.blockers.push({ jobId, blockedByChainId, index, traceContext });
+              chain.blocking = true;
             }
             return chain;
           });
@@ -574,7 +579,7 @@ export const createMemoryStateAdapter = (
     listChains: async ({
       txCtx,
       typeName,
-      independent,
+      blocking,
       from,
       to,
       status,
@@ -590,8 +595,7 @@ export const createMemoryStateAdapter = (
             (chain) =>
               chain.typeName === typeName &&
               (status === undefined || chain.status === status) &&
-              (independent === undefined ||
-                independent === (dependentsOf(state, chain.id).length === 0)) &&
+              (blocking === undefined || chain.blocking === blocking) &&
               inRange(sortDate(chain), from, to),
           )
           .map((chain) => toChain(state, chain));

@@ -175,7 +175,7 @@ export const summaryTables: { title: string; columns: { scenario: string; label:
     title: "Completion, no-op handler (jobs/s)",
     columns: NOOP_CONCURRENCY_LEVELS.map((concurrency) => ({
       scenario: `complete-noop-${concurrency}`,
-      label: `x${concurrency}`,
+      label: concurrency === 1 ? "1 slot" : `${concurrency} slots`,
     })),
   },
 ];
@@ -192,7 +192,7 @@ const formatNumber = (n: number): string => Math.round(n).toLocaleString("en-US"
 const formatDuration = (ms: number): string =>
   ms < 1_000 ? `${ms.toFixed(0)}ms` : `${(ms / 1_000).toFixed(2)}s`;
 
-export const formatRate = (count: number, ms: number): string => formatNumber(count / (ms / 1_000));
+const formatRate = (count: number, ms: number): string => formatNumber(count / (ms / 1_000));
 
 const parseScenario = (): { name: string; spec: ScenarioSpec } => {
   const name = parseScenarioName();

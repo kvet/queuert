@@ -104,7 +104,7 @@ When `configDiffers` and the running chain is currently _executing_, `deleteChai
     do {
       const page = await client.listChains({
         status: "completed", orderBy: "completedAt", orderDirection: "asc",
-        independent: true, to: cutoff, limit: batchSize,
+        blocking: false, to: cutoff, limit: batchSize,
         ...(typeNames ? { typeName: typeNames } : {}),
         ...(cursor ? { cursor } : {}),
       });

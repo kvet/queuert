@@ -1326,7 +1326,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         );
 
         const allChains = yield* step(client.listChains({ typeName: "order" }));
-        const rootChains = yield* step(client.listChains({ typeName: "order", independent: true }));
+        const rootChains = yield* step(client.listChains({ typeName: "order", blocking: false }));
 
         assert.equal(allChains.items.length, 1);
         assert.equal(rootChains.items.length, 0);

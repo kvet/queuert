@@ -2,7 +2,7 @@
 
 Make the PostgreSQL state adapter correct when any transaction that touches Queuert's tables runs at READ COMMITTED, REPEATABLE READ or SERIALIZABLE, including mixes of levels across transactions. The design rests on three changes:
 
-- Every cross-transaction invariant becomes a write-write conflict on a shared row: counter-based blocker bookkeeping (`has_dependents`, `blockers_remaining`) and a write on the worker row during acquisition.
+- Every cross-transaction invariant becomes a write-write conflict on a shared row: counter-based blocker bookkeeping (`blocking`, `blockers_remaining`) and a write on the worker row during acquisition.
 - The adapter retries serialization failures in the work Queuert runs itself.
 - Migrations are pinned to READ COMMITTED. Every other transaction runs at the level the user's connection or transaction chooses.
 
@@ -28,13 +28,13 @@ Two more problems come from the session default:
 
 Raw-SQL spikes (PostgreSQL 14, two-connection interleavings) reproduced the lock-only races. The first spike ran both sides at the same level; the second set each side's level independently:
 
-| Race (today's statements)                               | Broken                                                  |
-| ------------------------------------------------------- | ------------------------------------------------------- |
-| Attach commits inside the completer's snapshot          | RR (same level on both sides)                           |
-| Completer waits on the attacher's head lock             | RR (same level on both sides)                           |
-| Two blockers of one dependent complete concurrently     | RR (same level on both sides)                           |
-| Attach with `has_dependents` already true vs completion | attacher/completer RC/RR, RC/SER, SER/RR                |
-| Acquisition (`FOR KEY SHARE`) vs reclaim: job orphaned  | acquirer/reclaimer RC/RR, RC/SER, RR/RR, RR/SER, SER/RR |
+| Race (today's statements)                              | Broken                                                  |
+| ------------------------------------------------------ | ------------------------------------------------------- |
+| Attach commits inside the completer's snapshot         | RR (same level on both sides)                           |
+| Completer waits on the attacher's head lock            | RR (same level on both sides)                           |
+| Two blockers of one dependent complete concurrently    | RR (same level on both sides)                           |
+| Attach with `blocking` already true vs completion      | attacher/completer RC/RR, RC/SER, SER/RR                |
+| Acquisition (`FOR KEY SHARE`) vs reclaim: job orphaned | acquirer/reclaimer RC/RR, RC/SER, RR/RR, RR/SER, SER/RR |
 
 Under load (200 dependents × 16 blockers completed by 8 connections at REPEATABLE READ), 6–8 dependents were left `blocked`. With the changes below, all nine level pairs of the last two races end correctly, with one 40001 retry where a side is REPEATABLE READ or SERIALIZABLE. The worker-owned transactions (own-job reclaim vs own `complete`, stop vs reclaim as expired) were correct in all nine pairs already.
 
@@ -46,15 +46,15 @@ Rule: **every invariant that pairs a read in one transaction with a write in ano
 
 On `job`:
 
-- `has_dependents boolean NOT NULL DEFAULT false` — meaningful on head jobs: at least one `job_blocker` row references this chain. It is never cleared, so `true` can outlive the rows.
+- `blocking boolean NOT NULL DEFAULT false` — meaningful on head jobs: at least one `job_blocker` row references this chain. `deleteChains` clears it when it deletes the last such row.
 - `blockers_remaining integer NOT NULL DEFAULT 0` — meaningful on `blocked` jobs: the number of this job's `job_blocker` rows whose blocker chain is not `completed`. Duplicate blocker chains at different `index` positions count once per row.
 
-Neither column is indexed, so writes that change only these columns can be HOT updates. The `worker` table needs no change.
+`blockers_remaining` is not indexed, so writes that change only it can be HOT updates; flipping `blocking` updates the partial index `chain_blocking_idx`, which is why it is written only on heads whose value changes. The `worker` table needs no change.
 
 ### Attach (`addJobsBlockers`)
 
 1. Lock the blocker head jobs in id order (`ORDER BY h.id FOR UPDATE`), as today. The lock stays a `SELECT … FOR UPDATE`: a bare `UPDATE` cannot order its row locks, and in the spike it deadlocked on 119 of 2000 concurrent multi-blocker attaches.
-2. Write `has_dependents = true` on **every** locked head, including heads where it is already `true`. The conflict has to exist whenever the _completer_ might be at REPEATABLE READ or SERIALIZABLE, and the attacher cannot know the completer's level.
+2. Write `blocking = true` on **every** locked head, including heads where it is already `true`. The conflict has to exist whenever the _completer_ might be at REPEATABLE READ or SERIALIZABLE, and the attacher cannot know the completer's level.
 3. Insert the `job_blocker` rows.
 4. Set the dependent's `blockers_remaining` to the number of its `job_blocker` rows whose locked head is `running`, and its status to `blocked` when that number is above zero.
 
@@ -64,8 +64,8 @@ The same write covers `deleteChains`. A deletion whose snapshot predates a commi
 
 ### Completion (`completeJobs` + `unblockJobs`)
 
-- `completeJobs` returns the chain head's `has_dependents` as `hasDependents` on each result, taken from the `UPDATE … RETURNING` that completes the chain (the head itself for a single-job chain, `head_done` otherwise). After a lock wait this is the latest version.
-- Core skips `unblockJobs` when `hasDependents` is `false`. This replaces `lockBlockedJobs`' `EXISTS` round trip on every chain completion without dependents.
+- `completeJobs` returns the chain head's `blocking` column as `chain.blocking` on each result, taken from the `UPDATE … RETURNING` that completes the chain (the head itself for a single-job chain, `head_done` otherwise). After a lock wait this is the latest version.
+- Core skips `unblockJobs` when `blocking` is `false`. This replaces `lockBlockedJobs`' `EXISTS` round trip on every chain completion without dependents.
 - `unblockJobs` is one statement:
   1. Lock, in id order (`MATERIALIZED` CTE, `FOR UPDATE`), the dependents that are `blocked` and have `job_blocker` rows for the completed chain.
   2. Decrement each one's `blockers_remaining` by its row count for that chain.
@@ -127,9 +127,9 @@ A `complete` that succeeded in a rolled-back try refuses to run again with the s
 
 ### SQLite and in-process
 
-SQLite serializes writers and the in-process adapter serializes through its lock, so neither has these races. Both keep recomputing readiness and take no migration. They only implement the contract changes:
+SQLite serializes writers and the in-process adapter serializes through its lock, so neither has these races. Both keep recomputing readiness. They only implement the contract changes:
 
-- `completeJobs` returns `hasDependents` (an `EXISTS` over `job_blocker` for the completed chain).
+- `completeJobs` returns `blocking`: SQLite reads the head's stored `blocking` (added by `002_schema_v2` for the `listChains` index), the in-process adapter its stored chain flag.
 - `withTransaction` keeps calling `fn` once.
 
 ## Behavior by isolation level
@@ -196,26 +196,29 @@ Attach, as core issues it: `lockBlockerChains`, `createJobs`, then a single-stat
 - At REPEATABLE READ, hot-blocker attaches lose about 25% of throughput and half of them retry; 3.5% of transactions exhaust 5 retries and reach the caller. The write that makes REPEATABLE READ correct is what conflicts, so no correct variant avoids it. Cold attaches at REPEATABLE READ run like READ COMMITTED.
 - At SERIALIZABLE, about half of all attach transactions retry and about 4% exhaust their retries, even on uncontended blockers: SSI predicate-lock conflicts on `job_blocker` and index pages. This is correct but slow; it is documented, not addressed here.
 
-## Migration (`002_blocker_counters`)
+## Migration
 
-One breaking transactional migration after `001_schema_v1`, with a `SET LOCAL lock_timeout` so it gives up rather than queue behind running workers. Besides its schema change it creates `schema_fence_v2` and drops `schema_fence_v1`:
+`002_schema_v2` (unreleased) is a non-transactional migration that copies `job` into a new `job_v2` table with the v2 columns while 0.18 pods keep running, then swaps the tables in one short transaction. The old table never changes shape, so the prepared statements of 0.18 pods keep working until the swap; adding a column to it in place would fail every cached `SELECT j.*` plan with "cached plan must not change result type". `blockers_remaining` joins the same `002` before it is released, so there is no `003` and no `schema_fence_v3`.
 
-1. Add `has_dependents` and `blockers_remaining` (constant defaults: no table rewrite).
-2. Set `has_dependents = true` on every head job referenced by a `job_blocker` row.
-3. Set `blockers_remaining` on every `blocked` job to the number of its `job_blocker` rows whose blocker head's `chain_status` is distinct from `completed` (the same predicate as today's recompute, so a missing head counts as incomplete).
-4. Move `blocked` jobs whose `blockers_remaining` is zero to `pending` with `scheduled_at = GREATEST(scheduled_at, now())`. These are dependents a previous release left stuck; none exist on a database that only ever ran at READ COMMITTED.
-5. Move `running` jobs whose `attempt_by` matches no `worker` row to `pending`, with `attempt_at`, `attempt_by` and `attempt_token` cleared. These are attempts orphaned by the acquisition race; none exist on a database that only ever ran at READ COMMITTED.
+Steps today, each safe to repeat after a failure:
 
-No older process may write alongside a process after `002`:
+1. One short transaction with `SET LOCAL lock_timeout = '5000ms'`: create `job_v2` with the `001` columns plus `blocking`, its indexes under `_v2` names and `chain_blocking_idx`, and `job_v2_dirty (chain_id)`; add row triggers on `job` that upsert or delete the matching `job_v2` row, and on `job_blocker` that record the referenced chain in `job_v2_dirty`. Creating the triggers waits for in-flight 0.18 writes, so every earlier write is visible to the copy and every later one fires them.
+2. Copy `job` into `job_v2` in batches of 1000 by id, one short transaction per batch with `SET LOCAL lock_timeout = '5000ms'`. Each batch reads its rows `FOR KEY SHARE`, so a row a 0.18 pod deletes meanwhile is copied or not at all and a later update reaches `job_v2` through the mirror trigger, and inserts with `ON CONFLICT DO NOTHING`, so a row the trigger already mirrored wins. `blocking` is computed from `job_blocker` as of the batch.
+3. One short transaction that locks `job` and `job_blocker`: drop `schema_fence_v1` and create `schema_fence_v2`, recompute `blocking` for the chains in `job_v2_dirty` (a batch or trigger may have read `job_blocker` before a concurrent change committed), drop `job`, the triggers, their functions and `job_v2_dirty`, and rename `job_v2`, its constraints and its indexes to the `001` names. Every 0.18 write fails with `SchemaFencedError` afterwards.
 
-- A 0.17 attacher inserts `job_blocker` rows without setting `has_dependents` or `blockers_remaining`. A new completer then skips `unblockJobs` (the dependent stays `blocked`), or decrements a counter that was never set and unblocks the dependent before its other blockers complete.
-- A 0.17 completer unblocks through the recompute, which stays correct but leaves `blockers_remaining` stale on jobs it moves to `pending`. That is harmless, because the counter is read only on `blocked` jobs.
+A run that finds `job` already has `blocking` only makes sure the fences are swapped. Newer pods are fenced until step 3 commits and retry their writes.
 
-Dropping `schema_fence_v1` makes every write of the release before it fail with `SchemaFencedError`, so those processes cannot corrupt state. A 0.17 process references no fence table, so the release still requires every 0.17 process to stop before `002` runs.
+Still to add to `002`, keeping 0.18 and newer pods able to run side by side:
+
+- Add `blockers_remaining` (constant default) and set it on every `blocked` job to the number of its `job_blocker` rows whose blocker head's `chain_status` is distinct from `completed` (the same predicate as today's recompute, so a missing head counts as incomplete).
+- Move `blocked` jobs whose `blockers_remaining` is zero to `pending` with `scheduled_at = GREATEST(scheduled_at, now())`. These are dependents a previous release left stuck; none exist on a database that only ever ran at READ COMMITTED.
+- Move `running` jobs whose `attempt_by` matches no `worker` row to `pending`, with `attempt_at`, `attempt_by` and `attempt_token` cleared. These are attempts orphaned by the acquisition race; none exist on a database that only ever ran at READ COMMITTED.
+
+Open: a 0.18 completer unblocks through the recompute and never decrements `blockers_remaining`, and a 0.18 attacher never sets it. The `job_blocker` trigger alone cannot keep the counter right while 0.18 pods write, so the counter backfill needs its own answer before it joins `002`.
 
 ## API
 
-- State adapter contract: each `completeJobs` result carries `hasDependents: boolean`. `false` guarantees that no `job_blocker` row references the completed chain; `true` may outlive the rows. `unblockJobs` is documented as called only when it is `true`. This is a breaking change for custom state adapters.
+- State adapter contract: each `completeJobs` result carries `blocking: boolean`. `true` means at least one `job_blocker` row references the completed chain; `deleteChains` clears it with the last such row. `unblockJobs` is documented as called only when it is `true`. This is a breaking change for custom state adapters.
 - State adapter contract: `withTransaction` may call `fn` more than once, and core keeps every callback it passes free of side effects outside the database.
 - No change to the client, worker or processor API.
 - Docs: the "Isolation level" section of the PostgreSQL integration page states the following:
@@ -232,7 +235,7 @@ Tests are split by what can observe them. Contract behavior goes into the shared
 
 **Shared conformance (core `state-adapter-cases`, all adapters)**
 
-- `complete-jobs`: `hasDependents` is `false` for a chain no `job_blocker` row ever referenced, and `true` for a referenced chain, both when the head completes a single-job chain and when the tail completes a multi-job chain.
+- `complete-jobs`: `blocking` is `false` for a chain no `job_blocker` row ever referenced, and `true` for a referenced chain, both when the head completes a single-job chain and when the tail completes a multi-job chain.
 - `unblock-jobs`: a dependent that lists one blocker chain at two positions unblocks when that chain completes. A dependent with three blockers stays `blocked` until the last one completes, whatever the completion order.
 - `add-jobs-blockers`: a completion that waits on an attach's head lock unblocks the attached dependent. This is the reverse order of the existing "completed while it waited on the head lock" case.
 - `start-job-attempt`: a reclaim that waits on an acquisition's worker-row lock sees the job the acquisition claimed. This is the reverse order of the existing "a claim waiting on a transaction that locks and deletes the worker claims nothing" case.
@@ -245,7 +248,7 @@ Kept separate from the shared suite because it needs raw SQL and per-connection 
 - Level matrix: the conformance spec passes `isolationVariants` built from three pools whose `default_transaction_isolation` is `read committed`, `repeatable read` and `serializable` (nine ordered pairs per interleaving case).
 - Counter invariant: the conformance context's `createStateAdapter` first checks two things, then truncates:
   - every `blocked` job's `blockers_remaining` equals its recomputed count;
-  - every head that a `job_blocker` row references has `has_dependents`.
+  - every head that a `job_blocker` row references has `blocking`.
 - Fan-in under load: 200 dependents × 16 blockers completed by 8 connections at REPEATABLE READ and at SERIALIZABLE leave no dependent `blocked`. Concurrent multi-blocker attaches raise no 40P01 at READ COMMITTED.
 - Retry: a provider that injects 40001 or 40P01 shows four things:
   - `withTransaction` calls `fn` again;
@@ -256,7 +259,7 @@ Kept separate from the shared suite because it needs raw SQL and per-connection 
 - Migrations, with the session default at `repeatable read` and at `serializable`:
   - parallel deployments through the existing spawner all succeed, exactly one applies each migration, and none fails with 40001;
   - `current_setting('transaction_isolation')` inside a migration reports `read committed`.
-- Migration `002`: a database migrated to `001` and seeded with raw inserts. The seed contains:
+- Migration `002_schema_v2`: a database migrated to `001` and seeded with raw inserts. The seed contains:
   - blocked dependents waiting on mixed `running`/`completed` blockers
   - duplicate blocker chains
   - a stuck dependent whose blockers all completed
@@ -266,9 +269,9 @@ Kept separate from the shared suite because it needs raw SQL and per-connection 
 
 **SQLite and in-process**
 
-No suite of their own. Both have a single effective isolation level and no new SQL-level invariant, so the shared conformance cases cover their contract change (`hasDependents`).
+No suite of their own. Both have a single effective isolation level and no new SQL-level invariant, so the shared conformance cases cover their contract change (`blocking`).
 
 ## Related designs
 
-- **Chain table** (`design/chain-table.md`): moves `has_dependents` from the head job row to the `chain` row; `blockers_remaining` stays on `job`. Its write-based bookkeeping section is this design applied to the split schema.
+- **Chain table** (`design/chain-table.md`): moves `blocking` from the head job row to the `chain` row; `blockers_remaining` stays on `job`. Its write-based bookkeeping section is this design applied to the split schema.
 - **Unbounded blockers** (`design/unbounded-blockers.md`): its `job_blocker.blocked` flip has to follow the same write-based rule.

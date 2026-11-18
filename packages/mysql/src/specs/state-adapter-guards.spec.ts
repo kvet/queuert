@@ -46,7 +46,7 @@ describe("createMysqlStateAdapter guards", () => {
         concurrency: 1,
         leaseMs: 60_000,
       });
-      await pool.query("DROP TABLE queuert_schema_fence_v1");
+      await pool.query("DROP TABLE queuert_schema_fence_v2");
 
       await expect(
         stateAdapter.startJobAttempts({

@@ -5,6 +5,10 @@ import { ExampleRows } from "../../../../components/ExampleList.tsx";
 import { FieldList, type FieldItem } from "../../../../components/FieldList.tsx";
 import { ClientTiles } from "../../../../components/integrations/ClientTiles.tsx";
 import {
+  postgresIndexes,
+  postgresTables,
+} from "../../../../components/integrations/state-adapters/postgres.schema.ts";
+import {
   SchemaIndexes,
   SchemaTables,
 } from "../../../../components/integrations/state-adapters/SchemaTables.tsx";
@@ -313,13 +317,12 @@ const Page = () => (
     <h2>Write fence</h2>
     <p>
       Every insert, update or delete of a job, a blocker or a worker references an empty{" "}
-      <code>{"{prefix}"}schema_fence_v1</code> table, the write fence of the adapter's schema
-      version. A breaking migration drops the fence tables of older versions, so code older than the
-      schema fails each write with <code>SchemaFencedError</code> and changes nothing, instead of
-      corrupting state. Reads still work, and older workers report the error through{" "}
-      <code>workerError</code> and keep retrying. Stop them once you have deployed the newer
-      version. Processes on 0.17 reference no fence, so stop them before the first breaking
-      migration.
+      <code>{"{prefix}"}schema_fence_v2</code> table, the write fence of the adapter's schema
+      version. A breaking migration, such as <code>002_schema_v2</code>, drops the fence tables of
+      older versions, so code older than the schema fails each write with{" "}
+      <code>SchemaFencedError</code> and changes nothing, instead of corrupting state. Reads still
+      work, and older workers report the error through <code>workerError</code> and keep retrying.
+      Stop them once you have deployed the newer version.
     </p>
 
     <h2>Schema</h2>
@@ -330,21 +333,13 @@ const Page = () => (
       isolation.
     </p>
     <p>
-      A database migrated by 0.17 is carried onto the schema by adding the{" "}
-      <code>{"{prefix}"}schema_fence_v1</code> table and recording <code>001_schema_v1</code> next
-      to the 0.17 migration records, without touching job or worker rows, so 0.17 processes keep
-      running while <code>migrateToLatest()</code> runs, and a 0.17 process that restarts afterwards
-      finds no migration left to apply. A 0.16 database is refused: upgrade it with{" "}
-      <code>@queuert/postgres</code> 0.17 first.
-    </p>
-    <p>
       The migrator behind <code>migrateToLatest()</code> is exported for your own tables too; see{" "}
       <A href="/guides/application-migrations/">Application Migrations</A>.
     </p>
-    <SchemaTables dialect="postgres" />
+    <SchemaTables tables={postgresTables} />
 
     <h2>Indexes</h2>
-    <SchemaIndexes dialect="postgres" />
+    <SchemaIndexes indexes={postgresIndexes} />
 
     <h2>Vacuum tuning</h2>
     <p>The schema configures aggressive autovacuum and storage settings on the job tables:</p>

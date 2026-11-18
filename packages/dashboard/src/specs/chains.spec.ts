@@ -57,20 +57,20 @@ describe("chain server functions", () => {
       expect(body.nextCursor).not.toBeNull();
     });
 
-    it("filters by independent=true, independent=false, or neither", async () => {
+    it("filters by blocking=true, blocking=false, or neither", async () => {
       const { call, stateAdapter } = await createTestDashboard();
       const blockerChain = await createJob(stateAdapter, "test-type", null);
       const mainChain = await createJob(stateAdapter, "test-type", null);
       await addBlocker(stateAdapter, mainChain.id, blockerChain.chainId);
 
-      const ids = async (independent?: boolean) =>
-        (await parseBody(await call("listChains", { typeName: "test-type", independent }))).items
+      const ids = async (blocking?: boolean) =>
+        (await parseBody(await call("listChains", { typeName: "test-type", blocking }))).items
           .map((c: { id: string }) => c.id)
           .sort();
 
       expect(await ids()).toEqual([blockerChain.chainId, mainChain.chainId].sort());
-      expect(await ids(true)).toEqual([mainChain.chainId]);
-      expect(await ids(false)).toEqual([blockerChain.chainId]);
+      expect(await ids(true)).toEqual([blockerChain.chainId]);
+      expect(await ids(false)).toEqual([mainChain.chainId]);
     });
 
     it("filters by chain status", async () => {

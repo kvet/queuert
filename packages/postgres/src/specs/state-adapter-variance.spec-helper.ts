@@ -45,7 +45,7 @@ export const varianceConformance =
       });
       await stateAdapter.migrateToLatest();
     }
-    const fenceTable = tablePrefixed(options, "schema_fence_v1");
+    const fenceTable = tablePrefixed(options, "schema_fence_v2");
     return {
       createStateAdapter: async () => {
         await pool.query(

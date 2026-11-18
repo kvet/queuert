@@ -38,7 +38,7 @@ import {
   takeFromSortedList,
 } from "./sorted-list.ts";
 
-type ChainState = { readonly info: StateChainInfo; readonly blocking: boolean };
+type ChainState = { readonly info: StateChainInfo };
 
 type BlockerRow = {
   readonly blockedByChainId: string;
@@ -390,15 +390,15 @@ export const createInProcessState = (
   const chainListIndex = (
     status: StateChainStatus | undefined,
     orderBy: keyof typeof chainKeys,
-    independent: boolean | undefined,
+    blocking: boolean | undefined,
   ): ChainIndex => {
-    const name = `${status}:${orderBy}:${independent}`;
+    const name = `${status}:${orderBy}:${blocking}`;
     let index = chainListIndexes.get(name);
     if (index === undefined) {
       index = createSlotIndex<ChainSlot, ChainState>({
         bucketOf: (chain) =>
           (status === undefined || chain.info.status === status) &&
-          (independent === undefined || chain.blocking !== independent)
+          (blocking === undefined || chain.info.blocking === blocking)
             ? chain.info.typeName
             : undefined,
         keyOf: chainKeys[orderBy],
@@ -487,8 +487,8 @@ export const createInProcessState = (
 
   const setBlocking = (chain: ChainSlot, blocking: boolean): void => {
     const state = chain.state;
-    if (state !== undefined && state.blocking !== blocking) {
-      applyChain(chain, { info: state.info, blocking });
+    if (state !== undefined && state.info.blocking !== blocking) {
+      applyChain(chain, { info: { ...state.info, blocking } });
     }
   };
 
@@ -718,8 +718,9 @@ export const createInProcessState = (
               createdAt: now,
               completedAt: null,
               traceContext: chainTraceContext ?? null,
+              blocking: false,
             };
-            setChain(journal, chain, { info, blocking: false });
+            setChain(journal, chain, { info });
             const head = newJobState({
               id,
               typeName,
@@ -817,7 +818,6 @@ export const createInProcessState = (
           if (chainState.info.status !== "completed") {
             setChain(journal, chain, {
               info: { ...chainState.info, status: "completed", completedAt: now },
-              blocking: chainState.blocking,
             });
           }
           return { ...completed, chain: chain.state!.info };
@@ -897,7 +897,7 @@ export const createInProcessState = (
 
         const results = chainIds.map((chainId) => {
           const chain = chains.get(chainId);
-          return chain === undefined ? undefined : chainView(chain);
+          return chain === undefined ? undefined : { ...chainView(chain), blocking: false };
         });
 
         const deleted: ChainSlot[] = [];
@@ -989,7 +989,7 @@ export const createInProcessState = (
           );
         }
 
-        return jobBlockers.map(({ jobId, blockedByChainIds, blockerTraceContexts }) => {
+        const attached = jobBlockers.map(({ jobId, blockedByChainIds, blockerTraceContexts }) => {
           const slot = jobs.get(jobId)!;
           const rows = [...slot.blockers];
           const blockers = blockedByChainIds.map((blockedByChainId, index) => {
@@ -1006,7 +1006,7 @@ export const createInProcessState = (
             );
             if (existing === -1) rows.push(row);
             else rows[existing] = row;
-            return chain.state!.info;
+            return { ...chain.state!.info, blocking: true };
           });
           if (rows.length > 0) {
             setBlockers(
@@ -1020,8 +1020,9 @@ export const createInProcessState = (
           if (state.status === "pending" && blockers.some((info) => info?.status === "running")) {
             setJob(journal, slot, { ...state, status: "blocked" });
           }
-          return { ...jobView(slot), blockers };
+          return { slot, blockers };
         });
+        return attached.map(({ slot, blockers }) => ({ ...jobView(slot), blockers }));
       }),
 
     getJobBlockers: ({ txCtx, jobId }) =>
@@ -1174,21 +1175,11 @@ export const createInProcessState = (
         workerIds.map((workerId) => workerJobIndex.buckets.get(workerId)?.size ?? 0),
       ),
 
-    listChains: ({
-      txCtx,
-      typeName,
-      independent,
-      from,
-      to,
-      status,
-      orderBy,
-      orderDirection,
-      page,
-    }) =>
+    listChains: ({ txCtx, typeName, blocking, from, to, status, orderBy, orderDirection, page }) =>
       read(txCtx, () => {
         const keyOf = chainKeys[orderBy];
         const chainPage = paginateByTimestamp(
-          chainListIndex(status, orderBy, independent).buckets.get(typeName),
+          chainListIndex(status, orderBy, blocking).buckets.get(typeName),
           (chain) => keyOf(chain.state!),
           { sortKey: orderBy, from, to, orderDirection, page },
         );
@@ -1343,7 +1334,7 @@ export const createInProcessState = (
         jobs: [],
         dependents: undefined,
       };
-      applyChain(chain, { info: shiftStateChain(info, offsetMs), blocking: false });
+      applyChain(chain, { info: shiftStateChain(info, offsetMs) });
     }
     for (const job of dump.jobs) {
       applyJob(createJobSlot(chains.get(job.chainId)!, job.id), shiftStateJob(job, offsetMs));

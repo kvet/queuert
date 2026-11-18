@@ -4,13 +4,8 @@ import { join } from "node:path";
 import { sleep } from "@queuert/helpers/sleep";
 import { createDeploymentSpawner, startPaused, startTogether } from "@queuert/helpers/testing";
 import { acquirePostgres } from "@queuert/testcontainers";
-import {
-  type MigrationResult,
-  createMigrator,
-  createTemplateApplier,
-  createTypedSqlExecutor,
-} from "@queuert/typed-sql";
-import { Client, Pool } from "pg";
+import { type MigrationResult, createMigrator, createTemplateApplier } from "@queuert/typed-sql";
+import { Pool } from "pg";
 import { it as baseIt, describe, expect, vi } from "vitest";
 
 import {
@@ -24,12 +19,11 @@ import {
 } from "../state-provider/state-provider.pg-pool.ts";
 import type { PgStateProvider } from "../state-provider/state-provider.pg.ts";
 import { LEASE_TTL_MS, MARKER } from "./state-adapter-migration.process.ts";
-import { createV017Migrations } from "./v0.17-migrations.spec-helper.ts";
 
 const INSTALL = "001_schema_v1";
-const INSTALL_017 = "001_initial_schema";
-const WORKER_LIVENESS_017 = "002_worker_liveness";
-const ALL = createSchemaMigrations(async () => {}).map((migration) => migration.name);
+const ALL = createSchemaMigrations({} as Provider, createTemplateApplier({})).map(
+  (migration) => migration.name,
+);
 const spawnDeployment = createDeploymentSpawner<MigrationResult>(
   join(import.meta.dirname, "state-adapter-migration.process.ts"),
   join(import.meta.dirname, "..", ".."),
@@ -85,7 +79,8 @@ const relations = async (provider: Provider): Promise<Record<string, boolean>> =
             to_regclass('public.queuert_migration') AS migration,
             to_regclass('public.queuert_migration_lock') AS migration_lock,
             to_regclass('public.queuert_worker') AS worker,
-            to_regclass('public.queuert_schema_fence_v1') AS schema_fence_v1`,
+            to_regclass('public.queuert_schema_fence_v1') AS schema_fence_v1,
+            to_regclass('public.queuert_schema_fence_v2') AS schema_fence_v2`,
   );
   return Object.fromEntries(Object.entries(row).map(([name, value]) => [name, value !== null]));
 };
@@ -98,22 +93,18 @@ const indexNames = async (provider: Provider): Promise<string[]> =>
     )
   ).map((row) => row.indexname);
 
-const migrateTo017 = async (
-  provider: Provider,
-  { only }: { only?: string } = {},
-): Promise<MigrationResult> => {
-  const applyTemplate017 = createTemplateApplier({
+const migrateToInstall = async (provider: Provider): Promise<void> => {
+  const applyTemplateUuid = createTemplateApplier({
     schema: "public",
     table_prefix: "queuert_",
     job_id_type: "uuid",
     worker_id_type: "uuid",
   });
-  const exec = createTypedSqlExecutor(provider);
-  return createMigrator({
-    migrations: createV017Migrations(async (txCtx: PgPoolContext, statement) =>
-      exec({ txCtx, sql: applyTemplate017(statement) }),
-    ).filter((migration) => only === undefined || migration.name === only),
-    store: createMigrationStore(provider, applyTemplate017),
+  await createMigrator({
+    migrations: createSchemaMigrations(provider, applyTemplateUuid).filter(
+      (migration) => migration.name === INSTALL,
+    ),
+    store: createMigrationStore(provider, applyTemplateUuid),
   }).migrateToLatest();
 };
 
@@ -143,42 +134,6 @@ const indexDefinition = async (provider: Provider, indexName: string): Promise<s
   return row.indexdef;
 };
 
-const schemaShape = async (provider: Provider, schema: string): Promise<unknown> => {
-  const strip = (text: string): string => text.replaceAll(`${schema}.`, "");
-  const columns = await query(
-    provider,
-    `SELECT table_name, column_name, data_type, udt_name, is_nullable, column_default
-     FROM information_schema.columns
-     WHERE table_schema = '${schema}' AND table_name NOT LIKE 'queuert_migration%'
-     ORDER BY table_name, ordinal_position`,
-  );
-  const indexes = await query<{ indexname: string; indexdef: string }>(
-    provider,
-    `SELECT indexname, indexdef FROM pg_indexes
-     WHERE schemaname = '${schema}' AND tablename NOT LIKE 'queuert_migration%'
-     ORDER BY indexname`,
-  );
-  const constraints = await query<{ conname: string; definition: string }>(
-    provider,
-    `SELECT c.conname, pg_get_constraintdef(c.oid) AS definition
-     FROM pg_constraint c JOIN pg_namespace n ON n.oid = c.connamespace
-     WHERE n.nspname = '${schema}' AND c.conname NOT LIKE 'queuert_migration%'
-     ORDER BY c.conname`,
-  );
-  const tables = await query(
-    provider,
-    `SELECT c.relname, c.reloptions FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-     WHERE n.nspname = '${schema}' AND c.relkind = 'r' AND c.relname NOT LIKE 'queuert_migration%'
-     ORDER BY c.relname`,
-  );
-  return {
-    columns,
-    indexes: indexes.map((row) => ({ ...row, indexdef: strip(row.indexdef) })),
-    constraints,
-    tables,
-  };
-};
-
 describe("migrateToLatest", () => {
   it("names its migrations NNN_name, in ascending order", () => {
     for (const name of ALL) expect(name).toMatch(/^\d{3}_[a-z][a-z0-9_]*$/);
@@ -190,7 +145,7 @@ describe("migrateToLatest", () => {
     { timeout: 120_000 },
     async ({ database: { provider, adapter } }) => {
       expect(await adapter.migrateToLatest()).toEqual({
-        applied: [INSTALL],
+        applied: ALL,
         skipped: [],
         reverted: [],
         unrecognized: [],
@@ -201,7 +156,8 @@ describe("migrateToLatest", () => {
         migration: true,
         migration_lock: true,
         worker: true,
-        schema_fence_v1: true,
+        schema_fence_v1: false,
+        schema_fence_v2: true,
       });
       expect(await workerColumns(provider)).toEqual([
         "concurrency int4 NOT NULL",
@@ -219,6 +175,7 @@ describe("migrateToLatest", () => {
   it("creates every index", { timeout: 120_000 }, async ({ database: { provider, adapter } }) => {
     await adapter.migrateToLatest();
     expect(await indexNames(provider)).toEqual([
+      "queuert_chain_blocking_idx",
       "queuert_chain_completed_idx",
       "queuert_chain_deduplication_idx",
       "queuert_chain_idx",
@@ -235,7 +192,7 @@ describe("migrateToLatest", () => {
       "queuert_job_running_idx",
       "queuert_migration_lock_pkey",
       "queuert_migration_pkey",
-      "queuert_schema_fence_v1_pkey",
+      "queuert_schema_fence_v2_pkey",
       "queuert_worker_idx",
       "queuert_worker_pkey",
     ]);
@@ -255,137 +212,265 @@ describe("migrateToLatest", () => {
   });
 });
 
-describe("upgrading from 0.17", () => {
+describe("upgrading from 001_schema_v1", () => {
   it(
-    "carries a 0.17 schema onto the squashed migration, matching a fresh install",
+    "flags the chains that blocker rows reference",
     { timeout: 120_000 },
     async ({ database: { provider, adapter } }) => {
-      await migrateTo017(provider);
-      await query(provider, "CREATE SCHEMA fresh");
-      await createPgStateAdapter({ stateProvider: provider, schema: "fresh" }).migrateToLatest();
+      await migrateToInstall(provider);
+      const blockerChainId = randomUUID();
+      const continuedBlockerChainId = randomUUID();
+      const continuedBlockerTailId = randomUUID();
+      const unreferencedChainId = randomUUID();
+      const dependentId = randomUUID();
+      await query(
+        provider,
+        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status, continued_to_id)
+         VALUES ('${blockerChainId}', 'blocker', '${blockerChainId}', 0, 'pending', 'running', NULL),
+                ('${continuedBlockerChainId}', 'blocker', '${continuedBlockerChainId}', 0, 'completed', 'running', '${continuedBlockerTailId}'),
+                ('${continuedBlockerTailId}', 'blocker', '${continuedBlockerChainId}', 1, 'pending', NULL, NULL),
+                ('${unreferencedChainId}', 'unreferenced', '${unreferencedChainId}', 0, 'pending', 'running', NULL),
+                ('${dependentId}', 'dependent', '${dependentId}', 0, 'blocked', 'running', NULL)`,
+      );
+      await query(
+        provider,
+        `INSERT INTO queuert_job_blocker (job_id, blocked_by_chain_id, "index")
+         VALUES ('${dependentId}', '${blockerChainId}', 0),
+                ('${dependentId}', '${continuedBlockerChainId}', 1)`,
+      );
 
       expect(await adapter.migrateToLatest()).toEqual({
-        applied: [],
+        applied: ["002_schema_v2"],
         skipped: [INSTALL],
         reverted: [],
         unrecognized: [],
       });
-      expect(await appliedNames(provider)).toEqual([INSTALL_017, INSTALL, WORKER_LIVENESS_017]);
-      expect(await relations(provider)).toMatchObject({ schema_fence_v1: true });
-      expect(await schemaShape(provider, "public")).toEqual(await schemaShape(provider, "fresh"));
+
+      const completed = await adapter.withTransaction(async (txCtx) =>
+        adapter.completeJobs({
+          txCtx,
+          jobs: [
+            { jobId: blockerChainId, output: null },
+            { jobId: continuedBlockerTailId, output: null },
+            { jobId: unreferencedChainId, output: null },
+          ],
+        }),
+      );
+      expect(completed.map((job) => job!.chain.blocking)).toEqual([true, true, false]);
+    },
+  );
+
+  it(
+    "replaces the write fence of 001_schema_v1 with its own",
+    { timeout: 120_000 },
+    async ({ database: { provider, adapter } }) => {
+      await migrateToInstall(provider);
+      expect(await relations(provider)).toMatchObject({
+        schema_fence_v1: true,
+        schema_fence_v2: false,
+      });
+
+      await adapter.migrateToLatest();
+
+      expect(await relations(provider)).toMatchObject({
+        schema_fence_v1: false,
+        schema_fence_v2: true,
+      });
+    },
+  );
+
+  it(
+    "keeps the privileges granted on the job table",
+    { timeout: 120_000 },
+    async ({ database: { provider, adapter } }) => {
+      await migrateToInstall(provider);
+      const role = `queuert_reader_${randomUUID().replaceAll("-", "")}`;
+      await query(provider, `CREATE ROLE ${role}`);
+      await query(provider, `GRANT SELECT, UPDATE ON queuert_job TO ${role}`);
+
+      await adapter.migrateToLatest();
+
+      expect(
+        await query(
+          provider,
+          `SELECT has_table_privilege('${role}', 'public.queuert_job', 'SELECT') AS can_select,
+                  has_table_privilege('${role}', 'public.queuert_job', 'UPDATE') AS can_update,
+                  has_table_privilege('${role}', 'public.queuert_job', 'DELETE') AS can_delete`,
+        ),
+      ).toEqual([{ can_select: true, can_update: true, can_delete: false }]);
+    },
+  );
+
+  it(
+    "keeps the writes a 0.18 process makes while it copies, and resumes after a failed copy",
+    { timeout: 120_000 },
+    async ({ database: { provider, adapter } }) => {
+      await migrateToInstall(provider);
+      const flaggedBlockerId = "00000000-0000-4000-8000-000000000001";
+      const deletedDependentId = "00000000-0000-4000-8000-000000000002";
+      const lateBlockerId = "00000000-0000-4000-8000-000000000003";
+      const updatedJobId = "00000000-0000-4000-8000-000000000004";
+      const deletedJobId = "00000000-0000-4000-8000-000000000005";
+      const lateDependentId = "ffffffff-ffff-4fff-bfff-ffffffffffff";
+      const referencedDependentId = "00000000-0000-4000-8000-000000000006";
+      const referencedHeadId = "ffffffff-ffff-4fff-bfff-fffffffffff0";
+      await query(
+        provider,
+        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status)
+         SELECT id, 'filler', id, 0, 'pending', 'running'
+         FROM (SELECT gen_random_uuid() AS id FROM generate_series(1, 3000)) ids`,
+      );
+      await query(
+        provider,
+        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status)
+         VALUES ('${flaggedBlockerId}', 'blocker', '${flaggedBlockerId}', 0, 'pending', 'running'),
+                ('${deletedDependentId}', 'dependent', '${deletedDependentId}', 0, 'blocked', 'running'),
+                ('${lateBlockerId}', 'blocker', '${lateBlockerId}', 0, 'pending', 'running'),
+                ('${updatedJobId}', 'updated', '${updatedJobId}', 0, 'pending', 'running'),
+                ('${deletedJobId}', 'deleted', '${deletedJobId}', 0, 'pending', 'running'),
+                ('${referencedDependentId}', 'dependent', '${referencedDependentId}', 0, 'blocked', 'running'),
+                ('${referencedHeadId}', 'blocker', '${referencedHeadId}', 0, 'pending', 'running')`,
+      );
+      await query(
+        provider,
+        `INSERT INTO queuert_job_blocker (job_id, blocked_by_chain_id, "index")
+         VALUES ('${deletedDependentId}', '${flaggedBlockerId}', 0),
+                ('${referencedDependentId}', '${referencedHeadId}', 0)`,
+      );
+      let releaseCopy!: () => void;
+      const copyReleased = new Promise<void>((resolve) => {
+        releaseCopy = resolve;
+      });
+      let reachCopy!: () => void;
+      const copyReached = new Promise<void>((resolve) => {
+        reachCopy = resolve;
+      });
+      let batches = 0;
+      const interruptedAdapter = createPgStateAdapter({
+        stateProvider: {
+          ...provider,
+          executeSql: async (options) => {
+            if (options.sql.includes("WITH source AS")) {
+              batches++;
+              if (batches === 2) {
+                reachCopy();
+                await copyReleased;
+              }
+              if (batches === 3) throw new Error("copy interrupted");
+            }
+            return provider.executeSql(options);
+          },
+        },
+        generateJobId: (): string => randomUUID(),
+        generateWorkerId: (): string => randomUUID(),
+      });
+
+      const interrupted = interruptedAdapter.migrateToLatest().then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      await copyReached;
+      await query(
+        provider,
+        `DELETE FROM queuert_job_blocker WHERE job_id = '${deletedDependentId}'`,
+      );
+      await query(provider, `DELETE FROM queuert_job WHERE id = '${deletedDependentId}'`);
+      await query(
+        provider,
+        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status)
+         VALUES ('${lateDependentId}', 'dependent', '${lateDependentId}', 0, 'blocked', 'running')`,
+      );
+      await query(
+        provider,
+        `INSERT INTO queuert_job_blocker (job_id, blocked_by_chain_id, "index")
+         VALUES ('${lateDependentId}', '${lateBlockerId}', 0)`,
+      );
+      await query(
+        provider,
+        `UPDATE queuert_job SET status = 'running' WHERE id = '${updatedJobId}'`,
+      );
+      await query(provider, `DELETE FROM queuert_job WHERE id = '${deletedJobId}'`);
+      await query(
+        provider,
+        `UPDATE queuert_job SET status = 'running' WHERE id = '${referencedHeadId}'`,
+      );
+      releaseCopy();
+      expect(await interrupted).toMatchObject({
+        message: expect.stringContaining("copy interrupted"),
+      });
+      expect(await relations(provider)).toMatchObject({
+        schema_fence_v1: true,
+        schema_fence_v2: false,
+      });
+
       expect(await adapter.migrateToLatest()).toEqual({
-        applied: [],
+        applied: ["002_schema_v2"],
         skipped: [INSTALL],
         reverted: [],
         unrecognized: [],
       });
-    },
-  );
 
-  it(
-    "keeps the jobs and workers of a 0.17 schema as they are",
-    { timeout: 120_000 },
-    async ({ database: { provider, adapter } }) => {
-      await migrateTo017(provider);
-      const workerId = randomUUID();
-      const token = randomUUID();
-      const jobId = randomUUID();
-      await query(
-        provider,
-        `INSERT INTO queuert_worker (id, lease_until, token, concurrency, type_names)
-         VALUES ('${workerId}', now() + interval '60 seconds', '${token}', 1, ARRAY['legacy'])`,
-      );
-      await query(
-        provider,
-        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status, attempt, attempt_at, attempt_by, attempt_token)
-         VALUES ('${jobId}', 'legacy', '${jobId}', 0, 'running', 'running', 1, now(), '${workerId}', '${token}')`,
-      );
-
-      await adapter.migrateToLatest();
-
-      const [job] = await adapter.getJobs({ jobIds: [jobId] });
-      expect(job!.status).toBe("running");
-      expect(job!.attemptBy).toBe(workerId);
-      expect(job!.attemptToken).toBe(token);
-      const [worker] = await adapter.getWorkers({ workerIds: [workerId] });
-      expect(worker!.id).toBe(workerId);
-    },
-  );
-
-  it(
-    "lets a 0.17 process migrate after the upgrade, finding nothing to apply",
-    { timeout: 120_000 },
-    async ({ database: { provider, adapter } }) => {
-      await migrateTo017(provider);
-      await adapter.migrateToLatest();
-
-      expect(await migrateTo017(provider)).toEqual({
-        applied: [],
-        skipped: [INSTALL_017, WORKER_LIVENESS_017],
-        reverted: [],
-        unrecognized: [INSTALL],
-      });
-      expect(await appliedNames(provider)).toEqual([INSTALL_017, INSTALL, WORKER_LIVENESS_017]);
-    },
-  );
-
-  it(
-    "upgrades while a 0.17 transaction holds the job and worker tables",
-    { timeout: 120_000 },
-    async ({ database: { connectionString, provider, adapter } }) => {
-      await migrateTo017(provider);
-      const worker017 = new Client({ connectionString });
-      await worker017.connect();
-      try {
-        await worker017.query("BEGIN");
-        await worker017.query(
-          "LOCK TABLE queuert_job, queuert_job_blocker, queuert_worker IN ROW EXCLUSIVE MODE",
-        );
-
-        expect(await adapter.migrateToLatest()).toEqual({
-          applied: [],
-          skipped: [INSTALL],
-          reverted: [],
-          unrecognized: [],
-        });
-
-        await worker017.query("COMMIT");
-      } finally {
-        await worker017.end();
-      }
-    },
-  );
-
-  it(
-    "refuses a 0.16 schema, changing nothing",
-    { timeout: 120_000 },
-    async ({ database: { provider, adapter } }) => {
-      await migrateTo017(provider, { only: INSTALL_017 });
-
-      await expect(adapter.migrateToLatest()).rejects.toThrow(
-        "Cannot upgrade a 0.16 schema directly. Upgrade it with @queuert/postgres 0.17 first, then migrate to this version.",
-      );
-      expect(await appliedNames(provider)).toEqual([INSTALL_017]);
-      expect(await relations(provider)).toMatchObject({ worker: false, schema_fence_v1: false });
-    },
-  );
-
-  it(
-    "refuses a 0.17 schema that records a migration 0.17 did not ship, changing nothing",
-    { timeout: 120_000 },
-    async ({ database: { provider, adapter } }) => {
-      await migrateTo017(provider);
-      await query(provider, "INSERT INTO queuert_migration (name) VALUES ('003_unknown')");
-
-      await expect(adapter.migrateToLatest()).rejects.toThrow(
-        "Cannot upgrade the 0.17 schema: the migration table records 001_initial_schema, 002_worker_liveness, 003_unknown, but a 0.17 schema records exactly 001_initial_schema and 002_worker_liveness.",
-      );
-      expect(await appliedNames(provider)).toEqual([
-        INSTALL_017,
-        WORKER_LIVENESS_017,
-        "003_unknown",
+      expect(
+        await query(
+          provider,
+          `SELECT id::text, status, blocking FROM queuert_job
+           WHERE type_name <> 'filler' ORDER BY id`,
+        ),
+      ).toEqual([
+        { id: flaggedBlockerId, status: "pending", blocking: false },
+        { id: lateBlockerId, status: "pending", blocking: true },
+        { id: updatedJobId, status: "running", blocking: false },
+        { id: referencedDependentId, status: "blocked", blocking: false },
+        { id: referencedHeadId, status: "running", blocking: true },
+        { id: lateDependentId, status: "blocked", blocking: false },
       ]);
-      expect(await relations(provider)).toMatchObject({ schema_fence_v1: false });
+      expect(
+        await query(
+          provider,
+          `SELECT count(*)::int AS count FROM queuert_job WHERE type_name = 'filler'`,
+        ),
+      ).toEqual([{ count: 3000 }]);
+      expect(await relations(provider)).toMatchObject({
+        schema_fence_v1: false,
+        schema_fence_v2: true,
+      });
+    },
+  );
+
+  it(
+    "finishes a run that stopped after the cutover, leaving nothing of the copy behind",
+    { timeout: 120_000 },
+    async ({ database: { provider, adapter } }) => {
+      await migrateToInstall(provider);
+      await adapter.migrateToLatest();
+      await query(provider, `DELETE FROM queuert_migration WHERE name = '002_schema_v2'`);
+
+      expect(await adapter.migrateToLatest()).toEqual({
+        applied: ["002_schema_v2"],
+        skipped: [INSTALL],
+        reverted: [],
+        unrecognized: [],
+      });
+
+      expect(
+        await query(
+          provider,
+          `SELECT to_regclass('public.queuert_job_v2') AS job_v2,
+                  to_regclass('public.queuert_job_v2_dirty') AS job_v2_dirty`,
+        ),
+      ).toEqual([{ job_v2: null, job_v2_dirty: null }]);
+      expect(
+        await query(
+          provider,
+          `SELECT tgname AS name FROM pg_trigger WHERE tgname LIKE 'queuert_job_v2%'
+           UNION ALL
+           SELECT proname FROM pg_proc WHERE proname LIKE 'queuert_job_v2%'`,
+        ),
+      ).toEqual([]);
+      expect(await relations(provider)).toMatchObject({
+        schema_fence_v1: false,
+        schema_fence_v2: true,
+      });
     },
   );
 });

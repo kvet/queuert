@@ -60,7 +60,7 @@ export const listChains: ServerFn<
   {
     typeName: string;
     status?: "running" | "completed";
-    independent?: boolean;
+    blocking?: boolean;
     orderBy?: string;
     orderDirection?: "asc" | "desc";
   } & PageArguments,
@@ -70,7 +70,7 @@ export const listChains: ServerFn<
     v.strictObject({
       typeName: id,
       status: v.optional(v.picklist(["running", "completed"])),
-      independent: v.optional(v.boolean()),
+      blocking: v.optional(v.boolean()),
       orderBy: v.optional(v.string()),
       orderDirection: v.optional(orderDirection, "desc"),
       ...pageArguments,
@@ -87,7 +87,7 @@ export const listChains: ServerFn<
 
     const result = await client.listChains({
       typeName: data.typeName,
-      independent: data.independent,
+      blocking: data.blocking,
       orderDirection: data.orderDirection,
       cursor: checkCursor(data.cursor, { type: "timestampWithId", sortKey: listing.orderBy }),
       limit: data.limit,

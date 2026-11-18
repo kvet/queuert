@@ -11,6 +11,8 @@ import {
   operationalCoverageGroups,
 } from "queuert/conformance-internal";
 
+import { type QueryPlan, writeQueryPlans, writeQueryResults } from "./results.ts";
+
 const ITERATIONS = 10;
 const EXPLANATIONS_DIR = new URL("../explanations/sqlite", import.meta.url).pathname;
 const RESULTS_DIR = new URL("../results", import.meta.url).pathname;
@@ -25,12 +27,13 @@ const scale = parseScale();
 
 const stats = (times: number[]) => ({
   p50: times[Math.floor(times.length * 0.5)],
-  p95: times[Math.floor(times.length * 0.95)],
   max: times[times.length - 1],
 });
 
 const fmt = (ms: number) => `${ms.toFixed(2)}ms`;
 
+const timings = new Map<string, { p50: number; max: number }>();
+const plans = new Map<string, QueryPlan[]>();
 const resultLines: string[] = [];
 const report = (line = "") => {
   console.log(line);
@@ -57,7 +60,9 @@ const stateProvider: typeof baseProvider = {
         if (plan.length > 0) {
           captured.push({ id: args.id, sql: args.sql, plan });
         }
-      } catch {}
+      } catch (error) {
+        captured.push({ id: args.id, sql: args.sql, plan: [`EXPLAIN failed: ${String(error)}`] });
+      }
     }
     return baseProvider.executeSql(args);
   },
@@ -148,6 +153,10 @@ for (const group of [...operationalCoverageGroups, ...observabilityCoverageGroup
     await captureAct(stateAdapter, sentinels);
     capturing = false;
     const planCapture = [...captured];
+    plans.set(
+      testCase.key,
+      planCapture.map(({ id, plan }) => ({ id, plan: plan.join("\n") })),
+    );
 
     const times: number[] = [];
     for (let i = 0; i < ITERATIONS; i++) {
@@ -158,8 +167,9 @@ for (const group of [...operationalCoverageGroups, ...observabilityCoverageGroup
     }
     times.sort((a, b) => a - b);
     const s = stats(times);
+    timings.set(testCase.key, s);
     report(
-      `    ${testCase.key.padEnd(50)} p50=${fmt(s.p50).padStart(10)}  p95=${fmt(s.p95).padStart(10)}  max=${fmt(s.max).padStart(10)}`,
+      `    ${testCase.key.padEnd(50)} p50=${fmt(s.p50).padStart(10)}  max=${fmt(s.max).padStart(10)}`,
     );
 
     const filePath = `${EXPLANATIONS_DIR}/${testCase.key.replaceAll("/", "__")}.txt`;
@@ -170,7 +180,7 @@ for (const group of [...operationalCoverageGroups, ...observabilityCoverageGroup
     });
     const content = [
       `-- ${testCase.key}`,
-      `-- scale=${scale}  p50=${fmt(s.p50)}  p95=${fmt(s.p95)}  max=${fmt(s.max)}`,
+      `-- scale=${scale}  p50=${fmt(s.p50)}  max=${fmt(s.max)}`,
       "",
       ...sections,
     ].join("\n\n");
@@ -182,6 +192,8 @@ for (const group of [...operationalCoverageGroups, ...observabilityCoverageGroup
 mkdirSync(RESULTS_DIR, { recursive: true });
 writeFileSync(RESULTS_FILE, [`-- scale=${scale}`, "", ...resultLines].join("\n") + "\n");
 console.log(`  Results written to ${RESULTS_FILE}`);
+writeQueryResults("SQLite", scale, timings);
+writeQueryPlans("SQLite", scale, plans);
 console.log(`  Explanations written to ${EXPLANATIONS_DIR}\n`);
 
 db.close();

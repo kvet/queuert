@@ -45,7 +45,6 @@ import {
 
 import { createPgMigrationStore } from "../migration-store/migration-store.pg.ts";
 import type { PgStateProvider } from "../state-provider/state-provider.pg.ts";
-import { LEGACY_MIGRATION_NAMES, createLegacyUpgrade } from "./legacy-upgrade.pg.ts";
 
 type DbJob = {
   id: string;
@@ -77,6 +76,8 @@ type DbJob = {
 
   chain_trace_context: string | null;
   trace_context: string | null;
+
+  blocking: boolean;
 };
 
 type DbWorker = {
@@ -96,6 +97,7 @@ type DbChainColumns = {
   c_completed_at: string | null;
   c_deduplication_key: string | null;
   c_trace_context: string | null;
+  c_blocking: boolean | null;
 };
 
 type DbChainRow = { head_job: DbJob; tail_job: DbJob | null };
@@ -107,20 +109,25 @@ type DbBlocker = {
   trace_context: string | null;
 };
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const SCHEMA_MIGRATION = "001_schema_v1";
 
 const FENCE_GUARD = "NOT EXISTS (SELECT 1 FROM {{fence_table}} WHERE 1 = 0)";
 
-export const createSchemaMigrations = <TTxContext>(
-  execute: (txCtx: TTxContext, statement: TypedSqlTemplate<readonly []>) => Promise<unknown>,
-): Migration<TTxContext>[] => [
-  {
-    name: SCHEMA_MIGRATION,
-    up: async (txCtx) => {
-      for (const statement of [
-        sql(/* sql */ `
+export const createSchemaMigrations = <TTxContext extends BaseTxContext>(
+  stateProvider: PgStateProvider<TTxContext>,
+  applyTemplate: TemplateApplier,
+): Migration<TTxContext>[] => {
+  const exec = createTypedSqlExecutor(stateProvider);
+  const execute = async (txCtx: TTxContext | undefined, statement: TypedSqlTemplate<readonly []>) =>
+    exec({ txCtx, sql: applyTemplate(statement) });
+  return [
+    {
+      name: SCHEMA_MIGRATION,
+      up: async (txCtx) => {
+        for (const statement of [
+          sql(/* sql */ `
 CREATE TABLE {{schema}}.{{table_prefix}}job (
   created_at                    timestamptz NOT NULL DEFAULT now(),
   scheduled_at                  timestamptz NOT NULL DEFAULT now(),
@@ -159,50 +166,50 @@ CREATE TABLE {{schema}}.{{table_prefix}}job (
   autovacuum_analyze_threshold = 5000,
   autovacuum_analyze_scale_factor = 0
 )`),
-        sql(/* sql */ `
+          sql(/* sql */ `
 CREATE UNIQUE INDEX {{table_prefix}}chain_index_idx
 ON {{schema}}.{{table_prefix}}job (chain_id, chain_index)
 WHERE chain_index > 0`),
-        sql(/* sql */ `
+          sql(/* sql */ `
 CREATE INDEX {{table_prefix}}chain_deduplication_idx
 ON {{schema}}.{{table_prefix}}job (chain_deduplication_key, created_at DESC)
 WHERE chain_deduplication_key IS NOT NULL AND chain_index = 0`),
-        sql(/* sql */ `
+          sql(/* sql */ `
 CREATE INDEX {{table_prefix}}job_idx
 ON {{schema}}.{{table_prefix}}job (type_name, created_at)`),
-        sql(/* sql */ `
+          sql(/* sql */ `
 CREATE INDEX {{table_prefix}}job_pending_idx
 ON {{schema}}.{{table_prefix}}job (type_name, scheduled_at)
 WHERE status = 'pending'`),
-        sql(/* sql */ `
+          sql(/* sql */ `
 CREATE INDEX {{table_prefix}}job_blocked_idx
 ON {{schema}}.{{table_prefix}}job (type_name, scheduled_at)
 WHERE status = 'blocked'`),
-        sql(/* sql */ `
+          sql(/* sql */ `
 CREATE INDEX {{table_prefix}}job_running_idx
 ON {{schema}}.{{table_prefix}}job (type_name, attempt_at)
 WHERE status = 'running'`),
-        sql(/* sql */ `
+          sql(/* sql */ `
 CREATE INDEX {{table_prefix}}job_completed_idx
 ON {{schema}}.{{table_prefix}}job (type_name, completed_at)
 WHERE status = 'completed'`),
-        sql(/* sql */ `
+          sql(/* sql */ `
 CREATE INDEX {{table_prefix}}job_attempt_by_idx
 ON {{schema}}.{{table_prefix}}job (attempt_by, attempt_at)
 WHERE status = 'running'`),
-        sql(/* sql */ `
+          sql(/* sql */ `
 CREATE INDEX {{table_prefix}}chain_idx
 ON {{schema}}.{{table_prefix}}job (type_name, created_at)
 WHERE chain_index = 0`),
-        sql(/* sql */ `
+          sql(/* sql */ `
 CREATE INDEX {{table_prefix}}chain_running_idx
 ON {{schema}}.{{table_prefix}}job (type_name, created_at)
 WHERE chain_index = 0 AND chain_status = 'running'`),
-        sql(/* sql */ `
+          sql(/* sql */ `
 CREATE INDEX {{table_prefix}}chain_completed_idx
 ON {{schema}}.{{table_prefix}}job (type_name, chain_completed_at)
 WHERE chain_index = 0 AND chain_status = 'completed'`),
-        sql(/* sql */ `
+          sql(/* sql */ `
 CREATE TABLE {{schema}}.{{table_prefix}}job_blocker (
   job_id                        {{job_id_type}} NOT NULL,
   blocked_by_chain_id           {{job_id_type}} NOT NULL,
@@ -216,10 +223,10 @@ CREATE TABLE {{schema}}.{{table_prefix}}job_blocker (
   autovacuum_analyze_threshold = 5000,
   autovacuum_analyze_scale_factor = 0
 )`),
-        sql(/* sql */ `
+          sql(/* sql */ `
 CREATE INDEX {{table_prefix}}job_blocker_chain_idx
 ON {{schema}}.{{table_prefix}}job_blocker (blocked_by_chain_id)`),
-        sql(/* sql */ `
+          sql(/* sql */ `
 CREATE TABLE {{schema}}.{{table_prefix}}worker (
   started_at                    timestamptz NOT NULL DEFAULT now(),
   lease_until                   timestamptz NOT NULL,
@@ -228,20 +235,294 @@ CREATE TABLE {{schema}}.{{table_prefix}}worker (
   id                            {{worker_id_type}} PRIMARY KEY,
   type_names                    text[] NOT NULL
 ) WITH (fillfactor = 50)`),
-        sql(/* sql */ `
+          sql(/* sql */ `
 CREATE INDEX {{table_prefix}}worker_idx
 ON {{schema}}.{{table_prefix}}worker (started_at)`),
-        sql(/* sql */ `
+          sql(/* sql */ `
 CREATE TABLE {{schema}}.{{table_prefix}}schema_fence_v1 (id integer PRIMARY KEY)`),
-      ]) {
-        await execute(txCtx, statement);
-      }
+        ]) {
+          await execute(txCtx, statement);
+        }
+      },
+      down: async () => {
+        throw new Error("The Queuert schema cannot be reverted.");
+      },
     },
-    down: async () => {
-      throw new Error("The Queuert schema cannot be reverted.");
+    {
+      name: "002_schema_v2",
+      type: "non-transactional",
+      up: async ({ assertLockHeld }) => {
+        const v1Columns =
+          "created_at, scheduled_at, completed_at, last_attempt_at, attempt_at, chain_completed_at, chain_index, attempt, id, chain_id, continued_to_id, status, chain_status, type_name, chain_deduplication_key, chain_trace_context, trace_context, last_attempt_error, input, output, attempt_by, completed_by, attempt_token";
+        const v1Indexes = [
+          ["chain_index_idx", "UNIQUE INDEX", "(chain_id, chain_index) WHERE chain_index > 0"],
+          [
+            "chain_deduplication_idx",
+            "INDEX",
+            "(chain_deduplication_key, created_at DESC) WHERE chain_deduplication_key IS NOT NULL AND chain_index = 0",
+          ],
+          ["job_idx", "INDEX", "(type_name, created_at)"],
+          ["job_pending_idx", "INDEX", "(type_name, scheduled_at) WHERE status = 'pending'"],
+          ["job_blocked_idx", "INDEX", "(type_name, scheduled_at) WHERE status = 'blocked'"],
+          ["job_running_idx", "INDEX", "(type_name, attempt_at) WHERE status = 'running'"],
+          ["job_completed_idx", "INDEX", "(type_name, completed_at) WHERE status = 'completed'"],
+          ["job_attempt_by_idx", "INDEX", "(attempt_by, attempt_at) WHERE status = 'running'"],
+          ["chain_idx", "INDEX", "(type_name, created_at) WHERE chain_index = 0"],
+          [
+            "chain_running_idx",
+            "INDEX",
+            "(type_name, created_at) WHERE chain_index = 0 AND chain_status = 'running'",
+          ],
+          [
+            "chain_completed_idx",
+            "INDEX",
+            "(type_name, chain_completed_at) WHERE chain_index = 0 AND chain_status = 'completed'",
+          ],
+        ];
+
+        const [{ done }] = await exec({
+          sql: applyTemplate(
+            sql(
+              /* sql */ `
+SELECT EXISTS (
+  SELECT 1 FROM pg_catalog.pg_attribute
+  WHERE attrelid = to_regclass('{{schema}}.{{table_prefix}}job')
+    AND attname = 'blocking'
+    AND NOT attisdropped
+) AS done`,
+              { columns: { done: t.boolean() } },
+            ),
+          ),
+        });
+
+        if (!done) {
+          await stateProvider.withTransaction(async (txCtx) => {
+            for (const statement of [
+              sql(/* sql */ `SET LOCAL lock_timeout = '5000ms'`),
+              sql(/* sql */ `
+CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job_v2 (
+  created_at                    timestamptz NOT NULL DEFAULT now(),
+  scheduled_at                  timestamptz NOT NULL DEFAULT now(),
+  completed_at                  timestamptz,
+  last_attempt_at               timestamptz,
+  attempt_at                    timestamptz,
+  chain_completed_at            timestamptz,
+
+  chain_index                   integer NOT NULL,
+  attempt                       integer NOT NULL DEFAULT 0,
+
+  id                            {{job_id_type}} PRIMARY KEY,
+  chain_id                      {{job_id_type}} NOT NULL,
+  continued_to_id               {{job_id_type}},
+
+  status                        text NOT NULL DEFAULT 'pending'
+                                CHECK (status IN ('blocked', 'pending', 'running', 'completed')),
+  chain_status                  text
+                                CHECK (chain_status IN ('running', 'completed')),
+  type_name                     text NOT NULL,
+  chain_deduplication_key       text,
+  chain_trace_context           text,
+  trace_context                 text,
+  last_attempt_error            jsonb,
+  input                         jsonb,
+  output                        jsonb,
+
+  attempt_by                    {{worker_id_type}},
+  completed_by                  {{worker_id_type}},
+  attempt_token                 uuid,
+
+  blocking                      boolean NOT NULL DEFAULT false
+) WITH (
+  fillfactor = 75,
+  autovacuum_vacuum_cost_delay = 0,
+  autovacuum_vacuum_threshold = 5000,
+  autovacuum_vacuum_scale_factor = 0,
+  autovacuum_analyze_threshold = 5000,
+  autovacuum_analyze_scale_factor = 0
+)`),
+              sql(/* sql */ `
+DO $$
+DECLARE
+  privilege record;
+BEGIN
+  FOR privilege IN
+    SELECT a.privilege_type, a.is_grantable,
+      CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE quote_ident(r.rolname) END AS grantee
+    FROM pg_catalog.pg_class c
+    CROSS JOIN LATERAL aclexplode(c.relacl) a
+    LEFT JOIN pg_catalog.pg_roles r ON r.oid = a.grantee
+    WHERE c.oid = to_regclass('{{schema}}.{{table_prefix}}job') AND a.grantee <> c.relowner
+  LOOP
+    EXECUTE format(
+      'GRANT %s ON {{schema}}.{{table_prefix}}job_v2 TO %s%s',
+      privilege.privilege_type,
+      privilege.grantee,
+      CASE WHEN privilege.is_grantable THEN ' WITH GRANT OPTION' ELSE '' END
+    );
+  END LOOP;
+END
+$$`),
+              ...v1Indexes.map(([name, kind, definition]) =>
+                sql(/* sql */ `
+CREATE ${kind} IF NOT EXISTS {{table_prefix}}${name}_v2
+ON {{schema}}.{{table_prefix}}job_v2 ${definition}`),
+              ),
+              sql(/* sql */ `
+CREATE INDEX IF NOT EXISTS {{table_prefix}}chain_blocking_idx
+ON {{schema}}.{{table_prefix}}job_v2 (type_name, created_at)
+WHERE chain_index = 0 AND blocking`),
+              sql(/* sql */ `
+CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job_v2_dirty (
+  chain_id                      {{job_id_type}} PRIMARY KEY
+)`),
+              sql(/* sql */ `
+CREATE OR REPLACE FUNCTION {{schema}}.{{table_prefix}}job_v2_mirror() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    DELETE FROM {{schema}}.{{table_prefix}}job_v2 WHERE id = OLD.id;
+  ELSE
+    INSERT INTO {{schema}}.{{table_prefix}}job_v2 (${v1Columns})
+    VALUES (${v1Columns
+      .split(", ")
+      .map((column) => `NEW.${column}`)
+      .join(", ")})
+    ON CONFLICT (id) DO UPDATE SET ${v1Columns
+      .split(", ")
+      .filter((column) => column !== "id")
+      .map((column) => `${column} = EXCLUDED.${column}`)
+      .join(", ")};
+    IF NEW.chain_index = 0 THEN
+      INSERT INTO {{schema}}.{{table_prefix}}job_v2_dirty (chain_id) VALUES (NEW.id)
+      ON CONFLICT DO NOTHING;
+    END IF;
+  END IF;
+  RETURN NULL;
+END
+$$`),
+              sql(/* sql */ `
+CREATE OR REPLACE TRIGGER {{table_prefix}}job_v2_mirror
+AFTER INSERT OR UPDATE OR DELETE ON {{schema}}.{{table_prefix}}job
+FOR EACH ROW EXECUTE FUNCTION {{schema}}.{{table_prefix}}job_v2_mirror()`),
+              sql(/* sql */ `
+CREATE OR REPLACE FUNCTION {{schema}}.{{table_prefix}}job_v2_mark_dirty() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO {{schema}}.{{table_prefix}}job_v2_dirty (chain_id)
+  VALUES (CASE WHEN TG_OP = 'DELETE' THEN OLD.blocked_by_chain_id ELSE NEW.blocked_by_chain_id END)
+  ON CONFLICT DO NOTHING;
+  RETURN NULL;
+END
+$$`),
+              sql(/* sql */ `
+CREATE OR REPLACE TRIGGER {{table_prefix}}job_v2_mark_dirty
+AFTER INSERT OR DELETE ON {{schema}}.{{table_prefix}}job_blocker
+FOR EACH ROW EXECUTE FUNCTION {{schema}}.{{table_prefix}}job_v2_mark_dirty()`),
+            ]) {
+              await execute(txCtx, statement);
+            }
+          });
+
+          const copyBatch = applyTemplate(
+            sql(
+              /* sql */ `
+WITH source AS (
+  SELECT ${v1Columns} FROM {{schema}}.{{table_prefix}}job
+  WHERE $1::{{job_id_type}} IS NULL OR id > $1::{{job_id_type}}
+  ORDER BY id
+  LIMIT 1000
+  FOR KEY SHARE
+),
+copied AS (
+  INSERT INTO {{schema}}.{{table_prefix}}job_v2 (${v1Columns}, blocking)
+  SELECT ${v1Columns}, chain_index = 0 AND EXISTS (
+    SELECT 1 FROM {{schema}}.{{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = source.id
+  )
+  FROM source
+  ON CONFLICT (id) DO NOTHING
+)
+SELECT (SELECT id FROM source ORDER BY id DESC LIMIT 1)::text AS last_id`,
+              { params: [t["string?"]()], columns: { last_id: t["string?"]() } },
+            ),
+          );
+          let lastId = null as string | null;
+          do {
+            assertLockHeld();
+            lastId = await stateProvider.withTransaction(async (txCtx) => {
+              await execute(txCtx, sql(/* sql */ `SET LOCAL lock_timeout = '5000ms'`));
+              const [row] = await exec({ txCtx, sql: copyBatch, params: [lastId] });
+              return row.last_id;
+            });
+          } while (lastId !== null);
+
+          assertLockHeld();
+          await stateProvider.withTransaction(async (txCtx) => {
+            for (const statement of [
+              sql(/* sql */ `SET LOCAL lock_timeout = '5000ms'`),
+              sql(/* sql */ `
+LOCK TABLE {{schema}}.{{table_prefix}}job, {{schema}}.{{table_prefix}}job_blocker
+IN ACCESS EXCLUSIVE MODE`),
+              sql(/* sql */ `
+CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}schema_fence_v2 (id integer PRIMARY KEY)`),
+              sql(/* sql */ `
+DROP TABLE IF EXISTS {{schema}}.{{table_prefix}}schema_fence_v1`),
+              sql(/* sql */ `
+UPDATE {{schema}}.{{table_prefix}}job_v2 h
+SET blocking = EXISTS (
+  SELECT 1 FROM {{schema}}.{{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = h.id
+)
+WHERE h.chain_index = 0
+  AND h.id IN (SELECT chain_id FROM {{schema}}.{{table_prefix}}job_v2_dirty)`),
+              sql(/* sql */ `
+DROP TABLE {{schema}}.{{table_prefix}}job`),
+              sql(/* sql */ `
+DROP TRIGGER {{table_prefix}}job_v2_mark_dirty ON {{schema}}.{{table_prefix}}job_blocker`),
+              sql(/* sql */ `
+DROP FUNCTION {{schema}}.{{table_prefix}}job_v2_mark_dirty()`),
+              sql(/* sql */ `
+DROP FUNCTION {{schema}}.{{table_prefix}}job_v2_mirror()`),
+              sql(/* sql */ `
+DROP TABLE {{schema}}.{{table_prefix}}job_v2_dirty`),
+              sql(/* sql */ `
+ALTER TABLE {{schema}}.{{table_prefix}}job_v2 RENAME TO {{table_prefix}}job`),
+              sql(/* sql */ `
+ALTER TABLE {{schema}}.{{table_prefix}}job
+  RENAME CONSTRAINT {{table_prefix}}job_v2_pkey TO {{table_prefix}}job_pkey`),
+              sql(/* sql */ `
+ALTER TABLE {{schema}}.{{table_prefix}}job
+  RENAME CONSTRAINT {{table_prefix}}job_v2_status_check TO {{table_prefix}}job_status_check`),
+              sql(/* sql */ `
+ALTER TABLE {{schema}}.{{table_prefix}}job
+  RENAME CONSTRAINT {{table_prefix}}job_v2_chain_status_check TO {{table_prefix}}job_chain_status_check`),
+              ...v1Indexes.map(([name]) =>
+                sql(/* sql */ `
+ALTER INDEX {{schema}}.{{table_prefix}}${name}_v2 RENAME TO {{table_prefix}}${name}`),
+              ),
+            ]) {
+              await execute(txCtx, statement);
+            }
+          });
+          await execute(undefined, sql(/* sql */ `ANALYZE {{schema}}.{{table_prefix}}job`));
+        }
+
+        await stateProvider.withTransaction(async (txCtx) => {
+          for (const statement of [
+            sql(/* sql */ `SET LOCAL lock_timeout = '5000ms'`),
+            sql(/* sql */ `
+CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}schema_fence_v2 (id integer PRIMARY KEY)`),
+            sql(/* sql */ `
+DROP TABLE IF EXISTS {{schema}}.{{table_prefix}}schema_fence_v1`),
+          ]) {
+            await execute(txCtx, statement);
+          }
+        });
+      },
+      down: async () => {
+        throw new Error("The Queuert schema cannot be reverted.");
+      },
     },
-  },
-];
+  ];
+};
 
 export const createMigrationStore = <TTxContext extends BaseTxContext>(
   stateProvider: PgStateProvider<TTxContext>,
@@ -279,13 +560,14 @@ const DB_JOB_COLUMNS = [
   "chain_deduplication_key",
   "chain_trace_context",
   "trace_context",
+  "blocking",
 ] as const;
 
 const jobColumnsSelect = (alias: string): string =>
   DB_JOB_COLUMNS.map((column) => `${alias}.${column}`).join(", ");
 
 const chainColumnsSelect = (alias: string): string =>
-  `${alias}.type_name AS c_type_name, ${alias}.chain_status AS c_status, ${alias}.created_at AS c_created_at, ${alias}.chain_completed_at AS c_completed_at, ${alias}.chain_deduplication_key AS c_deduplication_key, ${alias}.chain_trace_context AS c_trace_context`;
+  `${alias}.type_name AS c_type_name, ${alias}.chain_status AS c_status, ${alias}.created_at AS c_created_at, ${alias}.chain_completed_at AS c_completed_at, ${alias}.chain_deduplication_key AS c_deduplication_key, ${alias}.chain_trace_context AS c_trace_context, ${alias}.blocking AS c_blocking`;
 
 const chainMembers = (alias: string, chainIdExpr: string): string =>
   `((${alias}.id = ${chainIdExpr} AND ${alias}.chain_index = 0) OR (${alias}.chain_id = ${chainIdExpr} AND ${alias}.chain_index > 0))`;
@@ -340,6 +622,7 @@ const mapDbHeadToStateChainInfo = (head: DbJob): StateChainInfo => ({
   createdAt: new Date(head.created_at),
   completedAt: head.chain_completed_at ? new Date(head.chain_completed_at) : null,
   traceContext: head.chain_trace_context,
+  blocking: head.blocking,
 });
 
 const mapDbChainColumns = (chainId: string, row: DbChainColumns): StateChainInfo => ({
@@ -350,6 +633,7 @@ const mapDbChainColumns = (chainId: string, row: DbChainColumns): StateChainInfo
   createdAt: new Date(row.c_created_at!),
   completedAt: row.c_completed_at ? new Date(row.c_completed_at) : null,
   traceContext: row.c_trace_context,
+  blocking: row.c_blocking!,
 });
 
 const mapDbJobRowToStateJob = (row: DbJob & DbChainColumns): StateJob => ({
@@ -463,9 +747,6 @@ export const createPgStateAdapter = <
 }): StateAdapter<TTxContext, TJobId, TWorkerId, "async"> & {
   /**
    * Create or upgrade the schema.
-   *
-   * @throws Error if a 0.16 schema is found (upgrade it with `@queuert/postgres` 0.17 first), or a
-   * 0.17 migration table that records migrations 0.17 did not ship.
    */
   migrateToLatest: () => Promise<MigrationResult>;
 } => {
@@ -524,6 +805,7 @@ export const createPgStateAdapter = <
     chain_deduplication_key: t["string?"](),
     chain_trace_context: t["string?"](),
     trace_context: t["string?"](),
+    blocking: t.boolean(),
   } as const satisfies Record<(typeof DB_JOB_COLUMNS)[number], DataType>;
 
   const dbChainColumns = {
@@ -533,6 +815,7 @@ export const createPgStateAdapter = <
     c_completed_at: t["string?"](),
     c_deduplication_key: t["string?"](),
     c_trace_context: t["string?"](),
+    c_blocking: t["boolean?"](),
   } as const;
 
   const dbStateJobColumns = { ...dbJobColumns, ...dbChainColumns } as const;
@@ -1125,20 +1408,85 @@ JOIN {{schema}}.{{table_prefix}}job h ON h.id = u.chain_id
 
     deleteChains: async ({ txCtx, chainIds }) => {
       if (chainIds.length === 0) return [];
+      const heights = await execute(
+        txCtx,
+        prepared(
+          "readDeletedChainHeights",
+          `
+WITH RECURSIVE
+members AS (
+  SELECT id FROM {{schema}}.{{table_prefix}}job
+  WHERE id = ANY($1::{{job_id_type}}[]) AND chain_index = 0
+  UNION ALL
+  SELECT id FROM {{schema}}.{{table_prefix}}job
+  WHERE chain_id = ANY($1::{{job_id_type}}[]) AND chain_index > 0
+),
+involved AS (
+  SELECT unnest($1::{{job_id_type}}[]) AS id
+  UNION
+  SELECT jb.blocked_by_chain_id
+  FROM members m
+  JOIN {{schema}}.{{table_prefix}}job_blocker jb ON jb.job_id = m.id
+),
+climb (origin, id, height) AS (
+  SELECT id, id, 0 FROM involved
+  UNION
+  SELECT c.origin, b.blocked_by_chain_id, c.height + 1
+  FROM climb c
+  CROSS JOIN LATERAL (
+    SELECT jb.blocked_by_chain_id
+    FROM {{schema}}.{{table_prefix}}job_blocker jb
+    WHERE jb.job_id = c.id
+    UNION ALL
+    SELECT jb.blocked_by_chain_id
+    FROM {{schema}}.{{table_prefix}}job j
+    JOIN {{schema}}.{{table_prefix}}job_blocker jb ON jb.job_id = j.id
+    WHERE j.chain_id = c.id AND j.chain_index > 0
+  ) b
+  WHERE c.height < 64
+)
+SELECT origin AS id, max(height) AS height FROM climb GROUP BY origin
+`,
+          {
+            params: [t.array()],
+            columns: { id: idDataType, height: t.number() },
+            readOnly: true,
+          },
+        ),
+        [chainIds],
+      );
       await execute(
         txCtx,
         prepared(
           "lockDeletedChains",
           `
-SELECT id FROM {{schema}}.{{table_prefix}}job
-WHERE (id = ANY($1::{{job_id_type}}[]) AND chain_index = 0)
-   OR (chain_id = ANY($1::{{job_id_type}}[]) AND chain_index > 0)
-ORDER BY id
-FOR UPDATE
+WITH ordered AS (
+  SELECT id, ord FROM unnest($1::{{job_id_type}}[]) WITH ORDINALITY AS o(id, ord)
+),
+targets AS (
+  SELECT j.id, o.ord
+  FROM ordered o
+  JOIN {{schema}}.{{table_prefix}}job j ON j.id = o.id AND j.chain_index = 0
+  UNION ALL
+  SELECT j.id, o.ord
+  FROM ordered o
+  JOIN {{schema}}.{{table_prefix}}job j ON j.chain_id = o.id AND j.chain_index > 0
+  WHERE o.id = ANY($2::{{job_id_type}}[])
+)
+SELECT j.id
+FROM targets t
+JOIN {{schema}}.{{table_prefix}}job j ON j.id = t.id
+ORDER BY t.ord, j.chain_index, j.id
+FOR UPDATE OF j
 `,
-          { params: [t.array()], columns: { id: idDataType } },
+          { params: [t.array(), t.array()], columns: { id: idDataType } },
         ),
-        [chainIds],
+        [
+          heights
+            .toSorted((a, b) => a.height - b.height || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+            .map((row) => row.id),
+          chainIds,
+        ],
       );
       const [row] = await execute(
         txCtx,
@@ -1161,6 +1509,22 @@ _external_refs AS (
 _deleted_blockers AS (
   DELETE FROM {{schema}}.{{table_prefix}}job_blocker
   WHERE job_id IN (SELECT id FROM _members)
+    AND NOT EXISTS (SELECT 1 FROM _external_refs)
+),
+_cleared_heads AS (
+  UPDATE {{schema}}.{{table_prefix}}job h
+  SET blocking = false
+  WHERE h.blocking
+    AND h.chain_index = 0
+    AND h.id IN (
+      SELECT blocked_by_chain_id FROM {{schema}}.{{table_prefix}}job_blocker
+      WHERE job_id IN (SELECT id FROM _members)
+    )
+    AND h.id NOT IN (SELECT id FROM _members)
+    AND NOT EXISTS (
+      SELECT 1 FROM {{schema}}.{{table_prefix}}job_blocker jb
+      WHERE jb.blocked_by_chain_id = h.id AND jb.job_id NOT IN (SELECT id FROM _members)
+    )
     AND NOT EXISTS (SELECT 1 FROM _external_refs)
 ),
 _deleted_jobs AS (
@@ -1213,7 +1577,7 @@ SELECT
             job: mapDbJobToStateJobInfo(ref.job),
           }));
         const deleted = deletedById.get(chainId);
-        return deleted ? mapDbChainRowToStateChain(deleted) : undefined;
+        return deleted ? { ...mapDbChainRowToStateChain(deleted), blocking: false } : undefined;
       });
     },
 
@@ -1380,11 +1744,23 @@ has_incomplete_blockers AS (
   JOIN locked_blocker_heads h ON h.id = d.blocked_by_chain_id
   WHERE h.chain_status = 'running'
 ),
+unflagged_blocker_heads AS (
+  SELECT id FROM locked_blocker_heads WHERE NOT blocking
+),
+update_targets AS (
+  SELECT id FROM unflagged_blocker_heads
+  UNION
+  SELECT job_id FROM has_incomplete_blockers
+),
 updated_jobs AS (
   UPDATE {{schema}}.{{table_prefix}}job j
-  SET status = 'blocked'
-  WHERE j.id IN (SELECT job_id FROM has_incomplete_blockers)
-    AND j.status = 'pending'
+  SET status = CASE
+      WHEN j.status = 'pending' AND j.id IN (SELECT job_id FROM has_incomplete_blockers)
+      THEN 'blocked' ELSE j.status END,
+    blocking = j.blocking OR j.id IN (SELECT id FROM unflagged_blocker_heads)
+  FROM update_targets t
+  WHERE j.id = t.id
+    AND (j.status = 'pending' OR j.id IN (SELECT id FROM unflagged_blocker_heads))
     AND ${FENCE_GUARD}
   RETURNING j.*
 ),
@@ -1426,21 +1802,29 @@ LEFT JOIN locked_blocker_heads h ON h.id = d.blocked_by_chain_id
         ],
       );
 
+      const blockerChainsById = new Map(
+        results.flatMap((row) =>
+          row.head_job
+            ? [
+                [
+                  row.blocked_by_chain_id,
+                  { ...mapDbHeadToStateChainInfo(row.head_job), blocking: true },
+                ] as const,
+              ]
+            : [],
+        ),
+      );
       const jobsById = new Map(
         results.map((row) => [
           row.job_row.id,
           {
             ...mapDbJobToStateJobInfo(row.job_row),
-            chain: mapDbHeadToStateChainInfo(row.job_chain_head),
+            chain: {
+              ...mapDbHeadToStateChainInfo(row.job_chain_head),
+              blocking: row.job_chain_head.blocking || blockerChainsById.has(row.job_chain_head.id),
+            },
           },
         ]),
-      );
-      const blockerChainsById = new Map(
-        results.flatMap((row) =>
-          row.head_job
-            ? [[row.blocked_by_chain_id, mapDbHeadToStateChainInfo(row.head_job)] as const]
-            : [],
-        ),
       );
       return jobBlockers.map((entry) => ({
         ...jobsById.get(entry.jobId)!,
@@ -1493,14 +1877,14 @@ SELECT
   EXISTS (
     SELECT 1 FROM {{schema}}.{{table_prefix}}job_blocker jb
     WHERE jb.blocked_by_chain_id = $1
-  ) AS has_dependents
+  ) AS referenced
 FROM (SELECT count(*) FROM locked_blocked_dependents) AS all_blocked_dependents_locked
 `,
-          { params: [idDataType], columns: { has_dependents: t.boolean() } },
+          { params: [idDataType], columns: { referenced: t.boolean() } },
         ),
         [blockedByChainId],
       );
-      if (!lockResult.has_dependents) return [];
+      if (!lockResult.referenced) return [];
 
       const [result] = await execute(
         txCtx,
@@ -1826,7 +2210,7 @@ ORDER BY w.ord
     listChains: async ({
       txCtx,
       typeName,
-      independent,
+      blocking,
       from,
       to,
       status,
@@ -1842,11 +2226,7 @@ ORDER BY w.ord
       const params: unknown[] = [typeName];
       const paramTypes: DataType[] = [t.string()];
       if (status !== undefined) conditions.push(chainStatusConditions[status]);
-      if (independent !== undefined) {
-        conditions.push(
-          `${independent ? "NOT " : ""}EXISTS (SELECT 1 FROM ${schema}.${tablePrefix}job_blocker jb WHERE jb.blocked_by_chain_id = head_job.id)`,
-        );
-      }
+      if (blocking !== undefined) conditions.push(`${blocking ? "" : "NOT "}head_job.blocking`);
       if (from) {
         conditions.push(`head_job.${orderColumn} >= $${params.length + 1}::timestamptz`);
         params.push(from);
@@ -1872,7 +2252,7 @@ ORDER BY w.ord
       const rows = await execute(
         txCtx,
         dynamic(
-          independent === true
+          blocking === false
             ? `SELECT row_to_json(head_job) AS head_job, row_to_json(tail_job) AS tail_job FROM ${schema}.${tablePrefix}job head_job${tailLateralInline} WHERE ${conditions.join(" AND ")} ${order} LIMIT $${params.length}`
             : `SELECT row_to_json(head_job) AS head_job, row_to_json(tail_job) AS tail_job FROM (SELECT * FROM ${schema}.${tablePrefix}job head_job WHERE ${conditions.join(" AND ")} ${order} LIMIT $${params.length}) head_job${tailLateralInline} ${order}`,
           { params: paramTypes, columns: rowToJsonJobColumns },
@@ -2154,18 +2534,10 @@ ORDER BY w.ord
 
     migrateToLatest: async () => {
       const store = createMigrationStore(stateProvider, applyTemplate);
-      const exec = createTypedSqlExecutor(stateProvider);
-      const result = await createMigrator({
-        migrations: createSchemaMigrations(async (txCtx: TTxContext, statement) =>
-          exec({ txCtx, sql: applyTemplate(statement) }),
-        ),
+      return createMigrator({
+        migrations: createSchemaMigrations(stateProvider, applyTemplate),
         store,
-        before: createLegacyUpgrade(stateProvider, store, applyTemplate, SCHEMA_MIGRATION),
       }).migrateToLatest();
-      return {
-        ...result,
-        unrecognized: result.unrecognized.filter((name) => !LEGACY_MIGRATION_NAMES.includes(name)),
-      };
     },
 
     close,
@@ -2183,9 +2555,6 @@ export type PgStateAdapter<
 > = StateAdapter<TTxContext, TJobId, TWorkerId, "async"> & {
   /**
    * Create or upgrade the schema.
-   *
-   * @throws Error if a 0.16 schema is found (upgrade it with `@queuert/postgres` 0.17 first), or a
-   * 0.17 migration table that records migrations 0.17 did not ship.
    */
   migrateToLatest: () => Promise<MigrationResult>;
 };

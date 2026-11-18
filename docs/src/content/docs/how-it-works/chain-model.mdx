@@ -80,7 +80,7 @@ Having the head job BE the chain (rather than a separate entity) provides:
 
 ### Simplicity
 
-- No separate `chain` table — a chain's own facts (type name, status, deduplication key, trace context, completion time) live on its head row in the `job` table, and continuations are further rows in the same table (plus a `job_blocker` junction table for dependencies)
+- No separate `chain` table — a chain's own facts (type name, status, deduplication key, trace context, completion time, whether other jobs depend on it) live on its head row in the `job` table, and continuations are further rows in the same table (plus a `job_blocker` junction table for dependencies)
 - One primary type, one set of operations
 - No synchronization issues
 

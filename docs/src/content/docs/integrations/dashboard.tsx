@@ -185,10 +185,10 @@ const Page = () => (
     <p>
       Lists the chains of one type, newest first by default; the selector next to the title switches
       to another chain type. A filter bar holds the status filter (All, Running, Completed, each
-      with its count) and, on the right, a role select that narrows the list to independent chains
-      or to chains used as blockers, next to the sort options, which depend on the selected status.
-      Each row shows the status, chain ID and time, with one-line input and output previews below.
-      More rows load as you scroll.
+      with its count) and, on the right, a role select that narrows the list to blocking chains
+      (ones a job references as a blocker) or to non-blocking chains, next to the sort options,
+      which depend on the selected status. Each row shows the status, chain ID and time, with
+      one-line input and output previews below. More rows load as you scroll.
     </p>
 
     <h3>Chain detail</h3>

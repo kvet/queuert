@@ -4,7 +4,7 @@ import { Session } from "node:inspector/promises";
 import { type SourceMapping, findSourceMap } from "node:module";
 import { fileURLToPath } from "node:url";
 
-import type { DoubleRunBenchmarkOptions, LifecycleContext } from "./utils.ts";
+import type { DoubleRunBenchmarkOptions, LifecycleContext, MeasurementResult } from "./utils.ts";
 
 const PROFILE_JOB_COUNT = 2_000;
 const CPU_SAMPLING_INTERVAL_US = 100;
@@ -239,7 +239,7 @@ export const runProfile = async <TInfra>({
   name,
   setupInfrastructure,
   runLifecycle,
-}: DoubleRunBenchmarkOptions<TInfra>): Promise<void> => {
+}: DoubleRunBenchmarkOptions<TInfra>): Promise<MeasurementResult> => {
   const { infra, teardown } = await setupInfrastructure();
   const session = new Session();
   const captured = Promise.withResolvers<{
@@ -302,13 +302,15 @@ export const runProfile = async <TInfra>({
   writeFileSync(`${profilesDirectory}${name}.cpuprofile`, JSON.stringify(cpuProfile));
   writeFileSync(`${profilesDirectory}${name}.heapprofile`, JSON.stringify(heapProfile));
 
+  const cpu = summarizeCpuProfile(cpuProfile);
+  const heap = summarizeHeapProfile(heapProfile);
   const report = formatProfileReport({
     name,
     jobCount: PROFILE_JOB_COUNT,
     wallMs,
     processCpuUs,
-    cpu: summarizeCpuProfile(cpuProfile),
-    heap: summarizeHeapProfile(heapProfile),
+    cpu,
+    heap,
   });
   console.log(`\n${report.join("\n")}`);
   mkdirSync(resultsDirectory, { recursive: true });
@@ -316,4 +318,14 @@ export const runProfile = async <TInfra>({
   console.log(`\n  → ${profilesDirectory}${name}.cpuprofile`);
   console.log(`  → ${profilesDirectory}${name}.heapprofile`);
   console.log(`  → ${resultsDirectory}${name}.txt`);
+
+  return {
+    name,
+    phase: "profile",
+    cpuMicrosecondsPerJob: Object.fromEntries(
+      categories.map((category) => [category, cpu.byCategory[category] / PROFILE_JOB_COUNT]),
+    ),
+    allocatedBytesPerJob:
+      sum(categories.map((category) => heap.byCategory[category])) / PROFILE_JOB_COUNT,
+  };
 };

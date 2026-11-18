@@ -80,6 +80,7 @@ const toStoredJob = (row: DumpJobRow, blockers: StateJobBlockerInfo[]): StoredJo
   deduplicationKey: row.chainDeduplicationKey,
   chainTraceContext: row.chainTraceContext,
   seq: nextSeq(new Date(row.createdAt)),
+  blocking: row.blocking,
   blockers: blockers.map(({ blockedByChainId, index, traceContext }) => ({
     blockedByChainId,
     index,

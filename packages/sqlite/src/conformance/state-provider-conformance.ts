@@ -396,12 +396,12 @@ const prepareContext = syncAsync(function* (
   });
 
   const withWritesFenced = syncAsync(function* (fn: () => MaybePromise<unknown>) {
-    yield* executeDdl.steps(`DROP TABLE ${tablePrefix}schema_fence_v1`);
+    yield* executeDdl.steps(`DROP TABLE ${tablePrefix}schema_fence_v2`);
     try {
       return yield* step(fn());
     } finally {
       yield* executeDdl.steps(
-        `CREATE TABLE ${tablePrefix}schema_fence_v1 (id INTEGER PRIMARY KEY)`,
+        `CREATE TABLE ${tablePrefix}schema_fence_v2 (id INTEGER PRIMARY KEY)`,
       );
     }
   });

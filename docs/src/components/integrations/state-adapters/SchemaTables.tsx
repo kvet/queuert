@@ -1,7 +1,7 @@
 import { Box } from "@queuert/ui/components";
 import { For, Show } from "solid-js";
 
-import { type SchemaDialect, schemaIndexes, schemaTables } from "./schema.ts";
+import type { SchemaIndex, SchemaTable } from "./schema-types.ts";
 
 const TableTitle = (props: { name: string }) => (
   <span class="font-mono tracking-normal normal-case">{`{prefix}${props.name}`}</span>
@@ -18,8 +18,8 @@ const rowClass =
   "grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 px-4 py-1.5 sm:grid-cols-[12rem_12.5rem_minmax(0,1fr)] sm:gap-x-4";
 
 /** Every table an adapter's migrations create, one box per table with one line per column. */
-export const SchemaTables = (props: { dialect: SchemaDialect }) => (
-  <For each={schemaTables[props.dialect]}>
+export const SchemaTables = (props: { tables: SchemaTable[] }) => (
+  <For each={props.tables}>
     {(table) => (
       <>
         <p>
@@ -54,12 +54,12 @@ export const SchemaTables = (props: { dialect: SchemaDialect }) => (
 );
 
 /** The indexes the migrations create, grouped by table: name and purpose, definition below. */
-export const SchemaIndexes = (props: { dialect: SchemaDialect }) => (
+export const SchemaIndexes = (props: { indexes: SchemaIndex[] }) => (
   <For each={["job", "job_blocker", "worker"]}>
     {(table) => (
       <Box title={<TableTitle name={table} />} class="my-4" bodyClass="">
         <ul class="row-list m-0 divide-y divide-border">
-          <For each={schemaIndexes[props.dialect].filter((index) => index.table === table)}>
+          <For each={props.indexes.filter((index) => index.table === table)}>
             {(index) => (
               <li class="grid gap-x-4 gap-y-0.5 px-4 py-1.5 sm:grid-cols-[13rem_minmax(0,1fr)]">
                 <span class="font-mono text-[13px] break-all text-fg">{index.name}</span>

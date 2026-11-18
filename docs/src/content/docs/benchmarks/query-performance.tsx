@@ -112,8 +112,10 @@ const Page = () => (
     <h2 id="reproduce">Reproduce</h2>
     <p>
       From <a href={benchmarkSourceUrl("query-performance")}>benchmarks/query-performance</a>, with
-      Docker running for PostgreSQL, MySQL, MariaDB and Redis. Each run also writes the query plans
-      to <code>explanations/</code>.
+      Docker running for PostgreSQL, MySQL, MariaDB and Redis. Each run writes its timings to{" "}
+      <code>results.md</code> and, for the SQL databases, its query plans to{" "}
+      <code>plans/&lt;database&gt;.md</code>, both committed so a rerun shows up as a diff, plus the
+      full plans with costs to <code>explanations/</code>.
     </p>
     <Code lang="bash">{`
       pnpm --filter benchmark-query-performance start:postgres

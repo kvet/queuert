@@ -355,6 +355,7 @@ const reportCompletedJob = syncAsync(function* (
   });
   notifyOnCommit(helpers, txCtx, helpers.notifyHelper.notifyChainsCompleted, [completed.chainId]);
 
+  if (!chain.blocking) return;
   const dependentJobs = yield* step(
     helpers.stateAdapter.unblockJobs({
       txCtx,

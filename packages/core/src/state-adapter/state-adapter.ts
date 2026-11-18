@@ -1,4 +1,4 @@
-import type { ModeResult, Mode } from "@queuert/sync-async";
+import type { Mode, ModeResult } from "@queuert/sync-async";
 
 import type { AdapterLifecycle } from "../adapter-mode.ts";
 import type { DeduplicationOptions } from "../entities/deduplication.ts";
@@ -69,6 +69,8 @@ export type StateChainInfo = {
   completedAt: Date | null;
   /** Serialized trace context of the chain, for observability adapters. */
   traceContext: string | null;
+  /** Whether at least one blocker row references the chain. */
+  blocking: boolean;
 };
 
 /** One blocker of a job: the chain the job waits for, in the order its blockers were added. */
@@ -250,7 +252,10 @@ export type StateAdapter<
     }[];
   }) => ModeResult<TMode, ((StateJob & { continuation: StateJobInfo }) | undefined)[]>;
 
-  /** Completes each job with its output, ending its chain and recording `workerId` as `completedBy`; `undefined` on a miss. */
+  /**
+   * Completes each job with its output, ending its chain and recording `workerId` as `completedBy`;
+   * `undefined` on a miss. The chain's `blocking` is read as the completion writes the head.
+   */
   completeJobs: (
     params: {
       jobs: {
@@ -274,7 +279,11 @@ export type StateAdapter<
     } & AutocommitTxContextParam<TTxContext>,
   ) => ModeResult<TMode, (StateJob | undefined)[]>;
 
-  /** Deletes chains, or none if one blocks an outside job: its slot then lists those jobs. */
+  /**
+   * Deletes chains, or none if one blocks an outside job: its slot then lists those jobs. Deleted
+   * chains are returned with `blocking` `false`, and each remaining chain the deleted blocker rows were
+   * the last to reference gets `blocking` `false`.
+   */
   deleteChains: (
     params: { chainIds: TJobId[] } & TransactionTxContextParam<TTxContext>,
   ) => ModeResult<TMode, (StateChain | StateBlockedJob[] | undefined)[]>;
@@ -296,7 +305,8 @@ export type StateAdapter<
 
   /**
    * Adds blockers to jobs. A blocker id that does not name a chain head is reported as
-   * `undefined` among the job's blockers, and the caller then rolls back.
+   * `undefined` among the job's blockers, and the caller then rolls back. Sets `blocking` on each
+   * blocker chain and returns those chains with it set.
    */
   addJobsBlockers: (params: {
     txCtx: TTxContext;
@@ -312,7 +322,10 @@ export type StateAdapter<
     params: { jobId: TJobId } & AutocommitTxContextParam<TTxContext>,
   ) => ModeResult<TMode, StateChain[]>;
 
-  /** Moves a completed chain's dependents to pending once all their blockers completed; one entry per blocker row. */
+  /**
+   * Moves a completed chain's dependents to pending once all their blockers completed; one entry
+   * per blocker row. Core skips this call when the completed chain's `blocking` is `false`.
+   */
   unblockJobs: (
     params: { blockedByChainId: TJobId } & TransactionTxContextParam<TTxContext>,
   ) => ModeResult<TMode, StateDependentJob[]>;
@@ -382,7 +395,7 @@ export type StateAdapter<
   listChains: (
     params: AutocommitTxContextParam<TTxContext> & {
       typeName: string;
-      independent?: boolean;
+      blocking?: boolean;
       from?: Date;
       to?: Date;
       orderDirection: OrderDirection;

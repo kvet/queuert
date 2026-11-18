@@ -7,6 +7,7 @@ on:
       - "docs/**"
       - "packages/**"
       - "packages-internal/**"
+      - "benchmarks/*/results.md"
       - ".github/workflows/deploy-docs.yml"
   release:
     types: [published]

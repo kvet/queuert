@@ -33,6 +33,7 @@ const jobColumns = {
   last_attempt_at: TIMESTAMP,
   attempt_at: TIMESTAMP,
   chain_completed_at: TIMESTAMP,
+  blocking: "TINYINT",
 };
 
 const blockerColumns = {

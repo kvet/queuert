@@ -7,8 +7,8 @@ import {
 
 const luaString = (text: string): string => `'${text.replaceAll(/[\\']/g, "\\$&")}'`;
 
-const luaValue = (value: string | number): string =>
-  typeof value === "number" ? String(value) : luaString(value);
+const luaValue = (value: string | number | boolean): string =>
+  typeof value === "string" ? luaString(value) : String(value);
 
 export const toLua = (symbolic: string, resolve: (field: string) => string): string => {
   const parts = symbolic
@@ -54,7 +54,7 @@ export const indexTransitionLua = <TRecord>({
         ...(definition.score === undefined ? [] : [definition.score]),
       ]),
     ].filter((field) => field !== "prefix");
-    const where = Object.entries(definition.where ?? {}) as [string, string | number][];
+    const where = Object.entries(definition.where ?? {}) as [string, string | number | boolean][];
     const touched = [...entryFields, ...where.map(([field]) => field)].some((field) =>
       changed.includes(field),
     );

@@ -131,10 +131,10 @@ const readAll = async (stateAdapter: RedisStateAdapter, workerIds: string[]) => 
   ),
   chains: await Promise.all(
     typeNames.flatMap((typeName) =>
-      [undefined, true, false].map(async (independent) =>
+      [undefined, true, false].map(async (blocking) =>
         stateAdapter.listChains({
           typeName,
-          independent,
+          blocking,
           orderBy: "createdAt",
           orderDirection: "desc",
           page,

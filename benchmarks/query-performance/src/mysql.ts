@@ -15,6 +15,8 @@ import {
 } from "queuert/conformance-internal";
 import { GenericContainer, Wait } from "testcontainers";
 
+import { type QueryPlan, writeQueryPlans, writeQueryResults } from "./results.ts";
+
 const ITERATIONS = 10;
 
 const dialect = process.argv.includes("--mariadb") ? "mariadb" : "mysql";
@@ -33,19 +35,20 @@ const scale = parseScale();
 
 const stats = (times: number[]) => ({
   p50: times[Math.floor(times.length * 0.5)],
-  p95: times[Math.floor(times.length * 0.95)],
   max: times[times.length - 1],
 });
 
 const fmt = (ms: number) => `${ms.toFixed(2)}ms`;
 
+const timings = new Map<string, { p50: number; max: number }>();
+const plans = new Map<string, QueryPlan[]>();
 const resultLines: string[] = [];
 const report = (line = "") => {
   console.log(line);
   resultLines.push(line);
 };
 
-type CapturedQuery = { id: string | undefined; sql: string; explain: string };
+type CapturedQuery = { id: string | undefined; sql: string; explain: string; plan: string };
 
 console.log(`\nStarting ${image} container...`);
 const container = await new GenericContainer(image)
@@ -89,6 +92,9 @@ const explain = async (
     .join("\n");
 };
 
+const withoutEstimates = (explain: string): string =>
+  explain.replaceAll(/\s*\((?:cost|rows)=[^)]*\)/g, "").replaceAll(/\s+(?:rows|filtered)=\S+/g, "");
+
 let capturing = false;
 const captured: CapturedQuery[] = [];
 const stateProvider = {
@@ -96,16 +102,19 @@ const stateProvider = {
   executeSql: async (args: Parameters<typeof baseProvider.executeSql>[0]) => {
     if (capturing && /^\s*(SELECT|UPDATE|DELETE|INSERT)/i.test(args.sql)) {
       try {
+        const explained = await explain(args.txCtx, args.sql, args.params);
         captured.push({
           id: args.id,
           sql: args.sql,
-          explain: await explain(args.txCtx, args.sql, args.params),
+          explain: explained,
+          plan: withoutEstimates(explained),
         });
       } catch (error) {
         captured.push({
           id: args.id,
           sql: args.sql,
           explain: `-- EXPLAIN failed: ${String(error)}`,
+          plan: `EXPLAIN failed: ${String(error)}`,
         });
       }
     }
@@ -147,8 +156,6 @@ for (const row of sizeRows as {
 }
 console.log("");
 
-capturing = true;
-
 rmSync(EXPLANATIONS_DIR, { recursive: true, force: true });
 mkdirSync(EXPLANATIONS_DIR, { recursive: true });
 writeFileSync(`${EXPLANATIONS_DIR}/_table_sizes.txt`, sizeLines.join("\n") + "\n");
@@ -160,21 +167,29 @@ report("════════════════════════
 for (const group of [...operationalCoverageGroups, ...observabilityCoverageGroups]) {
   report(`  ${group.name}`);
   for (const testCase of group.cases) {
+    const captureAct = await testCase.run(stateAdapter, sentinels);
+    captured.length = 0;
+    capturing = true;
+    await captureAct(stateAdapter, sentinels);
+    capturing = false;
+    const planCapture = [...captured];
+
     const times: number[] = [];
-    let planCapture: CapturedQuery[] = [];
     for (let i = 0; i < ITERATIONS; i++) {
       const act = await testCase.run(stateAdapter, sentinels);
-      captured.length = 0;
-      capturing = i === 0;
       const start = performance.now();
       await act(stateAdapter, sentinels);
       times.push(performance.now() - start);
-      if (i === 0) planCapture = [...captured];
     }
+    plans.set(
+      testCase.key,
+      planCapture.map(({ id, plan }) => ({ id, plan })),
+    );
     times.sort((a, b) => a - b);
     const s = stats(times);
+    timings.set(testCase.key, s);
     report(
-      `    ${testCase.key.padEnd(50)} p50=${fmt(s.p50).padStart(10)}  p95=${fmt(s.p95).padStart(10)}  max=${fmt(s.max).padStart(10)}`,
+      `    ${testCase.key.padEnd(50)} p50=${fmt(s.p50).padStart(10)}  max=${fmt(s.max).padStart(10)}`,
     );
 
     const filePath = `${EXPLANATIONS_DIR}/${testCase.key.replaceAll("/", "__")}.txt`;
@@ -185,7 +200,7 @@ for (const group of [...operationalCoverageGroups, ...observabilityCoverageGroup
     });
     const content = [
       `-- ${testCase.key}`,
-      `-- scale=${scale}  p50=${fmt(s.p50)}  p95=${fmt(s.p95)}  max=${fmt(s.max)}`,
+      `-- scale=${scale}  p50=${fmt(s.p50)}  max=${fmt(s.max)}`,
       "",
       ...sections,
     ].join("\n\n");
@@ -197,6 +212,8 @@ for (const group of [...operationalCoverageGroups, ...observabilityCoverageGroup
 mkdirSync(RESULTS_DIR, { recursive: true });
 writeFileSync(RESULTS_FILE, [`-- scale=${scale}`, "", ...resultLines].join("\n") + "\n");
 console.log(`  Results written to ${RESULTS_FILE}`);
+writeQueryResults(dialect === "mariadb" ? "MariaDB" : "MySQL", scale, timings);
+writeQueryPlans(dialect === "mariadb" ? "MariaDB" : "MySQL", scale, plans);
 console.log(`  Explanations written to ${EXPLANATIONS_DIR}\n`);
 
 await pool.end();

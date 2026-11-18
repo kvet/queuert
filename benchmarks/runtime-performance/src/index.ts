@@ -6,34 +6,44 @@
  */
 
 import { execSync, spawn } from "node:child_process";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { notMeasured } from "benchmark-results/results-file";
+import { writeResultsFile } from "benchmark-results/write-results-file";
+
+import type { MeasurementResult } from "./utils.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const args = process.argv.slice(2);
 
-const measurementModules: Record<string, string> = {
-  "state-postgres": "state-postgres.ts",
-  "state-in-process": "state-in-process.ts",
-  "state-in-process-async": "state-in-process-async.ts",
-  "state-sqlite": "state-sqlite.ts",
-  "state-mysql": "state-mysql.ts",
-  "state-mariadb": "state-mariadb.ts",
-  "state-redis": "state-redis.ts",
-  "notify-redis": "notify-redis.ts",
-  "notify-postgres": "notify-postgres.ts",
-  "notify-nats": "notify-nats.ts",
-  "notify-ipc": "notify-ipc.ts",
-  otel: "otel.ts",
-  dashboard: "dashboard.ts",
-  "validation-define": "validation-define.ts",
-  "validation-zod": "validation-zod.ts",
-  "validation-valibot": "validation-valibot.ts",
-  "validation-typebox": "validation-typebox.ts",
-  "validation-arktype": "validation-arktype.ts",
-  "validation-codec-zod": "validation-codec-zod.ts",
-  "validation-codec-superjson": "validation-codec-superjson.ts",
+const measurementModules: Record<string, { modulePath: string; registry?: string }> = {
+  "state-postgres": { modulePath: "state-postgres.ts" },
+  "state-in-process": { modulePath: "state-in-process.ts" },
+  "state-in-process-async": { modulePath: "state-in-process-async.ts" },
+  "state-sqlite": { modulePath: "state-sqlite.ts" },
+  "state-mysql": { modulePath: "state-mysql.ts" },
+  "state-mariadb": { modulePath: "state-mariadb.ts" },
+  "state-redis": { modulePath: "state-redis.ts" },
+  "notify-redis": { modulePath: "notify-redis.ts" },
+  "notify-postgres": { modulePath: "notify-postgres.ts" },
+  "notify-nats": { modulePath: "notify-nats.ts" },
+  "notify-ipc": { modulePath: "notify-ipc.ts" },
+  otel: { modulePath: "otel.ts" },
+  dashboard: { modulePath: "dashboard.ts" },
+  "validation-define": { modulePath: "validation-define.ts", registry: "defineJobTypes" },
+  "validation-zod": { modulePath: "validation-zod.ts", registry: "Zod" },
+  "validation-valibot": { modulePath: "validation-valibot.ts", registry: "Valibot" },
+  "validation-typebox": { modulePath: "validation-typebox.ts", registry: "TypeBox" },
+  "validation-arktype": { modulePath: "validation-arktype.ts", registry: "ArkType" },
+  "validation-codec-zod": { modulePath: "validation-codec-zod.ts", registry: "Zod codec" },
+  "validation-codec-superjson": {
+    modulePath: "validation-codec-superjson.ts",
+    registry: "superjson codec",
+  },
 };
 
 const measurementGroups: Record<string, string> = {
@@ -42,15 +52,19 @@ const measurementGroups: Record<string, string> = {
 
 const phases = ["memory", "profile"];
 
-async function runMeasurementInChildProcess(name: string, phase: string): Promise<void> {
+async function runMeasurementInChildProcess(
+  name: string,
+  phase: string,
+  resultFile: string,
+): Promise<void> {
   return new Promise((resolve, reject) => {
-    const modulePath = measurementModules[name];
-    if (!modulePath) {
+    const measurementModule = measurementModules[name];
+    if (!measurementModule) {
       reject(new Error(`Unknown measurement: ${name}`));
       return;
     }
 
-    const fullPath = join(__dirname, modulePath);
+    const fullPath = join(__dirname, measurementModule.modulePath);
 
     const child = spawn(
       process.execPath,
@@ -61,6 +75,7 @@ async function runMeasurementInChildProcess(name: string, phase: string): Promis
         `--import=${join(__dirname, "dist-hooks.ts")}`,
         fullPath,
         `--phase=${phase}`,
+        `--result-file=${resultFile}`,
       ],
       {
         stdio: "inherit",
@@ -134,13 +149,105 @@ async function main(): Promise<void> {
     });
   }
 
-  for (const name of toRun) {
-    for (const phase of phasesToRun) {
-      console.log(`\n>>> Running measurement: ${name}, ${phase} phase (in child process)\n`);
-      await runMeasurementInChildProcess(name, phase);
-      console.log("");
+  const resultDirectory = await mkdtemp(join(tmpdir(), "runtime-performance-"));
+  const resultFile = join(resultDirectory, "results.jsonl");
+  let results: MeasurementResult[];
+  try {
+    for (const name of toRun) {
+      for (const phase of phasesToRun) {
+        console.log(`\n>>> Running measurement: ${name}, ${phase} phase (in child process)\n`);
+        await runMeasurementInChildProcess(name, phase, resultFile);
+        console.log("");
+      }
     }
+    results = (await readFile(resultFile, "utf8"))
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .map((line) => JSON.parse(line) as MeasurementResult);
+  } finally {
+    await rm(resultDirectory, { recursive: true, force: true });
   }
+
+  const memoryOf = (name: string) =>
+    results.find(
+      (result): result is Extract<MeasurementResult, { phase: "memory" }> =>
+        result.name === name && result.phase === "memory",
+    );
+  const profileOf = (name: string) =>
+    results.find(
+      (result): result is Extract<MeasurementResult, { phase: "profile" }> =>
+        result.name === name && result.phase === "profile",
+    );
+  const adapterMeasurements = Object.entries(measurementModules)
+    .filter(([, { registry }]) => registry === undefined)
+    .map(([name]) => name);
+  const registryMeasurements = Object.entries(measurementModules).flatMap(([name, { registry }]) =>
+    registry === undefined ? [] : [{ name, registry }],
+  );
+  const content = writeResultsFile({
+    path: join(__dirname, "../results.md"),
+    title: "Runtime performance",
+    ran: `${args.includes("--all") ? "all measurements" : toRun.join(", ")}${phasesToRun.length === 1 ? `, ${phasesToRun[0]} phase` : ""}`,
+    tables: [
+      {
+        title: "Memory (KB)",
+        columns: [
+          "Measurement",
+          "Setup",
+          "In-flight peak",
+          "Live JS retained",
+          "JIT code retained",
+        ],
+        rows: adapterMeasurements.map((name) => {
+          const memory = memoryOf(name);
+          return [
+            name,
+            ...(memory === undefined
+              ? Array.from({ length: 4 }, () => notMeasured)
+              : [memory.setupBytes, memory.peakBytes, memory.liveJsBytes, memory.jitCodeBytes].map(
+                  (bytes) => String(Math.round(bytes / 1024 / 5) * 5),
+                )),
+          ];
+        }),
+      },
+      {
+        title: "CPU per job (µs)",
+        columns: ["Measurement", "Queuert core", "Adapter", "Dependencies", "Runtime"],
+        rows: adapterMeasurements.map((name) => [
+          name,
+          ...["core", "adapter", "dependencies", "runtime"].map((category) => {
+            const microseconds = profileOf(name)?.cpuMicrosecondsPerJob[category];
+            return microseconds === undefined ? notMeasured : String(Math.round(microseconds));
+          }),
+        ]),
+      },
+      {
+        title: "Allocated per job (KB)",
+        columns: ["Measurement", "Allocated"],
+        rows: adapterMeasurements.map((name) => {
+          const bytes = profileOf(name)?.allocatedBytesPerJob;
+          return [name, bytes === undefined ? notMeasured : (bytes / 1024).toFixed(1)];
+        }),
+      },
+      {
+        title: "Schema library CPU per job (µs)",
+        columns: ["Registry", "Schema library"],
+        rows: registryMeasurements.map(({ name, registry }) => {
+          const microseconds = profileOf(name)?.cpuMicrosecondsPerJob.dependencies;
+          return [registry, microseconds === undefined ? notMeasured : microseconds.toFixed(1)];
+        }),
+      },
+      {
+        title: "Allocated per job by registry (KB)",
+        columns: ["Registry", "Allocated"],
+        rows: registryMeasurements.map(({ name, registry }) => {
+          const bytes = profileOf(name)?.allocatedBytesPerJob;
+          return [registry, bytes === undefined ? notMeasured : (bytes / 1024).toFixed(1)];
+        }),
+      },
+    ],
+  });
+  console.log(`\n${content}`);
 
   console.log("╔════════════════════════════════════════════════════════════════╗");
   console.log("║                      MEASUREMENT COMPLETE                      ║");

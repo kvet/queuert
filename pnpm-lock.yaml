@@ -220,6 +220,9 @@ importers:
       '@queuert/sqlite':
         specifier: workspace:*
         version: link:../../packages/sqlite
+      benchmark-results:
+        specifier: workspace:*
+        version: link:../../packages-internal/benchmark-results
       better-sqlite3:
         specifier: 13.0.3
         version: 13.0.3
@@ -314,6 +317,9 @@ importers:
       '@queuert/sqlite':
         specifier: workspace:*
         version: link:../../packages/sqlite
+      benchmark-results:
+        specifier: workspace:*
+        version: link:../../packages-internal/benchmark-results
       better-sqlite3:
         specifier: 13.0.3
         version: 13.0.3
@@ -396,6 +402,9 @@ importers:
       arktype:
         specifier: 2.2.9
         version: 2.2.9
+      benchmark-results:
+        specifier: workspace:*
+        version: link:../../packages-internal/benchmark-results
       better-sqlite3:
         specifier: 13.0.3
         version: 13.0.3
@@ -487,6 +496,9 @@ importers:
 
   benchmarks/type-complexity:
     dependencies:
+      benchmark-results:
+        specifier: workspace:*
+        version: link:../../packages-internal/benchmark-results
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
@@ -545,6 +557,9 @@ importers:
       '@types/node':
         specifier: 24.19.1
         version: 24.19.1
+      benchmark-results:
+        specifier: workspace:*
+        version: link:../packages-internal/benchmark-results
       estree-util-value-to-estree:
         specifier: 3.5.0
         version: 3.5.0
@@ -1914,6 +1929,12 @@ importers:
       '@queuert/tsconfig':
         specifier: workspace:*
         version: link:../../../packages-internal/tsconfig
+
+  packages-internal/benchmark-results:
+    devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
 
   packages-internal/helpers:
     devDependencies:

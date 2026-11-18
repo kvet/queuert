@@ -11,8 +11,9 @@ import {
   createMysql2PoolProvider,
 } from "../state-provider/state-provider.mysql2-pool.ts";
 
-const INSTALLED = { applied: ["001_schema_v1"], skipped: [], reverted: [], unrecognized: [] };
-const UP_TO_DATE = { applied: [], skipped: ["001_schema_v1"], reverted: [], unrecognized: [] };
+const ALL = ["001_schema_v1", "002_schema_v2"];
+const INSTALLED = { applied: ALL, skipped: [], reverted: [], unrecognized: [] };
+const UP_TO_DATE = { applied: [], skipped: ALL, reverted: [], unrecognized: [] };
 
 const SCHEMA_STATEMENT =
   /^\s*CREATE TABLE IF NOT EXISTS queuert_(job|job_blocker|worker|schema_fence_v1)\b/;
@@ -77,6 +78,7 @@ const defineMysqlMigrationSuite = async ({
             dialect,
           }),
         shape: async () => schemaShape(shapePool),
+        pool: shapePool,
       };
     };
   });
@@ -116,6 +118,60 @@ const defineMysqlMigrationSuite = async ({
       ]);
 
       expect(results).toEqual(expect.arrayContaining([INSTALLED, UP_TO_DATE]));
+    });
+
+    it("upgrades a 001_schema_v1 database, flagging the chains that blocker rows reference and replacing its write fence", async ({
+      createDatabase,
+    }) => {
+      const database = await createDatabase();
+      const adapter = database.createAdapter();
+      await adapter.migrateToLatest();
+      const { pool } = database;
+      await pool.query("ALTER TABLE queuert_job DROP COLUMN blocking");
+      await pool.query("RENAME TABLE queuert_schema_fence_v2 TO queuert_schema_fence_v1");
+      await pool.query("DELETE FROM queuert_migration WHERE name = '002_schema_v2'");
+
+      const blockerChainId = randomUUID();
+      const continuedBlockerChainId = randomUUID();
+      const continuedBlockerTailId = randomUUID();
+      const unreferencedChainId = randomUUID();
+      const dependentId = randomUUID();
+      await pool.query(
+        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status, continued_to_id, completed_at, scheduled_at)
+         VALUES ('${blockerChainId}', 'blocker', '${blockerChainId}', 0, 'pending', 'running', NULL, NULL, UTC_TIMESTAMP(6)),
+                ('${continuedBlockerChainId}', 'blocker', '${continuedBlockerChainId}', 0, 'completed', 'running', '${continuedBlockerTailId}', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)),
+                ('${continuedBlockerTailId}', 'blocker', '${continuedBlockerChainId}', 1, 'pending', NULL, NULL, NULL, UTC_TIMESTAMP(6)),
+                ('${unreferencedChainId}', 'unreferenced', '${unreferencedChainId}', 0, 'pending', 'running', NULL, NULL, UTC_TIMESTAMP(6)),
+                ('${dependentId}', 'dependent', '${dependentId}', 0, 'blocked', 'running', NULL, NULL, UTC_TIMESTAMP(6))`,
+      );
+      await pool.query(
+        `INSERT INTO queuert_job_blocker (job_id, blocked_by_chain_id, \`index\`)
+         VALUES ('${dependentId}', '${blockerChainId}', 0),
+                ('${dependentId}', '${continuedBlockerChainId}', 1)`,
+      );
+
+      expect(await adapter.migrateToLatest()).toEqual({
+        applied: ["002_schema_v2"],
+        skipped: ["001_schema_v1"],
+        reverted: [],
+        unrecognized: [],
+      });
+      const [fences] = await pool.query<RowDataPacket[]>(
+        "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name LIKE 'queuert_schema_fence_%' ORDER BY table_name",
+      );
+      expect(fences.map((row) => row.name)).toEqual(["queuert_schema_fence_v2"]);
+
+      const completed = await adapter.withTransaction(async (txCtx) =>
+        adapter.completeJobs({
+          txCtx,
+          jobs: [
+            { jobId: blockerChainId, output: null },
+            { jobId: continuedBlockerTailId, output: null },
+            { jobId: unreferencedChainId, output: null },
+          ],
+        }),
+      );
+      expect(completed.map((job) => job!.chain.blocking)).toEqual([true, true, false]);
     });
   });
 };
