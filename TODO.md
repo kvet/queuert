@@ -2,7 +2,6 @@
 
 # Medium term
 
-- [TASK] Enable npm staged publishing — have `.github/workflows/publish.yaml` stage each package's release on npm for a manual approval before it goes live, instead of publishing straight from the tag, and switch every `@queuert/*` package and `queuert` to it in their npmjs.com settings.
 - [REF] PostgreSQL pipelining
 - [TASK] Built-in cleanup. See `design/builtin-cleanup.md`.
 - [TASK] Best-effort `rescheduleJobs` — today it fails the whole batch if any job is not pending, so apps hand-roll "wake a sleeping chain" loops (`listChainJobs` + `rescheduleJob` + catch `JobNotReschedulableError`). Add an option such as `skipNotReschedulable: true` that returns a per-job outcome (`rescheduled` / `not-pending` / `completed`) instead of throwing.

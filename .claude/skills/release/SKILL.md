@@ -86,6 +86,7 @@ prompt: |
 "queuert": <bump>
 "@queuert/postgres": <bump>
 "@queuert/sqlite": <bump>
+"@queuert/mysql": <bump>
 "@queuert/redis": <bump>
 "@queuert/nats": <bump>
 "@queuert/ipc": <bump>
@@ -164,14 +165,14 @@ gh release create v<version> --title "v<version>" --notes "$(cat <<'EOF'
 
 ### Packages
 
-All packages released at `<version>`: `queuert`, `@queuert/postgres`, `@queuert/sqlite`, `@queuert/redis`, `@queuert/nats`, `@queuert/ipc`, `@queuert/otel`, `@queuert/dashboard`.
+All packages released at `<version>`: `queuert`, `@queuert/postgres`, `@queuert/sqlite`, `@queuert/mysql`, `@queuert/redis`, `@queuert/nats`, `@queuert/ipc`, `@queuert/otel`, `@queuert/dashboard`.
 EOF
 )"
 ```
 
-### Step 7: Monitor Publish
+### Step 7: Monitor Staging
 
-The tag push triggers `.github/workflows/publish.yaml` which publishes to npm. Watch for the result:
+The tag push triggers `.github/workflows/publish.yaml`. Its build job packs every package, and its publish job stages each tarball on npm with `npm stage publish`. Nothing goes live until the user approves the staged releases. Watch for the result:
 
 ```bash
 sleep 5 && gh run list --repo kvet/queuert --workflow publish.yaml --limit 1
@@ -183,17 +184,29 @@ Then watch the run:
 gh run watch <run-id> --exit-status
 ```
 
-If it succeeds, verify on npm:
+If it fails, check logs with `gh run view <run-id> --log-failed` and help the user debug.
+
+### Step 8: Approve Staged Releases
+
+Approval needs the user's npm 2FA, so the user runs it, not you. Ask them to review and approve the staged releases, in this order: `queuert` first, then `@queuert/postgres`, `@queuert/sqlite`, `@queuert/mysql`, `@queuert/redis`, `@queuert/nats`, `@queuert/ipc`, `@queuert/otel`, `@queuert/dashboard`. Every adapter depends on `queuert` at the same version, so approving `queuert` first means no published adapter points at a `queuert` version that is not live yet.
+
+They can approve on npmjs.com (user menu → Staged Packages) or from a terminal:
+
+```bash
+npm stage list
+npm stage download <stage-id>
+npm stage approve <stage-id>
+```
+
+Wait for the user to confirm, then verify on npm:
 
 ```bash
 npm view queuert versions --json | tail -5
 ```
 
-If it fails, check logs with `gh run view <run-id> --log-failed` and help the user debug.
+### Step 9: Close Addressed Issues
 
-### Step 8: Close Addressed Issues
-
-Only after the publish succeeds, close the issues the user approved in Step 2. Leave a comment pointing to the release:
+Only after the staged releases are approved, close the issues the user approved in Step 2. Leave a comment pointing to the release:
 
 ```bash
 gh issue close <number> --repo kvet/queuert --reason completed --comment "Addressed in [v<version>](https://github.com/kvet/queuert/releases/tag/v<version>)."

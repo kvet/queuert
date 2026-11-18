@@ -9,10 +9,10 @@ packages:
 # Save dependencies with exact versions (no ^ or ~ range prefixes)
 saveExact: true
 
-# Only install package versions published at least 1 day ago (in minutes).
+# Only install package versions published at least 3 days ago (in minutes).
 # Mitigates supply-chain attacks where a compromised version is pulled from the
 # registry shortly after release.
-minimumReleaseAge: 1440
+minimumReleaseAge: 4320
 
 allowBuilds:
   "@prisma/engines": true
