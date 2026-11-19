@@ -15,24 +15,11 @@ import { SCHEMA_VERSION } from "../state-adapter/schema.redis.ts";
 import { createRedisStateAdapter } from "../state-adapter/state-adapter.redis.ts";
 import type { RedisStateProvider } from "../state-provider/state-provider.redis.ts";
 
-/**
- * The context the {@link redisStateProviderConformanceCases} run against. Get it from
- * {@link createRedisStateProviderConformanceContext} and pass it to every case unchanged.
- *
- * @experimental
- */
 export type RedisStateProviderConformanceContext = SchemaFenceConformanceContext & {
   createStateProvider: () => Promise<RedisStateProvider>;
   createStateAdapter: () => Promise<ReturnType<typeof createRedisStateAdapter>>;
 };
 
-/**
- * State adapter cases that assert a transaction waits on a row another transaction locked. The
- * Redis state adapter never waits: a transaction whose reads changed before it commits runs again,
- * so these cases do not apply to it.
- *
- * @experimental
- */
 export const redisStateAdapterLockWaitCaseNames: ReadonlySet<string> = new Set([
   "getChains > lock: exclusive blocks a concurrent locked read until the holding tx commits",
   "getJobs > lock: exclusive blocks a concurrent locked read until the holding tx commits",
@@ -182,35 +169,12 @@ export const redisStateProviderEvalGroup: ConformanceGroup<RedisStateProviderCon
   ],
 };
 
-/**
- * Prepares the context the {@link redisStateProviderConformanceCases} run against: a Redis state
- * adapter per case over a new provider, under a key prefix of its own and migrated to the latest
- * schema. The test file still owns the provider's resources and releases them itself.
- *
- * @param options - Context configuration.
- *
- * @experimental
- */
 export const createRedisStateProviderConformanceContext = ({
   createStateProvider,
   stateAdapterOptions,
-}: {
-  /**
-   * Creates the provider under test. Each case's adapter gets its own provider and closes it when
-   * the case ends, so closing one must not release resources the next one needs, such as the
-   * client connection.
-   */
-  createStateProvider: () => Promise<RedisStateProvider>;
-  /**
-   * Options every adapter of the suite is created with, besides its provider and `keyPrefix`,
-   * such as the ID generators your application configures. Each case still writes under a key
-   * prefix of its own.
-   */
-  stateAdapterOptions?: Omit<
-    Parameters<typeof createRedisStateAdapter>[0],
-    "stateProvider" | "keyPrefix"
-  >;
-}): RedisStateProviderConformanceContext => {
+}: Parameters<
+  typeof createRedisStateProviderConformanceCases
+>[0]): RedisStateProviderConformanceContext => {
   const keyPrefixes = new Set<string>();
   const createStateAdapter = async () => {
     const keyPrefix = `{queuert-conformance-${randomUUID()}}:`;
@@ -272,31 +236,54 @@ export const redisStateProviderConformanceGroups: ConformanceGroup<RedisStatePro
   ];
 
 /**
- * The provider's `eval` contract followed by every state adapter contract case the Redis state
- * adapter meets, including the checks of its schema write fence, run through
- * `createRedisStateAdapter` over a provider. Run them one per test in your own test file against
- * a context from {@link createRedisStateProviderConformanceContext}. Works with any test runner.
+ * Prepares the state adapter contract cases for a provider, ready to run. The cases are the
+ * provider's `eval` contract followed by every state adapter contract case the Redis state adapter
+ * meets, including the checks of its schema write fence, run through `createRedisStateAdapter` over
+ * a provider. Each case gets a Redis state adapter over a new provider, under a key prefix of its
+ * own and migrated to the latest schema. The test file still owns the provider's resources and
+ * releases them itself. Works with any test runner.
+ *
+ * @param options - Suite configuration.
  *
  * @example
  * ```ts
  * import { afterAll, test } from "vitest";
  *
  * const client = new Redis(url);
- * const context = createRedisStateProviderConformanceContext({
+ * const cases = createRedisStateProviderConformanceCases({
  *   createStateProvider: async () => createIoredisStateProvider({ client }),
  * });
  * afterAll(async () => {
  *   await client.quit();
  * });
  *
- * for (const conformanceCase of redisStateProviderConformanceCases) {
+ * for (const conformanceCase of cases) {
  *   test(conformanceCase.title, async () => {
- *     await conformanceCase.run(context);
+ *     await conformanceCase.run();
  *   });
  * }
  * ```
  *
  * @experimental
  */
-export const redisStateProviderConformanceCases: ConformanceTestCase<RedisStateProviderConformanceContext>[] =
-  toConformanceTestCases<RedisStateProviderConformanceContext>(redisStateProviderConformanceGroups);
+export const createRedisStateProviderConformanceCases = (options: {
+  /**
+   * Creates the provider under test. Each case's adapter gets its own provider and closes it when
+   * the case ends, so closing one must not release resources the next one needs, such as the
+   * client connection.
+   */
+  createStateProvider: () => Promise<RedisStateProvider>;
+  /**
+   * Options every adapter of the suite is created with, besides its provider and `keyPrefix`,
+   * such as the ID generators your application configures. Each case still writes under a key
+   * prefix of its own.
+   */
+  stateAdapterOptions?: Omit<
+    Parameters<typeof createRedisStateAdapter>[0],
+    "stateProvider" | "keyPrefix"
+  >;
+}): ConformanceTestCase[] =>
+  toConformanceTestCases(
+    redisStateProviderConformanceGroups,
+    createRedisStateProviderConformanceContext(options),
+  );

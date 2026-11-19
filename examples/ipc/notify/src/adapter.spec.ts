@@ -3,10 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createIpcNotifyAdapter } from "@queuert/ipc";
-import {
-  type NotifyAdapterConformanceContext,
-  notifyAdapterConformanceCases,
-} from "queuert/conformance";
+import { createNotifyAdapterConformanceCases } from "queuert/conformance";
 import { afterAll, beforeAll, test } from "vitest";
 
 // #region conformance
@@ -18,13 +15,13 @@ afterAll(async () => {
   await rm(directory, { recursive: true, force: true });
 });
 
-const context: NotifyAdapterConformanceContext = {
+const cases = createNotifyAdapterConformanceCases({
   createNotifyAdapter: async () => createIpcNotifyAdapter({ directory }),
-};
+});
 
-for (const conformanceCase of notifyAdapterConformanceCases) {
+for (const conformanceCase of cases) {
   test(conformanceCase.title, async () => {
-    await conformanceCase.run(context);
+    await conformanceCase.run();
   });
 }
 // #endregion

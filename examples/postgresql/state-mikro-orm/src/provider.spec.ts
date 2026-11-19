@@ -1,9 +1,5 @@
 import { MikroORM } from "@mikro-orm/postgresql";
-import {
-  createPgStateProviderConformanceContext,
-  pgStateProviderConformanceCases,
-  type PgStateProviderConformanceContext,
-} from "@queuert/postgres/conformance";
+import { createPgStateProviderConformanceCases } from "@queuert/postgres/conformance";
 import { acquirePostgres, type AcquiredPostgres } from "@queuert/testcontainers";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
@@ -30,20 +26,18 @@ afterAll(async () => {
 
 // #region conformance
 describe("postgresql/state-mikro-orm provider conformance", () => {
-  let context: PgStateProviderConformanceContext;
-
-  beforeAll(async () => {
-    context = await createPgStateProviderConformanceContext({
-      createStateProvider: async () => stateProvider,
-      withNonTransactionContext: async (fn) => fn({ em: orm.em.fork() }),
-      withSavepoint: async (txCtx, fn) =>
-        (txCtx as MikroOrmPgContext).em.transactional(async (em) => fn({ em })),
-    });
+  const cases = createPgStateProviderConformanceCases({
+    createStateProvider: async () => stateProvider,
+    withNonTransactionContext: async (fn) => fn({ em: orm.em.fork() }),
+    withSavepoint: async (txCtx, fn) =>
+      (txCtx as MikroOrmPgContext).em.transactional(async (em) => fn({ em })),
   });
 
-  for (const conformanceCase of pgStateProviderConformanceCases) {
+  beforeAll(async () => {});
+
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });

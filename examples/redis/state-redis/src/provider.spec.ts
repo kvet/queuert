@@ -1,8 +1,4 @@
-import {
-  createRedisStateProviderConformanceContext,
-  type RedisStateProviderConformanceContext,
-  redisStateProviderConformanceCases,
-} from "@queuert/redis/conformance";
+import { createRedisStateProviderConformanceCases } from "@queuert/redis/conformance";
 import { acquireRedis, type AcquiredRedis } from "@queuert/testcontainers";
 import { createClient, type RedisClientType } from "redis";
 import { afterAll, beforeAll, describe, test } from "vitest";
@@ -13,15 +9,14 @@ import { createNodeRedisStateProvider } from "./provider.ts";
 describe("redis/state-redis provider conformance", () => {
   let redis: AcquiredRedis;
   let client: RedisClientType;
-  let context: RedisStateProviderConformanceContext;
+  const cases = createRedisStateProviderConformanceCases({
+    createStateProvider: async () => createNodeRedisStateProvider({ client }),
+  });
 
   beforeAll(async () => {
     redis = await acquireRedis("redis:8");
     client = createClient({ url: redis.connectionUrl });
     await client.connect();
-    context = createRedisStateProviderConformanceContext({
-      createStateProvider: async () => createNodeRedisStateProvider({ client }),
-    });
   }, 60_000);
 
   afterAll(async () => {
@@ -29,9 +24,9 @@ describe("redis/state-redis provider conformance", () => {
     await redis[Symbol.asyncDispose]();
   });
 
-  for (const conformanceCase of redisStateProviderConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });

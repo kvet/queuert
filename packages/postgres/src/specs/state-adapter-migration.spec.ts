@@ -364,6 +364,8 @@ describe("upgrading from 001_schema_v1", () => {
       const lateDependentId = "ffffffff-ffff-4fff-bfff-ffffffffffff";
       const referencedDependentId = "00000000-0000-4000-8000-000000000006";
       const referencedHeadId = "ffffffff-ffff-4fff-bfff-fffffffffff0";
+      const partialDependentId = "00000000-0000-4000-8000-000000000007";
+      const completingBlockerId = "00000000-0000-4000-8000-000000000008";
       await query(
         provider,
         `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status)
@@ -379,13 +381,17 @@ describe("upgrading from 001_schema_v1", () => {
                 ('${updatedJobId}', 'updated', '${updatedJobId}', 0, 'pending', 'running'),
                 ('${deletedJobId}', 'deleted', '${deletedJobId}', 0, 'pending', 'running'),
                 ('${referencedDependentId}', 'dependent', '${referencedDependentId}', 0, 'blocked', 'running'),
-                ('${referencedHeadId}', 'blocker', '${referencedHeadId}', 0, 'pending', 'running')`,
+                ('${referencedHeadId}', 'blocker', '${referencedHeadId}', 0, 'pending', 'running'),
+                ('${partialDependentId}', 'dependent', '${partialDependentId}', 0, 'blocked', 'running'),
+                ('${completingBlockerId}', 'blocker', '${completingBlockerId}', 0, 'pending', 'running')`,
       );
       await query(
         provider,
         `INSERT INTO queuert_job_blocker (job_id, blocked_by_chain_id, "index")
          VALUES ('${deletedDependentId}', '${flaggedBlockerId}', 0),
-                ('${referencedDependentId}', '${referencedHeadId}', 0)`,
+                ('${referencedDependentId}', '${referencedHeadId}', 0),
+                ('${partialDependentId}', '${completingBlockerId}', 0),
+                ('${partialDependentId}', '${referencedHeadId}', 1)`,
       );
       let releaseCopy!: () => void;
       const copyReleased = new Promise<void>((resolve) => {
@@ -435,14 +441,25 @@ describe("upgrading from 001_schema_v1", () => {
         `INSERT INTO queuert_job_blocker (job_id, blocked_by_chain_id, "index")
          VALUES ('${lateDependentId}', '${lateBlockerId}', 0)`,
       );
+      const workerId = randomUUID();
       await query(
         provider,
-        `UPDATE queuert_job SET status = 'running', last_attempt_error = '"boom"' WHERE id = '${updatedJobId}'`,
+        `INSERT INTO queuert_worker (id, type_names, concurrency, lease_until, token)
+         VALUES ('${workerId}', ARRAY['updated', 'blocker'], 1, now() + interval '1 hour', gen_random_uuid())`,
+      );
+      await query(
+        provider,
+        `UPDATE queuert_job SET status = 'running', attempt_by = '${workerId}', last_attempt_error = '"boom"' WHERE id = '${updatedJobId}'`,
       );
       await query(provider, `DELETE FROM queuert_job WHERE id = '${deletedJobId}'`);
       await query(
         provider,
-        `UPDATE queuert_job SET status = 'running' WHERE id = '${referencedHeadId}'`,
+        `UPDATE queuert_job SET status = 'running', attempt_by = '${workerId}' WHERE id = '${referencedHeadId}'`,
+      );
+      await query(
+        provider,
+        `UPDATE queuert_job SET status = 'completed', chain_status = 'completed'
+         WHERE id = '${completingBlockerId}'`,
       );
       releaseCopy();
       expect(await interrupted).toMatchObject({
@@ -463,16 +480,18 @@ describe("upgrading from 001_schema_v1", () => {
       expect(
         await query(
           provider,
-          `SELECT id::text, status, blocking FROM queuert_job
+          `SELECT id::text, status, blocking, blockers_remaining FROM queuert_job
            WHERE type_name <> 'filler' ORDER BY id`,
         ),
       ).toEqual([
-        { id: flaggedBlockerId, status: "pending", blocking: false },
-        { id: lateBlockerId, status: "pending", blocking: true },
-        { id: updatedJobId, status: "running", blocking: false },
-        { id: referencedDependentId, status: "blocked", blocking: false },
-        { id: referencedHeadId, status: "running", blocking: true },
-        { id: lateDependentId, status: "blocked", blocking: false },
+        { id: flaggedBlockerId, status: "pending", blocking: false, blockers_remaining: 0 },
+        { id: lateBlockerId, status: "pending", blocking: true, blockers_remaining: 0 },
+        { id: updatedJobId, status: "running", blocking: false, blockers_remaining: 0 },
+        { id: referencedDependentId, status: "blocked", blocking: false, blockers_remaining: 1 },
+        { id: partialDependentId, status: "blocked", blocking: false, blockers_remaining: 1 },
+        { id: completingBlockerId, status: "completed", blocking: true, blockers_remaining: 0 },
+        { id: referencedHeadId, status: "running", blocking: true, blockers_remaining: 0 },
+        { id: lateDependentId, status: "blocked", blocking: false, blockers_remaining: 1 },
       ]);
       expect(
         await query(
@@ -490,6 +509,142 @@ describe("upgrading from 001_schema_v1", () => {
         schema_fence_v1: false,
         schema_fence_v2: true,
       });
+    },
+  );
+
+  it(
+    "counts the incomplete blockers of blocked jobs, and moves stuck dependents and orphaned attempts to pending",
+    { timeout: 30_000 },
+    async ({ database: { provider, adapter } }) => {
+      await migrateToInstall(provider);
+      const runningBlockerId = randomUUID();
+      const completedBlockerId = randomUUID();
+      const secondRunningBlockerId = randomUUID();
+      const waitingId = randomUUID();
+      const duplicateId = randomUUID();
+      const stuckId = randomUUID();
+      const orphanedId = randomUUID();
+      const attemptedId = randomUUID();
+      const workerId = randomUUID();
+      await query(
+        provider,
+        `INSERT INTO queuert_worker (id, type_names, concurrency, lease_until, token)
+         VALUES ('${workerId}', ARRAY['attempted'], 1, now() + interval '1 hour', gen_random_uuid())`,
+      );
+      await query(
+        provider,
+        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status, scheduled_at, attempt, attempt_at, attempt_by, attempt_token)
+         VALUES ('${runningBlockerId}', 'blocker', '${runningBlockerId}', 0, 'pending', 'running', now(), 0, NULL, NULL, NULL),
+                ('${completedBlockerId}', 'blocker', '${completedBlockerId}', 0, 'completed', 'completed', now(), 1, NULL, NULL, NULL),
+                ('${secondRunningBlockerId}', 'blocker', '${secondRunningBlockerId}', 0, 'pending', 'running', now(), 0, NULL, NULL, NULL),
+                ('${waitingId}', 'dependent', '${waitingId}', 0, 'blocked', 'running', now(), 0, NULL, NULL, NULL),
+                ('${duplicateId}', 'dependent', '${duplicateId}', 0, 'blocked', 'running', now(), 0, NULL, NULL, NULL),
+                ('${stuckId}', 'dependent', '${stuckId}', 0, 'blocked', 'running', now() - interval '1 hour', 0, NULL, NULL, NULL),
+                ('${orphanedId}', 'orphaned', '${orphanedId}', 0, 'running', 'running', now(), 1, now(), '${randomUUID()}', gen_random_uuid()),
+                ('${attemptedId}', 'attempted', '${attemptedId}', 0, 'running', 'running', now(), 1, now(), '${workerId}', gen_random_uuid())`,
+      );
+      await query(
+        provider,
+        `INSERT INTO queuert_job_blocker (job_id, blocked_by_chain_id, "index")
+         VALUES ('${waitingId}', '${runningBlockerId}', 0),
+                ('${waitingId}', '${completedBlockerId}', 1),
+                ('${waitingId}', '${secondRunningBlockerId}', 2),
+                ('${duplicateId}', '${runningBlockerId}', 0),
+                ('${duplicateId}', '${runningBlockerId}', 1),
+                ('${duplicateId}', '${completedBlockerId}', 2),
+                ('${stuckId}', '${completedBlockerId}', 0),
+                ('${stuckId}', '${completedBlockerId}', 1)`,
+      );
+
+      expect(await adapter.migrateToLatest()).toEqual({
+        applied: ["002_schema_v2"],
+        skipped: [INSTALL],
+        reverted: [],
+        unrecognized: [],
+      });
+
+      expect(
+        await query(
+          provider,
+          `SELECT j.id, j.status, j.blockers_remaining, j.attempt_by IS NULL AS attempt_cleared,
+             j.attempt_token IS NULL AS token_cleared, j.scheduled_at >= now() - interval '1 minute' AS scheduled_recently,
+             (SELECT count(*)::integer FROM queuert_job_blocker jb
+              LEFT JOIN queuert_job h ON h.id = jb.blocked_by_chain_id
+              WHERE jb.job_id = j.id AND h.chain_status IS DISTINCT FROM 'completed') AS recomputed
+           FROM queuert_job j
+           WHERE j.id IN ('${waitingId}', '${duplicateId}', '${stuckId}', '${orphanedId}', '${attemptedId}')
+           ORDER BY j.type_name, j.id`,
+        ),
+      ).toEqual(
+        expect.arrayContaining([
+          {
+            id: waitingId,
+            status: "blocked",
+            blockers_remaining: 2,
+            attempt_cleared: true,
+            token_cleared: true,
+            scheduled_recently: true,
+            recomputed: 2,
+          },
+          {
+            id: duplicateId,
+            status: "blocked",
+            blockers_remaining: 2,
+            attempt_cleared: true,
+            token_cleared: true,
+            scheduled_recently: true,
+            recomputed: 2,
+          },
+          {
+            id: stuckId,
+            status: "pending",
+            blockers_remaining: 0,
+            attempt_cleared: true,
+            token_cleared: true,
+            scheduled_recently: true,
+            recomputed: 0,
+          },
+          {
+            id: orphanedId,
+            status: "pending",
+            blockers_remaining: 0,
+            attempt_cleared: true,
+            token_cleared: true,
+            scheduled_recently: true,
+            recomputed: 0,
+          },
+          {
+            id: attemptedId,
+            status: "running",
+            blockers_remaining: 0,
+            attempt_cleared: false,
+            token_cleared: false,
+            scheduled_recently: true,
+            recomputed: 0,
+          },
+        ]),
+      );
+
+      await adapter.withTransaction(async (txCtx) => {
+        await adapter.completeJobs({
+          txCtx,
+          jobs: [{ jobId: runningBlockerId, output: null }],
+        });
+        return adapter.unblockJobs({ txCtx, blockedByChainId: runningBlockerId });
+      });
+      await adapter.withTransaction(async (txCtx) => {
+        await adapter.completeJobs({
+          txCtx,
+          jobs: [{ jobId: secondRunningBlockerId, output: null }],
+        });
+        return adapter.unblockJobs({ txCtx, blockedByChainId: secondRunningBlockerId });
+      });
+      expect(
+        await query(
+          provider,
+          `SELECT id, status FROM queuert_job WHERE id IN ('${waitingId}', '${duplicateId}') ORDER BY id`,
+        ),
+      ).toEqual([waitingId, duplicateId].toSorted().map((id) => ({ id, status: "pending" })));
     },
   );
 

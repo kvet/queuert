@@ -219,19 +219,18 @@ const Page = () => (
     <h2 id="testing-your-provider">Testing your provider</h2>
     <p>
       <code>@queuert/postgres/conformance</code> checks a provider you write.{" "}
-      <code>pgStateProviderConformanceCases</code> are every case a state adapter must pass, the
-      cases that hold two transactions open at once, checks of the schema write fence, and checks
-      that <code>classifyError</code> names a missing table.{" "}
-      <code>createPgStateProviderConformanceContext</code> prepares the context they run against: it
-      takes a <code>createStateProvider</code> factory and a <code>withNonTransactionContext</code>{" "}
-      that runs a callback with a context outside any transaction, and migrates the schema once. An
-      optional <code>withSavepoint</code> runs a callback in a savepoint of a transaction, opened
-      the way your application opens one, and passes it the savepoint's context; when you give it,
-      the cases check that <code>onTransactionCommit</code> and <code>onTransactionRollback</code>{" "}
-      follow savepoints. Each case then builds its own adapter over a new provider from your
-      factory, with the tables cleared, and closes both when it ends. The suite drives no test
-      runner: your test file owns the database in its own hooks and registers one test per case, as
-      each example does:
+      <code>createPgStateProviderConformanceCases</code> returns the cases, ready to run: every case
+      a state adapter must pass, the cases that hold two transactions open at once, checks of the
+      schema write fence, and checks that <code>classifyError</code> names a missing table. It takes
+      a <code>createStateProvider</code> factory and a <code>withNonTransactionContext</code> that
+      runs a callback with a context outside any transaction, and migrates the schema once, before
+      the first case. An optional <code>withSavepoint</code> runs a callback in a savepoint of a
+      transaction, opened the way your application opens one, and passes it the savepoint's context;
+      when you give it, the cases check that <code>onTransactionCommit</code> and{" "}
+      <code>onTransactionRollback</code> follow savepoints. Each case then builds its own adapter
+      over a new provider from your factory, with the tables cleared, and closes both when it ends.
+      The suite drives no test runner: your test file owns the database in its own hooks and
+      registers one test per case, as each example does:
     </p>
     <Tabs syncKey="postgres-driver">
       <TabItem label="pg">
@@ -308,10 +307,11 @@ const Page = () => (
       Queuert supports only READ COMMITTED, PostgreSQL's default isolation level. This covers every
       transaction Queuert writes in, including the ones you pass to <code>complete</code> and to
       client methods. Its conditional and multi-statement writes, such as <code>unblockJobs</code>{" "}
-      locking the blocked jobs and then recomputing their blockers, rely on each statement taking a
-      fresh snapshot after it waits on a row lock. Every provider above opens its transactions with
-      the level stated, so a server or role whose <code>default_transaction_isolation</code> is
-      higher cannot change it; open the transactions you pass to Queuert the same way.
+      locking the blocked jobs and then counting down their incomplete blockers, rely on each
+      statement taking a fresh snapshot after it waits on a row lock. Every provider above opens its
+      transactions with the level stated, so a server or role whose{" "}
+      <code>default_transaction_isolation</code> is higher cannot change it; open the transactions
+      you pass to Queuert the same way.
     </p>
 
     <h2>Write fence</h2>

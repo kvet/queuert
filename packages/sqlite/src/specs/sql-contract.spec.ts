@@ -3,8 +3,11 @@ import { conformanceTestSuite } from "@queuert/helpers/conformance";
 import { step, syncAsync, type Mode } from "@queuert/sync-async";
 import type { RuntimeType } from "@queuert/typed-sql";
 import Database from "better-sqlite3";
-import type { StateAdapterConformanceContext } from "queuert/conformance";
-import { stateAdapterAsyncGroups, stateAdapterBaseGroups } from "queuert/conformance-internal";
+import {
+  stateAdapterAsyncGroups,
+  stateAdapterBaseGroups,
+  type StateAdapterConformanceContext,
+} from "queuert/conformance-internal";
 import { describe, expect, it } from "vitest";
 
 import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";

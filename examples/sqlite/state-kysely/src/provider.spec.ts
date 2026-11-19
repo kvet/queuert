@@ -1,10 +1,6 @@
 import {
-  asyncSqliteStateProviderConformanceCases,
-  createSqliteMigratorConformanceContext,
-  createSqliteStateProviderConformanceContext,
-  type SqliteStateProviderConformanceContext,
-  sqliteMigratorConformanceCases,
-  sqliteStateProviderConformanceCases,
+  createSqliteMigratorConformanceCases,
+  createSqliteStateProviderConformanceCases,
 } from "@queuert/sqlite/conformance";
 import BetterSqlite3 from "better-sqlite3";
 import { Kysely, SqliteDialect } from "kysely";
@@ -19,25 +15,21 @@ describe("sqlite/state-kysely provider conformance", () => {
   const db = new Kysely<Database>({
     dialect: new SqliteDialect({ database: new BetterSqlite3(":memory:") }),
   });
-  let context: SqliteStateProviderConformanceContext;
-
-  beforeAll(async () => {
-    context = await createSqliteStateProviderConformanceContext({
-      createStateProvider: async () => createKyselySqliteStateProvider({ db }),
-      withNonTransactionContext: async (fn) => fn({ db }),
-    });
+  const cases = createSqliteStateProviderConformanceCases({
+    mode: "async",
+    createStateProvider: async () => createKyselySqliteStateProvider({ db }),
+    withNonTransactionContext: async (fn) => fn({ db }),
   });
+
+  beforeAll(async () => {});
 
   afterAll(async () => {
     await db.destroy();
   });
 
-  for (const conformanceCase of [
-    ...sqliteStateProviderConformanceCases,
-    ...asyncSqliteStateProviderConformanceCases,
-  ]) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });
@@ -47,17 +39,18 @@ describe("sqlite/state-kysely migrator conformance", () => {
   const db = new Kysely<Database>({
     dialect: new SqliteDialect({ database: new BetterSqlite3(":memory:") }),
   });
-  const context = createSqliteMigratorConformanceContext({
-    stateProvider: createKyselySqliteStateProvider({ db }),
+  const cases = createSqliteMigratorConformanceCases({
+    mode: "async",
+    createStateProvider: () => createKyselySqliteStateProvider({ db }),
   });
 
   afterAll(async () => {
     await db.destroy();
   });
 
-  for (const conformanceCase of sqliteMigratorConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });

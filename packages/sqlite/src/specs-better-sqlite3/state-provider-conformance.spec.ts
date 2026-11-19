@@ -18,6 +18,7 @@ const it = baseIt.extend("conformance", { scope: "file" }, async ({}, { onCleanu
     db.close();
   });
   return createSqliteStateProviderConformanceContext({
+    mode: "async",
     createStateProvider: async () => createBetterSqlite3Provider({ db }),
     withNonTransactionContext: async (fn) => fn({ db }),
     withSavepoint: withBetterSqlite3Savepoint("async"),
@@ -30,6 +31,7 @@ const syncIt = baseIt.extend("conformance", { scope: "file" }, async ({}, { onCl
     db.close();
   });
   return createSqliteStateProviderConformanceContext({
+    mode: "sync",
     createStateProvider: () => createBetterSqlite3Provider({ db, mode: "sync" }),
     withNonTransactionContext: (fn) => fn({ db }),
     withSavepoint: withBetterSqlite3Savepoint("sync"),
@@ -45,6 +47,7 @@ const customOptionsIt = baseIt.extend(
       db.close();
     });
     return createSqliteStateProviderConformanceContext({
+      mode: "sync",
       createStateProvider: () => createBetterSqlite3Provider({ db, mode: "sync" }),
       withNonTransactionContext: (fn) => fn({ db }),
       withSavepoint: withBetterSqlite3Savepoint("sync"),

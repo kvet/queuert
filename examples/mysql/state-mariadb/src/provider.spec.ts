@@ -1,10 +1,6 @@
 import {
-  createMysqlMigratorConformanceContext,
-  createMysqlStateProviderConformanceContext,
-  type MysqlMigratorConformanceContext,
-  type MysqlStateProviderConformanceContext,
-  mysqlMigratorConformanceCases,
-  mysqlStateProviderConformanceCases,
+  createMysqlMigratorConformanceCases,
+  createMysqlStateProviderConformanceCases,
 } from "@queuert/mysql/conformance";
 import { acquireMysql } from "@queuert/testcontainers";
 import { type Pool, createPool } from "mariadb";
@@ -15,32 +11,31 @@ import { createMariadbPoolStateProvider } from "./provider.ts";
 // #region conformance
 describe("mysql/state-mariadb provider conformance", () => {
   let pool: Pool;
-  let context: MysqlStateProviderConformanceContext;
+  const cases = createMysqlStateProviderConformanceCases({
+    createStateProvider: async () => createMariadbPoolStateProvider({ pool }),
+    dialect: "mariadb",
+    withNonTransactionContext: async (fn) => {
+      const connection = await pool.getConnection();
+      try {
+        return await fn({ connection });
+      } finally {
+        await connection.release();
+      }
+    },
+  });
 
   beforeAll(async () => {
     const { connectionOptions } = await acquireMysql("mariadb:13", import.meta.url);
     pool = createPool({ ...connectionOptions, connectionLimit: 20 });
-    context = await createMysqlStateProviderConformanceContext({
-      createStateProvider: async () => createMariadbPoolStateProvider({ pool }),
-      dialect: "mariadb",
-      withNonTransactionContext: async (fn) => {
-        const connection = await pool.getConnection();
-        try {
-          return await fn({ connection });
-        } finally {
-          await connection.release();
-        }
-      },
-    });
   }, 120_000);
 
   afterAll(async () => {
     await pool.end();
   });
 
-  for (const conformanceCase of mysqlStateProviderConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });
@@ -48,23 +43,22 @@ describe("mysql/state-mariadb provider conformance", () => {
 
 describe("mysql/state-mariadb migrator conformance", () => {
   let pool: Pool;
-  let context: MysqlMigratorConformanceContext;
+  const cases = createMysqlMigratorConformanceCases({
+    createStateProvider: () => createMariadbPoolStateProvider({ pool }),
+  });
 
   beforeAll(async () => {
     const { connectionOptions } = await acquireMysql("mariadb:13", `${import.meta.url}#migrator`);
     pool = createPool({ ...connectionOptions, connectionLimit: 10 });
-    context = createMysqlMigratorConformanceContext({
-      stateProvider: createMariadbPoolStateProvider({ pool }),
-    });
   }, 120_000);
 
   afterAll(async () => {
     await pool.end();
   });
 
-  for (const conformanceCase of mysqlMigratorConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });

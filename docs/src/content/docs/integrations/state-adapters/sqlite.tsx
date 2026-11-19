@@ -264,27 +264,24 @@ const Page = () => (
     <h2 id="testing-your-provider">Testing your provider</h2>
     <p>
       <code>@queuert/sqlite/conformance</code> checks a provider you write.{" "}
-      <code>sqliteStateProviderConformanceCases</code> are every case a state adapter must pass,
-      checks of the schema write fence, and checks that <code>classifyError</code> names a missing
-      table. <code>createSqliteStateProviderConformanceContext</code> prepares the context they run
-      against: it takes a <code>createStateProvider</code> factory and a{" "}
-      <code>withNonTransactionContext</code> that runs a callback with a context outside any
-      transaction, and migrates the schema once. An optional <code>withSavepoint</code> runs a
-      callback in a savepoint of a transaction, opened the way your application opens one, and
-      passes it the savepoint's context; when you give it, the cases check that{" "}
-      <code>onTransactionCommit</code> and <code>onTransactionRollback</code> follow savepoints.
-      Each case then builds its own adapter over a new provider from your factory, with the tables
-      cleared, and closes both when it ends. The suite drives no test runner: your test file owns
-      the database in its own hooks and registers one test per case. An async provider also runs{" "}
-      <code>asyncSqliteStateProviderConformanceCases</code>, the cases that hold a transaction open
-      across an <code>await</code>, next to them. The node:sqlite example runs under{" "}
+      <code>createSqliteStateProviderConformanceCases</code> returns the cases, ready to run: every
+      case a state adapter must pass, checks of the schema write fence, and checks that{" "}
+      <code>classifyError</code> names a missing table. It takes the provider's <code>mode</code>, a{" "}
+      <code>createStateProvider</code> factory and a <code>withNonTransactionContext</code> that
+      runs a callback with a context outside any transaction, and migrates the schema once, before
+      the first case. An optional <code>withSavepoint</code> runs a callback in a savepoint of a
+      transaction, opened the way your application opens one, and passes it the savepoint's context;
+      when you give it, the cases check that <code>onTransactionCommit</code> and{" "}
+      <code>onTransactionRollback</code> follow savepoints. Each case then builds its own adapter
+      over a new provider from your factory, with the tables cleared, and closes both when it ends.
+      The suite drives no test runner: your test file owns the database in its own hooks and
+      registers one test per case. With <code>mode: "async"</code> the cases also include those that
+      hold a transaction open across an <code>await</code>. The node:sqlite example runs under{" "}
       <code>node:test</code>, the Bun examples under <code>bun:test</code> and the others under
-      vitest. Over a synchronous provider, the same <code>sqliteStateProviderConformanceCases</code>{" "}
-      run these cases synchronously through the adapter over it and add cases for the synchronous
-      contract, including the autocommit guard.{" "}
-      <code>createSqliteStateProviderConformanceContext</code> returns their context directly when
-      given a <code>createStateProvider</code> that returns the provider directly, a synchronous{" "}
-      <code>withNonTransactionContext</code> and an optional synchronous <code>withSavepoint</code>:
+      vitest. With <code>mode: "sync"</code>, a <code>createStateProvider</code> that returns the
+      provider directly, a synchronous <code>withNonTransactionContext</code> and an optional
+      synchronous <code>withSavepoint</code>, the cases run synchronously through the adapter over
+      it and add cases for the synchronous contract, including the autocommit guard:
     </p>
     <Tabs syncKey="sqlite-driver">
       <TabItem label="better-sqlite3">

@@ -53,7 +53,8 @@ const Page = () => (
 
     <h2 id="conformance">Conformance</h2>
     <p>
-      The example's <code>src/adapter.spec.ts</code> runs <code>notifyAdapterConformanceCases</code>{" "}
+      The example's <code>src/adapter.spec.ts</code> runs the cases from{" "}
+      <code>createNotifyAdapterConformanceCases</code>
       and is a working template. To run it under another test runner, see{" "}
       <A href="/integrations/notify-adapters/custom/#conformance">Custom Notify Adapter</A>.
     </p>

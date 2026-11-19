@@ -2,9 +2,8 @@ import { connect, type NatsConnection } from "@nats-io/transport-node";
 import { createNatsNotifyAdapter } from "@queuert/nats";
 import { acquireNats, type AcquiredNats } from "@queuert/testcontainers";
 import {
-  type NotifyAdapterConformanceContext,
-  notifyAdapterConformanceCases,
-  notifyAdapterEndToEndConformanceCases,
+  createNotifyAdapterConformanceCases,
+  createNotifyAdapterEndToEndConformanceCases,
 } from "queuert/conformance";
 import { afterAll, beforeAll, describe, test } from "vitest";
 
@@ -12,18 +11,10 @@ import { afterAll, beforeAll, describe, test } from "vitest";
 describe("postgresql/notify-nats adapter conformance", () => {
   let nats: AcquiredNats;
   let nc: NatsConnection;
-  let context: NotifyAdapterConformanceContext;
 
   beforeAll(async () => {
     nats = await acquireNats("nats:2");
     nc = await connect(nats.connectionOptions);
-    context = {
-      createNotifyAdapter: async () =>
-        createNatsNotifyAdapter({
-          nc,
-          subjectPrefix: `queuert.spec.${Date.now()}.${Math.random().toString(36).slice(2)}`,
-        }),
-    };
   }, 60_000);
 
   afterAll(async () => {
@@ -31,15 +22,24 @@ describe("postgresql/notify-nats adapter conformance", () => {
     await nats[Symbol.asyncDispose]();
   });
 
-  for (const conformanceCase of notifyAdapterConformanceCases) {
+  for (const conformanceCase of [
+    ...createNotifyAdapterConformanceCases({
+      createNotifyAdapter: async () =>
+        createNatsNotifyAdapter({
+          nc,
+          subjectPrefix: `queuert.spec.${Date.now()}.${Math.random().toString(36).slice(2)}`,
+        }),
+    }),
+    ...createNotifyAdapterEndToEndConformanceCases({
+      createNotifyAdapter: async () =>
+        createNatsNotifyAdapter({
+          nc,
+          subjectPrefix: `queuert.spec.${Date.now()}.${Math.random().toString(36).slice(2)}`,
+        }),
+    }),
+  ]) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
-    });
-  }
-
-  for (const conformanceCase of notifyAdapterEndToEndConformanceCases) {
-    test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });

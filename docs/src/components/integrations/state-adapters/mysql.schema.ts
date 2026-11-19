@@ -107,6 +107,12 @@ export const mysqlTables: SchemaTable[] = [
         description:
           "Whether a job_blocker row references the chain; cleared when the last one is deleted",
       },
+      {
+        name: "blockers_remaining",
+        type: "INT",
+        description:
+          "Number of the job's job_blocker rows whose blocker chain is not completed; meaningful on blocked jobs",
+      },
     ],
   },
   {

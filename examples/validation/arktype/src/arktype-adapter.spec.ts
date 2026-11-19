@@ -1,14 +1,11 @@
 import { type } from "arktype";
-import {
-  type ValidationAdapterConformanceContext,
-  validationAdapterConformanceCases,
-} from "queuert/conformance";
+import { createValidationAdapterConformanceCases } from "queuert/conformance";
 import { describe, test } from "vitest";
 
 import { createArkTypeJobTypes } from "./arktype-adapter.ts";
 
 describe("arktype adapter conformance", () => {
-  const context: ValidationAdapterConformanceContext = {
+  const cases = createValidationAdapterConformanceCases({
     basic: {
       buildEntry: () =>
         createArkTypeJobTypes({
@@ -154,11 +151,11 @@ describe("arktype adapter conformance", () => {
         );
       },
     },
-  };
+  });
 
-  for (const conformanceCase of validationAdapterConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });

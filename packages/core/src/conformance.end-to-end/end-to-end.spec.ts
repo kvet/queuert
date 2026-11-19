@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { notifyAdapterBaseGroups } from "../conformance.notify-adapter/groups.ts";
 import {
-  notifyAdapterConformanceCases,
-  notifyAdapterEndToEndConformanceCases,
+  createNotifyAdapterConformanceCases,
+  createNotifyAdapterEndToEndConformanceCases,
 } from "../conformance.notify-adapter/notify-adapter-cases.ts";
 import {
   stateAdapterAsyncGroups,
@@ -11,15 +11,12 @@ import {
   stateAdapterConcurrentTransactionGroups,
 } from "../conformance.state-adapter/groups.ts";
 import {
-  asyncStateAdapterConformanceCases,
-  asyncStateAdapterEndToEndConformanceCases,
-  concurrentStateAdapterConformanceCases,
-  concurrentStateAdapterEndToEndConformanceCases,
-  stateAdapterConformanceCases,
-  stateAdapterEndToEndConformanceCases,
+  createStateAdapterConformanceCases,
+  createStateAdapterEndToEndConformanceCases,
 } from "../conformance.state-adapter/state-adapter-cases.ts";
 import type { StateAdapterConformanceContext } from "../conformance.state-adapter/types.ts";
-import { validationAdapterConformanceCases } from "../conformance.validation-adapter/validation-adapter-cases.ts";
+import type { ValidationAdapterConformanceContext } from "../conformance.validation-adapter/types.ts";
+import { createValidationAdapterConformanceCases } from "../conformance.validation-adapter/validation-adapter-cases.ts";
 import { createInProcessNotifyAdapter } from "../notify-adapter.in-process/notify-adapter.in-process.ts";
 import type { NotifyAdapter } from "../notify-adapter/notify-adapter.ts";
 import { createInProcessStateAdapter } from "../state-adapter.in-process/state-adapter.in-process.ts";
@@ -53,19 +50,30 @@ const findCase = <T extends { title: string }>(cases: T[], title: string): T => 
   return found;
 };
 
+const stateContext: StateAdapterConformanceContext = {
+  createStateAdapter: async () => createInProcessStateAdapter({ mode: "async" }),
+  withNonTransactionContext: async (fn) => fn({ outsideTransaction: true }),
+};
+const notifyContext = {
+  createNotifyAdapter: async () => createInProcessNotifyAdapter({ mode: "async" }),
+};
+
 describe("public case lists", () => {
   it("gives every case its own title across the lists an adapter runs together", () => {
     for (const cases of [
       [
-        ...stateAdapterConformanceCases,
-        ...asyncStateAdapterConformanceCases,
-        ...concurrentStateAdapterConformanceCases,
-        ...stateAdapterEndToEndConformanceCases,
-        ...asyncStateAdapterEndToEndConformanceCases,
-        ...concurrentStateAdapterEndToEndConformanceCases,
+        ...createStateAdapterConformanceCases({ ...stateContext, mode: "async", concurrent: true }),
+        ...createStateAdapterEndToEndConformanceCases({
+          ...stateContext,
+          mode: "async",
+          concurrent: true,
+        }),
       ],
-      [...notifyAdapterConformanceCases, ...notifyAdapterEndToEndConformanceCases],
-      validationAdapterConformanceCases,
+      [
+        ...createNotifyAdapterConformanceCases(notifyContext),
+        ...createNotifyAdapterEndToEndConformanceCases(notifyContext),
+      ],
+      createValidationAdapterConformanceCases({} as ValidationAdapterConformanceContext),
     ]) {
       const titles = cases.map(({ title }) => title);
       expect(titles.filter((title, index) => titles.indexOf(title) !== index)).toEqual([]);
@@ -73,25 +81,39 @@ describe("public case lists", () => {
   });
 });
 
-describe("stateAdapterEndToEndConformanceCases", () => {
-  it("keeps the contract cases and the end-to-end cases in separate lists", () => {
-    expect(stateAdapterConformanceCases.map(({ title }) => title)).toEqual(
+describe("createStateAdapterEndToEndConformanceCases", () => {
+  it("chooses the contract and end-to-end cases by mode and concurrency", () => {
+    const titles = (cases: { title: string }[]) => cases.map(({ title }) => title);
+
+    expect(titles(createStateAdapterConformanceCases({ ...stateContext, mode: "sync" }))).toEqual(
       titlesOf(stateAdapterBaseGroups),
     );
-    expect(concurrentStateAdapterConformanceCases.map(({ title }) => title)).toEqual(
-      titlesOf(stateAdapterConcurrentTransactionGroups),
+    expect(titles(createStateAdapterConformanceCases({ ...stateContext, mode: "async" }))).toEqual(
+      titlesOf([...stateAdapterBaseGroups, ...stateAdapterAsyncGroups]),
     );
-    expect(asyncStateAdapterConformanceCases.map(({ title }) => title)).toEqual(
-      titlesOf(stateAdapterAsyncGroups),
-    );
-    expect(stateAdapterEndToEndConformanceCases.map(({ title }) => title)).toEqual(
-      titlesOf([...endToEndBaseGroups, ...endToEndNotifyGroups]),
-    );
-    expect(asyncStateAdapterEndToEndConformanceCases.map(({ title }) => title)).toEqual(
-      titlesOf(endToEndAsyncGroups),
-    );
-    expect(concurrentStateAdapterEndToEndConformanceCases.map(({ title }) => title)).toEqual(
-      titlesOf(endToEndConcurrentTransactionGroups),
+    expect(
+      titles(
+        createStateAdapterConformanceCases({ ...stateContext, mode: "sync", concurrent: true }),
+      ),
+    ).toEqual(titlesOf([...stateAdapterBaseGroups, ...stateAdapterConcurrentTransactionGroups]));
+    expect(
+      titles(createStateAdapterEndToEndConformanceCases({ ...stateContext, mode: "sync" })),
+    ).toEqual(titlesOf([...endToEndBaseGroups, ...endToEndNotifyGroups]));
+    expect(
+      titles(
+        createStateAdapterEndToEndConformanceCases({
+          ...stateContext,
+          mode: "async",
+          concurrent: true,
+        }),
+      ),
+    ).toEqual(
+      titlesOf([
+        ...endToEndBaseGroups,
+        ...endToEndNotifyGroups,
+        ...endToEndAsyncGroups,
+        ...endToEndConcurrentTransactionGroups,
+      ]),
     );
   });
 
@@ -118,13 +140,9 @@ describe("stateAdapterEndToEndConformanceCases", () => {
       withNonTransactionContext: async (fn) => fn({ outsideTransaction: true }),
     };
 
-    await findCase(stateAdapterEndToEndConformanceCases, "chains > handles chained jobs").run(
-      context,
-    );
-    await findCase(
-      stateAdapterEndToEndConformanceCases,
-      "notify > schedules processing immediately",
-    ).run(context);
+    const cases = createStateAdapterEndToEndConformanceCases({ ...context, mode: "async" });
+    await findCase(cases, "chains > handles chained jobs").run();
+    await findCase(cases, "notify > schedules processing immediately").run();
 
     expect(created).toEqual(["state", "notify", "state", "notify"]);
     expect(closed.toSorted()).toEqual(["notify", "notify", "state", "state"]);
@@ -136,22 +154,23 @@ describe("stateAdapterEndToEndConformanceCases", () => {
       withNonTransactionContext: async (fn) => fn({ outsideTransaction: true }),
     };
 
-    for (const conformanceCase of stateAdapterEndToEndConformanceCases.filter(
-      ({ group }) => group === "notify",
-    )) {
-      await conformanceCase.run(context);
+    for (const conformanceCase of createStateAdapterEndToEndConformanceCases({
+      ...context,
+      mode: "async",
+    }).filter(({ group }) => group === "notify")) {
+      await conformanceCase.run();
     }
   });
 });
 
-describe("notifyAdapterEndToEndConformanceCases", () => {
+describe("createNotifyAdapterEndToEndConformanceCases", () => {
   it("keeps the contract cases and the end-to-end notify cases in separate lists", () => {
-    expect(notifyAdapterConformanceCases.map(({ title }) => title)).toEqual(
+    expect(createNotifyAdapterConformanceCases(notifyContext).map(({ title }) => title)).toEqual(
       titlesOf(notifyAdapterBaseGroups),
     );
-    expect(notifyAdapterEndToEndConformanceCases.map(({ title }) => title)).toEqual(
-      titlesOf(notifyAdapterEndToEndGroups),
-    );
+    expect(
+      createNotifyAdapterEndToEndConformanceCases(notifyContext).map(({ title }) => title),
+    ).toEqual(titlesOf(notifyAdapterEndToEndGroups));
     expect(titlesOf(notifyAdapterEndToEndGroups)).toEqual(titlesOf(endToEndNotifyGroups));
   });
 
@@ -170,15 +189,14 @@ describe("notifyAdapterEndToEndConformanceCases", () => {
       },
     };
 
-    for (const conformanceCase of notifyAdapterEndToEndConformanceCases.filter(
+    const notifyCases = createNotifyAdapterEndToEndConformanceCases(context).filter(
       ({ group }) => group === "notify",
-    )) {
-      await conformanceCase.run(context);
+    );
+    for (const conformanceCase of notifyCases) {
+      await conformanceCase.run();
     }
 
-    expect(created).toHaveLength(
-      notifyAdapterEndToEndConformanceCases.filter(({ group }) => group === "notify").length,
-    );
+    expect(created).toHaveLength(notifyCases.length);
     expect(new Set(closed)).toEqual(new Set(created));
   });
 
@@ -197,7 +215,7 @@ describe("notifyAdapterEndToEndConformanceCases", () => {
         }) as unknown as NotifyAdapter<"async">,
     };
 
-    await expect(notifyAdapterEndToEndConformanceCases[0].run(context)).rejects.toThrow(
+    await expect(createNotifyAdapterEndToEndConformanceCases(context)[0].run()).rejects.toThrow(
       "A resource got a value that is neither async disposable nor disposable",
     );
     expect(closed).toEqual(["notify"]);

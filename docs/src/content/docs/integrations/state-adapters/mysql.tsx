@@ -309,14 +309,14 @@ const Page = () => (
     <h2 id="testing-your-provider">Testing your provider</h2>
     <p>
       <code>@queuert/mysql/conformance</code> checks a provider you write.{" "}
-      <code>mysqlStateProviderConformanceCases</code> are every case a state adapter must pass, the
-      cases that hold two transactions open at once, and checks of the schema write fence.{" "}
-      <code>createMysqlStateProviderConformanceContext</code> prepares the context they run against:
-      it takes a <code>createStateProvider</code> factory, the <code>dialect</code>, and a{" "}
-      <code>withNonTransactionContext</code> that runs a callback with a context outside any
-      transaction, and migrates the schema once. An optional <code>withSavepoint</code> adds the
-      savepoint cases, as on <A href="/integrations/state-adapters/postgres/">PostgreSQL</A>. Your
-      test file owns the database in its own hooks and registers one test per case:
+      <code>createMysqlStateProviderConformanceCases</code> returns the cases, ready to run: every
+      case a state adapter must pass, the cases that hold two transactions open at once, and checks
+      of the schema write fence. It takes a <code>createStateProvider</code> factory, the{" "}
+      <code>dialect</code>, and a <code>withNonTransactionContext</code> that runs a callback with a
+      context outside any transaction, and migrates the schema once, before the first case. An
+      optional <code>withSavepoint</code> adds the savepoint cases, as on{" "}
+      <A href="/integrations/state-adapters/postgres/">PostgreSQL</A>. Your test file owns the
+      database in its own hooks and registers one test per case:
     </p>
     <Tabs syncKey="mysql-driver">
       <TabItem label="mysql2">

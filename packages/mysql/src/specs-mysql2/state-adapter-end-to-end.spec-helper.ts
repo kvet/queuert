@@ -81,12 +81,12 @@ export const createEndToEndContext = async (
   dialect: "mysql" | "mariadb",
   createNotifyAdapter: EndToEndContext["createNotifyAdapter"],
 ): Promise<EndToEndContext> => ({
-  ...(await createMysqlStateProviderConformanceContext({
+  ...createMysqlStateProviderConformanceContext({
     createStateProvider: async () => createMysql2PoolProvider({ pool }),
     dialect,
     withNonTransactionContext: withMysql2PoolNonTransactionContext(pool),
     withSavepoint: withMysql2PoolSavepoint,
-  })),
+  }),
   withSavepoint: withMysql2PoolSavepoint,
   createNotifyAdapter,
   poisonTransaction: async (txCtx) => {

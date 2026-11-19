@@ -5,8 +5,10 @@ import { join } from "node:path";
 
 import { conformanceTestSuite } from "@queuert/helpers/conformance";
 import type { NotifyAdapter } from "queuert";
-import type { NotifyAdapterConformanceContext } from "queuert/conformance";
-import { notifyAdapterBaseGroups } from "queuert/conformance-internal";
+import {
+  notifyAdapterBaseGroups,
+  type NotifyAdapterConformanceContext,
+} from "queuert/conformance-internal";
 import { it as baseIt, describe, expect } from "vitest";
 
 import { createIpcNotifyAdapter } from "../notify-adapter/notify-adapter.ipc.ts";

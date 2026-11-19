@@ -15,12 +15,6 @@ import {
 import { createSqliteMigratorStore } from "../migration-store/migration-store.sqlite.ts";
 import type { SqliteStateProvider } from "../state-provider/state-provider.sqlite.ts";
 
-/**
- * The context the {@link sqliteMigratorConformanceCases} run against, over a provider of either mode. Get it
- * from {@link createSqliteMigratorConformanceContext} and pass it to every case unchanged.
- *
- * @experimental
- */
 export type SqliteMigratorConformanceContext = MigratorConformanceContext<Mode>;
 
 export const sqliteMigratorConformanceGroups: ConformanceGroup<SqliteMigratorConformanceContext>[] =
@@ -30,36 +24,38 @@ export const sqliteMigratorConformanceGroups: ConformanceGroup<SqliteMigratorCon
     ...migrationStoreLeaseGroups,
   ];
 
-/**
- * Prepares the context the {@link sqliteMigratorConformanceCases} run against, with the store `createSqliteMigrator`
- * uses over `stateProvider`, in the provider's mode. The cases create tables named
- * `conformance_<random>_*` and drop them when they end.
- *
- * @experimental
- * @param options - Context configuration.
- */
 export const createSqliteMigratorConformanceContext = ({
-  stateProvider,
-}: {
-  /** The provider under test, over a database the cases may create tables in. */
-  stateProvider: SqliteStateProvider<any, Mode>;
-}): SqliteMigratorConformanceContext => {
-  const provider: SqliteStateProvider<any, Mode> = stateProvider;
+  mode,
+  createStateProvider,
+}: Parameters<
+  typeof createSqliteMigratorConformanceCases
+>[0]): SqliteMigratorConformanceContext => {
+  let stateProvider: SqliteStateProvider<any, Mode> | undefined;
+  const provider = (): SqliteStateProvider<any, Mode> => {
+    if (stateProvider !== undefined) return stateProvider;
+    const created: SqliteStateProvider<any, Mode> = createStateProvider();
+    if ((created.sync === true) !== (mode === "sync")) {
+      throw new TypeError(
+        `createSqliteMigratorConformanceCases: createStateProvider returned a ${created.sync === true ? "sync" : "async"} provider, but mode is "${mode}"`,
+      );
+    }
+    return (stateProvider = created);
+  };
   return {
     createMigrationStore: ({ migrationTableName, lockTableName }) => {
       const store = createSqliteMigratorStore({
-        stateProvider: provider,
+        stateProvider: provider(),
         migrationTableName,
         lockTableName,
       });
-      return stateProvider.sync === true ? { sync: true, ...store } : store;
+      return provider().sync === true ? { sync: true, ...store } : store;
     },
     executeSql: (sql, txCtx) =>
       runInModeOf(
-        provider,
+        provider(),
         syncAsync(function* () {
           yield* step(
-            provider.executeSql({
+            provider().executeSql({
               txCtx,
               sql,
               params: [],
@@ -72,10 +68,10 @@ export const createSqliteMigratorConformanceContext = ({
       ),
     countRows: (table) =>
       runInModeOf(
-        provider,
+        provider(),
         syncAsync(function* () {
           const rows = yield* step(
-            provider.executeSql({
+            provider().executeSql({
               sql: `SELECT CAST(count(*) AS integer) AS count FROM ${table}`,
               params: [],
               paramTypes: {},
@@ -90,29 +86,55 @@ export const createSqliteMigratorConformanceContext = ({
 };
 
 /**
- * Cases that check `createSqliteMigrator` over the provider in its mode: its history,
+ * Prepares the cases that check `createSqliteMigrator` over the provider in its mode (its history,
  * transactional and non-transactional migrations, reverts and, over an asynchronous provider, its
- * lease. The synchronous migrator takes no lease, so the lease cases pass without running over a
- * provider with `sync: true`. Run them one per test in your
- * own test file against a context from {@link createSqliteMigratorConformanceContext}. Works with
- * any test runner.
+ * lease), ready to run with the store `createSqliteMigrator` uses over the provider. The synchronous
+ * migrator takes no lease, so the lease cases pass without running over a provider with
+ * `sync: true`. The cases create tables named `conformance_<random>_*` and drop them when they end.
+ * Works with any test runner.
  *
  * @experimental
+ * @param options - Suite configuration.
  *
  * @example
  * ```ts
  * import { test } from "vitest";
  *
- * const context = createSqliteMigratorConformanceContext({
- *   stateProvider: createBetterSqlite3Provider({ db: new Database(":memory:") }),
+ * const db = new Database(":memory:");
+ * const cases = createSqliteMigratorConformanceCases({
+ *   mode: "async",
+ *   createStateProvider: () => createBetterSqlite3Provider({ db }),
  * });
  *
- * for (const conformanceCase of sqliteMigratorConformanceCases) {
+ * for (const conformanceCase of cases) {
  *   test(conformanceCase.title, async () => {
- *     await conformanceCase.run(context);
+ *     await conformanceCase.run();
  *   });
  * }
  * ```
  */
-export const sqliteMigratorConformanceCases: ConformanceTestCase<SqliteMigratorConformanceContext>[] =
-  toConformanceTestCases(sqliteMigratorConformanceGroups);
+export const createSqliteMigratorConformanceCases = (
+  options:
+    | {
+        /** The provider's mode: `"sync"` for a {@link SqliteStateProvider} with `sync: true`. */
+        mode: "sync";
+        /**
+         * Creates the provider under test, over a database the cases may create tables in. Called
+         * once, when the first case runs.
+         */
+        createStateProvider: () => SqliteStateProvider<any, "sync">;
+      }
+    | {
+        /** The provider's mode: `"async"` for a {@link SqliteStateProvider} without `sync: true`. */
+        mode: "async";
+        /**
+         * Creates the provider under test, over a database the cases may create tables in. Called
+         * once, when the first case runs.
+         */
+        createStateProvider: () => SqliteStateProvider<any>;
+      },
+): ConformanceTestCase[] =>
+  toConformanceTestCases(
+    sqliteMigratorConformanceGroups,
+    createSqliteMigratorConformanceContext(options),
+  );

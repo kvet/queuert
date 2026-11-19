@@ -4,8 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { conformanceTestSuite } from "@queuert/helpers/conformance";
-import type { NotifyAdapterConformanceContext } from "queuert/conformance";
-import { notifyAdapterEndToEndGroups } from "queuert/conformance-internal";
+import {
+  notifyAdapterEndToEndGroups,
+  type NotifyAdapterConformanceContext,
+} from "queuert/conformance-internal";
 import { it as baseIt, describe } from "vitest";
 
 import { createIpcNotifyAdapter } from "../notify-adapter/notify-adapter.ipc.ts";

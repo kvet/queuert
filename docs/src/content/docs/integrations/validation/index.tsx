@@ -172,7 +172,8 @@ const Page = () => (
 
     <h2>Conformance</h2>
     <p>
-      Each example checks its adapter with <code>validationAdapterConformanceCases</code>; see{" "}
+      Each example checks its adapter with the cases from{" "}
+      <code>createValidationAdapterConformanceCases</code>; see{" "}
       <A href="/integrations/validation/custom/#conformance">Custom validation adapter</A>.
     </p>
     <Tabs syncKey="validation-library">

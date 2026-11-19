@@ -1,10 +1,6 @@
 import {
-  createPgMigratorConformanceContext,
-  type PgMigratorConformanceContext,
-  createPgStateProviderConformanceContext,
-  type PgStateProviderConformanceContext,
-  pgMigratorConformanceCases,
-  pgStateProviderConformanceCases,
+  createPgMigratorConformanceCases,
+  createPgStateProviderConformanceCases,
 } from "@queuert/postgres/conformance";
 import { acquirePostgres, type AcquiredPostgres } from "@queuert/testcontainers";
 import postgres from "postgres";
@@ -16,15 +12,14 @@ import { createPostgresJsStateProvider } from "./provider.ts";
 describe("postgresql/state-postgres-js provider conformance", () => {
   let pg: AcquiredPostgres;
   let sql: postgres.Sql;
-  let context: PgStateProviderConformanceContext;
+  const cases = createPgStateProviderConformanceCases({
+    createStateProvider: async () => createPostgresJsStateProvider({ sql }),
+    withNonTransactionContext: async (fn) => fn({ txSql: sql }),
+  });
 
   beforeAll(async () => {
     pg = await acquirePostgres("postgres:18", import.meta.url);
     sql = postgres(pg.connectionString, { max: 10 });
-    context = await createPgStateProviderConformanceContext({
-      createStateProvider: async () => createPostgresJsStateProvider({ sql }),
-      withNonTransactionContext: async (fn) => fn({ txSql: sql }),
-    });
   }, 60_000);
 
   afterAll(async () => {
@@ -32,9 +27,9 @@ describe("postgresql/state-postgres-js provider conformance", () => {
     await pg[Symbol.asyncDispose]();
   });
 
-  for (const conformanceCase of pgStateProviderConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });
@@ -43,14 +38,13 @@ describe("postgresql/state-postgres-js provider conformance", () => {
 describe("postgresql/state-postgres-js migrator conformance", () => {
   let pg: AcquiredPostgres;
   let sql: postgres.Sql;
-  let context: PgMigratorConformanceContext;
+  const cases = createPgMigratorConformanceCases({
+    createStateProvider: () => createPostgresJsStateProvider({ sql }),
+  });
 
   beforeAll(async () => {
     pg = await acquirePostgres("postgres:18", `${import.meta.url}#migrator`);
     sql = postgres(pg.connectionString, { max: 10 });
-    context = createPgMigratorConformanceContext({
-      stateProvider: createPostgresJsStateProvider({ sql }),
-    });
   }, 60_000);
 
   afterAll(async () => {
@@ -58,9 +52,9 @@ describe("postgresql/state-postgres-js migrator conformance", () => {
     await pg[Symbol.asyncDispose]();
   });
 
-  for (const conformanceCase of pgMigratorConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });

@@ -19,8 +19,8 @@ const Page = () => (
 
     <h2>Conformance</h2>
     <p>
-      <code>validationAdapterConformanceCases</code> from <code>queuert/conformance</code> check
-      that:
+      <code>createValidationAdapterConformanceCases</code> from <code>queuert/conformance</code>{" "}
+      returns the cases, ready to run, that check that:
     </p>
     <ul>
       <li>
@@ -40,10 +40,10 @@ const Page = () => (
       </li>
     </ul>
     <p>
-      The last point is enforced at compile time: each builder in the context has a precise return
-      type, so an inference bug in your adapter trips a TypeScript error where the context is
-      declared, before any case runs. The suite drives no test runner: register one test per case
-      and run it against the context. The Zod example's spec:
+      The last point is enforced at compile time: each builder you pass has a precise return type,
+      so an inference bug in your adapter trips a TypeScript error where you pass it, before any
+      case runs. The suite drives no test runner: register one test per case. The Zod example's
+      spec:
     </p>
     <ExampleCode example="validation/zod" file="src/zod-adapter.spec.ts" />
     <p>

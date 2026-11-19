@@ -18,12 +18,6 @@ import {
 import { createMysqlStateAdapter } from "../state-adapter/state-adapter.mysql.ts";
 import type { MysqlStateProvider } from "../state-provider/state-provider.mysql.ts";
 
-/**
- * The context the {@link mysqlStateProviderConformanceCases} run against. Get it from
- * {@link createMysqlStateProviderConformanceContext} and pass it to every case unchanged.
- *
- * @experimental
- */
 export type MysqlStateProviderConformanceContext = SchemaFenceConformanceContext &
   SavepointConformanceContext & {
     createStateProvider: () => Promise<MysqlStateProvider<any>>;
@@ -85,40 +79,15 @@ export const mysqlStateProviderConformanceGroups: ConformanceGroup<MysqlStatePro
     isolationLevelGroup,
   ];
 
-/**
- * Prepares the context the {@link mysqlStateProviderConformanceCases} run against: migrates the
- * schema once through a provider from `createStateProvider`. Each case then builds its own adapter
- * over a new provider from it, with the tables cleared.
- *
- * @param options - Context configuration.
- *
- * @experimental
- */
-export const createMysqlStateProviderConformanceContext = async ({
+export const createMysqlStateProviderConformanceContext = ({
   createStateProvider,
   dialect,
   withNonTransactionContext,
   withSavepoint,
   stateAdapterOptions,
-}: {
-  /** Creates the provider under test, over a database the suite may create tables in. */
-  createStateProvider: () => Promise<MysqlStateProvider<any>>;
-  /** The server the provider connects to. */
-  dialect: "mysql" | "mariadb";
-  /** Runs the callback with a context of the provider's shape that is not inside a transaction. */
-  withNonTransactionContext: <T>(fn: (txCtx: any) => Promise<T>) => Promise<T>;
-  /** Runs `fn` in a savepoint of `txCtx`'s transaction, opened the way the application opens one. */
-  withSavepoint?: <T>(txCtx: any, fn: (txCtx: any) => Promise<T>) => Promise<T>;
-  /**
-   * Options every adapter of the suite is created with, besides its provider and `dialect`, such
-   * as the `schema`, `tablePrefix` and ID types your application configures. The suite migrates
-   * and clears the tables they name.
-   */
-  stateAdapterOptions?: Omit<
-    Parameters<typeof createMysqlStateAdapter<any, string, string>>[0],
-    "stateProvider" | "dialect"
-  >;
-}): Promise<MysqlStateProviderConformanceContext> => {
+}: Parameters<
+  typeof createMysqlStateProviderConformanceCases
+>[0]): MysqlStateProviderConformanceContext => {
   const tables = `${stateAdapterOptions?.schema === undefined ? "" : `${stateAdapterOptions.schema}.`}${stateAdapterOptions?.tablePrefix ?? "queuert_"}`;
   const executeStatements = async (statements: string[]): Promise<void> => {
     const stateProvider = await createStateProvider();
@@ -137,20 +106,25 @@ export const createMysqlStateProviderConformanceContext = async ({
     }
   };
 
-  {
-    await using stateAdapter = createMysqlStateAdapter({
-      ...stateAdapterOptions,
-      stateProvider: await createStateProvider(),
-      dialect,
-    });
-    await stateAdapter.migrateToLatest();
-  }
+  let migrated: Promise<void> | undefined;
+  const migrate = async (): Promise<void> => {
+    migrated ??= (async () => {
+      await using stateAdapter = createMysqlStateAdapter({
+        ...stateAdapterOptions,
+        stateProvider: await createStateProvider(),
+        dialect,
+      });
+      await stateAdapter.migrateToLatest();
+    })();
+    return migrated;
+  };
 
   return {
     createStateProvider,
     withNonTransactionContext,
     withSavepoint,
     createStateAdapter: async () => {
+      await migrate();
       await executeStatements([
         `DELETE FROM ${tables}job_blocker`,
         `DELETE FROM ${tables}job`,
@@ -163,6 +137,7 @@ export const createMysqlStateProviderConformanceContext = async ({
       });
     },
     withWritesFenced: async (fn) => {
+      await migrate();
       await executeStatements([`DROP TABLE ${tables}schema_fence_v2`]);
       try {
         return await fn();
@@ -176,11 +151,65 @@ export const createMysqlStateProviderConformanceContext = async ({
 };
 
 /**
- * Every state adapter contract case, run through `createMysqlStateAdapter` over a provider. Run
- * them one per test in your own test file against a context from
- * {@link createMysqlStateProviderConformanceContext}. Works with any test runner.
+ * Prepares the state adapter contract cases for a provider, ready to run. The cases are every state
+ * adapter contract case run through `createMysqlStateAdapter` over a provider. The cases migrate
+ * the schema once, before the first case, through a provider from `createStateProvider`; each case
+ * then builds its own adapter over a new provider from it, with the tables cleared. Works with any
+ * test runner.
+ *
+ * @param options - Suite configuration.
+ *
+ * @example
+ * ```ts
+ * import { afterAll, beforeAll, test } from "vitest";
+ *
+ * let pool: Pool;
+ * const cases = createMysqlStateProviderConformanceCases({
+ *   createStateProvider: async () => createMysql2PoolStateProvider({ pool }),
+ *   dialect: "mysql",
+ *   withNonTransactionContext: async (fn) => {
+ *     const connection = await pool.getConnection();
+ *     try {
+ *       return await fn({ connection });
+ *     } finally {
+ *       connection.release();
+ *     }
+ *   },
+ * });
+ * beforeAll(async () => {
+ *   pool = createPool(connectionOptions);
+ * });
+ * afterAll(async () => pool.end());
+ *
+ * for (const conformanceCase of cases) {
+ *   test(conformanceCase.title, async () => {
+ *     await conformanceCase.run();
+ *   });
+ * }
+ * ```
  *
  * @experimental
  */
-export const mysqlStateProviderConformanceCases: ConformanceTestCase<MysqlStateProviderConformanceContext>[] =
-  toConformanceTestCases(mysqlStateProviderConformanceGroups);
+export const createMysqlStateProviderConformanceCases = (options: {
+  /** Creates the provider under test, over a database the suite may create tables in. */
+  createStateProvider: () => Promise<MysqlStateProvider<any>>;
+  /** The server the provider connects to. */
+  dialect: "mysql" | "mariadb";
+  /** Runs the callback with a context of the provider's shape that is not inside a transaction. */
+  withNonTransactionContext: <T>(fn: (txCtx: any) => Promise<T>) => Promise<T>;
+  /** Runs `fn` in a savepoint of `txCtx`'s transaction, opened the way the application opens one. */
+  withSavepoint?: <T>(txCtx: any, fn: (txCtx: any) => Promise<T>) => Promise<T>;
+  /**
+   * Options every adapter of the suite is created with, besides its provider and `dialect`, such
+   * as the `schema`, `tablePrefix` and ID types your application configures. The suite migrates
+   * and clears the tables they name.
+   */
+  stateAdapterOptions?: Omit<
+    Parameters<typeof createMysqlStateAdapter<any, string, string>>[0],
+    "stateProvider" | "dialect"
+  >;
+}): ConformanceTestCase[] =>
+  toConformanceTestCases(
+    mysqlStateProviderConformanceGroups,
+    createMysqlStateProviderConformanceContext(options),
+  );

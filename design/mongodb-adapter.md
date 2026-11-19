@@ -4,7 +4,7 @@ Add `@queuert/mongodb`: a state adapter and a notify adapter for MongoDB replica
 
 ## Goals
 
-- Pass `stateAdapterConformanceCases` and `stateAdapterEndToEndConformanceCases`, with the divergences listed under [Contract divergences](#contract-divergences) and no others.
+- Pass the cases from `createStateAdapterConformanceCases` and `createStateAdapterEndToEndConformanceCases`, with the divergences listed under [Contract divergences](#contract-divergences) and no others.
 - Join the user's transaction from the official `mongodb` driver, Mongoose and MikroORM.
 - No change to the client, worker or processor API, and no state adapter contract change required to ship.
 
@@ -325,7 +325,7 @@ Replication latency (`w: majority` across three nodes), failover and multi-node 
 - Claims: 8 concurrent claimers never claim one job twice and never return a short batch while jobs remain; a claim racing a reclaim of its worker either commits first and is reclaimed, or claims nothing.
 - Notify: `notify-adapter-cases.ts` conformance with the shared stream; a test that the adapter opens one change stream regardless of subscriber count.
 - Benchmarks: `benchmarks/query-performance/src/mongodb.ts` running `index-coverage-cases.ts` with `explain("executionStats")` written to `explanations/`, so every query's plan and its index are reviewed like the PostgreSQL ones.
-- Examples: `state-mongodb-native`, `state-mongodb-mongoose`, `notify-mongodb`, each with `provider.spec.ts` running `stateAdapterConformanceCases`.
+- Examples: `state-mongodb-native`, `state-mongodb-mongoose`, `notify-mongodb`, each with `provider.spec.ts` running the cases from `createStateAdapterConformanceCases`.
 
 ## API and docs
 

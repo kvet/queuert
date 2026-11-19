@@ -11,6 +11,18 @@ export const meta = {
 
 const contextFields = (): FieldItem[] => [
   {
+    name: "mode",
+    chips: ["required"],
+    description:
+      'The adapter\'s mode: "sync" for an adapter with sync: true, "async" otherwise. In "async" the cases also include those that hold a transaction open across an await.',
+  },
+  {
+    name: "concurrent",
+    chips: ["optional"],
+    description:
+      "Whether the adapter runs transactions in parallel, such as one over a connection pool. When true the cases also include those that hold two transactions open at once.",
+  },
+  {
     name: "createStateAdapter",
     chips: ["required"],
     description:
@@ -70,59 +82,53 @@ const Page = () => (
       is a complete implementation to start from: it keeps every table in plain in-memory maps, runs
       transactions one at a time on a copy of the state, carries <code>TxHooks</code> in its
       transaction context for <code>onTransactionCommit</code> and{" "}
-      <code>onTransactionRollback</code>, and passes <code>stateAdapterConformanceCases</code>,{" "}
-      <code>stateAdapterEndToEndConformanceCases</code> and their <code>async</code> lists.
+      <code>onTransactionRollback</code>, and passes the contract and end-to-end cases for an async
+      adapter.
     </p>
 
     <h2 id="conformance">Conformance</h2>
     <p>
-      <code>queuert/conformance</code> exports the same cases Queuert uses internally, as lists to
-      run against your adapter:
+      <code>queuert/conformance</code> exports the same cases Queuert uses internally, from two
+      functions that return them ready to run against your adapter:
     </p>
     <ul>
       <li>
-        <code>stateAdapterConformanceCases</code> check the contract every state adapter must meet,
-        calling the adapter's members directly with transactions run one at a time. They run fast.
+        <code>createStateAdapterConformanceCases</code> returns the cases that check the contract
+        every state adapter must meet, calling the adapter's members directly with transactions run
+        one at a time. They run fast.
       </li>
       <li>
-        <code>concurrentStateAdapterConformanceCases</code> hold two transactions open at once:
-        blocker races, concurrent deletes, row locks, and reads that must not see uncommitted rows.
-      </li>
-      <li>
-        <code>stateAdapterEndToEndConformanceCases</code> check what an application sees end to end:
-        each case builds a client and worker runners over your adapter and checks chains,
-        continuations, blockers, scheduling, deduplication, deletion, workerless completion,
-        queries, notifications and recovery from errors. They take a few seconds in all, so you may
-        run them apart from the contract cases, such as only in CI.
-      </li>
-      <li>
-        <code>concurrentStateAdapterEndToEndConformanceCases</code> are end-to-end cases that need
-        transactions running in parallel, such as several blocker chains completing at once, or
-        several worker runners on a database that fails.
+        <code>createStateAdapterEndToEndConformanceCases</code> returns the cases that check what an
+        application sees end to end: each case builds a client and worker runners over your adapter
+        and checks chains, continuations, blockers, scheduling, deduplication, deletion, workerless
+        completion, queries, notifications and recovery from errors. They take a few seconds in all,
+        so you may run them apart from the contract cases, such as only in CI.
       </li>
     </ul>
     <p>
-      An async adapter also runs <code>asyncStateAdapterConformanceCases</code> next to the contract
-      cases and <code>asyncStateAdapterEndToEndConformanceCases</code> next to the end-to-end ones:
-      they hold a transaction open across an <code>await</code>, which only an async adapter can do.
-      Run the two concurrent lists as well when your adapter can run transactions in parallel, such
-      as one over a connection pool.
+      With <code>mode: "async"</code> both also include the cases that hold a transaction open
+      across an <code>await</code>, which only an async adapter can do. With{" "}
+      <code>concurrent: true</code>, for an adapter that can run transactions in parallel such as
+      one over a connection pool, they also include the cases that hold two transactions open at
+      once: blocker races, concurrent deletes, row locks and reads that must not see uncommitted
+      rows, and end-to-end cases such as several blocker chains completing at once, or several
+      worker runners on a database that fails.
     </p>
     <p>
       The suite drives no test runner. Your test file sets up the database in its own hooks and
-      registers one test per case. Each case creates its own adapter with the context's{" "}
+      registers one test per case. Each case creates its own adapter with{" "}
       <code>createStateAdapter</code> and closes it when it ends, so closing an adapter must leave
       the database usable for the next one. Each case has a <code>title</code>, and its{" "}
-      <code>run(context)</code> resolves when the case passes and rejects when it fails. The cases
-      share one context, so run them one at a time:
+      <code>run()</code> resolves when the case passes and rejects when it fails. The cases share
+      one context, so run them one at a time:
     </p>
     <ExampleCode
       example="custom/state-memory"
       file="src/state-adapter.spec.ts"
       region="conformance"
     />
-    <p>The context holds:</p>
-    <FieldList title="StateAdapterConformanceContext" items={contextFields()} />
+    <p>Both take the same options:</p>
+    <FieldList title="Options" items={contextFields()} />
     <p>
       An adapter over a real database sets it up in <code>beforeAll</code> and releases it in{" "}
       <code>afterAll</code>, or <code>before</code> and <code>after</code> under{" "}
@@ -132,13 +138,10 @@ const Page = () => (
       <A href="/api/conformance/readme/">conformance reference</A>.
     </p>
     <p>
-      For a <code>"sync"</code> <code>StateAdapter</code>, register only{" "}
-      <code>stateAdapterConformanceCases</code> and{" "}
-      <code>stateAdapterEndToEndConformanceCases</code>, without the async lists. They call the
-      adapter's members synchronously, the end-to-end ones through a client over it. They run
-      against the same <code>StateAdapterConformanceContext</code>, with a{" "}
+      For a <code>"sync"</code> <code>StateAdapter</code>, pass <code>mode: "sync"</code>, a{" "}
       <code>createStateAdapter</code> that returns the adapter directly and a synchronous{" "}
-      <code>withNonTransactionContext</code>. Every case takes its mode from your adapter's{" "}
+      <code>withNonTransactionContext</code>. The cases call the adapter's members synchronously,
+      the end-to-end ones through a client over it. Every case takes its mode from your adapter's{" "}
       <code>sync</code> marker and checks the adapter calls it makes against it: a sync adapter
       fails a case when a call returns a promise or rejects instead of throwing, and an async one
       when a call returns a plain value. There are no concurrent cases for it: a synchronous

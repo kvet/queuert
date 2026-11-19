@@ -1,10 +1,6 @@
 import {
-  createMysqlMigratorConformanceContext,
-  createMysqlStateProviderConformanceContext,
-  type MysqlMigratorConformanceContext,
-  type MysqlStateProviderConformanceContext,
-  mysqlMigratorConformanceCases,
-  mysqlStateProviderConformanceCases,
+  createMysqlMigratorConformanceCases,
+  createMysqlStateProviderConformanceCases,
 } from "@queuert/mysql/conformance";
 import { acquireMysql } from "@queuert/testcontainers";
 import knexFactory, { type Knex } from "knex";
@@ -15,7 +11,11 @@ import { createKnexMysqlStateProvider } from "./provider.ts";
 // #region conformance
 describe("mysql/state-knex provider conformance", () => {
   let knex: Knex;
-  let context: MysqlStateProviderConformanceContext;
+  const cases = createMysqlStateProviderConformanceCases({
+    createStateProvider: async () => createKnexMysqlStateProvider({ knex }),
+    dialect: "mysql",
+    withNonTransactionContext: async (fn) => fn({ trx: knex }),
+  });
 
   beforeAll(async () => {
     const { connectionOptions } = await acquireMysql("mysql:26", import.meta.url);
@@ -24,20 +24,15 @@ describe("mysql/state-knex provider conformance", () => {
       connection: connectionOptions,
       pool: { min: 0, max: 20 },
     });
-    context = await createMysqlStateProviderConformanceContext({
-      createStateProvider: async () => createKnexMysqlStateProvider({ knex }),
-      dialect: "mysql",
-      withNonTransactionContext: async (fn) => fn({ trx: knex }),
-    });
   }, 120_000);
 
   afterAll(async () => {
     await knex.destroy();
   });
 
-  for (const conformanceCase of mysqlStateProviderConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });
@@ -45,7 +40,9 @@ describe("mysql/state-knex provider conformance", () => {
 
 describe("mysql/state-knex migrator conformance", () => {
   let knex: Knex;
-  let context: MysqlMigratorConformanceContext;
+  const cases = createMysqlMigratorConformanceCases({
+    createStateProvider: () => createKnexMysqlStateProvider({ knex }),
+  });
 
   beforeAll(async () => {
     const { connectionOptions } = await acquireMysql("mysql:26", `${import.meta.url}#migrator`);
@@ -54,18 +51,15 @@ describe("mysql/state-knex migrator conformance", () => {
       connection: connectionOptions,
       pool: { min: 0, max: 10 },
     });
-    context = createMysqlMigratorConformanceContext({
-      stateProvider: createKnexMysqlStateProvider({ knex }),
-    });
   }, 120_000);
 
   afterAll(async () => {
     await knex.destroy();
   });
 
-  for (const conformanceCase of mysqlMigratorConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });

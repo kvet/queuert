@@ -1,14 +1,11 @@
-import {
-  type ValidationAdapterConformanceContext,
-  validationAdapterConformanceCases,
-} from "queuert/conformance";
+import { createValidationAdapterConformanceCases } from "queuert/conformance";
 import * as v from "valibot";
 import { describe, test } from "vitest";
 
 import { createValibotJobTypes } from "./valibot-adapter.ts";
 
 describe("valibot adapter conformance", () => {
-  const context: ValidationAdapterConformanceContext = {
+  const cases = createValidationAdapterConformanceCases({
     basic: {
       buildEntry: () =>
         createValibotJobTypes({
@@ -156,11 +153,11 @@ describe("valibot adapter conformance", () => {
         );
       },
     },
-  };
+  });
 
-  for (const conformanceCase of validationAdapterConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });

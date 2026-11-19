@@ -17,10 +17,6 @@ import {
 import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.ts";
 import type { PgStateProvider } from "../state-provider/state-provider.pg.ts";
 
-/**
- * The context the {@link pgStateProviderConformanceCases} run against. Get it from
- * {@link createPgStateProviderConformanceContext} and pass it to every case unchanged.
- */
 export type PgStateProviderConformanceContext = SchemaFenceConformanceContext &
   SavepointConformanceContext & {
     createStateProvider: () => Promise<PgStateProvider<any>>;
@@ -143,8 +139,7 @@ export const isolationLevelGroup: ConformanceGroup<PgStateProviderConformanceCon
               txCtx,
             ),
           );
-          assert.equal(rows.length, 1);
-          assert.equal((rows[0] as { level: unknown }).level, "read committed");
+          assert.deepEqual([...rows], [{ level: "read committed" }]);
         } finally {
           await stateProvider.close?.();
         }
@@ -169,20 +164,106 @@ export const pgStateProviderConformanceGroups: ConformanceGroup<PgStateProviderC
     isolationLevelGroup,
   ];
 
-/**
- * Prepares the context the {@link pgStateProviderConformanceCases} run against: migrates the
- * schema once through a provider from `createStateProvider`. Each case then builds its own adapter
- * over a new provider from it, with the tables cleared. Call it once the database is ready, such
- * as in `beforeAll`; the test file owns the database and releases it itself.
- *
- * @param options - Context configuration.
- */
-export const createPgStateProviderConformanceContext = async ({
+export const createPgStateProviderConformanceContext = ({
   createStateProvider,
   withNonTransactionContext,
   withSavepoint,
   stateAdapterOptions,
-}: {
+}: Parameters<
+  typeof createPgStateProviderConformanceCases
+>[0]): PgStateProviderConformanceContext => {
+  const tables = `${stateAdapterOptions?.schema ?? "public"}.${stateAdapterOptions?.tablePrefix ?? "queuert_"}`;
+  const ddl = { params: [], paramTypes: {}, columnTypes: {}, readOnly: false };
+  const executeDdl = async (sql: string): Promise<void> => {
+    const stateProvider = await createStateProvider();
+    try {
+      await stateProvider.executeSql({ ...ddl, sql });
+    } finally {
+      await stateProvider.close?.();
+    }
+  };
+  let migrated: Promise<void> | undefined;
+  const migrate = async (): Promise<void> => {
+    migrated ??= (async () => {
+      await using stateAdapter = createPgStateAdapter({
+        ...stateAdapterOptions,
+        stateProvider: await createStateProvider(),
+      });
+      await stateAdapter.migrateToLatest();
+    })();
+    return migrated;
+  };
+
+  return {
+    createStateProvider,
+    withNonTransactionContext,
+    withSavepoint,
+    createStateAdapter: async () => {
+      await migrate();
+      const stateProvider = await createStateProvider();
+      const stateAdapter = createPgStateAdapter({ ...stateAdapterOptions, stateProvider });
+      try {
+        await stateProvider.executeSql({
+          ...ddl,
+          sql: `TRUNCATE ${tables}job_blocker, ${tables}job, ${tables}worker CASCADE`,
+        });
+      } catch (error) {
+        await stateAdapter.close();
+        throw error;
+      }
+      return stateAdapter;
+    },
+    withWritesFenced: async (fn) => {
+      await migrate();
+      await executeDdl(`DROP TABLE ${tables}schema_fence_v2`);
+      try {
+        return await fn();
+      } finally {
+        await executeDdl(`CREATE TABLE ${tables}schema_fence_v2 (id integer PRIMARY KEY)`);
+      }
+    },
+  };
+};
+
+/**
+ * Prepares the state adapter contract cases for a provider, ready to run. The cases are every state
+ * adapter contract case, including those that hold two transactions open at once, run through
+ * `createPgStateAdapter` over a provider, plus checks of the provider's `classifyError`. The cases
+ * migrate the schema once, before the first case, through a provider from `createStateProvider`;
+ * each case then builds its own adapter over a new provider from it, with the tables cleared. The
+ * test file owns the database and releases it itself. Works with any test runner.
+ *
+ * @param options - Suite configuration.
+ *
+ * @example
+ * ```ts
+ * import { afterAll, beforeAll, test } from "vitest";
+ *
+ * let pool: Pool;
+ * const cases = createPgStateProviderConformanceCases({
+ *   createStateProvider: async () => createPgPoolStateProvider({ pool }),
+ *   withNonTransactionContext: async (fn) => {
+ *     const poolClient = await pool.connect();
+ *     try {
+ *       return await fn({ poolClient });
+ *     } finally {
+ *       poolClient.release();
+ *     }
+ *   },
+ * });
+ * beforeAll(async () => {
+ *   pool = new Pool({ connectionString });
+ * });
+ * afterAll(async () => pool.end());
+ *
+ * for (const conformanceCase of cases) {
+ *   test(conformanceCase.title, async () => {
+ *     await conformanceCase.run();
+ *   });
+ * }
+ * ```
+ */
+export const createPgStateProviderConformanceCases = (options: {
   /**
    * Creates the provider under test, over a database the suite may create tables in. Each case's
    * adapter gets its own provider and closes it when the case ends, so closing one must not
@@ -210,89 +291,8 @@ export const createPgStateProviderConformanceContext = async ({
     Parameters<typeof createPgStateAdapter<any, string, string>>[0],
     "stateProvider"
   >;
-}): Promise<PgStateProviderConformanceContext> => {
-  const tables = `${stateAdapterOptions?.schema ?? "public"}.${stateAdapterOptions?.tablePrefix ?? "queuert_"}`;
-  const ddl = { params: [], paramTypes: {}, columnTypes: {}, readOnly: false };
-  const executeDdl = async (sql: string): Promise<void> => {
-    const stateProvider = await createStateProvider();
-    try {
-      await stateProvider.executeSql({ ...ddl, sql });
-    } finally {
-      await stateProvider.close?.();
-    }
-  };
-
-  {
-    await using stateAdapter = createPgStateAdapter({
-      ...stateAdapterOptions,
-      stateProvider: await createStateProvider(),
-    });
-    await stateAdapter.migrateToLatest();
-  }
-
-  return {
-    createStateProvider,
-    withNonTransactionContext,
-    withSavepoint,
-    createStateAdapter: async () => {
-      const stateProvider = await createStateProvider();
-      const stateAdapter = createPgStateAdapter({ ...stateAdapterOptions, stateProvider });
-      try {
-        await stateProvider.executeSql({
-          ...ddl,
-          sql: `TRUNCATE ${tables}job_blocker, ${tables}job, ${tables}worker CASCADE`,
-        });
-      } catch (error) {
-        await stateAdapter.close();
-        throw error;
-      }
-      return stateAdapter;
-    },
-    withWritesFenced: async (fn) => {
-      await executeDdl(`DROP TABLE ${tables}schema_fence_v2`);
-      try {
-        return await fn();
-      } finally {
-        await executeDdl(`CREATE TABLE ${tables}schema_fence_v2 (id integer PRIMARY KEY)`);
-      }
-    },
-  };
-};
-
-/**
- * Every state adapter contract case, including those that hold two transactions open at once, run
- * through `createPgStateAdapter` over a provider, plus checks of the provider's `classifyError`.
- * Run them one per test in your own test file against a context from {@link
- * createPgStateProviderConformanceContext}. Works with any test runner.
- *
- * @example
- * ```ts
- * import { afterAll, beforeAll, test } from "vitest";
- *
- * let pool: Pool;
- * let context: PgStateProviderConformanceContext;
- * beforeAll(async () => {
- *   pool = new Pool({ connectionString });
- *   context = await createPgStateProviderConformanceContext({
- *     createStateProvider: async () => createPgPoolStateProvider({ pool }),
- *     withNonTransactionContext: async (fn) => {
- *       const poolClient = await pool.connect();
- *       try {
- *         return await fn({ poolClient });
- *       } finally {
- *         poolClient.release();
- *       }
- *     },
- *   });
- * });
- * afterAll(async () => pool.end());
- *
- * for (const conformanceCase of pgStateProviderConformanceCases) {
- *   test(conformanceCase.title, async () => {
- *     await conformanceCase.run(context);
- *   });
- * }
- * ```
- */
-export const pgStateProviderConformanceCases: ConformanceTestCase<PgStateProviderConformanceContext>[] =
-  toConformanceTestCases(pgStateProviderConformanceGroups);
+}): ConformanceTestCase[] =>
+  toConformanceTestCases(
+    pgStateProviderConformanceGroups,
+    createPgStateProviderConformanceContext(options),
+  );

@@ -1,10 +1,6 @@
 import {
-  createPgMigratorConformanceContext,
-  type PgMigratorConformanceContext,
-  createPgStateProviderConformanceContext,
-  type PgStateProviderConformanceContext,
-  pgMigratorConformanceCases,
-  pgStateProviderConformanceCases,
+  createPgMigratorConformanceCases,
+  createPgStateProviderConformanceCases,
 } from "@queuert/postgres/conformance";
 import { acquirePostgres, type AcquiredPostgres } from "@queuert/testcontainers";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -17,16 +13,16 @@ import { createDrizzlePgStateProvider } from "./provider.ts";
 describe("postgresql/state-drizzle provider conformance", () => {
   let pg: AcquiredPostgres;
   let pool: Pool;
-  let context: PgStateProviderConformanceContext;
+  let db: Parameters<typeof createDrizzlePgStateProvider>[0]["db"];
+  const cases = createPgStateProviderConformanceCases({
+    createStateProvider: async () => createDrizzlePgStateProvider({ db }),
+    withNonTransactionContext: async (fn) => fn({ tx: db }),
+  });
 
   beforeAll(async () => {
     pg = await acquirePostgres("postgres:18", import.meta.url);
     pool = new Pool({ connectionString: pg.connectionString, idleTimeoutMillis: 0 });
-    const db = drizzle(pool, { schema: {} });
-    context = await createPgStateProviderConformanceContext({
-      createStateProvider: async () => createDrizzlePgStateProvider({ db }),
-      withNonTransactionContext: async (fn) => fn({ tx: db }),
-    });
+    db = drizzle(pool, { schema: {} });
   }, 60_000);
 
   afterAll(async () => {
@@ -34,9 +30,9 @@ describe("postgresql/state-drizzle provider conformance", () => {
     await pg[Symbol.asyncDispose]();
   });
 
-  for (const conformanceCase of pgStateProviderConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });
@@ -45,15 +41,15 @@ describe("postgresql/state-drizzle provider conformance", () => {
 describe("postgresql/state-drizzle migrator conformance", () => {
   let pg: AcquiredPostgres;
   let pool: Pool;
-  let context: PgMigratorConformanceContext;
+  let db: Parameters<typeof createDrizzlePgStateProvider>[0]["db"];
+  const cases = createPgMigratorConformanceCases({
+    createStateProvider: () => createDrizzlePgStateProvider({ db }),
+  });
 
   beforeAll(async () => {
     pg = await acquirePostgres("postgres:18", `${import.meta.url}#migrator`);
     pool = new Pool({ connectionString: pg.connectionString, idleTimeoutMillis: 0 });
-    const db = drizzle(pool, { schema: {} });
-    context = createPgMigratorConformanceContext({
-      stateProvider: createDrizzlePgStateProvider({ db }),
-    });
+    db = drizzle(pool, { schema: {} });
   }, 60_000);
 
   afterAll(async () => {
@@ -61,9 +57,9 @@ describe("postgresql/state-drizzle migrator conformance", () => {
     await pg[Symbol.asyncDispose]();
   });
 
-  for (const conformanceCase of pgMigratorConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });

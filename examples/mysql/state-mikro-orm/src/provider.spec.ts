@@ -1,9 +1,5 @@
 import { MikroORM } from "@mikro-orm/mysql";
-import {
-  createMysqlStateProviderConformanceContext,
-  mysqlStateProviderConformanceCases,
-  type MysqlStateProviderConformanceContext,
-} from "@queuert/mysql/conformance";
+import { createMysqlStateProviderConformanceCases } from "@queuert/mysql/conformance";
 import { acquireMysql } from "@queuert/testcontainers";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
@@ -32,21 +28,19 @@ afterAll(async () => {
 
 // #region conformance
 describe("mysql/state-mikro-orm provider conformance", () => {
-  let context: MysqlStateProviderConformanceContext;
-
-  beforeAll(async () => {
-    context = await createMysqlStateProviderConformanceContext({
-      createStateProvider: async () => stateProvider,
-      dialect: "mysql",
-      withNonTransactionContext: async (fn) => fn({ em: orm.em.fork() }),
-      withSavepoint: async (txCtx, fn) =>
-        (txCtx as MikroOrmMysqlContext).em.transactional(async (em) => fn({ em })),
-    });
+  const cases = createMysqlStateProviderConformanceCases({
+    createStateProvider: async () => stateProvider,
+    dialect: "mysql",
+    withNonTransactionContext: async (fn) => fn({ em: orm.em.fork() }),
+    withSavepoint: async (txCtx, fn) =>
+      (txCtx as MikroOrmMysqlContext).em.transactional(async (em) => fn({ em })),
   });
 
-  for (const conformanceCase of mysqlStateProviderConformanceCases) {
+  beforeAll(async () => {});
+
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });

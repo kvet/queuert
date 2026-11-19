@@ -80,6 +80,7 @@ type DbJob = {
   trace_context: string | null;
 
   blocking: boolean;
+  blockers_remaining: number;
 };
 
 type DbWorker = {
@@ -347,7 +348,8 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job_v2 (
   completed_by                  {{worker_id_type}},
   attempt_token                 uuid,
 
-  blocking                      boolean NOT NULL DEFAULT false
+  blocking                      boolean NOT NULL DEFAULT false,
+  blockers_remaining            integer NOT NULL DEFAULT 0
 ) WITH (
   fillfactor = 75,
   autovacuum_vacuum_cost_delay = 0,
@@ -446,12 +448,33 @@ WITH source AS (
   LIMIT 1000
   FOR KEY SHARE
 ),
-copied AS (
-  INSERT INTO {{schema}}.{{table_prefix}}job_v2 (${v2Columns}, blocking)
-  SELECT ${v2Values("")}, chain_index = 0 AND EXISTS (
-    SELECT 1 FROM {{schema}}.{{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = source.id
-  )
+counted AS (
+  SELECT source.*,
+    CASE WHEN source.status = 'blocked' THEN (
+      SELECT count(*)::integer
+      FROM {{schema}}.{{table_prefix}}job_blocker jb
+      LEFT JOIN {{schema}}.{{table_prefix}}job h ON h.id = jb.blocked_by_chain_id
+      WHERE jb.job_id = source.id AND h.chain_status IS DISTINCT FROM 'completed'
+    ) ELSE 0 END AS blockers_remaining
   FROM source
+),
+copied AS (
+  INSERT INTO {{schema}}.{{table_prefix}}job_v2 (${v2Columns}, blocking, blockers_remaining)
+  SELECT ${v2Values("")
+    .split(", ")
+    .map((column) =>
+      column === "status"
+        ? "CASE WHEN status = 'blocked' AND blockers_remaining = 0 THEN 'pending' ELSE status END"
+        : column === "scheduled_at"
+          ? "CASE WHEN status = 'blocked' AND blockers_remaining = 0 THEN GREATEST(scheduled_at, now()) ELSE scheduled_at END"
+          : column,
+    )
+    .join(", ")},
+    chain_index = 0 AND EXISTS (
+      SELECT 1 FROM {{schema}}.{{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = counted.id
+    ),
+    blockers_remaining
+  FROM counted
   ON CONFLICT (id) DO NOTHING
 )
 SELECT (SELECT id FROM source ORDER BY id DESC LIMIT 1)::text AS last_id`,
@@ -486,6 +509,36 @@ SET blocking = EXISTS (
 )
 WHERE h.chain_index = 0
   AND h.id IN (SELECT chain_id FROM {{schema}}.{{table_prefix}}job_v2_dirty)`),
+              sql(/* sql */ `
+UPDATE {{schema}}.{{table_prefix}}job_v2 j
+SET blockers_remaining = c.blockers_remaining,
+  status = CASE WHEN c.blockers_remaining = 0 THEN 'pending' ELSE j.status END,
+  scheduled_at = CASE
+    WHEN c.blockers_remaining = 0 THEN GREATEST(j.scheduled_at, now()) ELSE j.scheduled_at END
+FROM (
+  SELECT jb.job_id,
+    count(*) FILTER (WHERE h.chain_status IS DISTINCT FROM 'completed')::integer AS blockers_remaining
+  FROM {{schema}}.{{table_prefix}}job_blocker jb
+  LEFT JOIN {{schema}}.{{table_prefix}}job_v2 h ON h.id = jb.blocked_by_chain_id
+  WHERE jb.job_id IN (
+    SELECT dependent.job_id FROM {{schema}}.{{table_prefix}}job_blocker dependent
+    WHERE dependent.blocked_by_chain_id IN (
+      SELECT chain_id FROM {{schema}}.{{table_prefix}}job_v2_dirty
+    )
+  )
+  GROUP BY jb.job_id
+) c
+WHERE j.id = c.job_id AND j.status = 'blocked'`),
+              sql(/* sql */ `
+UPDATE {{schema}}.{{table_prefix}}job_v2 j
+SET status = 'pending',
+  attempt_at = NULL,
+  attempt_by = NULL,
+  attempt_token = NULL
+WHERE j.status = 'running'
+  AND NOT EXISTS (
+    SELECT 1 FROM {{schema}}.{{table_prefix}}worker w WHERE w.id = j.attempt_by
+  )`),
               sql(/* sql */ `
 DROP TABLE {{schema}}.{{table_prefix}}job`),
               sql(/* sql */ `
@@ -576,6 +629,7 @@ const DB_JOB_COLUMNS = [
   "chain_trace_context",
   "trace_context",
   "blocking",
+  "blockers_remaining",
 ] as const;
 
 const jobColumnsSelect = (alias: string): string =>
@@ -825,6 +879,7 @@ export const createPgStateAdapter = <
     chain_trace_context: t["string?"](),
     trace_context: t["string?"](),
     blocking: t.boolean(),
+    blockers_remaining: t.number(),
   } as const satisfies Record<(typeof DB_JOB_COLUMNS)[number], DataType>;
 
   const dbChainColumns = {
@@ -1765,11 +1820,12 @@ inserted_blockers AS (
   WHERE ${FENCE_GUARD}
   RETURNING job_id, blocked_by_chain_id
 ),
-has_incomplete_blockers AS (
-  SELECT DISTINCT d.job_id
+incomplete_blocker_counts AS (
+  SELECT d.job_id, count(*)::integer AS blockers_remaining
   FROM input_data d
   JOIN locked_blocker_heads h ON h.id = d.blocked_by_chain_id
   WHERE h.chain_status = 'running'
+  GROUP BY d.job_id
 ),
 unflagged_blocker_heads AS (
   SELECT id FROM locked_blocker_heads WHERE NOT blocking
@@ -1777,17 +1833,23 @@ unflagged_blocker_heads AS (
 update_targets AS (
   SELECT id FROM unflagged_blocker_heads
   UNION
-  SELECT job_id FROM has_incomplete_blockers
+  SELECT job_id FROM incomplete_blocker_counts
 ),
 updated_jobs AS (
   UPDATE {{schema}}.{{table_prefix}}job j
   SET status = CASE
-      WHEN j.status = 'pending' AND j.id IN (SELECT job_id FROM has_incomplete_blockers)
+      WHEN j.status = 'pending' AND c.job_id IS NOT NULL
       THEN 'blocked' ELSE j.status END,
+    blockers_remaining = CASE
+      WHEN c.job_id IS NULL THEN j.blockers_remaining
+      WHEN j.status = 'pending' THEN c.blockers_remaining
+      WHEN j.status = 'blocked' THEN j.blockers_remaining + c.blockers_remaining
+      ELSE j.blockers_remaining END,
     blocking = j.blocking OR j.id IN (SELECT id FROM unflagged_blocker_heads)
   FROM update_targets t
+  LEFT JOIN incomplete_blocker_counts c ON c.job_id = t.id
   WHERE j.id = t.id
-    AND (j.status = 'pending' OR j.id IN (SELECT id FROM unflagged_blocker_heads))
+    AND (j.status IN ('pending', 'blocked') OR j.id IN (SELECT id FROM unflagged_blocker_heads))
     AND ${FENCE_GUARD}
   RETURNING j.*
 ),
@@ -1883,58 +1945,35 @@ ORDER BY b.index ASC
     },
 
     unblockJobs: async ({ txCtx, blockedByChainId }) => {
-      const [lockResult] = await execute(
-        txCtx,
-        prepared(
-          "lockBlockedJobs",
-          `
-WITH locked_blocked_dependents AS (
-  SELECT j.id
-  FROM {{schema}}.{{table_prefix}}job j
-  WHERE j.id IN (
-    SELECT DISTINCT jb.job_id
-    FROM {{schema}}.{{table_prefix}}job_blocker jb
-    WHERE jb.blocked_by_chain_id = $1
-  )
-  AND j.status = 'blocked'
-  ORDER BY j.id
-  FOR UPDATE
-)
-SELECT
-  EXISTS (
-    SELECT 1 FROM {{schema}}.{{table_prefix}}job_blocker jb
-    WHERE jb.blocked_by_chain_id = $1
-  ) AS referenced
-FROM (SELECT count(*) FROM locked_blocked_dependents) AS all_blocked_dependents_locked
-`,
-          { params: [idDataType], columns: { referenced: t.boolean() } },
-        ),
-        [blockedByChainId],
-      );
-      if (!lockResult.referenced) return [];
-
       const [result] = await execute(
         txCtx,
         prepared(
           "unblockJobs",
           `
-WITH updated AS (
+WITH dependent_blocker_counts AS MATERIALIZED (
+  SELECT jb.job_id, count(*)::integer AS blocker_count
+  FROM {{schema}}.{{table_prefix}}job_blocker jb
+  WHERE jb.blocked_by_chain_id = $1
+  GROUP BY jb.job_id
+),
+locked_dependents AS MATERIALIZED (
+  SELECT j.id, c.blocker_count
+  FROM {{schema}}.{{table_prefix}}job j
+  JOIN dependent_blocker_counts c ON c.job_id = j.id
+  WHERE j.status = 'blocked'
+  ORDER BY j.id
+  FOR UPDATE OF j
+),
+updated AS (
   UPDATE {{schema}}.{{table_prefix}}job j
-  SET status = 'pending',
-    scheduled_at = GREATEST(j.scheduled_at, statement_timestamp())
-  WHERE j.id IN (
-      SELECT jb.job_id
-      FROM {{schema}}.{{table_prefix}}job_blocker jb
-      WHERE jb.blocked_by_chain_id = $1
-    )
+  SET blockers_remaining = j.blockers_remaining - l.blocker_count,
+    status = CASE WHEN j.blockers_remaining - l.blocker_count <= 0 THEN 'pending' ELSE j.status END,
+    scheduled_at = CASE
+      WHEN j.blockers_remaining - l.blocker_count <= 0
+      THEN GREATEST(j.scheduled_at, statement_timestamp()) ELSE j.scheduled_at END
+  FROM locked_dependents l
+  WHERE j.id = l.id
     AND j.status = 'blocked'
-    AND NOT EXISTS (
-      SELECT 1
-      FROM {{schema}}.{{table_prefix}}job_blocker jb
-      LEFT JOIN {{schema}}.{{table_prefix}}job h ON h.id = jb.blocked_by_chain_id
-      WHERE jb.job_id = j.id
-        AND h.chain_status IS DISTINCT FROM 'completed'
-    )
     AND ${FENCE_GUARD}
   RETURNING j.*
 ),

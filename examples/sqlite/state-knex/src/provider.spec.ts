@@ -1,10 +1,6 @@
 import {
-  asyncSqliteStateProviderConformanceCases,
-  createSqliteMigratorConformanceContext,
-  createSqliteStateProviderConformanceContext,
-  type SqliteStateProviderConformanceContext,
-  sqliteMigratorConformanceCases,
-  sqliteStateProviderConformanceCases,
+  createSqliteMigratorConformanceCases,
+  createSqliteStateProviderConformanceCases,
 } from "@queuert/sqlite/conformance";
 import knexFactory from "knex";
 import { afterAll, beforeAll, describe, test } from "vitest";
@@ -18,25 +14,21 @@ describe("sqlite/state-knex provider conformance", () => {
     connection: { filename: ":memory:" },
     useNullAsDefault: true,
   });
-  let context: SqliteStateProviderConformanceContext;
-
-  beforeAll(async () => {
-    context = await createSqliteStateProviderConformanceContext({
-      createStateProvider: async () => createKnexSqliteStateProvider({ knex }),
-      withNonTransactionContext: async (fn) => fn({ trx: knex }),
-    });
+  const cases = createSqliteStateProviderConformanceCases({
+    mode: "async",
+    createStateProvider: async () => createKnexSqliteStateProvider({ knex }),
+    withNonTransactionContext: async (fn) => fn({ trx: knex }),
   });
+
+  beforeAll(async () => {});
 
   afterAll(async () => {
     await knex.destroy();
   });
 
-  for (const conformanceCase of [
-    ...sqliteStateProviderConformanceCases,
-    ...asyncSqliteStateProviderConformanceCases,
-  ]) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });
@@ -48,17 +40,18 @@ describe("sqlite/state-knex migrator conformance", () => {
     connection: { filename: ":memory:" },
     useNullAsDefault: true,
   });
-  const context = createSqliteMigratorConformanceContext({
-    stateProvider: createKnexSqliteStateProvider({ knex }),
+  const cases = createSqliteMigratorConformanceCases({
+    mode: "async",
+    createStateProvider: () => createKnexSqliteStateProvider({ knex }),
   });
 
   afterAll(async () => {
     await knex.destroy();
   });
 
-  for (const conformanceCase of sqliteMigratorConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });

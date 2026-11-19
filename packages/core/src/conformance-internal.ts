@@ -15,11 +15,13 @@ export type {
   EndToEndSavepointContext,
 } from "./conformance.end-to-end/types.ts";
 export { notifyAdapterBaseGroups } from "./conformance.notify-adapter/groups.ts";
+export type { NotifyAdapterConformanceContext } from "./conformance.notify-adapter/types.ts";
 export { type ConformanceGroup } from "./conformance/runner.ts";
 export { toConformanceTestCases } from "./conformance/suite.ts";
 export type {
   SavepointConformanceContext,
   SchemaFenceConformanceContext,
+  StateAdapterConformanceContext,
 } from "./conformance.state-adapter/types.ts";
 export {
   stateAdapterAsyncGroups,

@@ -1,26 +1,22 @@
 import {
-  type NotifyAdapterConformanceContext,
-  notifyAdapterConformanceCases,
-  notifyAdapterEndToEndConformanceCases,
+  createNotifyAdapterConformanceCases,
+  createNotifyAdapterEndToEndConformanceCases,
 } from "queuert/conformance";
 import { test } from "vitest";
 
 import { createMemoryNotifyAdapter } from "./notify-adapter.ts";
 
 // #region conformance
-const context: NotifyAdapterConformanceContext = {
-  createNotifyAdapter: async () => createMemoryNotifyAdapter(),
-};
-
-for (const conformanceCase of notifyAdapterConformanceCases) {
+for (const conformanceCase of [
+  ...createNotifyAdapterConformanceCases({
+    createNotifyAdapter: async () => createMemoryNotifyAdapter(),
+  }),
+  ...createNotifyAdapterEndToEndConformanceCases({
+    createNotifyAdapter: async () => createMemoryNotifyAdapter(),
+  }),
+]) {
   test(conformanceCase.title, async () => {
-    await conformanceCase.run(context);
-  });
-}
-
-for (const conformanceCase of notifyAdapterEndToEndConformanceCases) {
-  test(conformanceCase.title, async () => {
-    await conformanceCase.run(context);
+    await conformanceCase.run();
   });
 }
 // #endregion

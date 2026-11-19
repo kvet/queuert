@@ -1,10 +1,6 @@
 import {
-  createMysqlMigratorConformanceContext,
-  createMysqlStateProviderConformanceContext,
-  type MysqlMigratorConformanceContext,
-  type MysqlStateProviderConformanceContext,
-  mysqlMigratorConformanceCases,
-  mysqlStateProviderConformanceCases,
+  createMysqlMigratorConformanceCases,
+  createMysqlStateProviderConformanceCases,
 } from "@queuert/mysql/conformance";
 import { acquireMysql } from "@queuert/testcontainers";
 import { drizzle } from "drizzle-orm/mysql2";
@@ -16,26 +12,26 @@ import { createDrizzleMysqlStateProvider } from "./provider.ts";
 // #region conformance
 describe("mysql/state-drizzle provider conformance", () => {
   let pool: Pool;
-  let context: MysqlStateProviderConformanceContext;
+  let db: Parameters<typeof createDrizzleMysqlStateProvider>[0]["db"];
+  const cases = createMysqlStateProviderConformanceCases({
+    createStateProvider: async () => createDrizzleMysqlStateProvider({ db }),
+    dialect: "mysql",
+    withNonTransactionContext: async (fn) => fn({ tx: db }),
+  });
 
   beforeAll(async () => {
     const { connectionOptions } = await acquireMysql("mysql:26", import.meta.url);
     pool = createPool({ ...connectionOptions, connectionLimit: 20 });
-    const db = drizzle(pool, { schema: {}, mode: "default" });
-    context = await createMysqlStateProviderConformanceContext({
-      createStateProvider: async () => createDrizzleMysqlStateProvider({ db }),
-      dialect: "mysql",
-      withNonTransactionContext: async (fn) => fn({ tx: db }),
-    });
+    db = drizzle(pool, { schema: {}, mode: "default" });
   }, 120_000);
 
   afterAll(async () => {
     await pool.end();
   });
 
-  for (const conformanceCase of mysqlStateProviderConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });
@@ -43,25 +39,25 @@ describe("mysql/state-drizzle provider conformance", () => {
 
 describe("mysql/state-drizzle migrator conformance", () => {
   let pool: Pool;
-  let context: MysqlMigratorConformanceContext;
+  const cases = createMysqlMigratorConformanceCases({
+    createStateProvider: () =>
+      createDrizzleMysqlStateProvider({
+        db: drizzle(pool, { schema: {}, mode: "default" }),
+      }),
+  });
 
   beforeAll(async () => {
     const { connectionOptions } = await acquireMysql("mysql:26", `${import.meta.url}#migrator`);
     pool = createPool({ ...connectionOptions, connectionLimit: 10 });
-    context = createMysqlMigratorConformanceContext({
-      stateProvider: createDrizzleMysqlStateProvider({
-        db: drizzle(pool, { schema: {}, mode: "default" }),
-      }),
-    });
   }, 120_000);
 
   afterAll(async () => {
     await pool.end();
   });
 
-  for (const conformanceCase of mysqlMigratorConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });

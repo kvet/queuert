@@ -17,9 +17,11 @@ const conformanceIt = (mode: Mode) =>
     onCleanup(async () => {
       db.close();
     });
-    return createSqliteMigratorConformanceContext({
-      stateProvider: createBetterSqlite3Provider({ db, mode }),
-    });
+    return createSqliteMigratorConformanceContext(
+      mode === "sync"
+        ? { mode, createStateProvider: () => createBetterSqlite3Provider({ db, mode }) }
+        : { mode, createStateProvider: () => createBetterSqlite3Provider({ db, mode }) },
+    );
   });
 
 const it = conformanceIt("async");

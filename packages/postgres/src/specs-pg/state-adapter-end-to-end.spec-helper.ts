@@ -71,11 +71,11 @@ export const createEndToEndContext = async (
 ): Promise<
   EndToEndSavepointContext & EndToEndPoisonTransactionContext & EndToEndFlakyDbContext
 > => ({
-  ...(await createPgStateProviderConformanceContext({
+  ...createPgStateProviderConformanceContext({
     createStateProvider: async () => createPgPoolProvider({ pool }),
     withNonTransactionContext: withPgPoolNonTransactionContext(pool),
     withSavepoint: withPgPoolSavepoint,
-  })),
+  }),
   withSavepoint: withPgPoolSavepoint,
   createNotifyAdapter,
   poisonTransaction: async (txCtx) => {

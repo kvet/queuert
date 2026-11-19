@@ -4,7 +4,7 @@ import type { BaseJobTypeDefinitions } from "../job-types/job-type.ts";
 import { type JobTypes, createJobTypes } from "../job-types/job-types.ts";
 import type { JobTypesDefinitions } from "../job-types/merge-job-types.ts";
 import type { ValidationAdapterConformanceContext } from "./types.ts";
-import { validationAdapterConformanceCases } from "./validation-adapter-cases.ts";
+import { createValidationAdapterConformanceCases } from "./validation-adapter-cases.ts";
 
 type FieldType = "string" | "number" | "boolean";
 type FieldShape = Record<string, FieldType>;
@@ -328,20 +328,17 @@ const buildBrokenEntryContext = (): ValidationAdapterConformanceContext => {
   };
 };
 
-describe("validationAdapterConformanceCases", () => {
-  const context = buildPassingContext();
-
-  for (const conformanceCase of validationAdapterConformanceCases) {
+describe("createValidationAdapterConformanceCases", () => {
+  for (const conformanceCase of createValidationAdapterConformanceCases(buildPassingContext())) {
     it(`passes ${conformanceCase.title} for a correctly-implemented adapter`, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 
   it("fails a case when a builder violates the runtime contract", async () => {
-    const context = buildBrokenEntryContext();
     const outcomes = await Promise.allSettled(
-      validationAdapterConformanceCases.map(async (conformanceCase) =>
-        conformanceCase.run(context),
+      createValidationAdapterConformanceCases(buildBrokenEntryContext()).map(
+        async (conformanceCase) => conformanceCase.run(),
       ),
     );
 

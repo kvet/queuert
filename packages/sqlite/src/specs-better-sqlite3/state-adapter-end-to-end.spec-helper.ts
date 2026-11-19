@@ -76,17 +76,19 @@ export const createEndToEndContext = async (
   const withNonTransactionContext = <T>(fn: (txCtx: BetterSqlite3Context) => T): T =>
     fn({ db } as BetterSqlite3Context);
   return {
-    ...(await (mode === "sync"
+    ...(mode === "sync"
       ? createSqliteStateProviderConformanceContext({
+          mode: "sync",
           createStateProvider: () => createBetterSqlite3Provider({ db, mode: "sync" }),
           withNonTransactionContext,
           withSavepoint: withBetterSqlite3Savepoint("sync"),
         })
       : createSqliteStateProviderConformanceContext({
+          mode: "async",
           createStateProvider: async () => createBetterSqlite3Provider({ db, lock }),
           withNonTransactionContext,
           withSavepoint: withBetterSqlite3Savepoint("async"),
-        }))),
+        })),
     withSavepoint: withBetterSqlite3Savepoint(mode),
     createNotifyAdapter,
     createFlakyDbStateAdapter: () =>

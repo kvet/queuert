@@ -2,10 +2,7 @@ import { createSqliteStateAdapter } from "@queuert/sqlite";
 import Database from "better-sqlite3";
 import { createBetterSqlite3StateProvider } from "example-sqlite-state-better-sqlite3/provider";
 import { createClient, createWorkerRunner, createProcessors } from "queuert";
-import {
-  type ValidationAdapterConformanceContext,
-  validationAdapterConformanceCases,
-} from "queuert/conformance";
+import { createValidationAdapterConformanceCases } from "queuert/conformance";
 import { describe, expect, test } from "vitest";
 import { z } from "zod";
 
@@ -140,7 +137,7 @@ test("validates structural blockers against the runtime form", () => {
 });
 
 describe("zod codec adapter conformance", () => {
-  const context: ValidationAdapterConformanceContext = {
+  const cases = createValidationAdapterConformanceCases({
     basic: {
       buildEntry: () =>
         createZodCodecJobTypes({
@@ -288,11 +285,11 @@ describe("zod codec adapter conformance", () => {
         );
       },
     },
-  };
+  });
 
-  for (const conformanceCase of validationAdapterConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });

@@ -1,35 +1,26 @@
 import {
-  asyncStateAdapterConformanceCases,
-  asyncStateAdapterEndToEndConformanceCases,
-  type StateAdapterConformanceContext,
-  stateAdapterConformanceCases,
-  stateAdapterEndToEndConformanceCases,
+  createStateAdapterConformanceCases,
+  createStateAdapterEndToEndConformanceCases,
 } from "queuert/conformance";
 import { test } from "vitest";
 
 import { createMemoryStateAdapter } from "./state-adapter.ts";
 
 // #region conformance
-const context: StateAdapterConformanceContext = {
-  createStateAdapter: async () => createMemoryStateAdapter(),
-  withNonTransactionContext: async (fn) => fn({ transaction: undefined }),
-};
-
 for (const conformanceCase of [
-  ...stateAdapterConformanceCases,
-  ...asyncStateAdapterConformanceCases,
+  ...createStateAdapterConformanceCases({
+    mode: "async",
+    createStateAdapter: async () => createMemoryStateAdapter(),
+    withNonTransactionContext: async (fn) => fn({ transaction: undefined }),
+  }),
+  ...createStateAdapterEndToEndConformanceCases({
+    mode: "async",
+    createStateAdapter: async () => createMemoryStateAdapter(),
+    withNonTransactionContext: async (fn) => fn({ transaction: undefined }),
+  }),
 ]) {
   test(conformanceCase.title, async () => {
-    await conformanceCase.run(context);
-  });
-}
-
-for (const conformanceCase of [
-  ...stateAdapterEndToEndConformanceCases,
-  ...asyncStateAdapterEndToEndConformanceCases,
-]) {
-  test(conformanceCase.title, async () => {
-    await conformanceCase.run(context);
+    await conformanceCase.run();
   });
 }
 // #endregion

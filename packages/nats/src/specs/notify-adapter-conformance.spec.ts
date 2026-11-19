@@ -2,8 +2,11 @@
 import { connect } from "@nats-io/transport-node";
 import { conformanceTestSuite } from "@queuert/helpers/conformance";
 import { acquireNats } from "@queuert/testcontainers";
-import type { NotifyAdapterConformanceContext } from "queuert/conformance";
-import { notifyAdapterBaseGroups, notifyAdapterEndToEndGroups } from "queuert/conformance-internal";
+import {
+  notifyAdapterBaseGroups,
+  notifyAdapterEndToEndGroups,
+  type NotifyAdapterConformanceContext,
+} from "queuert/conformance-internal";
 import { it as baseIt, describe } from "vitest";
 
 import { createNatsNotifyAdapter } from "../notify-adapter/notify-adapter.nats.ts";

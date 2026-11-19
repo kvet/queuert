@@ -23,7 +23,7 @@ const defineMysqlMigratorConformanceSuite = async ({
     const pool = createPool({ ...connectionOptions, connectionLimit: 10 });
     onCleanup(async () => pool.end());
     return createMysqlMigratorConformanceContext({
-      stateProvider: createMysql2PoolProvider({ pool }),
+      createStateProvider: () => createMysql2PoolProvider({ pool }),
     });
   });
 

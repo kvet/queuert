@@ -4,11 +4,11 @@ import { detectResourceLeaks } from "@queuert/helpers/testing";
 import { TESTCONTAINERS_RESOURCE_TYPES, acquirePostgres } from "@queuert/testcontainers";
 import type { RuntimeType } from "@queuert/typed-sql";
 import { Client, Pool } from "pg";
-import type { StateAdapterConformanceContext } from "queuert/conformance";
 import {
   stateAdapterAsyncGroups,
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
+  type StateAdapterConformanceContext,
 } from "queuert/conformance-internal";
 import { it as baseIt, describe, expect } from "vitest";
 

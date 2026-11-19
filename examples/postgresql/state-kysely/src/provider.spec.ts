@@ -1,10 +1,6 @@
 import {
-  createPgMigratorConformanceContext,
-  type PgMigratorConformanceContext,
-  createPgStateProviderConformanceContext,
-  type PgStateProviderConformanceContext,
-  pgMigratorConformanceCases,
-  pgStateProviderConformanceCases,
+  createPgMigratorConformanceCases,
+  createPgStateProviderConformanceCases,
 } from "@queuert/postgres/conformance";
 import { acquirePostgres, type AcquiredPostgres } from "@queuert/testcontainers";
 import { Kysely, PostgresDialect } from "kysely";
@@ -19,17 +15,15 @@ type Database = Record<string, never>;
 describe("postgresql/state-kysely provider conformance", () => {
   let pg: AcquiredPostgres;
   let db: Kysely<Database>;
-  let context: PgStateProviderConformanceContext;
+  const cases = createPgStateProviderConformanceCases({
+    createStateProvider: async () => createKyselyPgStateProvider({ db }),
+    withNonTransactionContext: async (fn) => fn({ db }),
+  });
 
   beforeAll(async () => {
     pg = await acquirePostgres("postgres:18", import.meta.url);
     const pool = new Pool({ connectionString: pg.connectionString, idleTimeoutMillis: 0 });
-    const kysely = new Kysely<Database>({ dialect: new PostgresDialect({ pool }) });
-    db = kysely;
-    context = await createPgStateProviderConformanceContext({
-      createStateProvider: async () => createKyselyPgStateProvider({ db: kysely }),
-      withNonTransactionContext: async (fn) => fn({ db: kysely }),
-    });
+    db = new Kysely<Database>({ dialect: new PostgresDialect({ pool }) });
   }, 60_000);
 
   afterAll(async () => {
@@ -37,9 +31,9 @@ describe("postgresql/state-kysely provider conformance", () => {
     await pg[Symbol.asyncDispose]();
   });
 
-  for (const conformanceCase of pgStateProviderConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });
@@ -48,15 +42,14 @@ describe("postgresql/state-kysely provider conformance", () => {
 describe("postgresql/state-kysely migrator conformance", () => {
   let pg: AcquiredPostgres;
   let db: Kysely<Database>;
-  let context: PgMigratorConformanceContext;
+  const cases = createPgMigratorConformanceCases({
+    createStateProvider: () => createKyselyPgStateProvider({ db }),
+  });
 
   beforeAll(async () => {
     pg = await acquirePostgres("postgres:18", `${import.meta.url}#migrator`);
     const pool = new Pool({ connectionString: pg.connectionString, idleTimeoutMillis: 0 });
     db = new Kysely<Database>({ dialect: new PostgresDialect({ pool }) });
-    context = createPgMigratorConformanceContext({
-      stateProvider: createKyselyPgStateProvider({ db }),
-    });
   }, 60_000);
 
   afterAll(async () => {
@@ -64,9 +57,9 @@ describe("postgresql/state-kysely migrator conformance", () => {
     await pg[Symbol.asyncDispose]();
   });
 
-  for (const conformanceCase of pgMigratorConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });

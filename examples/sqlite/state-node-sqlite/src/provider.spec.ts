@@ -2,11 +2,8 @@ import { DatabaseSync } from "node:sqlite";
 import { after, before, describe, test } from "node:test";
 
 import {
-  createSqliteMigratorConformanceContext,
-  createSqliteStateProviderConformanceContext,
-  type SqliteStateProviderConformanceContext,
-  sqliteMigratorConformanceCases,
-  sqliteStateProviderConformanceCases,
+  createSqliteMigratorConformanceCases,
+  createSqliteStateProviderConformanceCases,
 } from "@queuert/sqlite/conformance";
 
 import { createNodeSqliteStateProvider } from "./provider.ts";
@@ -14,22 +11,21 @@ import { createNodeSqliteStateProvider } from "./provider.ts";
 // #region conformance
 void describe("sqlite/state-node-sqlite provider conformance", () => {
   const db = new DatabaseSync(":memory:");
-  let context: SqliteStateProviderConformanceContext;
-
-  before(() => {
-    context = createSqliteStateProviderConformanceContext({
-      createStateProvider: () => createNodeSqliteStateProvider({ db }),
-      withNonTransactionContext: (fn) => fn({ db }),
-    });
+  const cases = createSqliteStateProviderConformanceCases({
+    mode: "sync",
+    createStateProvider: () => createNodeSqliteStateProvider({ db }),
+    withNonTransactionContext: (fn) => fn({ db }),
   });
+
+  before(() => {});
 
   after(() => {
     db.close();
   });
 
-  for (const conformanceCase of sqliteStateProviderConformanceCases) {
+  for (const conformanceCase of cases) {
     void test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });
@@ -37,17 +33,18 @@ void describe("sqlite/state-node-sqlite provider conformance", () => {
 
 void describe("sqlite/state-node-sqlite migrator conformance", () => {
   const db = new DatabaseSync(":memory:");
-  const context = createSqliteMigratorConformanceContext({
-    stateProvider: createNodeSqliteStateProvider({ db }),
+  const cases = createSqliteMigratorConformanceCases({
+    mode: "sync",
+    createStateProvider: () => createNodeSqliteStateProvider({ db }),
   });
 
   after(() => {
     db.close();
   });
 
-  for (const conformanceCase of sqliteMigratorConformanceCases) {
+  for (const conformanceCase of cases) {
     void test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });

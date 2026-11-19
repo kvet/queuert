@@ -109,13 +109,12 @@ const Page = () => (
 
     <h2 id="testing-your-provider">Testing your provider</h2>
     <p>
-      <code>pgNotifyProviderConformanceCases</code> from <code>@queuert/postgres/conformance</code>{" "}
-      check a provider you write: they are every case a notify adapter must pass, run against the
-      context <code>createPgNotifyProviderConformanceContext({"{ createNotifyProvider }"})</code>{" "}
-      returns: each case builds its own notify adapter over a new provider from your factory and
-      closes both when it ends. The suite drives no test runner: your test file owns the connections
-      in its own hooks and registers one test per case. Every example's{" "}
-      <code>src/provider.spec.ts</code> is a working template:
+      <code>createPgNotifyProviderConformanceCases({"{ createNotifyProvider }"})</code> from{" "}
+      <code>@queuert/postgres/conformance</code> checks a provider you write: it returns the cases,
+      ready to run, that every notify adapter must pass: each case builds its own notify adapter
+      over a new provider from your factory and closes both when it ends. The suite drives no test
+      runner: your test file owns the connections in its own hooks and registers one test per case.
+      Every example's <code>src/provider.spec.ts</code> is a working template:
     </p>
     <Tabs syncKey="postgres-driver">
       <TabItem label="pg">

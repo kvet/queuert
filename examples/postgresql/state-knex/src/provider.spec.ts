@@ -1,10 +1,6 @@
 import {
-  createPgMigratorConformanceContext,
-  type PgMigratorConformanceContext,
-  createPgStateProviderConformanceContext,
-  type PgStateProviderConformanceContext,
-  pgMigratorConformanceCases,
-  pgStateProviderConformanceCases,
+  createPgMigratorConformanceCases,
+  createPgStateProviderConformanceCases,
 } from "@queuert/postgres/conformance";
 import { acquirePostgres, type AcquiredPostgres } from "@queuert/testcontainers";
 import knexFactory, { type Knex } from "knex";
@@ -16,7 +12,10 @@ import { createKnexPgStateProvider } from "./provider.ts";
 describe("postgresql/state-knex provider conformance", () => {
   let pg: AcquiredPostgres;
   let knex: Knex;
-  let context: PgStateProviderConformanceContext;
+  const cases = createPgStateProviderConformanceCases({
+    createStateProvider: async () => createKnexPgStateProvider({ knex }),
+    withNonTransactionContext: async (fn) => fn({ trx: knex }),
+  });
 
   beforeAll(async () => {
     pg = await acquirePostgres("postgres:18", import.meta.url);
@@ -25,10 +24,6 @@ describe("postgresql/state-knex provider conformance", () => {
       connection: pg.connectionString,
       pool: { min: 0, max: 10 },
     });
-    context = await createPgStateProviderConformanceContext({
-      createStateProvider: async () => createKnexPgStateProvider({ knex }),
-      withNonTransactionContext: async (fn) => fn({ trx: knex }),
-    });
   }, 60_000);
 
   afterAll(async () => {
@@ -36,9 +31,9 @@ describe("postgresql/state-knex provider conformance", () => {
     await pg[Symbol.asyncDispose]();
   });
 
-  for (const conformanceCase of pgStateProviderConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });
@@ -47,7 +42,9 @@ describe("postgresql/state-knex provider conformance", () => {
 describe("postgresql/state-knex migrator conformance", () => {
   let pg: AcquiredPostgres;
   let knex: Knex;
-  let context: PgMigratorConformanceContext;
+  const cases = createPgMigratorConformanceCases({
+    createStateProvider: () => createKnexPgStateProvider({ knex }),
+  });
 
   beforeAll(async () => {
     pg = await acquirePostgres("postgres:18", `${import.meta.url}#migrator`);
@@ -56,9 +53,6 @@ describe("postgresql/state-knex migrator conformance", () => {
       connection: pg.connectionString,
       pool: { min: 0, max: 10 },
     });
-    context = createPgMigratorConformanceContext({
-      stateProvider: createKnexPgStateProvider({ knex }),
-    });
   }, 60_000);
 
   afterAll(async () => {
@@ -66,9 +60,9 @@ describe("postgresql/state-knex migrator conformance", () => {
     await pg[Symbol.asyncDispose]();
   });
 
-  for (const conformanceCase of pgMigratorConformanceCases) {
+  for (const conformanceCase of cases) {
     test(conformanceCase.title, async () => {
-      await conformanceCase.run(context);
+      await conformanceCase.run();
     });
   }
 });

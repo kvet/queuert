@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { sleep } from "@queuert/helpers/sleep";
-import { dynamicSyncAsync, syncAsync, resource, step, wait } from "@queuert/sync-async";
+import { dynamicSyncAsync, resource, step, syncAsync, wait } from "@queuert/sync-async";
 
 import { runInModeOf } from "../../conformance/adapters.ts";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
@@ -215,6 +215,137 @@ export const unblockJobsGroup: ConformanceGroup<StateAdapterConformanceContext> 
         assert.equal(stillBlocked?.completedAt, null);
         assert.equal(stillBlocked?.attemptAt, null);
         assert.equal(stillBlocked?.status, "blocked");
+      }),
+    },
+    {
+      name: "unblocks a dependent that lists one blocker chain at two positions when that chain completes",
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
+
+        const [blockerChain, mainChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "blocker", input: null },
+                { id: stateAdapter.config.generateJobId(), typeName: "main", input: null },
+              ],
+            }),
+          ),
+        );
+
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [
+                { jobId: mainChain.head.id, blockedByChainIds: [blockerChain.id, blockerChain.id] },
+              ],
+            }),
+          ),
+        );
+
+        const [completed] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.completeJobs({
+              txCtx,
+              jobs: [{ jobId: blockerChain.head.id, output: null }],
+            }),
+          ),
+        );
+        assert.equal(completed!.chain.blocking, true);
+
+        const result = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.unblockJobs({ txCtx, blockedByChainId: blockerChain.id }),
+          ),
+        );
+
+        assert.deepEqual(
+          result
+            .toSorted((left, right) => left.index - right.index)
+            .map((entry) => [entry.jobId, entry.index, entry.job.status]),
+          [
+            [mainChain.head.id, 0, "pending"],
+            [mainChain.head.id, 1, "pending"],
+          ],
+        );
+        const [stored] = yield* step(stateAdapter.getJobs({ jobIds: [mainChain.head.id] }));
+        assert.equal(stored!.status, "pending");
+      }),
+    },
+    {
+      name: "keeps a dependent of three blockers blocked until the last one completes, in any order",
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
+
+        for (const completionOrder of [
+          [0, 1, 2],
+          [2, 0, 1],
+          [1, 2, 0],
+        ]) {
+          const [mainChain, ...blockerChains] = yield* step(
+            stateAdapter.withTransaction((txCtx) =>
+              stateAdapter.createJobs({
+                txCtx,
+                jobs: [
+                  { id: stateAdapter.config.generateJobId(), typeName: "main", input: null },
+                  ...[0, 1, 2].map(() => ({
+                    id: stateAdapter.config.generateJobId(),
+                    typeName: "blocker",
+                    input: null,
+                  })),
+                ],
+              }),
+            ),
+          );
+
+          yield* step(
+            stateAdapter.withTransaction((txCtx) =>
+              stateAdapter.addJobsBlockers({
+                txCtx,
+                jobBlockers: [
+                  {
+                    jobId: mainChain.head.id,
+                    blockedByChainIds: blockerChains.map((blockerChain) => blockerChain.id),
+                  },
+                ],
+              }),
+            ),
+          );
+
+          const statuses: string[] = [];
+          for (const blockerIndex of completionOrder) {
+            const blockerChain = blockerChains[blockerIndex];
+            const result = yield* step(
+              stateAdapter.withTransaction((txCtx) =>
+                runInModeOf(
+                  stateAdapter,
+                  syncAsync(function* () {
+                    const [completed] = yield* step(
+                      stateAdapter.completeJobs({
+                        txCtx,
+                        jobs: [{ jobId: blockerChain.head.id, output: null }],
+                      }),
+                    );
+                    assert.equal(completed!.chain.blocking, true);
+                    return yield* step(
+                      stateAdapter.unblockJobs({ txCtx, blockedByChainId: blockerChain.id }),
+                    );
+                  }),
+                ),
+              ),
+            );
+            assert.deepEqual(
+              result.map((entry) => [entry.jobId, entry.index]),
+              [[mainChain.head.id, blockerIndex]],
+            );
+            const [stored] = yield* step(stateAdapter.getJobs({ jobIds: [mainChain.head.id] }));
+            statuses.push(stored!.status);
+          }
+
+          assert.deepEqual(statuses, ["blocked", "blocked", "pending"]);
+        }
       }),
     },
     {
@@ -879,7 +1010,6 @@ export const unblockJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapt
         name: "concurrent blocker chain completions unblock all jobs sharing those blockers",
         run: async ({ createStateAdapter }) => {
           await using stateAdapter = await createStateAdapter();
-
           const blockerCount = 5;
           const mainCount = 5;
 
@@ -948,6 +1078,93 @@ export const unblockJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapt
 
           const stranded = finalStates.filter(([job]) => job?.status === "blocked");
           assert.equal(stranded.length, 0);
+        },
+      },
+      {
+        name: "concurrent completions of 16 blocker chains in 8 lanes unblock each of 200 dependents exactly when its last blocker completes",
+        run: async ({ createStateAdapter }) => {
+          await using stateAdapter = await createStateAdapter();
+          const blockerChains = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: Array.from({ length: 16 }, (_, index) => ({
+                id: stateAdapter.config.generateJobId(),
+                typeName: "fan-in-blocker",
+                input: { index },
+              })),
+            }),
+          );
+          const dependents = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: Array.from({ length: 200 }, (_, index) => ({
+                id: stateAdapter.config.generateJobId(),
+                typeName: "fan-in-dependent",
+                input: { index },
+              })),
+            }),
+          );
+          const blockerIndexes = (dependentIndex: number) =>
+            [0, 3, 7, 12].map((offset) => (dependentIndex + offset) % 16);
+          await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: dependents.map((dependent, dependentIndex) => ({
+                jobId: dependent.head.id,
+                blockedByChainIds: blockerIndexes(dependentIndex).map(
+                  (blockerIndex) => blockerChains[blockerIndex].head.chainId,
+                ),
+              })),
+            }),
+          );
+
+          const complete = async (blockerIndex: number) => {
+            const blocker = blockerChains[blockerIndex].head;
+            await stateAdapter.withTransaction(async (txCtx) => {
+              await stateAdapter.completeJobs({
+                txCtx,
+                jobs: [{ jobId: blocker.id, output: null }],
+              });
+              await stateAdapter.unblockJobs({ txCtx, blockedByChainId: blocker.chainId });
+            });
+          };
+          const completeInLanes = async (blockerIndexesToComplete: number[]) => {
+            const failed: number[] = [];
+            await Promise.all(
+              Array.from({ length: 8 }, async (_, lane) => {
+                for (const blockerIndex of blockerIndexesToComplete.filter(
+                  (_, position) => position % 8 === lane,
+                )) {
+                  await complete(blockerIndex).catch(() => {
+                    failed.push(blockerIndex);
+                  });
+                }
+              }),
+            );
+            for (const blockerIndex of failed) await complete(blockerIndex);
+          };
+          const statuses = async () =>
+            (
+              await stateAdapter.getJobs({
+                jobIds: dependents.map((dependent) => dependent.head.id),
+              })
+            ).map((job) => job?.status);
+
+          await completeInLanes([0, 1, 2, 3, 4, 5, 6, 7]);
+          assert.deepEqual(
+            await statuses(),
+            dependents.map((_, dependentIndex) =>
+              blockerIndexes(dependentIndex).every((blockerIndex) => blockerIndex < 8)
+                ? "pending"
+                : "blocked",
+            ),
+          );
+
+          await completeInLanes([8, 9, 10, 11, 12, 13, 14, 15]);
+          assert.deepEqual(
+            await statuses(),
+            dependents.map(() => "pending"),
+          );
         },
       },
     ],
