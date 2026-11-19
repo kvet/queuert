@@ -57,6 +57,12 @@ const serializeMigrationTransactionStatement = sql(
   /* sql */ `DO $$ BEGIN PERFORM pg_advisory_xact_lock(hashtext('{{lock_table}}'), 0); END $$`,
   { id: "serializeMigrationTransaction", params: [], columns: {}, readOnly: true },
 );
+const readCommittedStatement = sql(/* sql */ `SET TRANSACTION ISOLATION LEVEL READ COMMITTED`, {
+  id: "setMigrationTransactionReadCommitted",
+  params: [],
+  columns: {},
+  readOnly: true,
+});
 const createMigrationLockTableStatement = sql(
   /* sql */ `
 CREATE TABLE IF NOT EXISTS {{lock_table}} (
@@ -122,6 +128,7 @@ export const createPgMigrationStore = <TTxContext extends BaseTxContext>({
   const getAppliedMigrationsSql = applyTemplate(getAppliedMigrationsStatement);
   const recordMigrationSql = applyTemplate(recordMigrationStatement);
   const unrecordMigrationSql = applyTemplate(unrecordMigrationStatement);
+  const readCommittedSql = applyTemplate(readCommittedStatement);
   const serializeMigrationTransactionSql = applyTemplate(serializeMigrationTransactionStatement);
   const createMigrationLockTableSql = applyTemplate(createMigrationLockTableStatement);
   const acquireMigrationLockSql = applyTemplate(acquireMigrationLockStatement);
@@ -135,6 +142,7 @@ export const createPgMigrationStore = <TTxContext extends BaseTxContext>({
         return;
       }
       await stateProvider.withTransaction(async (txCtx) => {
+        await exec({ txCtx, sql: readCommittedSql });
         await exec({ txCtx, sql: serializeMigrationTransactionSql });
         const [found] = await exec({ txCtx, sql: findMigrationObjectsSql });
         if (createSchema && !found.schema_exists) {
@@ -150,6 +158,7 @@ export const createPgMigrationStore = <TTxContext extends BaseTxContext>({
     },
     runInTransaction: async (fn) =>
       stateProvider.withTransaction(async (txCtx) => {
+        await exec({ txCtx, sql: readCommittedSql });
         await exec({ txCtx, sql: serializeMigrationTransactionSql });
         return fn(txCtx);
       }),
@@ -164,8 +173,13 @@ export const createPgMigrationStore = <TTxContext extends BaseTxContext>({
       await exec({ txCtx, sql: unrecordMigrationSql, params: [name] });
     },
     acquireMigrationLock: async (ownerId, ttlMs) => {
-      const rows = await exec({ sql: acquireMigrationLockSql, params: [ownerId, ttlMs] });
-      return rows.length > 0;
+      try {
+        const rows = await exec({ sql: acquireMigrationLockSql, params: [ownerId, ttlMs] });
+        return rows.length > 0;
+      } catch (error) {
+        if (stateProvider.classifyError({ error })?.kind === "transaction_conflict") return false;
+        throw error;
+      }
     },
     extendMigrationLock: async (ownerId, ttlMs) => {
       const rows = await exec({ sql: extendMigrationLockSql, params: [ownerId, ttlMs] });
@@ -209,7 +223,7 @@ export const createPgMigratorStore = <TTxContext extends BaseTxContext>({
  * missing. Every run claims a lease row first, so processes migrating at once take turns: one
  * migrates and extends the lease while it works, the others wait and then skip what it applied.
  * Migration transactions also serialize on an advisory lock keyed on the lease table's qualified
- * name.
+ * name, and run at READ COMMITTED whatever the session default.
  *
  * @experimental
  * @param options - Migrator configuration.

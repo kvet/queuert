@@ -57,6 +57,17 @@ const options = (): FieldItem[] => [
     chips: [{ label: '"uuid"', mono: true }],
     description: "Type of the worker id columns.",
   },
+  {
+    name: "transactionRetry",
+    chips: [{ label: "{ maxTries: 5, initialDelayMs: 50, maxDelayMs: 50 }", mono: true }],
+    description: (
+      <>
+        Retries of the transactions and statements the adapter runs itself after a serialization
+        failure: each retry waits a random delay up to the backoff of the failed try, and the
+        failure of the last try is thrown; see <a href="#isolation-level">Isolation level</a>.
+      </>
+    ),
+  },
   ...stateAdapterConfigItems(),
 ];
 
@@ -221,16 +232,19 @@ const Page = () => (
       <code>@queuert/postgres/conformance</code> checks a provider you write.{" "}
       <code>createPgStateProviderConformanceCases</code> returns the cases, ready to run: every case
       a state adapter must pass, the cases that hold two transactions open at once, checks of the
-      schema write fence, and checks that <code>classifyError</code> names a missing table. It takes
-      a <code>createStateProvider</code> factory and a <code>withNonTransactionContext</code> that
-      runs a callback with a context outside any transaction, and migrates the schema once, before
-      the first case. An optional <code>withSavepoint</code> runs a callback in a savepoint of a
-      transaction, opened the way your application opens one, and passes it the savepoint's context;
-      when you give it, the cases check that <code>onTransactionCommit</code> and{" "}
-      <code>onTransactionRollback</code> follow savepoints. Each case then builds its own adapter
-      over a new provider from your factory, with the tables cleared, and closes both when it ends.
-      The suite drives no test runner: your test file owns the database in its own hooks and
-      registers one test per case, as each example does:
+      schema write fence, and checks that <code>classifyError</code> names a missing table and
+      reports a serialization failure, and that <code>withTransaction</code> runs no statement
+      before its callback. It takes a <code>createStateProvider</code> factory and a{" "}
+      <code>withNonTransactionContext</code> that runs a callback with a context outside any
+      transaction, and migrates the schema once, before the first case. The cases run at the
+      isolation level of your provider's transactions; to cover several levels, create the cases
+      once per level, over providers whose connections default to it. An optional{" "}
+      <code>withSavepoint</code> runs a callback in a savepoint of a transaction, opened the way
+      your application opens one, and passes it the savepoint's context; when you give it, the cases
+      check that <code>onTransactionCommit</code> and <code>onTransactionRollback</code> follow
+      savepoints. Each case then builds its own adapter over a new provider from your factory, with
+      the tables cleared, and closes both when it ends. The suite drives no test runner: your test
+      file owns the database in its own hooks and registers one test per case, as each example does:
     </p>
     <Tabs syncKey="postgres-driver">
       <TabItem label="pg">
@@ -304,15 +318,41 @@ const Page = () => (
 
     <h2>Isolation level</h2>
     <p>
-      Queuert supports only READ COMMITTED, PostgreSQL's default isolation level. This covers every
-      transaction Queuert writes in, including the ones you pass to <code>complete</code> and to
-      client methods. Its conditional and multi-statement writes, such as <code>unblockJobs</code>{" "}
-      locking the blocked jobs and then counting down their incomplete blockers, rely on each
-      statement taking a fresh snapshot after it waits on a row lock. Every provider above opens its
-      transactions with the level stated, so a server or role whose{" "}
-      <code>default_transaction_isolation</code> is higher cannot change it; open the transactions
-      you pass to Queuert the same way.
+      Queuert works at READ COMMITTED, REPEATABLE READ and SERIALIZABLE, set as the session default
+      (<code>default_transaction_isolation</code>) or per transaction, and transactions at different
+      levels can work on the same jobs at once. Whenever one transaction acts on what another may be
+      changing, both write the same row: attaching a dependent and completing its blocker both write
+      the blocker's head job, and acquiring jobs and reclaiming the acquiring worker both write the
+      worker row. At READ COMMITTED the second transaction waits and re-reads the row; at the
+      stricter levels it fails with a serialization failure (SQLSTATE <code>40001</code>).
     </p>
+    <ul>
+      <li>
+        Queuert retries the transactions and statements it runs itself, such as acquisition, lease
+        renewal and reclaims, as{" "}
+        <a href="#option-transactionRetry">
+          <code>transactionRetry</code>
+        </a>{" "}
+        configures, when the provider's <code>classifyError</code> reports the failure as{" "}
+        <code>transaction_conflict</code>: a serialization failure, or a deadlock (SQLSTATE{" "}
+        <code>40P01</code>), which can happen at any level.
+      </li>
+      <li>
+        The transactions you pass to <code>complete</code>, <code>fence</code> and client methods
+        raise it to you. Retry them with fresh <code>txHooks</code> for each try, or inside{" "}
+        <A href="/guides/tx-hooks/#drivers-that-rerun-the-callback">
+          <code>txHooks.retryBoundary</code>
+        </A>
+        .
+      </li>
+      <li>Migration transactions run at READ COMMITTED whatever the session default.</li>
+      <li>
+        The stricter levels cost throughput under contention: workers acquiring the same job type
+        retry when another worker claimed a row after their statement's snapshot, and attaching many
+        dependents to one blocker conflicts on its head. Give Queuert's pool a READ COMMITTED
+        default to keep its own work at that level while your transactions use a stricter one.
+      </li>
+    </ul>
 
     <h2>Write fence</h2>
     <p>

@@ -28,9 +28,7 @@ export const createDrizzlePgStateProvider = <TSchema extends Record<string, unkn
 }): PgStateProvider<DrizzlePgContext<TSchema>> => {
   return {
     withTransaction: async (cb) =>
-      withTxHooks(async (txHooks) =>
-        db.transaction(async (tx) => cb({ tx, txHooks }), { isolationLevel: "read committed" }),
-      ),
+      withTxHooks(async (txHooks) => db.transaction(async (tx) => cb({ tx, txHooks }))),
     isTransaction: (txCtx) => txCtx.tx instanceof PgTransaction,
     onTransactionCommit: (txCtx, callback) => {
       txCtx.txHooks.onCommit(callback);
@@ -40,10 +38,16 @@ export const createDrizzlePgStateProvider = <TSchema extends Record<string, unkn
     },
     classifyError: ({ error }) => {
       type DriverError = { code?: unknown; message?: unknown; cause?: DriverError };
-      const driverError = [
+      const candidates = [
         error as DriverError | undefined,
         (error as DriverError | undefined)?.cause,
-      ].find((candidate) => candidate?.code === "42P01");
+      ];
+      if (
+        candidates.some((candidate) => candidate?.code === "40001" || candidate?.code === "40P01")
+      ) {
+        return { kind: "transaction_conflict" };
+      }
+      const driverError = candidates.find((candidate) => candidate?.code === "42P01");
       if (driverError === undefined) return undefined;
       const tableName = /relation "([^"]+)" does not exist/.exec(String(driverError.message))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };

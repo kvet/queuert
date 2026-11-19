@@ -86,6 +86,47 @@ const it = baseIt.extend("database", async ({}, { onCleanup }) => {
 
 describe("createPgMigrator", () => {
   it(
+    "runs migrations at READ COMMITTED under a serializable session default",
+    { timeout: 120_000 },
+    async ({ database: { connectionString } }) => {
+      const pool = new Pool({
+        connectionString,
+        options: "-c default_transaction_isolation=serializable",
+      });
+      try {
+        const provider = createPgPoolProvider({ pool });
+        const levels: unknown[] = [];
+        const migrator = createPgMigrator({
+          stateProvider: provider,
+          migrations: [
+            {
+              name: "report_isolation",
+              up: async (txCtx) => {
+                levels.push(
+                  ...(await provider.executeSql({
+                    txCtx,
+                    sql: "SELECT current_setting('transaction_isolation') AS level",
+                    params: [],
+                    paramTypes: {},
+                    columnTypes: {},
+                    readOnly: true,
+                  })),
+                );
+              },
+              down: async () => {},
+            },
+          ],
+        });
+
+        expect(await migrator.migrateToLatest()).toEqual(result({ applied: ["report_isolation"] }));
+        expect(levels).toEqual([{ level: "read committed" }]);
+      } finally {
+        await pool.end();
+      }
+    },
+  );
+
+  it(
     "applies every migration type and reverts them all, last first",
     { timeout: 120_000 },
     async ({ database: { provider } }) => {
@@ -295,6 +336,30 @@ describe("parallel deployments", () => {
     async ({ database: { connectionString, provider } }) => {
       const results = await startTogether(
         Array.from({ length: 5 }, () => spawnDeployment(connectionString, "older")),
+      );
+
+      expect(
+        results.toSorted((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+      ).toEqual([
+        result({ skipped: ALL }),
+        result({ skipped: ALL }),
+        result({ skipped: ALL }),
+        result({ skipped: ALL }),
+        result({ applied: ALL }),
+      ]);
+      expect(await appliedNames(provider)).toEqual(ALL.toSorted());
+      expect(await invoiceState(provider)).toEqual(MIGRATED);
+      expect(await lockRows(provider)).toEqual([]);
+    },
+  );
+
+  it(
+    "applies the migrations exactly once when several deployments with a serializable session default migrate at the same time",
+    { timeout: 120_000 },
+    async ({ database: { connectionString, provider } }) => {
+      const serializableConnectionString = `${connectionString}?options=${encodeURIComponent("-c default_transaction_isolation=serializable")}`;
+      const results = await startTogether(
+        Array.from({ length: 5 }, () => spawnDeployment(serializableConnectionString, "older")),
       );
 
       expect(

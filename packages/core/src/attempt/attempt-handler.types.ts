@@ -109,8 +109,11 @@ export type AttemptCompleteResult<
  *
  * The attempt counts as completed once the state provider runs the commit callbacks `complete`
  * registered, so the provider must run them only after COMMIT: callbacks that run before COMMIT
- * make the worker treat the attempt as completed even if the transaction then rolls back. On
- * PostgreSQL, Queuert supports only READ COMMITTED (the default).
+ * make the worker treat the attempt as completed even if the transaction then rolls back.
+ *
+ * The isolation levels the transaction may run at depend on the state adapter. At a level stricter
+ * than READ COMMITTED it can fail on a conflict with a concurrent transaction; the caller retries
+ * it with fresh `txHooks`, or inside `txHooks.retryBoundary`.
  *
  * Every write is conditional on this attempt still owning the job; if it does not, nothing is
  * written and `complete` throws, so the caller's transaction rolls back. Validation runs before

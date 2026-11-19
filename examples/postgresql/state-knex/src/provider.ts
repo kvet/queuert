@@ -33,7 +33,6 @@ export const createKnexPgStateProvider = ({
     withTransaction: async (cb) =>
       withTxHooks(async (txHooks) =>
         knex.transaction(async (trx) => cb({ trx, txHooks }), {
-          isolationLevel: "read committed",
           doNotRejectOnRollback: false,
         }),
       ),
@@ -46,6 +45,8 @@ export const createKnexPgStateProvider = ({
     },
     classifyError: ({ error }) => {
       const driverError = error as { code?: unknown; message?: unknown } | undefined;
+      if (driverError?.code === "40001" || driverError?.code === "40P01")
+        return { kind: "transaction_conflict" };
       if (driverError?.code !== "42P01") return undefined;
       const tableName = /relation "([^"]+)" does not exist/.exec(String(driverError.message))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };

@@ -24,13 +24,21 @@ it("accepts a keyPrefix with a hash tag", () => {
   expect(() => createRedisStateAdapter({ stateProvider })).not.toThrow();
 });
 
-it("rejects a maxTransactionTries that is not a positive integer", () => {
-  for (const maxTransactionTries of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
-    expect(() => createRedisStateAdapter({ stateProvider, maxTransactionTries })).toThrow(
-      /maxTransactionTries must be a positive integer/,
-    );
-  }
-  expect(() => createRedisStateAdapter({ stateProvider, maxTransactionTries: 1 })).not.toThrow();
+it("rejects a transactionRetry that is not a valid retry config", () => {
+  expect(() =>
+    createRedisStateAdapter({
+      stateProvider,
+      transactionRetry: { maxTries: 1.5, initialDelayMs: 2, maxDelayMs: 50 },
+    }),
+  ).toThrow(
+    "createRedisStateAdapter: invalid configuration:\n  - transactionRetry.maxTries must be a positive integer (got 1.5)",
+  );
+  expect(() =>
+    createRedisStateAdapter({
+      stateProvider,
+      transactionRetry: { maxTries: 1, initialDelayMs: 2, maxDelayMs: 50 },
+    }),
+  ).not.toThrow();
 });
 
 it("claims nothing and calls no script for a limit of 0", async () => {

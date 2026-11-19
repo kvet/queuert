@@ -2,6 +2,7 @@ import { createLatch } from "@queuert/helpers/latch";
 import { type MigrationResult, createMigrator } from "@queuert/typed-sql";
 import {
   type Page,
+  type RetryConfig,
   type ScheduleOptions,
   type StateAdapter,
   type StateBlockedJob,
@@ -19,6 +20,8 @@ import {
   decodeTimestampWithIdCursor,
   encodeCursor,
   resolveStateAdapterConfig,
+  retryConfigViolations,
+  withRetry,
 } from "queuert/internal";
 
 import { RedisTransactionConflictError } from "../errors.ts";
@@ -292,20 +295,20 @@ export type RedisStateAdapter = StateAdapter<RedisContext, string, string, "asyn
  * Redis and record the version of every record they see, writes are buffered, and the commit is
  * one Lua script that applies the writes only if nothing read changed in the meantime. On a
  * conflict the adapter runs the callback again, so a transaction callback must be safe to rerun;
- * side effects belong in `onTransactionCommit`. After `maxTransactionTries` conflicting tries it
- * throws {@link RedisTransactionConflictError}.
+ * side effects belong in `onTransactionCommit`. After `transactionRetry.maxTries` conflicting
+ * tries it throws {@link RedisTransactionConflictError}.
  *
  * Redis holds only Queuert's state, so writes to another database cannot join these transactions.
  *
  * @experimental
  * @param options - Redis state adapter configuration.
  * @throws Error if `keyPrefix` has no non-empty hash tag.
- * @throws TypeError if `maxTransactionTries` is not a positive integer.
+ * @throws TypeError if a `transactionRetry` field holds an invalid value.
  */
 export const createRedisStateAdapter = ({
   stateProvider,
   keyPrefix = "{queuert}:",
-  maxTransactionTries = 50,
+  transactionRetry = { maxTries: 50, initialDelayMs: 2, multiplier: 2, maxDelayMs: 50 },
   ...configOptions
 }: {
   /** The provider the adapter runs its Lua scripts through. */
@@ -318,11 +321,12 @@ export const createRedisStateAdapter = ({
    */
   keyPrefix?: string;
   /**
-   * Most tries of one transaction before it throws {@link RedisTransactionConflictError}.
+   * Retries of a transaction that conflicted with concurrent commits; after `maxTries` conflicting
+   * tries it throws {@link RedisTransactionConflictError}.
    *
-   * @defaultValue `50`
+   * @defaultValue `{ maxTries: 50, initialDelayMs: 2, multiplier: 2, maxDelayMs: 50 }`
    */
-  maxTransactionTries?: number;
+  transactionRetry?: RetryConfig;
   /**
    * Function to generate new job IDs. Must return unique values: creating a job whose ID
    * already exists throws.
@@ -369,9 +373,10 @@ export const createRedisStateAdapter = ({
       `Invalid keyPrefix "${keyPrefix}": it needs a non-empty hash tag such as "{queuert}" so Redis Cluster stores every key in one slot`,
     );
   }
-  if (!Number.isInteger(maxTransactionTries) || maxTransactionTries < 1) {
+  const transactionRetryViolations = retryConfigViolations("transactionRetry", transactionRetry);
+  if (transactionRetryViolations.length > 0) {
     throw new TypeError(
-      `createRedisStateAdapter: invalid configuration: maxTransactionTries must be a positive integer (got ${String(maxTransactionTries)})`,
+      `createRedisStateAdapter: invalid configuration:\n${transactionRetryViolations.map((v) => `  - ${v}`).join("\n")}`,
     );
   }
   const config = resolveStateAdapterConfig(configOptions);
@@ -524,59 +529,54 @@ export const createRedisStateAdapter = ({
     }));
   };
 
-  const backoff = async (tryNumber: number): Promise<void> =>
-    new Promise((resolve) => {
-      setTimeout(resolve, Math.random() * Math.min(50, 2 ** tryNumber));
-    });
-
   const runTransaction = async <T>(
     fn: (tx: RedisStoreTransaction, tryNumber: number) => Promise<T>,
   ): Promise<T> => {
-    for (let tryNumber = 1; ; tryNumber++) {
-      closed.throwIfTripped();
-      const { txHooks, flush, discard } = createTxHooks();
-      const discardQuietly = () => {
+    let conflict: RedisTransactionConflictError | undefined;
+    return withRetry(
+      async (tryNumber) => {
+        closed.throwIfTripped();
+        const { txHooks, flush, discard } = createTxHooks();
+        const discardQuietly = () => {
+          try {
+            discard();
+          } catch {}
+        };
+        const tx = createRedisTransaction(store, txHooks, tryNumber);
+        let result: T;
         try {
-          discard();
-        } catch {}
-      };
-      const tx = createRedisTransaction(store, txHooks, tryNumber);
-      let result: T;
-      try {
-        result = await fn(tx, tryNumber);
-      } catch (error) {
-        const { stale } = await tx.rollback().catch(() => ({ stale: false }));
-        discardQuietly();
-        if (!stale) throw error;
-        if (tryNumber >= maxTransactionTries) {
-          throw new RedisTransactionConflictError(
+          result = await fn(tx, tryNumber);
+        } catch (error) {
+          const { stale } = await tx.rollback().catch(() => ({ stale: false }));
+          discardQuietly();
+          if (!stale) throw error;
+          conflict = new RedisTransactionConflictError(
             `The Redis transaction conflicted with concurrent commits on each of its ${tryNumber} tries`,
             { tries: tryNumber, cause: error },
           );
+          throw conflict;
         }
-        await backoff(tryNumber);
-        continue;
-      }
-      let committed: boolean;
-      try {
-        committed = await tx.commit();
-      } catch (error) {
+        let committed: boolean;
+        try {
+          committed = await tx.commit();
+        } catch (error) {
+          discardQuietly();
+          throw error;
+        }
+        if (committed) {
+          await flush();
+          return result;
+        }
         discardQuietly();
-        throw error;
-      }
-      if (committed) {
-        await flush();
-        return result;
-      }
-      discardQuietly();
-      if (tryNumber >= maxTransactionTries) {
-        throw new RedisTransactionConflictError(
+        conflict = new RedisTransactionConflictError(
           `The Redis transaction conflicted with concurrent commits on each of its ${tryNumber} tries`,
           { tries: tryNumber },
         );
-      }
-      await backoff(tryNumber);
-    }
+        throw conflict;
+      },
+      transactionRetry,
+      (error) => error === conflict,
+    );
   };
 
   const transactionOf = (

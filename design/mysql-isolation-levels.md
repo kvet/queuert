@@ -1,13 +1,13 @@
 # MySQL / MariaDB isolation levels
 
-Make the MySQL / MariaDB state adapter correct when a transaction passed to Queuert (client methods, `complete`, `fence`) runs at REPEATABLE READ or SERIALIZABLE, as `design/pg-isolation-levels.md` does for PostgreSQL. REPEATABLE READ is InnoDB's default, so most users pass it in without knowing; today the docs ask them to open those transactions at READ COMMITTED.
+Make the MySQL / MariaDB state adapter correct when a transaction passed to Queuert (client methods, `complete`, `fence`) runs at REPEATABLE READ or SERIALIZABLE, as the PostgreSQL adapter already is. REPEATABLE READ is InnoDB's default, so most users pass it in without knowing; today the docs ask them to open those transactions at READ COMMITTED.
 
 Today the adapter keeps blockers the way PostgreSQL does at READ COMMITTED: `unblockJobs` locks the blocked dependents and rechecks `job_blocker` for an incomplete blocker. That is correct at RC and leaves dependents stuck at RR (see [Races](#races)). The provider already opens the transactions Queuert owns at READ COMMITTED. What is left:
 
-- Add the counter-based blocker bookkeeping from `design/pg-isolation-levels.md` in a migration, with every read that drives a write a current read (see [Blocker counters](#blocker-counters)).
+- Add the counter-based blocker bookkeeping the PostgreSQL adapter uses in a migration, with every read that drives a write a current read (see [Blocker counters](#blocker-counters)).
 - Run the races and the end-to-end suites at RR and SERIALIZABLE on every server, and fix what they find.
 - Handle MariaDB's snapshot-isolation error (1020) and deadlocks (1213) in the work Queuert runs itself.
-- Take the `blocking` contract and the `isolationVariants` conformance fixture from `design/pg-isolation-levels.md` once they land.
+- Take what the PostgreSQL work landed: the `blocking` contract, the `transaction_conflict` error classification, the `transactionRetry` option (a `RetryConfig` from `@queuert/helpers/retry`, run through `withRetry`), and the provider conformance cases created once per pool default level.
 - Rewrite the "Isolation level" section of the MySQL integration page.
 
 Claims marked _(spike)_ were verified against MySQL 8.0.46, MySQL 8.4.13, MariaDB 10.11.19, MariaDB 11.4.13 and MariaDB 11.8.9 with mysql2 3.24, by a spike run before the adapter was written. The adapter itself has been tested at READ COMMITTED only.
@@ -27,7 +27,7 @@ Each fact below was verified on MySQL 8.4, MariaDB 11.4 and MariaDB 11.8 _(spike
 
 ### Races
 
-The blocker races from `design/pg-isolation-levels.md`, run with two connections and controlled interleavings. Every transaction first runs a plain `SELECT`, which fixes its snapshot. "Stuck" means the dependent stayed `blocked` with no incomplete blockers; "retry" means one side raised the listed error and a retry succeeded _(spike)_.
+The blocker races the PostgreSQL adapter guards against (attach vs completion of the blocker, two blockers of one dependent completing), run with two connections and controlled interleavings. Every transaction first runs a plain `SELECT`, which fixes its snapshot. "Stuck" means the dependent stayed `blocked` with no incomplete blockers; "retry" means one side raised the listed error and a retry succeeded _(spike)_.
 
 | Variant                                          | Race                                   | RC           | RR                              | SER                             |
 | ------------------------------------------------ | -------------------------------------- | ------------ | ------------------------------- | ------------------------------- |
@@ -44,7 +44,7 @@ Under load (8 connections, 200 dependents × 16 blockers, RR), the counter desig
 
 ### Blocker counters
 
-`002_schema_v2` (unreleased) adds `blocking` (with `chain_blocking_idx` and the move to `schema_fence_v2`); `blockers_remaining` joins the same `002` before it is released, with the semantics of `design/pg-isolation-levels.md`, and backfills it from `job_blocker`. The rule stays the same: every invariant that pairs a read in one transaction with a write in another must be a write-write conflict on a shared row. InnoDB adds one more: every read that drives such a write is a current read.
+`002_schema_v2` (unreleased) adds `blocking` (with `chain_blocking_idx` and the move to `schema_fence_v2`); `blockers_remaining` joins the same `002` before it is released, with the semantics the PostgreSQL adapter uses, and backfills it from `job_blocker`. The rule stays the same: every invariant that pairs a read in one transaction with a write in another must be a write-write conflict on a shared row. InnoDB adds one more: every read that drives such a write is a current read.
 
 - **Attach** locks the blocker heads in id order with a driven lock (`JSON_TABLE` `STRAIGHT_JOIN` `job` `FORCE INDEX (PRIMARY)`), sets `blocking` on heads where it is false, inserts the `job_blocker` rows, and adds to each dependent's `blockers_remaining` the number of its locked heads that are still running.
 - **Completion** reads `blocking` from the head row it just updated, and skips `unblockJobs` when it is false.
@@ -71,7 +71,7 @@ Lease renewals and other autocommit statements run at the session default. On a 
 
 ### Retries in Queuert's own work
 
-The adapter retries 1213 and 1020 for the work Queuert runs itself, with the bounds from `design/pg-isolation-levels.md` (5 attempts, 5–50 ms jittered delay): `withTransaction` rolls back and calls `fn` again, and autocommit statements re-execute. At RC 1020 cannot occur, but a pool at a stricter session default can still produce 1213. Statements on a caller's `txCtx` are never retried.
+The adapter retries 1213 and 1020 for the work Queuert runs itself, through `withRetry` with a `transactionRetry` option like the PostgreSQL adapter's (default `{ maxTries: 5, initialDelayMs: 50, maxDelayMs: 50 }`): `withTransaction` rolls back and calls `fn` again, and autocommit statements re-execute. At RC 1020 cannot occur, but a pool at a stricter session default can still produce 1213. Statements on a caller's `txCtx` are never retried.
 
 ### Migrations
 
@@ -91,7 +91,7 @@ Levels apply to either side of each race, mixed or not. Expected values, to be f
 ## API
 
 - No change to the client, worker or processor API.
-- Takes the state adapter contract changes from `design/pg-isolation-levels.md` (`blocking`, `withTransaction` may call `fn` more than once). `blocking` and `blockers_remaining` both arrive in `002_schema_v2`.
+- Takes the state adapter contract changes that shipped with the PostgreSQL work (`blocking`, `withTransaction` may call `fn` more than once). `blocking` and `blockers_remaining` both arrive in `002_schema_v2`.
 - Docs: the "Isolation level" section of the MySQL integration page states:
   - READ COMMITTED, REPEATABLE READ and SERIALIZABLE are supported for transactions passed to Queuert, as a session default or per transaction.
   - Transactions Queuert opens always run at READ COMMITTED, and why.
@@ -102,7 +102,7 @@ Levels apply to either side of each race, mixed or not. Expected values, to be f
 
 In `packages/mysql/src/specs-mysql2`, on MySQL 8.4 and MariaDB 11.4, plus MariaDB 11.8 for `innodb_snapshot_isolation`:
 
-- **Level matrix:** the conformance spec passes `isolationVariants` built from pools whose session default is `READ-COMMITTED`, `REPEATABLE-READ` and `SERIALIZABLE`. MariaDB 11.8 runs it twice, with `innodb_snapshot_isolation` ON and OFF.
+- **Level matrix:** the conformance spec runs the provider cases once per pool, with session defaults `READ-COMMITTED`, `REPEATABLE-READ` and `SERIALIZABLE`, and a race spec runs the mixed-level pairs, as `packages/postgres/src/specs/state-adapter-isolation-levels.spec.ts` does. MariaDB 11.8 runs it twice, with `innodb_snapshot_isolation` ON and OFF.
 - **Races:** the isolation spec runs its races at RR and SERIALIZABLE on both sides, mixed. Each ends with the dependent `pending`, retrying the side that raised 1213 or 1020.
 - **Migration `002`:** a database at `001` with blocked dependents on mixed running and completed blockers ends with counters that match the recompute.
 - **Fan-in under load:** 200 dependents × 16 blockers completed by 8 connections at RR and at SERIALIZABLE leave no dependent `blocked`, and `blockers_remaining` equals its recompute.
@@ -112,6 +112,6 @@ In `packages/mysql/src/specs-mysql2`, on MySQL 8.4 and MariaDB 11.4, plus MariaD
 
 ## Related designs
 
-- **PostgreSQL isolation levels** (`design/pg-isolation-levels.md`): supplies the counter semantics, the `blocking` contract change, the `isolationVariants` fixture and the retry bounds. This task follows it.
+- **PostgreSQL isolation levels** (implemented in `@queuert/postgres`): supplies the counter semantics, the `blocking` contract change, `transactionRetry` and the per-level test setup. This task follows it.
 - **Chain table** (`design/chain-table.md`): moves `blocking` to the chain row; this adapter follows in the same release.
 - **Unbounded blockers** (`design/unbounded-blockers.md`): its `job_blocker.blocked` flip must be a current-read write here as well.

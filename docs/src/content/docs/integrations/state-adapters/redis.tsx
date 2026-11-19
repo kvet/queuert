@@ -45,11 +45,14 @@ const options = (): FieldItem[] => [
     ),
   },
   {
-    name: "maxTransactionTries",
-    chips: [{ label: "50", mono: true }],
+    name: "transactionRetry",
+    chips: [
+      { label: "{ maxTries: 50, initialDelayMs: 2, multiplier: 2, maxDelayMs: 50 }", mono: true },
+    ],
     description: (
       <>
-        The most tries of one transaction. After that many conflicting tries,{" "}
+        Retries of a transaction that conflicted with concurrent commits: each retry waits a random
+        delay up to the backoff of the failed try. After <code>maxTries</code> conflicting tries,{" "}
         <code>withTransaction</code> throws <code>RedisTransactionConflictError</code>.
       </>
     ),
@@ -156,7 +159,7 @@ const Page = () => (
       reads, buffers every write, and commits with one Lua script that applies the writes only if
       none of those versions changed. When one did, the adapter runs the callback again with fresh
       reads. A callback that throws after reading records another transaction has since changed runs
-      again too. After <code>maxTransactionTries</code> conflicting tries it throws{" "}
+      again too. After <code>transactionRetry.maxTries</code> conflicting tries it throws{" "}
       <code>RedisTransactionConflictError</code>, with the last callback's error as its{" "}
       <code>cause</code> when that try threw.
     </p>

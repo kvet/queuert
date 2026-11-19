@@ -352,6 +352,63 @@ describe("upgrading from 001_schema_v1", () => {
   );
 
   it(
+    "runs its copy and cutover transactions at READ COMMITTED under a serializable session default",
+    { timeout: 120_000 },
+    async ({ database: { connectionString, provider } }) => {
+      await migrateToInstall(provider);
+      await query(
+        provider,
+        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status)
+         SELECT id, 'filler', id, 0, 'pending', 'running'
+         FROM (SELECT gen_random_uuid() AS id FROM generate_series(1, 10)) ids`,
+      );
+      const pool = new Pool({
+        connectionString,
+        options: "-c default_transaction_isolation=serializable",
+      });
+      try {
+        const serializableProvider = createPgPoolProvider({ pool });
+        const levels: { step: string; level: unknown }[] = [];
+        const serializableAdapter = createPgStateAdapter({
+          stateProvider: {
+            ...serializableProvider,
+            executeSql: async (options) => {
+              const step = options.sql.includes("WITH source AS")
+                ? "copy"
+                : options.sql.includes("LOCK TABLE")
+                  ? "cutover"
+                  : undefined;
+              if (step !== undefined) {
+                const [row] = await serializableProvider.executeSql({
+                  txCtx: options.txCtx,
+                  sql: "SELECT current_setting('transaction_isolation') AS level",
+                  params: [],
+                  paramTypes: {},
+                  columnTypes: {},
+                  readOnly: true,
+                });
+                levels.push({ step, level: (row as { level: unknown }).level });
+              }
+              return serializableProvider.executeSql(options);
+            },
+          },
+          generateJobId: (): string => randomUUID(),
+          generateWorkerId: (): string => randomUUID(),
+        });
+
+        expect(await serializableAdapter.migrateToLatest()).toMatchObject({
+          applied: ["002_schema_v2"],
+        });
+        expect(levels.length).toBeGreaterThanOrEqual(2);
+        expect(new Set(levels.map(({ level }) => level))).toEqual(new Set(["read committed"]));
+        expect(new Set(levels.map(({ step }) => step))).toEqual(new Set(["copy", "cutover"]));
+      } finally {
+        await pool.end();
+      }
+    },
+  );
+
+  it(
     "keeps the writes a 0.18 process makes while it copies, and resumes after a failed copy",
     { timeout: 120_000 },
     async ({ database: { provider, adapter } }) => {

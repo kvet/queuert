@@ -1,9 +1,4 @@
-import {
-  type EntityManager,
-  IsolationLevel,
-  type MikroORM,
-  type Transaction,
-} from "@mikro-orm/postgresql";
+import type { EntityManager, MikroORM, Transaction } from "@mikro-orm/postgresql";
 import type { PgStateProvider } from "@queuert/postgres";
 import { CompiledQuery, type Kysely } from "kysely";
 import { type TxHooks, createTxHooks } from "queuert";
@@ -75,13 +70,10 @@ export const createMikroOrmPgStateProvider = ({
     withTransaction: async (fn) => {
       let transaction: Transaction = undefined;
       try {
-        return await orm.em.transactional(
-          async (em) => {
-            transaction = em.getTransactionContext();
-            return fn({ em });
-          },
-          { isolationLevel: IsolationLevel.READ_COMMITTED },
-        );
+        return await orm.em.transactional(async (em) => {
+          transaction = em.getTransactionContext();
+          return fn({ em });
+        });
       } catch (error) {
         if (transaction !== undefined) takeSettler(transaction)?.rollback();
         throw error;
@@ -96,6 +88,8 @@ export const createMikroOrmPgStateProvider = ({
     },
     classifyError: ({ error }) => {
       const driverError = error as { code?: unknown; message?: unknown } | undefined;
+      if (driverError?.code === "40001" || driverError?.code === "40P01")
+        return { kind: "transaction_conflict" };
       if (driverError?.code !== "42P01") return undefined;
       const tableName = /relation "([^"]+)" does not exist/.exec(String(driverError.message))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };

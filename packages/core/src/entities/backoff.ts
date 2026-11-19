@@ -6,7 +6,7 @@ export type BackoffConfig = {
   initialDelayMs: number;
   /** Maximum delay in milliseconds after a failure. Must be non-negative; `Infinity` means no cap. */
   maxDelayMs: number;
-  /** Exponential backoff multiplier. Must be finite and positive. @default 2 */
+  /** Exponential backoff multiplier. Must be finite and positive. @defaultValue 2 */
   multiplier?: number;
 };
 

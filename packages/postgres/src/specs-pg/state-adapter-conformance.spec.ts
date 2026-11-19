@@ -26,6 +26,25 @@ const it = baseIt.extend("conformance", { scope: "file" }, async ({}, { onCleanu
   });
 });
 
+const createIsolationLevelIt = (defaultTransactionIsolation: string) =>
+  baseIt.extend("conformance", { scope: "file" }, async ({}, { onCleanup }) => {
+    const pool = new Pool({
+      connectionString: pg.connectionString,
+      idleTimeoutMillis: 0,
+      max: 5,
+      options: `-c default_transaction_isolation=${defaultTransactionIsolation}`,
+    });
+    onCleanup(async () => pool.end());
+    return createPgStateProviderConformanceContext({
+      createStateProvider: async () => createPgPoolProvider({ pool }),
+      withNonTransactionContext: withPgPoolNonTransactionContext(pool),
+      withSavepoint: withPgPoolSavepoint,
+    });
+  });
+
+const repeatableReadIt = createIsolationLevelIt("repeatable\\ read");
+const serializableIt = createIsolationLevelIt("serializable");
+
 const customOptionsIt = baseIt.extend(
   "conformance",
   { scope: "file" },
@@ -54,6 +73,20 @@ baseIt("index");
 
 describe("PostgreSQL State Provider Conformance", () => {
   conformanceTestSuite({ it, groups: pgStateProviderConformanceGroups });
+});
+
+describe("PostgreSQL State Provider Conformance - REPEATABLE READ", () => {
+  conformanceTestSuite({
+    it: repeatableReadIt,
+    groups: pgStateProviderConformanceGroups,
+  });
+});
+
+describe("PostgreSQL State Provider Conformance - SERIALIZABLE", () => {
+  conformanceTestSuite({
+    it: serializableIt,
+    groups: pgStateProviderConformanceGroups,
+  });
 });
 
 describe("PostgreSQL State Provider Conformance - Custom Options", () => {

@@ -48,6 +48,7 @@ export {
   type JobTypeValidationErrorCode,
 } from "./errors.ts";
 export { type BackoffConfig } from "./entities/backoff.ts";
+export { type RetryConfig } from "./entities/retry.ts";
 export { createWorkerRunner, type WorkerRunner } from "./worker/worker-runner.ts";
 export { type WorkerLeaseConfig } from "./worker/worker-lease.ts";
 export { type NotifyAdapter } from "./notify-adapter/notify-adapter.ts";

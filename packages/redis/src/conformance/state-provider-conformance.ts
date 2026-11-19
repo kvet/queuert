@@ -33,6 +33,7 @@ export const redisStateAdapterLockWaitCaseNames: ReadonlySet<string> = new Set([
   "unblockJobs > leaves a dependent pending when its blocker completed before the blocker was added, without a caller pre-lock",
   "deleteChains > sees a blocker reference committed while it waited on the head lock",
   "deleteChains > deletes a continuation committed while it waited on the head lock",
+  "workerless-completion > completes the continuation committed while completeChain waits on the old tail",
 ]);
 
 export const withoutLockWaitCases = <TContext>(

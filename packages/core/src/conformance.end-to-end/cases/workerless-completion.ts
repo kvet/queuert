@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { assertRejects } from "@queuert/helpers/assert-rejects";
-import { sleep } from "@queuert/helpers/sleep";
+import { raceWithSleep, sleep } from "@queuert/helpers/sleep";
 import { dynamicSyncAsync, syncAsync, resource, step, wait } from "@queuert/sync-async";
 
 import { createClient } from "../../client/client.ts";
@@ -1004,6 +1004,76 @@ export const workerlessCompletionConcurrentTransactionsGroup: ConformanceGroup<S
             handlerGate.resolve();
             await completion;
           }
+        },
+      },
+      {
+        name: "completes the continuation committed while completeChain waits on the old tail",
+        run: async ({ createStateAdapter, createNotifyAdapter }) => {
+          await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
+          await using notifyAdapter = await createCaseNotifyAdapter(
+            createNotifyAdapter,
+            stateAdapter,
+          );
+          const jobTypes = defineJobTypes<{
+            first: { entry: true; input: null; continueWith: { typeName: "second" } };
+            second: { input: null; output: { done: true } };
+          }>();
+
+          const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+
+          const chain = await stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "first", input: null }),
+          );
+
+          const continued = Promise.withResolvers<void>();
+          const commitGate = Promise.withResolvers<void>();
+          await using workerRunner = createWorkerRunner({
+            client,
+            concurrency: 1,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                first: {
+                  attemptHandler: async ({ complete }) =>
+                    stateAdapter.withTransaction(async (txCtx) => {
+                      const result = await complete({
+                        ...txCtx,
+                        continueWith: { typeName: "second", input: null },
+                      });
+                      continued.resolve();
+                      await commitGate.promise;
+                      return result;
+                    }),
+                },
+              },
+            }),
+          });
+          await workerRunner.start();
+          await continued.promise;
+
+          const completion = stateAdapter.withTransaction((txCtx) =>
+            client.completeChain({
+              ...txCtx,
+              ...chain,
+              handler: ({ job, completeJob }) => {
+                if (job.typeName !== "second") throw new Error(`unexpected ${job.typeName}`);
+                return completeJob(job, ({ complete }) => complete({ output: { done: true } }));
+              },
+            }),
+          );
+          assert.equal(
+            await raceWithSleep(
+              completion.then(() => "settled"),
+              100,
+            ),
+            undefined,
+          );
+          commitGate.resolve();
+
+          const completed = await completion;
+          assert.equal(completed.status, "completed");
+          assert.deepEqual(completed.output, { done: true });
         },
       },
     ],

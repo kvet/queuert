@@ -157,4 +157,15 @@ describe("config", () => {
       countCap: 3,
     });
   });
+
+  it("rejects a transactionRetry that is not a valid retry config", () => {
+    expect(() =>
+      createPgStateAdapter({
+        stateProvider: dummyProvider,
+        transactionRetry: { maxTries: 0, initialDelayMs: -1, maxDelayMs: 50 },
+      }),
+    ).toThrow(
+      "createPgStateAdapter: invalid configuration:\n  - transactionRetry.maxTries must be a positive integer (got 0)\n  - transactionRetry.initialDelayMs must be a non-negative finite number (got -1)",
+    );
+  });
 });

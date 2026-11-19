@@ -23,6 +23,7 @@ export type PgStateProviderConformanceContext = SchemaFenceConformanceContext &
   };
 
 const MISSING_TABLE = "public.queuert_conformance_missing";
+const CONFLICT_TABLE = "public.queuert_conformance_conflict";
 
 const executeSql = async (
   stateProvider: PgStateProvider<any>,
@@ -93,6 +94,105 @@ export const classifyErrorGroup: ConformanceGroup<PgStateProviderConformanceCont
       },
     },
     {
+      name: "classifies a serialization failure as transaction_conflict",
+      run: async ({ createStateProvider }) => {
+        const stateProvider = await createStateProvider();
+        const write = async (sql: string, txCtx?: unknown) =>
+          stateProvider.executeSql({
+            txCtx,
+            sql,
+            params: [],
+            paramTypes: {},
+            columnTypes: {},
+            readOnly: false,
+          });
+
+        try {
+          await write(
+            `CREATE TABLE IF NOT EXISTS ${CONFLICT_TABLE} (id integer PRIMARY KEY, value integer NOT NULL)`,
+          );
+          await write(`INSERT INTO ${CONFLICT_TABLE} VALUES (1, 0) ON CONFLICT (id) DO NOTHING`);
+          let error: unknown;
+          await assert.rejects(
+            stateProvider.withTransaction(async (txCtx) => {
+              await write("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ", txCtx);
+              await write(`SELECT value FROM ${CONFLICT_TABLE} WHERE id = 1`, txCtx);
+              await write(`UPDATE ${CONFLICT_TABLE} SET value = value + 1 WHERE id = 1`);
+              error = await captureError(async () =>
+                write(`UPDATE ${CONFLICT_TABLE} SET value = value + 1 WHERE id = 1`, txCtx),
+              );
+              throw error;
+            }),
+          );
+          assert.deepEqual(stateProvider.classifyError({ error }), {
+            kind: "transaction_conflict",
+          });
+        } finally {
+          await write(`DROP TABLE IF EXISTS ${CONFLICT_TABLE}`);
+          await stateProvider.close?.();
+        }
+      },
+    },
+    {
+      name: "classifies a deadlock as transaction_conflict",
+      run: async ({ createStateProvider }) => {
+        const stateProvider = await createStateProvider();
+        const write = async (sql: string, txCtx?: unknown) =>
+          stateProvider.executeSql({
+            txCtx,
+            sql,
+            params: [],
+            paramTypes: {},
+            columnTypes: {},
+            readOnly: false,
+          });
+
+        try {
+          await write(
+            `CREATE TABLE IF NOT EXISTS ${CONFLICT_TABLE} (id integer PRIMARY KEY, value integer NOT NULL)`,
+          );
+          await write(
+            `INSERT INTO ${CONFLICT_TABLE} VALUES (1, 0), (2, 0) ON CONFLICT (id) DO NOTHING`,
+          );
+          const firstLocked = Promise.withResolvers<void>();
+          const secondLocked = Promise.withResolvers<void>();
+          const lockInOrder = async (
+            first: number,
+            second: number,
+            locked: PromiseWithResolvers<void>,
+            otherLocked: Promise<void>,
+          ) =>
+            stateProvider.withTransaction(async (txCtx) => {
+              await write(
+                `UPDATE ${CONFLICT_TABLE} SET value = value + 1 WHERE id = ${first}`,
+                txCtx,
+              );
+              locked.resolve();
+              await otherLocked;
+              await write(
+                `UPDATE ${CONFLICT_TABLE} SET value = value + 1 WHERE id = ${second}`,
+                txCtx,
+              );
+            });
+
+          const outcomes = await Promise.allSettled([
+            lockInOrder(1, 2, firstLocked, secondLocked.promise),
+            lockInOrder(2, 1, secondLocked, firstLocked.promise),
+          ]);
+          const errors = outcomes.flatMap((outcome) =>
+            outcome.status === "rejected" ? [outcome.reason as unknown] : [],
+          );
+          assert.equal(errors.length, 1);
+          assert.deepEqual(stateProvider.classifyError({ error: errors[0] }), {
+            kind: "transaction_conflict",
+          });
+        } finally {
+          await write(`DROP TABLE IF EXISTS ${CONFLICT_TABLE}`);
+          await stateProvider.close?.();
+        }
+      },
+    },
+    {
       name: "returns undefined for an error other than a missing table",
       run: async ({ createStateProvider }) => {
         const stateProvider = await createStateProvider();
@@ -127,19 +227,27 @@ export const isolationLevelGroup: ConformanceGroup<PgStateProviderConformanceCon
   name: "isolationLevel",
   cases: [
     {
-      name: "withTransaction opens transactions at READ COMMITTED",
+      name: "withTransaction runs no statement before the callback, so SET TRANSACTION takes effect",
       run: async ({ createStateProvider }) => {
         const stateProvider = await createStateProvider();
 
         try {
-          const rows = await stateProvider.withTransaction(async (txCtx) =>
-            executeSql(
+          const rows = await stateProvider.withTransaction(async (txCtx) => {
+            await stateProvider.executeSql({
+              txCtx,
+              sql: "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+              params: [],
+              paramTypes: {},
+              columnTypes: {},
+              readOnly: false,
+            });
+            return executeSql(
               stateProvider,
               "SELECT current_setting('transaction_isolation') AS level",
               txCtx,
-            ),
-          );
-          assert.deepEqual([...rows], [{ level: "read committed" }]);
+            );
+          });
+          assert.deepEqual([...rows], [{ level: "repeatable read" }]);
         } finally {
           await stateProvider.close?.();
         }
@@ -228,7 +336,11 @@ export const createPgStateProviderConformanceContext = ({
 /**
  * Prepares the state adapter contract cases for a provider, ready to run. The cases are every state
  * adapter contract case, including those that hold two transactions open at once, run through
- * `createPgStateAdapter` over a provider, plus checks of the provider's `classifyError`. The cases
+ * `createPgStateAdapter` over a provider, plus checks of the provider's `classifyError` and that its
+ * `withTransaction` runs no statement before the callback, so the migrations' `SET TRANSACTION`
+ * takes effect. The cases run at the isolation level of the provider's transactions; to cover
+ * several levels, create the cases once per level over providers whose connections default to it,
+ * and register each list under its own name, since the case titles repeat. The cases
  * migrate the schema once, before the first case, through a provider from `createStateProvider`;
  * each case then builds its own adapter over a new provider from it, with the tables cleared. The
  * test file owns the database and releases it itself. Works with any test runner.

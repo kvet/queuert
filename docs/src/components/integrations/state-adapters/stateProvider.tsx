@@ -37,9 +37,9 @@ export const stateProviderMembers = (dialect: "postgres" | "sqlite" | "mysql"): 
         ) : dialect === "postgres" ? (
           <>
             {" "}
-            It states READ COMMITTED explicitly (<code>BEGIN ISOLATION LEVEL READ COMMITTED</code>,
-            or the client's isolation-level option), so a higher{" "}
-            <code>default_transaction_isolation</code> cannot apply; see{" "}
+            It opens the transaction at the connection's default level (a plain <code>BEGIN</code>)
+            and runs no statement before the callback, since migrations set READ COMMITTED with{" "}
+            <code>SET TRANSACTION</code>, which must be the transaction's first statement; see{" "}
             <a href="#isolation-level">Isolation level</a>.
           </>
         ) : null}
@@ -139,6 +139,14 @@ export const stateProviderMembers = (dialect: "postgres" | "sqlite" | "mysql"): 
         , and <code>undefined</code> for any other error, or when it cannot read the table name. The
         adapter uses it to turn a write that hit a dropped <a href="#write-fence">write fence</a>{" "}
         into <code>SchemaFencedError</code>.
+        {dialect === "postgres" ? (
+          <>
+            {" "}
+            It returns <code>{'{ kind: "transaction_conflict" }'}</code> for a serialization failure
+            (SQLSTATE <code>40001</code>) or a deadlock (<code>40P01</code>), which the adapter
+            retries in the work it runs itself; see <a href="#isolation-level">Isolation level</a>.
+          </>
+        ) : null}
       </>
     ),
   },

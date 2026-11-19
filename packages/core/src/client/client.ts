@@ -1090,16 +1090,26 @@ export const createClient = <
           }
           assertChainTypeName(stateChain, { chainId: String(id), typeName });
 
-          const [currentJob] = yield* step(
+          let [lockedJob] = yield* step(
             helpers.stateAdapter.getJobs({
               txCtx,
               jobIds: [(stateChain.tail ?? stateChain.head).id],
               lock: "exclusive",
             }),
           );
-          if (!currentJob) {
+          while (lockedJob?.continuedToId != null) {
+            [lockedJob] = yield* step(
+              helpers.stateAdapter.getJobs({
+                txCtx,
+                jobIds: [lockedJob.continuedToId],
+                lock: "exclusive",
+              }),
+            );
+          }
+          if (!lockedJob) {
             throw new Error(`Current job of chain ${id} not found under the chain lock`);
           }
+          const currentJob = lockedJob;
 
           const completeJob = (
             job: AnyJob,

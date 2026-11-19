@@ -29,7 +29,7 @@ const it = baseIt.extend("setup", async ({}, { onCleanup }) => {
           : intercept(script, keys, args),
     },
     keyPrefix,
-    maxTransactionTries: 3,
+    transactionRetry: { maxTries: 3, initialDelayMs: 2, multiplier: 2, maxDelayMs: 50 },
   });
   await stateAdapter.migrateToLatest();
   const createJob = async (typeName = "task") => {

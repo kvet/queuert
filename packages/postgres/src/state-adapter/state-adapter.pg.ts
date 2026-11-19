@@ -23,6 +23,7 @@ import {
 } from "@queuert/typed-sql";
 import {
   type BaseTxContext,
+  type RetryConfig,
   SchemaFencedError,
   type StateAdapter,
   type StateBlockedJob,
@@ -41,6 +42,8 @@ import {
   decodeTimestampWithIdCursor,
   encodeCursor,
   resolveStateAdapterConfig,
+  retryConfigViolations,
+  withRetry,
 } from "queuert/internal";
 
 import { createPgMigrationStore } from "../migration-store/migration-store.pg.ts";
@@ -313,6 +316,7 @@ SELECT EXISTS (
         if (!done) {
           await stateProvider.withTransaction(async (txCtx) => {
             for (const statement of [
+              sql(/* sql */ `SET TRANSACTION ISOLATION LEVEL READ COMMITTED`),
               sql(/* sql */ `SET LOCAL lock_timeout = '5000ms'`),
               sql(/* sql */ `
 CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job_v2 (
@@ -485,6 +489,7 @@ SELECT (SELECT id FROM source ORDER BY id DESC LIMIT 1)::text AS last_id`,
           do {
             assertLockHeld();
             lastId = await stateProvider.withTransaction(async (txCtx) => {
+              await execute(txCtx, sql(/* sql */ `SET TRANSACTION ISOLATION LEVEL READ COMMITTED`));
               await execute(txCtx, sql(/* sql */ `SET LOCAL lock_timeout = '5000ms'`));
               const [row] = await exec({ txCtx, sql: copyBatch, params: [lastId] });
               return row.last_id;
@@ -494,6 +499,7 @@ SELECT (SELECT id FROM source ORDER BY id DESC LIMIT 1)::text AS last_id`,
           assertLockHeld();
           await stateProvider.withTransaction(async (txCtx) => {
             for (const statement of [
+              sql(/* sql */ `SET TRANSACTION ISOLATION LEVEL READ COMMITTED`),
               sql(/* sql */ `SET LOCAL lock_timeout = '5000ms'`),
               sql(/* sql */ `
 LOCK TABLE {{schema}}.{{table_prefix}}job, {{schema}}.{{table_prefix}}job_blocker
@@ -573,6 +579,7 @@ ALTER INDEX {{schema}}.{{table_prefix}}${name}_v2 RENAME TO {{table_prefix}}${na
 
         await stateProvider.withTransaction(async (txCtx) => {
           for (const statement of [
+            sql(/* sql */ `SET TRANSACTION ISOLATION LEVEL READ COMMITTED`),
             sql(/* sql */ `SET LOCAL lock_timeout = '5000ms'`),
             sql(/* sql */ `
 CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}schema_fence_v2 (id integer PRIMARY KEY)`),
@@ -742,11 +749,16 @@ const mapDbBlockerToStateBlockedJob = (row: DbBlocker): Omit<StateBlockedJob, "j
  * Create a state adapter backed by PostgreSQL 14+. Returns the adapter with a
  * `migrateToLatest()` method for schema migrations.
  *
- * Queuert supports only READ COMMITTED (the default).
+ * Every transaction may run at READ COMMITTED, REPEATABLE READ or SERIALIZABLE, mixed freely.
+ * The adapter retries serialization failures (`40001`) and deadlocks (`40P01`) in the transactions
+ * and statements it runs
+ * itself, as `transactionRetry` configures; transactions passed to Queuert raise them to the
+ * caller.
  *
  * @param options - PostgreSQL state adapter configuration.
  * @throws Error if `schema`, `tablePrefix`, `jobIdType` or `workerIdType` is not a valid SQL
  * identifier.
+ * @throws TypeError if a `transactionRetry` field holds an invalid value.
  */
 export const createPgStateAdapter = <
   TTxContext extends BaseTxContext,
@@ -764,6 +776,7 @@ export const createPgStateAdapter = <
   validateWorkerId: validateWorkerIdOption,
   maxBlockersPerJob: maxBlockersPerJobOption,
   countCap: countCapOption,
+  transactionRetry = { maxTries: 5, initialDelayMs: 50, maxDelayMs: 50 },
 }: {
   /** PostgreSQL state provider wrapping the database connection. */
   stateProvider: PgStateProvider<TTxContext>;
@@ -815,6 +828,16 @@ export const createPgStateAdapter = <
    * @defaultValue `10_000`
    */
   countCap?: number;
+  /**
+   * Retries of the transactions and statements the adapter runs itself, such as acquisition, lease
+   * renewal or a reclaim, after a serialization failure (`40001`) or a deadlock (`40P01`); the
+   * failure of the last try is
+   * thrown. Raise `maxTries` for Queuert's own work at REPEATABLE READ or SERIALIZABLE under
+   * contention.
+   *
+   * @defaultValue `{ maxTries: 5, initialDelayMs: 50, maxDelayMs: 50 }`
+   */
+  transactionRetry?: RetryConfig;
 }): StateAdapter<TTxContext, TJobId, TWorkerId, "async"> & {
   /**
    * Create or upgrade the schema.
@@ -825,6 +848,12 @@ export const createPgStateAdapter = <
   validateSqlIdentifier(tablePrefix, "tablePrefix");
   validateSqlIdentifier(jobIdType, "jobIdType");
   validateSqlIdentifier(workerIdType, "workerIdType");
+  const transactionRetryViolations = retryConfigViolations("transactionRetry", transactionRetry);
+  if (transactionRetryViolations.length > 0) {
+    throw new TypeError(
+      `createPgStateAdapter: invalid configuration:\n${transactionRetryViolations.map((v) => `  - ${v}`).join("\n")}`,
+    );
+  }
 
   const closed = createLatch();
 
@@ -936,6 +965,13 @@ export const createPgStateAdapter = <
     );
   };
 
+  const retryOwnWork = async <T>(fn: () => Promise<T>): Promise<T> =>
+    withRetry(
+      fn,
+      transactionRetry,
+      (error) => stateProvider.classifyError({ error })?.kind === "transaction_conflict",
+    );
+
   const execute = async <
     TParams extends readonly DataType[],
     TColumns extends Record<string, DataType>,
@@ -944,8 +980,8 @@ export const createPgStateAdapter = <
     typedSql: TypedSql<TParams, TColumns>,
     params: [...InferParams<TParams>],
   ): Promise<InferColumns<TColumns>[]> => {
-    try {
-      return (await stateProvider.executeSql({
+    const run = async () =>
+      (await stateProvider.executeSql({
         txCtx,
         id: typedSql.id,
         sql: typedSql.sql,
@@ -954,6 +990,8 @@ export const createPgStateAdapter = <
         columnTypes: extractColumnTypes(typedSql.columns),
         readOnly: typedSql.readOnly,
       })) as InferColumns<TColumns>[];
+    try {
+      return await (txCtx === undefined ? retryOwnWork(run) : run());
     } catch (error) {
       if (isFenceError(error)) {
         throw new SchemaFencedError(
@@ -1014,7 +1052,7 @@ WHERE id = ANY($1::{{worker_id_type}}[])${locked ? "\nORDER BY id\nFOR UPDATE" :
   return {
     config,
 
-    withTransaction: stateProvider.withTransaction,
+    withTransaction: async (fn) => retryOwnWork(async () => stateProvider.withTransaction(fn)),
 
     isTransaction: stateProvider.isTransaction,
 
@@ -1595,18 +1633,16 @@ _deleted_blockers AS (
 ),
 _cleared_heads AS (
   UPDATE {{schema}}.{{table_prefix}}job h
-  SET blocking = false
-  WHERE h.blocking
-    AND h.chain_index = 0
+  SET blocking = h.blocking AND EXISTS (
+    SELECT 1 FROM {{schema}}.{{table_prefix}}job_blocker jb
+    WHERE jb.blocked_by_chain_id = h.id AND jb.job_id NOT IN (SELECT id FROM _members)
+  )
+  WHERE h.chain_index = 0
     AND h.id IN (
       SELECT blocked_by_chain_id FROM {{schema}}.{{table_prefix}}job_blocker
       WHERE job_id IN (SELECT id FROM _members)
     )
     AND h.id NOT IN (SELECT id FROM _members)
-    AND NOT EXISTS (
-      SELECT 1 FROM {{schema}}.{{table_prefix}}job_blocker jb
-      WHERE jb.blocked_by_chain_id = h.id AND jb.job_id NOT IN (SELECT id FROM _members)
-    )
     AND NOT EXISTS (SELECT 1 FROM _external_refs)
 ),
 _deleted_jobs AS (
@@ -1670,12 +1706,13 @@ SELECT
           "startJobAttempts",
           `
 WITH live_worker AS (
-  SELECT w.id
-  FROM {{schema}}.{{table_prefix}}worker w
+  UPDATE {{schema}}.{{table_prefix}}worker w
+  SET lease_until = w.lease_until
   WHERE w.id = $2::{{worker_id_type}}
     AND w.token = $4::uuid
     AND w.lease_until > statement_timestamp()
-  FOR KEY SHARE
+    AND ${FENCE_GUARD}
+  RETURNING w.id
 ),
 acquired_jobs AS (
   SELECT j.id
@@ -1827,11 +1864,8 @@ incomplete_blocker_counts AS (
   WHERE h.chain_status = 'running'
   GROUP BY d.job_id
 ),
-unflagged_blocker_heads AS (
-  SELECT id FROM locked_blocker_heads WHERE NOT blocking
-),
 update_targets AS (
-  SELECT id FROM unflagged_blocker_heads
+  SELECT id FROM locked_blocker_heads
   UNION
   SELECT job_id FROM incomplete_blocker_counts
 ),
@@ -1845,11 +1879,11 @@ updated_jobs AS (
       WHEN j.status = 'pending' THEN c.blockers_remaining
       WHEN j.status = 'blocked' THEN j.blockers_remaining + c.blockers_remaining
       ELSE j.blockers_remaining END,
-    blocking = j.blocking OR j.id IN (SELECT id FROM unflagged_blocker_heads)
+    blocking = j.blocking OR j.id IN (SELECT id FROM locked_blocker_heads)
   FROM update_targets t
   LEFT JOIN incomplete_blocker_counts c ON c.job_id = t.id
   WHERE j.id = t.id
-    AND (j.status IN ('pending', 'blocked') OR j.id IN (SELECT id FROM unflagged_blocker_heads))
+    AND (j.status IN ('pending', 'blocked') OR j.id IN (SELECT id FROM locked_blocker_heads))
     AND ${FENCE_GUARD}
   RETURNING j.*
 ),
