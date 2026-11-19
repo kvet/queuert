@@ -11,8 +11,9 @@ export const redisRecordKeys = (): FieldItem[] => [
         scripts read and change (ids, type name, status, chain status, attempt fields, timestamps
         and, on a chain's head, <code>blocking</code>, the counterpart of the SQL{" "}
         <code>blocking</code> column), and <code>u</code> the JSON fields no script reads: input,
-        output, last attempt error, trace contexts, deduplication key, <code>completedBy</code> and
-        blockers. A field that is <code>null</code> is left out of both.
+        output, last attempt error, last reschedule reason, trace contexts, deduplication key,{" "}
+        <code>completedBy</code> and blockers. A field that is <code>null</code> is left out of
+        both.
       </>
     ),
   },

@@ -69,8 +69,10 @@ const newJob = (
   continuedToId: null,
   output: null,
   attempt: 0,
-  lastAttemptError: null,
+  consecutiveFailures: 0,
   lastAttemptAt: null,
+  lastAttemptError: null,
+  lastRescheduleReason: null,
   attemptAt: null,
   attemptBy: null,
   attemptToken: null,
@@ -312,7 +314,9 @@ export const createMemoryStateAdapter = (
           parent.completedBy = job.workerId ?? null;
           parent.continuedToId = continuation.id;
           parent.output = null;
+          parent.consecutiveFailures = 0;
           parent.lastAttemptError = null;
+          parent.lastRescheduleReason = null;
           clearAttempt(parent);
           return { ...toJob(state, parent), continuation };
         });
@@ -329,7 +333,9 @@ export const createMemoryStateAdapter = (
           job.completedAt = now;
           job.completedBy = workerId ?? null;
           job.output = output ?? null;
+          job.consecutiveFailures = 0;
           job.lastAttemptError = null;
+          job.lastRescheduleReason = null;
           clearAttempt(job);
 
           const chain = state.chains.get(job.chainId)!;
@@ -342,10 +348,13 @@ export const createMemoryStateAdapter = (
     rescheduleJobs: async ({ txCtx, jobs }) =>
       write(txCtx, (state) => {
         const now = new Date();
-        return jobs.map(({ jobId, schedule, error, attemptToken }) => {
+        return jobs.map(({ jobId, schedule, error, reason, attemptToken }) => {
           const job = state.jobs.get(jobId);
           if (!job || !holdsAttempt(job, attemptToken)) return undefined;
 
+          const failed = job.status === "running" && error !== undefined;
+          job.consecutiveFailures = failed ? job.consecutiveFailures + 1 : 0;
+          job.lastRescheduleReason = failed ? null : (reason ?? null);
           if (job.status === "running") {
             job.status = "pending";
             job.lastAttemptAt = now;

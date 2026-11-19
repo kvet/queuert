@@ -117,6 +117,8 @@ export const JobItem = (props: {
   onRescheduled: (job: UnknownJob) => void;
 }) => {
   const phase = () => jobPhase(props.job, now());
+  const lastFailure = () => props.job.lastAttemptError ?? undefined;
+  const requestedReason = () => props.job.lastRescheduleReason ?? undefined;
   const blockers = () => props.blockers ?? [];
   const completedTail = () =>
     props.job.status === "completed" && props.job.continuedToId === null ? props.job : undefined;
@@ -164,7 +166,13 @@ export const JobItem = (props: {
 
       <Show when={phase().phase === "rescheduledAfterError"}>
         <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-muted">
-          <ErrorMark text="Rescheduled after error" />
+          <ErrorMark
+            text={
+              props.job.consecutiveFailures === 1
+                ? "Failed once"
+                : `Failed ${props.job.consecutiveFailures} times in a row`
+            }
+          />
           <span>
             {props.job.attempt} {props.job.attempt === 1 ? "attempt" : "attempts"}
           </span>
@@ -176,17 +184,24 @@ export const JobItem = (props: {
           <RescheduleButton job={props.job} label="Run now" onRescheduled={props.onRescheduled} />
         </div>
       </Show>
-      <Show when={phase().phase === "running" && props.job.lastAttemptError != null}>
+      <Show when={phase().phase === "running" && props.job.consecutiveFailures > 0}>
         <div class="mt-1.5 text-xs">
           <ErrorMark text="an earlier attempt failed" />
         </div>
       </Show>
 
-      <Show when={props.job.lastAttemptError}>
+      <Show when={lastFailure()}>
         {(error) => (
           <div class="mt-2 rounded-xs border border-error-border bg-error-bg px-3 py-2">
             <ErrorText text={error()} lines={3} />
           </div>
+        )}
+      </Show>
+      <Show when={requestedReason()}>
+        {(reason) => (
+          <p class="mt-1.5 text-xs text-fg-muted">
+            Rescheduled: <span class="text-fg">{reason()}</span>
+          </p>
         )}
       </Show>
 

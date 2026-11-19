@@ -126,6 +126,19 @@ const jobColumnNames = async (provider: Provider): Promise<string[]> =>
     )
   ).map((row) => row.column_name);
 
+const jobColumnTypes = async (provider: Provider): Promise<Record<string, string>> =>
+  Object.fromEntries(
+    (
+      await query<{ column_name: string; udt_name: string; is_nullable: string }>(
+        provider,
+        "SELECT column_name, udt_name, is_nullable FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'queuert_job'",
+      )
+    ).map((row) => [
+      row.column_name,
+      `${row.udt_name}${row.is_nullable === "NO" ? " NOT NULL" : ""}`,
+    ]),
+  );
+
 const indexDefinition = async (provider: Provider, indexName: string): Promise<string> => {
   const [row] = await query<{ indexdef: string }>(
     provider,
@@ -169,6 +182,11 @@ describe("migrateToLatest", () => {
       ]);
       expect(await jobColumnNames(provider)).not.toContain("attempt_until");
       expect(await jobColumnNames(provider)).toContain("attempt_token");
+      expect(await jobColumnTypes(provider)).toMatchObject({
+        consecutive_failures: "int4 NOT NULL",
+        last_attempt_error: "text",
+        last_reschedule_reason: "text",
+      });
     },
   );
 
@@ -275,6 +293,38 @@ describe("upgrading from 001_schema_v1", () => {
       expect(await relations(provider)).toMatchObject({
         schema_fence_v1: false,
         schema_fence_v2: true,
+      });
+    },
+  );
+
+  it(
+    "counts one failure for a job that kept an attempt error and none for a job without one",
+    { timeout: 120_000 },
+    async ({ database: { provider, adapter } }) => {
+      await migrateToInstall(provider);
+      const failedJobId = randomUUID();
+      const cleanJobId = randomUUID();
+      await query(
+        provider,
+        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status, attempt, last_attempt_at, last_attempt_error)
+         VALUES ('${failedJobId}', 'legacy', '${failedJobId}', 0, 'pending', 'running', 3, now(), '"Error: boom"'),
+                ('${cleanJobId}', 'legacy', '${cleanJobId}', 0, 'pending', 'running', 2, now(), NULL)`,
+      );
+
+      await adapter.migrateToLatest();
+
+      const [failedJob, cleanJob] = await adapter.getJobs({ jobIds: [failedJobId, cleanJobId] });
+      expect(failedJob).toMatchObject({
+        attempt: 3,
+        consecutiveFailures: 1,
+        lastAttemptError: "Error: boom",
+        lastRescheduleReason: null,
+      });
+      expect(cleanJob).toMatchObject({
+        attempt: 2,
+        consecutiveFailures: 0,
+        lastAttemptError: null,
+        lastRescheduleReason: null,
       });
     },
   );
@@ -387,7 +437,7 @@ describe("upgrading from 001_schema_v1", () => {
       );
       await query(
         provider,
-        `UPDATE queuert_job SET status = 'running' WHERE id = '${updatedJobId}'`,
+        `UPDATE queuert_job SET status = 'running', last_attempt_error = '"boom"' WHERE id = '${updatedJobId}'`,
       );
       await query(provider, `DELETE FROM queuert_job WHERE id = '${deletedJobId}'`);
       await query(
@@ -430,6 +480,12 @@ describe("upgrading from 001_schema_v1", () => {
           `SELECT count(*)::int AS count FROM queuert_job WHERE type_name = 'filler'`,
         ),
       ).toEqual([{ count: 3000 }]);
+      expect(
+        await query(
+          provider,
+          `SELECT consecutive_failures, last_attempt_error FROM queuert_job WHERE id = '${updatedJobId}'`,
+        ),
+      ).toEqual([{ consecutive_failures: 1, last_attempt_error: "boom" }]);
       expect(await relations(provider)).toMatchObject({
         schema_fence_v1: false,
         schema_fence_v2: true,

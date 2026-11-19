@@ -30,7 +30,9 @@ describe("attempt handler job", () => {
             attemptHandler: async ({ job, complete }) => {
               expectTypeOf(job.attempt).toEqualTypeOf<number>();
               expectTypeOf(job.lastAttemptAt).toEqualTypeOf<Date | null>();
+              expectTypeOf(job.consecutiveFailures).toEqualTypeOf<number>();
               expectTypeOf(job.lastAttemptError).toEqualTypeOf<string | null>();
+              expectTypeOf(job.lastRescheduleReason).toEqualTypeOf<string | null>();
 
               return complete({ ...txCtx, output: null });
             },

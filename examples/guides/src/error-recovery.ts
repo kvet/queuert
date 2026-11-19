@@ -178,7 +178,7 @@ const transferChain = await stateAdapter.withTransaction(async (txCtx) =>
     input: { fromAccountId: "bob", toAccountId: "alice", amountCents: 20_000 },
   }),
 );
-while ((await client.getJob({ id: transferChain.id }))!.lastAttemptError === null) {
+while ((await client.getJob({ id: transferChain.id }))!.consecutiveFailures === 0) {
   await setTimeout(10);
 }
 assert.deepEqual(Object.fromEntries(accounts), { alice: 10_000, bob: 5000 });

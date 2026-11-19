@@ -1,3 +1,4 @@
+import { truncate } from "@queuert/helpers/serialize-error";
 import {
   isPromise,
   type MaybePromise,
@@ -513,7 +514,7 @@ export const runContinueChain: SyncAsync<
 });
 
 type RescheduleJobsOptions = {
-  jobs: { jobId: string; schedule?: ScheduleOptions; error?: string; attemptToken?: string }[];
+  jobs: { jobId: string; schedule?: ScheduleOptions; reason?: string; attemptToken?: string }[];
   txCtx: BaseTxContext;
 };
 
@@ -521,7 +522,14 @@ export const runRescheduleJobs: SyncAsync<
   [helpers: Helpers, options: RescheduleJobsOptions],
   (StateJob | undefined)[]
 > = syncAsync(function* (helpers: Helpers, { jobs, txCtx }: RescheduleJobsOptions) {
-  const rescheduledJobs = yield* step(helpers.stateAdapter.rescheduleJobs({ txCtx, jobs }));
+  const rescheduledJobs = yield* step(
+    helpers.stateAdapter.rescheduleJobs({
+      txCtx,
+      jobs: jobs.map((job) =>
+        job.reason === undefined ? job : { ...job, reason: truncate(job.reason) },
+      ),
+    }),
+  );
   reportRescheduledJobs(helpers, { rescheduledJobs, txCtx });
   return rescheduledJobs;
 });

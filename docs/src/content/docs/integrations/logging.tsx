@@ -38,7 +38,12 @@ const jobEntries = [
   entry("job_created", "info", "Job created", [...job, "input", "blockers", "scheduledAt"]),
   entry("job_completed", "info", "Job completed", [...processing, "output?", "continuedWith?"]),
   entry("job_blocked", "info", "Job blocked by incomplete chains", [...job, "blockedByChains"]),
-  entry("job_rescheduled", "info", "Job rescheduled", [...job, "scheduledAt"]),
+  entry("job_rescheduled", "info", "Job rescheduled", [
+    ...job,
+    "scheduledAt",
+    "consecutiveFailures",
+    "reason?",
+  ]),
   entry("job_unblocked", "info", "Job unblocked", [...job, "unblockedByChain"]),
 ];
 

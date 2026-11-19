@@ -1,6 +1,6 @@
 const MAX_LENGTH = 10_000;
 
-const truncate = (s: string): string =>
+export const truncate = (s: string): string =>
   s.length <= MAX_LENGTH ? s : `${s.slice(0, MAX_LENGTH)}… [truncated]`;
 
 export const serializeError = (err: unknown): string => {

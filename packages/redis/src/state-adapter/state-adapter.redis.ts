@@ -98,6 +98,7 @@ const deserializeJob = (stored: StoredJob): DbJob => ({
   continuedToId: stored.continuedToId ?? null,
   completedBy: stored.completedBy ?? null,
   lastAttemptError: stored.lastAttemptError ?? null,
+  lastRescheduleReason: stored.lastRescheduleReason ?? null,
   attemptBy: stored.attemptBy ?? null,
   attemptToken: stored.attemptToken ?? null,
   deduplicationKey: stored.deduplicationKey ?? null,
@@ -142,8 +143,10 @@ const jobInfo = (job: DbJob): StateJobInfo => ({
   continuedToId: job.continuedToId,
   output: job.output,
   attempt: job.attempt,
-  lastAttemptError: job.lastAttemptError,
+  consecutiveFailures: job.consecutiveFailures,
   lastAttemptAt: job.lastAttemptAt,
+  lastAttemptError: job.lastAttemptError,
+  lastRescheduleReason: job.lastRescheduleReason,
   attemptAt: job.attemptAt,
   attemptBy: job.attemptBy,
   attemptToken: job.attemptToken,
@@ -651,8 +654,10 @@ export const createRedisStateAdapter = ({
     completedAt: null,
     completedBy: null,
     attempt: 0,
-    lastAttemptError: null,
+    consecutiveFailures: 0,
     lastAttemptAt: null,
+    lastAttemptError: null,
+    lastRescheduleReason: null,
     attemptBy: null,
     attemptToken: null,
     attemptAt: null,
@@ -913,7 +918,9 @@ export const createRedisStateAdapter = ({
             completedAt: now,
             completedBy: jobInput.workerId ?? null,
             output: null,
+            consecutiveFailures: 0,
             lastAttemptError: null,
+            lastRescheduleReason: null,
           };
           writeJob(tx, parent, completed);
           completedJobs.push(completed);
@@ -956,7 +963,9 @@ export const createRedisStateAdapter = ({
             status: "completed",
             completedAt: now,
             completedBy: workerId ?? null,
+            consecutiveFailures: 0,
             lastAttemptError: null,
+            lastRescheduleReason: null,
             ...(isHead ? { chainStatus: "completed" as const, chainCompletedAt: now } : {}),
           };
           writeJob(tx, job, updated);
@@ -991,22 +1000,26 @@ export const createRedisStateAdapter = ({
           loaded.filter((job) => job !== undefined).map((job) => job.chainId),
         );
         const resultById = new Map<string, DbJob | undefined>();
-        for (const { jobId, schedule, error, attemptToken } of jobs) {
+        for (const { jobId, schedule, error, reason, attemptToken } of jobs) {
           if (resultById.has(jobId)) continue;
           const job = await loadJob(tx, jobId);
           if (!job || job.status === "completed" || !holdsAttempt(job, attemptToken)) {
             resultById.set(jobId, undefined);
             continue;
           }
+          const running = job.status === "running";
+          const failed = running && error !== undefined;
           const updated: DbJob = {
             ...job,
+            status: running ? "pending" : job.status,
             scheduledAt: resolveScheduledAt(schedule, now),
+            consecutiveFailures: failed ? job.consecutiveFailures + 1 : 0,
+            lastAttemptAt: running ? now : job.lastAttemptAt,
+            lastAttemptError: running ? (error ?? null) : job.lastAttemptError,
+            lastRescheduleReason: failed ? null : (reason ?? null),
             attemptAt: null,
             attemptBy: null,
             attemptToken: null,
-            ...(job.status === "running"
-              ? { status: "pending" as const, lastAttemptAt: now, lastAttemptError: error ?? null }
-              : {}),
           };
           writeJob(tx, job, updated);
           resultById.set(jobId, updated);
@@ -1609,7 +1622,7 @@ export const createRedisStateAdapter = ({
       const withTransaction = async <T>(fn: (txCtx: RedisStoreContext) => Promise<T>) =>
         runTransaction(async (tx) => fn({ transaction: tx }));
       return createMigrator({
-        migrations: createRedisSchemaMigrations({ schema, withTransaction }),
+        migrations: createRedisSchemaMigrations({ schema, stateProvider, withTransaction }),
         store: createRedisMigrationStore({
           stateProvider,
           withTransaction,

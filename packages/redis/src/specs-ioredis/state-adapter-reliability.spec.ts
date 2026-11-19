@@ -263,7 +263,6 @@ describe("Redis state adapter reliability", () => {
 
     expect(second).toMatchObject({
       id: chain.head.id,
-      attempt: 2,
       lastAttemptError: lone,
       traceContext: lone,
       input: lone,

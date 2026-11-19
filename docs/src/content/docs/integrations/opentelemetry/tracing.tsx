@@ -110,6 +110,7 @@ const spans: FieldItem[] = [
       "queuert.job.attempt",
       "queuert.worker.id",
       ...continuedWith,
+      "queuert.reschedule.reason",
     ],
   }),
   span({
@@ -161,6 +162,16 @@ const attributes: FieldItem[] = [
     name: "queuert.continued_with.job_type",
     chips: ["string"],
     description: "Type name of the continuation job; present when the job continued.",
+  },
+  {
+    name: "queuert.reschedule.reason",
+    chips: ["string"],
+    description: (
+      <>
+        Reason passed to <code>{"complete({ reschedule, reason })"}</code>; present when the attempt
+        rescheduled with one.
+      </>
+    ),
   },
   { name: "queuert.blocker.chain.id", chips: ["string"], description: "Blocker chain ID." },
   {

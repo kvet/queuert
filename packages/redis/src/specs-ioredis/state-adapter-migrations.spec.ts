@@ -7,12 +7,14 @@ import { it as baseIt, describe, expect } from "vitest";
 import { createRedisSchemaMigrations } from "../migration-store/migration-store.redis.ts";
 import { createRedisSchema } from "../state-adapter/schema.redis.ts";
 import { createRedisStateAdapter } from "../state-adapter/state-adapter.redis.ts";
+import type { RedisStateProvider } from "../state-provider/state-provider.redis.ts";
 import { createIoredisStateProvider } from "./state-provider.ioredis.ts";
 
 const redis = await acquireRedis("redis:6");
 
 const ALL = createRedisSchemaMigrations({
   schema: createRedisSchema(""),
+  stateProvider: {} as RedisStateProvider,
   withTransaction: async () => {
     throw new Error("not called");
   },
@@ -213,5 +215,46 @@ describe("Redis state adapter migrations", () => {
       }),
     );
     expect(completed!.chain.blocking).toBe(true);
+  });
+
+  it("counts one failure for a v1 job that kept an attempt error", async ({ setup }) => {
+    const { client, keyPrefix } = setup;
+    await using stateAdapter = setup.createStateAdapter();
+    const v1Job = (id: string) => ({
+      id,
+      typeName: "charge-card",
+      chainId: id,
+      chainIndex: 0,
+      chainStatus: "running",
+      status: "pending",
+      createdAt: 0,
+      scheduledAt: 0,
+      attempt: 1,
+      lastAttemptAt: 0,
+      seq: `0000000000${id}`,
+    });
+    await client.hset(`${keyPrefix}job:failed`, {
+      v: "1",
+      d: JSON.stringify(v1Job("failed")),
+      u: JSON.stringify({ input: null, lastAttemptError: "card declined", blockers: [] }),
+    });
+    await client.hset(`${keyPrefix}job:waiting`, {
+      v: "1",
+      d: JSON.stringify(v1Job("waiting")),
+      u: JSON.stringify({ input: [], blockers: [] }),
+    });
+    await client.zadd(`${keyPrefix}jobs:createdAt:all:charge-card`, 0, "failed", 0, "waiting");
+    await client.hset(`${keyPrefix}job-type-names`, "charge-card", "2");
+    await client.sadd(`${keyPrefix}schema-fences`, "1");
+    await client.sadd(`${keyPrefix}migrations`, "001_schema_fence_v1");
+
+    const result = await stateAdapter.migrateToLatest();
+
+    expect(result.applied).toEqual(["002_schema_v2"]);
+    expect(await client.smembers(`${keyPrefix}schema-fences`)).toEqual(["2"]);
+    expect(await stateAdapter.getJobs({ jobIds: ["failed", "waiting"] })).toMatchObject([
+      { consecutiveFailures: 1, lastAttemptError: "card declined", lastRescheduleReason: null },
+      { consecutiveFailures: 0, lastAttemptError: null, lastRescheduleReason: null, input: [] },
+    ]);
   });
 });

@@ -17,10 +17,17 @@ export type JobFields<TJobId, TJobTypeName, TChainTypeName, TInput> = {
   scheduledAt: Date;
   /** Number of processing attempts so far. */
   attempt: number;
-  /** When the last failed or reclaimed attempt ended. */
+  /**
+   * Number of attempts in a row that failed or were reclaimed; any other attempt outcome or a client
+   * reschedule resets it to 0.
+   */
+  consecutiveFailures: number;
+  /** When the last attempt that returned the job to pending ended, or `null` before one. */
   lastAttemptAt: Date | null;
-  /** Serialized error of the last failed or reclaimed attempt. */
+  /** Serialized error of the last attempt when it failed or was reclaimed, otherwise `null`. */
   lastAttemptError: string | null;
+  /** The reason a handler or client gave for the last reschedule, or `null` when none was given. */
+  lastRescheduleReason: string | null;
 };
 
 /** Status fields of a `blocked` {@link Job}. @inline */

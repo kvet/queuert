@@ -33,7 +33,7 @@ export const seedDashboardDemo = async (): Promise<{
   });
   const client = createClient({ stateAdapter, jobTypes });
 
-  const { orderChain, blockerChain, retryChain, liveWorkerId } = await populateScenarios({
+  const { orderChain, blockerChain, failingChain, liveWorkerId } = await populateScenarios({
     client,
     stateAdapter,
     withTransaction: (fn) => stateAdapter.withTransaction((ctx) => fn(ctx)),
@@ -48,7 +48,7 @@ export const seedDashboardDemo = async (): Promise<{
       "chains-list": "/chains?typeName=greet",
       "chain-detail": `/chains/${blockerChain.id}`,
       "jobs-list": "/jobs?typeName=greet",
-      "job-detail": `/jobs/${retryChain.id}`,
+      "job-detail": `/jobs/${failingChain.id}`,
       "workers-list": "/workers",
       "worker-detail": `/workers/${liveWorkerId}`,
       find: `/find?ids=${[orderChain.id, liveWorkerId, generateId()].join(",")}`,

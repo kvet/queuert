@@ -54,14 +54,25 @@ export const postgresTables: SchemaTable[] = [
         description: "Number of processing attempts (starts at 0)",
       },
       {
+        name: "consecutive_failures",
+        type: "integer",
+        description:
+          "Attempts in a row that failed or were reclaimed; 0 after any other outcome or a client reschedule",
+      },
+      {
         name: "last_attempt_at",
         type: "timestamptz",
-        description: "When the last failed attempt ended",
+        description: "When the last attempt that returned the job to pending ended",
       },
       {
         name: "last_attempt_error",
-        type: "jsonb",
-        description: "Error from the last failed or reclaimed attempt",
+        type: "text",
+        description: "Serialized error of the last attempt when it failed or was reclaimed",
+      },
+      {
+        name: "last_reschedule_reason",
+        type: "text",
+        description: "Reason a handler or client gave for the last reschedule",
       },
       {
         name: "attempt_at",

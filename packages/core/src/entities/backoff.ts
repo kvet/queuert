@@ -1,10 +1,10 @@
 import { isNonNegative, isNonNegativeFinite, isPositiveFinite } from "@queuert/helpers/number";
 
-/** Exponential backoff configuration for retry delays. */
+/** Exponential backoff configuration for the delays after failed attempts. */
 export type BackoffConfig = {
-  /** Initial delay in milliseconds before first retry. Must be finite and non-negative. */
+  /** Delay in milliseconds after the first failure. Must be finite and non-negative. */
   initialDelayMs: number;
-  /** Maximum delay in milliseconds between retries. Must be non-negative; `Infinity` means no cap. */
+  /** Maximum delay in milliseconds after a failure. Must be non-negative; `Infinity` means no cap. */
   maxDelayMs: number;
   /** Exponential backoff multiplier. Must be finite and positive. @default 2 */
   multiplier?: number;

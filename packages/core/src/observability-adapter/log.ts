@@ -96,11 +96,18 @@ type JobAttemptCompletedLogEntry = LogEntry<
   JobCompletionData & WorkerBasicData
 >;
 type JobCompletedLogEntry = LogEntry<"job_completed", "info", "Job completed", JobCompletionData>;
+export type JobRescheduleData = JobBasicData & {
+  scheduledAt: Date;
+  /** Attempts in a row that failed or were reclaimed; above 0 when this reschedule followed one. */
+  consecutiveFailures: number;
+  /** The reason a handler or client gave. */
+  reason?: string;
+};
 type JobRescheduledLogEntry = LogEntry<
   "job_rescheduled",
   "info",
   "Job rescheduled",
-  JobBasicData & { scheduledAt: Date }
+  JobRescheduleData
 >;
 type JobBlockedLogEntry = LogEntry<
   "job_blocked",

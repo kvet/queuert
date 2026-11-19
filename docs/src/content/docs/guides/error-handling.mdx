@@ -51,7 +51,7 @@ When the carrier rejects the order, the processor continues with the refund in t
 
 ## Rescheduling
 
-When a job throws an error, the job is rescheduled with exponential backoff; this is what other queues call a retry. `fetch-exchange-rate` lets the rate provider's error propagate, and a worker runs a new attempt after the delay its `backoffConfig` sets:
+When a job throws an error, the job is rescheduled with exponential backoff; this is what other queues call a retry. The delay grows with `consecutiveFailures`, the number of attempts in a row that failed, so a job that rescheduled itself on purpose starts again from the initial delay when it later fails. `fetch-exchange-rate` lets the rate provider's error propagate, and a worker runs a new attempt after the delay its `backoffConfig` sets:
 
 <ExampleCode example="guides" file="src/error-handling.ts" region="rescheduling" />
 
@@ -59,7 +59,7 @@ For explicit control over when the next attempt runs, see [Rescheduling from a H
 
 ## lastAttemptError
 
-On every attempt after the first, `job.lastAttemptError` contains the serialized error from the previous attempt, and it is `null` on the first attempt. The handler above records it; use it for logging or to adjust how the next attempt behaves. When the previous attempt was reclaimed because its worker lost its lease, stopped, or no longer ran it, it holds a serialized `JobAttemptReclaimedError`.
+When the last attempt failed, `job.lastAttemptError` contains its serialized error and `job.consecutiveFailures` is above 0. It is `null` on the first attempt and after an attempt that ended without failing, such as `complete({ reschedule })`. A client `rescheduleJob` runs no attempt, so it leaves the error in place. The handler above records each error; use it for logging or to adjust how the next attempt behaves. When the previous attempt was reclaimed because its worker lost its lease, stopped, or no longer ran it, it holds a serialized `JobAttemptReclaimedError`.
 
 | Thrown value   | Stored as                                                                   |
 | -------------- | --------------------------------------------------------------------------- |

@@ -231,6 +231,38 @@ describe.each(["async", "sync"] as const)("in %s mode", (mode) => {
         ).toEqual([blockerChainId, continuedBlockerChainId].toSorted());
       },
     );
+
+    it(
+      "counts one failure for a job that stored an attempt error, and none for a job without one",
+      { timeout: 60_000 },
+      async ({ database: { provider, adapter } }) => {
+        await migrateToInstall(provider);
+        const failedJobId = randomUUID();
+        const cleanJobId = randomUUID();
+        await execute(
+          provider,
+          `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status, attempt, last_attempt_at, last_attempt_error)
+           VALUES ('${failedJobId}', 'legacy', '${failedJobId}', 0, 'pending', 'running', 3, datetime('now', 'subsec'), '"Error: boom"'),
+                  ('${cleanJobId}', 'legacy', '${cleanJobId}', 0, 'pending', 'running', 2, NULL, NULL)`,
+        );
+
+        await adapter.migrateToLatest();
+
+        const [failedJob, cleanJob] = await adapter.getJobs({ jobIds: [failedJobId, cleanJobId] });
+        expect(failedJob).toMatchObject({
+          attempt: 3,
+          consecutiveFailures: 1,
+          lastAttemptError: "Error: boom",
+          lastRescheduleReason: null,
+        });
+        expect(cleanJob).toMatchObject({
+          attempt: 2,
+          consecutiveFailures: 0,
+          lastAttemptError: null,
+          lastRescheduleReason: null,
+        });
+      },
+    );
   });
 
   describe("parallel deployments", () => {

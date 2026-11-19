@@ -144,7 +144,7 @@ A handler learns that its attempt was lost elsewhere (the job was taken over, co
 
 ## Reclaim
 
-A worker whose lease expired holds jobs no one runs. An idle worker runner reclaims them: each iteration with an idle slot, it lists up to eight expired workers of any job type, picks one at random, locks its row, checks it is still expired, and in one transaction reschedules every job running under it and deletes the row with `stopWorker`. Each reclaimed job returns to `pending` at once, with no backoff, as a failed attempt: `lastAttemptAt` is stamped and `lastAttemptError` holds a serialized `JobAttemptReclaimedError` (carrying `reclaimedBy`, the reclaiming worker). After the commit the worker runner:
+A worker whose lease expired holds jobs no one runs. An idle worker runner reclaims them: each iteration with an idle slot, it lists up to eight expired workers of any job type, picks one at random, locks its row, checks it is still expired, and in one transaction reschedules every job running under it and deletes the row with `stopWorker`. Each reclaimed job returns to `pending` as a failed attempt: `consecutiveFailures` goes up by 1, `lastAttemptAt` is stamped, `lastAttemptError` holds a serialized `JobAttemptReclaimedError` (carrying `reclaimedBy`, the reclaiming worker), and the job backs off like any failure, so a job that keeps crashing its worker is not picked up again at once. The reclaiming worker takes the `backoffConfig` of its processor for that job type, or its own default when it does not run that type. After the commit the worker runner:
 
 1. Emits `jobAttemptReclaimed` (with `reclaimedFrom` naming the expired worker) and `jobRescheduled` observability events per job
 2. Notifies with one `notifyJobAttemptsLost` call carrying every reclaimed job id, so a handler still running on the expired worker aborts
@@ -165,10 +165,10 @@ A worker whose lease expired holds jobs no one runs. An idle worker runner recla
 When a job handler throws before a `complete` commits, or returns without a committed `complete`, the worker runner reschedules it with exponential backoff, in one atomic write under the attempt token:
 
 ```
-delay = min(initialDelayMs * multiplier^(attempt-1), maxDelayMs)
+delay = min(initialDelayMs * multiplier^(consecutiveFailures-1), maxDelayMs)
 ```
 
-Example with defaults: 10s → 20s → 40s → 80s → 160s → 300s → 300s...
+`consecutiveFailures` counts the failed attempts in a row, including this one, so any other outcome — `complete({ reschedule })` or a client `rescheduleJob` — starts the next failure at `initialDelayMs` again. Example with defaults: 10s → 20s → 40s → 80s → 160s → 300s → 300s...
 
 See [Job Processing](../job-processing/) for details on error handling and abort signals.
 

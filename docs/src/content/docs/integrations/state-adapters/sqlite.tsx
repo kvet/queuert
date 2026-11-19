@@ -481,9 +481,11 @@ const Page = () => (
       <code>{"{prefix}"}schema_fence_v2</code> table, the write fence of the adapter's schema
       version. A breaking migration, such as <code>002_schema_v2</code>, drops the fence tables of
       older versions, so code older than the schema fails each write with{" "}
-      <code>SchemaFencedError</code> and changes nothing, instead of corrupting state. Reads still
-      work, and older workers report the error through <code>workerError</code> and keep retrying.
-      Stop them once you have deployed the newer version.
+      <code>SchemaFencedError</code> and changes nothing, instead of corrupting state.{" "}
+      <code>002_schema_v2</code> also converts <code>last_attempt_error</code> to plain text, so
+      code older than it fails to read a job that holds an error. Older workers report the errors
+      through <code>workerError</code> and keep retrying. Stop them once you have deployed the newer
+      version.
     </p>
 
     <h2>Schema</h2>

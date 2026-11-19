@@ -80,6 +80,8 @@ export const JobDetail = () => {
           {(data) => {
             const job = () => data().job;
             const phase = () => jobPhase(job(), now());
+            const lastFailure = () => job().lastAttemptError ?? undefined;
+            const requestedReason = () => job().lastRescheduleReason ?? undefined;
             const running = () => {
               const value = job();
               return value.status === "running" ? value : undefined;
@@ -138,6 +140,11 @@ export const JobDetail = () => {
                         >
                           <span class="inline-flex items-center gap-2">
                             {job().attempt} <Pips count={job().attempt} />
+                            <Show when={job().consecutiveFailures > 0}>
+                              <span class="text-xs text-fg-muted">
+                                · {job().consecutiveFailures} failed in a row
+                              </span>
+                            </Show>
                           </span>
                         </Show>
                       </Fact>
@@ -154,6 +161,17 @@ export const JobDetail = () => {
                             hint="When a running attempt was last rescheduled, after an error or by its handler."
                           >
                             <Time date={at()} />
+                          </Fact>
+                        )}
+                      </Show>
+                      <Show when={requestedReason()}>
+                        {(reason) => (
+                          <Fact
+                            label="Reschedule reason"
+                            hint="The reason a handler or client gave when it last rescheduled the job."
+                            wide
+                          >
+                            <span class="break-words">{reason()}</span>
                           </Fact>
                         )}
                       </Show>
@@ -222,7 +240,7 @@ export const JobDetail = () => {
                 </div>
 
                 <div class="flex min-w-0 flex-col gap-6">
-                  <Show when={job().lastAttemptError}>
+                  <Show when={lastFailure()}>
                     {(error) => (
                       <Box
                         title={

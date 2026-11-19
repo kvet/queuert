@@ -123,6 +123,8 @@ export const createJobsGroup: ConformanceGroup<StateAdapterConformanceContext> =
         assert.equal(job.completedAt, null);
         assert.equal(job.completedBy, null);
         assert.equal(job.lastAttemptError, null);
+        assert.equal(job.lastRescheduleReason, null);
+        assert.equal(job.consecutiveFailures, 0);
         assert.equal(job.lastAttemptAt, null);
         assert.equal(job.attemptAt, null);
         assert.equal(job.attemptBy, null);

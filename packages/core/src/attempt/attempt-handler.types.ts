@@ -38,6 +38,7 @@ type AttemptContinueWithOutcome<
             TContinuationTypeName
           >;
         }[JobTypeContinuation<TJobTypeDefinitions, TJobTypeName>];
+        reason?: never;
       };
 
 type AttemptOutputOutcome<
@@ -48,9 +49,17 @@ type AttemptOutputOutcome<
     ? never
     : {
         output: JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "output">;
+        reason?: never;
       };
 
-type AttemptRescheduleOutcome = { reschedule: ScheduleOptions };
+type AttemptRescheduleOutcome = {
+  reschedule: ScheduleOptions;
+  /**
+   * Why the job comes back later, stored as the job's `lastRescheduleReason`. Keep it short; longer
+   * reasons are truncated to 10,000 characters.
+   */
+  reason?: string;
+};
 
 /** Every outcome `complete` accepts, as a single union. */
 export type AttemptOutcome<
@@ -228,4 +237,5 @@ export type AnyCompleteOptions = BaseTxContext & {
   output?: unknown;
   continueWith?: AnyNewJob;
   reschedule?: ScheduleOptions;
+  reason?: string;
 };

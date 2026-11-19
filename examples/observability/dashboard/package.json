@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@queuert/dashboard": "workspace:*",
+    "@queuert/helpers": "workspace:*",
     "@queuert/sqlite": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@types/better-sqlite3": "9.6.0",

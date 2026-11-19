@@ -54,7 +54,7 @@ Keep work that must succeed for the job to count as done inside the transaction 
 
 ## What This Means in Practice
 
-- **Any unhandled error before the commit → reschedule with backoff.** Whether the error occurs before your transaction or inside it — the job is always rescheduled. Backoff follows the first `backoffConfig` set on the processor, its processor registry or the worker, or else the default, which starts at 10s, doubles with each attempt and caps at 300s. A handler that returns without a committed `complete` is rescheduled the same way.
+- **Any unhandled error before the commit → reschedule with backoff.** Whether the error occurs before your transaction or inside it — the job is always rescheduled. Backoff follows the first `backoffConfig` set on the processor, its processor registry or the worker, or else the default, which starts at 10s, doubles with each failure in a row and caps at 300s. A handler that returns without a committed `complete` is rescheduled the same way.
 - **No corrupted state.** Your transaction ensures that partial SQL work is never committed when an error occurs.
 - **No orphaned continuations.** If `complete` was called with `continueWith` and the transaction throws afterward, both the continuation job and the completion are rolled back.
 - **Blocked jobs stay blocked.** If a blocker job's completion is rolled back, dependent jobs remain correctly blocked.

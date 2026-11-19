@@ -195,11 +195,12 @@ const Page = () => (
     <DashboardDemo view="chain-detail" title="Dashboard chain detail" />
     <p>
       Shows one chain with its jobs as a vertical sequence, oldest first. Each job shows its status,
-      the last error and attempt count if it was rescheduled after an error (with a{" "}
-      <strong>Run now</strong> button while the next attempt is still scheduled), and the blocker
-      chains it waits on (or waited on) with a "done / total" count. Expand <strong>Details</strong>{" "}
-      to see a job's input and, for the tail job, its output. Runs of three or more repeated
-      completed jobs of the same type are folded into one item that can be expanded.
+      how many attempts in a row failed, the last error and attempt count if it was rescheduled
+      after an error (with a <strong>Run now</strong> button while the next attempt is still
+      scheduled), and the blocker chains it waits on (or waited on) with a "done / total" count. A
+      job rescheduled with a reason shows that reason. Expand <strong>Details</strong> to see a
+      job's input and, for the tail job, its output. Runs of three or more repeated completed jobs
+      of the same type are folded into one item that can be expanded.
     </p>
     <p>
       While the chain runs, its header names the current job and that job's status, since a running
@@ -225,11 +226,13 @@ const Page = () => (
     <h3>Job detail</h3>
     <DashboardDemo view="job-detail" title="Dashboard job detail" />
     <p>
-      Shows one job, top to bottom: its attempts and timing, the current attempt's worker, linked to
-      its page, with its start time and its deadline while it runs, or the worker that completed it,
-      its last error if any, input, the job it continued to or its output, and the blocker chains it
-      waited on. A pending job scheduled in the future gets a <strong>Run now</strong> button that
-      makes it due immediately; a failure is reported under the button.
+      Shows one job, top to bottom: its attempts, with how many failed in a row, and timing, the
+      reason its handler or a client gave when it last rescheduled it, the current attempt's worker,
+      linked to its page, with its start time and its deadline while it runs, or the worker that
+      completed it, the error of its last attempt if that attempt failed, input, the job it
+      continued to or its output, and the blocker chains it waited on. A pending job scheduled in
+      the future gets a <strong>Run now</strong> button that makes it due immediately; a failure is
+      reported under the button.
     </p>
 
     <h3>Worker list</h3>

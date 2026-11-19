@@ -72,13 +72,16 @@ const createAttemptWrites = (
 
   const complete = syncAsync(function* (options: AnyCompleteOptions) {
     closed.throwIfTripped("complete cannot be called after the attempt handler has ended");
-    const { output, continueWith, reschedule, ...txCtxFields } = options;
+    const { output, continueWith, reschedule, reason, ...txCtxFields } = options;
     const outcomeCount =
       Number("output" in options) +
       Number("continueWith" in options) +
       Number("reschedule" in options);
     if (outcomeCount !== 1) {
       throw new Error("complete requires exactly one of output, continueWith or reschedule");
+    }
+    if (reason !== undefined && !("reschedule" in options)) {
+      throw new Error("complete accepts reason only together with reschedule");
     }
     const txCtx = requireTxCtx(helpers.stateAdapter, txCtxFields, "complete");
     inProgress.throwIfTripped();
@@ -90,7 +93,7 @@ const createAttemptWrites = (
         "reschedule" in options
           ? (yield* runRescheduleJobs.steps(helpers, {
               txCtx,
-              jobs: [{ jobId: stateJob.id, schedule: reschedule, attemptToken }],
+              jobs: [{ jobId: stateJob.id, schedule: reschedule, reason, attemptToken }],
             }))[0]
           : continueWith === undefined
             ? yield* runCompleteChain.steps(helpers, {
@@ -225,7 +228,9 @@ const rescheduleFailedAttempt = async (
       jobs: [
         {
           jobId: stateJob.id,
-          schedule: { afterMs: calculateBackoffMs(stateJob.attempt, backoffConfig) },
+          schedule: {
+            afterMs: calculateBackoffMs(stateJob.consecutiveFailures + 1, backoffConfig),
+          },
           error: serializeError(failure),
           attemptToken,
         },
@@ -323,6 +328,10 @@ export const runAttempt = async ({
     chainCompleted:
       finished.completedAt !== null && finished.continuedToId === null
         ? { output: finished.output }
+        : undefined,
+    rescheduled:
+      finished.completedAt === null
+        ? { reason: finished.lastRescheduleReason ?? undefined }
         : undefined,
   });
   if (handlerError !== undefined) {

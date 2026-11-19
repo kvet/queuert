@@ -18,7 +18,15 @@ describe("jobPhase", () => {
 
   it("maps running jobs and flags an error left by an earlier attempt", () => {
     expect(jobPhase(runningJob(), now)).toEqual({ phase: "running", hadError: false });
-    expect(jobPhase(runningJob({ lastAttemptError: "boom" }), now)).toEqual({
+    expect(
+      jobPhase(
+        runningJob({
+          consecutiveFailures: 1,
+          lastAttemptError: "boom",
+        }),
+        now,
+      ),
+    ).toEqual({
       phase: "running",
       hadError: true,
     });
@@ -27,16 +35,22 @@ describe("jobPhase", () => {
   it("maps a pending job with an error to rescheduledAfterError, whether it is due or not", () => {
     const future = pendingJob({
       attempt: 2,
+      consecutiveFailures: 2,
       lastAttemptError: "boom",
       scheduledAt: new Date(20_000),
     });
-    const due = pendingJob({ attempt: 2, lastAttemptError: "boom", scheduledAt: new Date(5000) });
+    const due = pendingJob({
+      attempt: 2,
+      consecutiveFailures: 2,
+      lastAttemptError: "boom",
+      scheduledAt: new Date(5000),
+    });
 
     expect(jobPhase(future, now)).toEqual({ phase: "rescheduledAfterError" });
     expect(jobPhase(due, now)).toEqual({ phase: "rescheduledAfterError" });
   });
 
-  it("maps an error-free pending job by scheduledAt and flags attempts already started", () => {
+  it("maps a pending job without failures in a row by scheduledAt and flags attempts already started", () => {
     expect(jobPhase(pendingJob({ scheduledAt: new Date(20_000) }), now)).toEqual({
       phase: "scheduled",
       rescheduled: false,
@@ -53,6 +67,27 @@ describe("jobPhase", () => {
       phase: "due",
       rescheduled: true,
     });
+    expect(
+      jobPhase(
+        pendingJob({
+          scheduledAt: new Date(20_000),
+          attempt: 1,
+          lastRescheduleReason: "waiting",
+        }),
+        now,
+      ),
+    ).toEqual({ phase: "scheduled", rescheduled: true });
+    expect(
+      jobPhase(
+        pendingJob({
+          scheduledAt: new Date(0),
+          attempt: 2,
+          lastAttemptError: "boom",
+          lastRescheduleReason: "retry now",
+        }),
+        now,
+      ),
+    ).toEqual({ phase: "due", rescheduled: true });
   });
 
   it("splits completed jobs into continued and tail, flagging workerless completion", () => {

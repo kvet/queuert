@@ -9,6 +9,7 @@ import type {
   JobCompletionData,
   JobProcessingData,
   JobReclaimData,
+  JobRescheduleData,
   WorkerBasicData,
 } from "./log.ts";
 
@@ -70,6 +71,8 @@ export type JobAttemptSpanResult =
       continuedWith?: { jobId: string; jobTypeName: string };
       /** `output` is the encoded (stored) form — see {@link ObservabilityAdapter}. */
       chainCompleted?: { output: unknown };
+      /** Set when the attempt ended with `complete({ reschedule })`, with its `reason` if given. */
+      rescheduled?: { reason?: string };
     }
   | {
       status: "failed";
@@ -152,7 +155,7 @@ export type ObservabilityAdapter = {
     },
   ) => void;
   jobCompleted: (data: JobCompletionData) => void;
-  jobRescheduled: (data: JobBasicData & { scheduledAt: Date }) => void;
+  jobRescheduled: (data: JobRescheduleData) => void;
   jobBlocked: (data: JobBasicData & { blockedByChains: ChainBasicData[] }) => void;
   jobUnblocked: (data: JobBasicData & { unblockedByChain: ChainBasicData }) => void;
 

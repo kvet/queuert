@@ -620,8 +620,10 @@ export const createInProcessState = (
     continuedToId: null,
     output: null,
     attempt: 0,
-    lastAttemptError: null,
+    lastRescheduleReason: null,
+    consecutiveFailures: 0,
     lastAttemptAt: null,
+    lastAttemptError: null,
     attemptAt: null,
     attemptBy: null,
     attemptToken: null,
@@ -778,6 +780,8 @@ export const createInProcessState = (
             completedBy: workerId ?? null,
             continuedToId: id,
             output: null,
+            lastRescheduleReason: null,
+            consecutiveFailures: 0,
             lastAttemptError: null,
             attemptAt: null,
             attemptBy: null,
@@ -807,6 +811,8 @@ export const createInProcessState = (
             completedAt: now,
             completedBy: workerId ?? null,
             output: output ?? null,
+            lastRescheduleReason: null,
+            consecutiveFailures: 0,
             lastAttemptError: null,
             attemptAt: null,
             attemptBy: null,
@@ -828,7 +834,7 @@ export const createInProcessState = (
       write(txCtx, (journal) => {
         const now = new Date(clock());
         const resultById = new Map<string, StateJob | undefined>();
-        return jobInputs.map(({ jobId, schedule, error, attemptToken }) => {
+        return jobInputs.map(({ jobId, schedule, error, reason, attemptToken }) => {
           if (resultById.has(jobId)) return resultById.get(jobId);
           const slot = jobs.get(jobId);
           const state = slot?.state;
@@ -838,25 +844,20 @@ export const createInProcessState = (
             state.status !== "completed" &&
             holdsAttempt(state, attemptToken)
           ) {
-            const rescheduled: StateJobInfo =
-              state.status === "running"
-                ? {
-                    ...state,
-                    status: "pending",
-                    scheduledAt: resolveScheduledAt(schedule, now),
-                    lastAttemptAt: now,
-                    lastAttemptError: error ?? null,
-                    attemptAt: null,
-                    attemptBy: null,
-                    attemptToken: null,
-                  }
-                : {
-                    ...state,
-                    scheduledAt: resolveScheduledAt(schedule, now),
-                    attemptAt: null,
-                    attemptBy: null,
-                    attemptToken: null,
-                  };
+            const running = state.status === "running";
+            const failed = running && error !== undefined;
+            const rescheduled: StateJobInfo = {
+              ...state,
+              status: running ? "pending" : state.status,
+              scheduledAt: resolveScheduledAt(schedule, now),
+              lastAttemptAt: running ? now : state.lastAttemptAt,
+              lastRescheduleReason: failed ? null : (reason ?? null),
+              consecutiveFailures: failed ? state.consecutiveFailures + 1 : 0,
+              lastAttemptError: running ? (error ?? null) : state.lastAttemptError,
+              attemptAt: null,
+              attemptBy: null,
+              attemptToken: null,
+            };
             setJob(journal, slot!, rescheduled);
             result = jobView(slot!);
           }

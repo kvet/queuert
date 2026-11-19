@@ -63,8 +63,10 @@ type DbJob = {
   completed_by: string | null;
 
   attempt: number;
-  last_attempt_error: string | null;
+  consecutive_failures: number;
   last_attempt_at: string | null;
+  last_attempt_error: string | null;
+  last_reschedule_reason: string | null;
 
   attempt_at: string | null;
   attempt_by: string | null;
@@ -254,6 +256,18 @@ CREATE TABLE {{schema}}.{{table_prefix}}schema_fence_v1 (id integer PRIMARY KEY)
       up: async ({ assertLockHeld }) => {
         const v1Columns =
           "created_at, scheduled_at, completed_at, last_attempt_at, attempt_at, chain_completed_at, chain_index, attempt, id, chain_id, continued_to_id, status, chain_status, type_name, chain_deduplication_key, chain_trace_context, trace_context, last_attempt_error, input, output, attempt_by, completed_by, attempt_token";
+        const v2Columns = `${v1Columns}, consecutive_failures`;
+        const v2Values = (row: string) =>
+          [
+            ...v1Columns
+              .split(", ")
+              .map((column) =>
+                column === "last_attempt_error"
+                  ? `${row}last_attempt_error #>> '{}'`
+                  : `${row}${column}`,
+              ),
+            `(${row}last_attempt_error IS NOT NULL)::integer`,
+          ].join(", ");
         const v1Indexes = [
           ["chain_index_idx", "UNIQUE INDEX", "(chain_id, chain_index) WHERE chain_index > 0"],
           [
@@ -310,6 +324,7 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job_v2 (
 
   chain_index                   integer NOT NULL,
   attempt                       integer NOT NULL DEFAULT 0,
+  consecutive_failures          integer NOT NULL DEFAULT 0,
 
   id                            {{job_id_type}} PRIMARY KEY,
   chain_id                      {{job_id_type}} NOT NULL,
@@ -323,7 +338,8 @@ CREATE TABLE IF NOT EXISTS {{schema}}.{{table_prefix}}job_v2 (
   chain_deduplication_key       text,
   chain_trace_context           text,
   trace_context                 text,
-  last_attempt_error            jsonb,
+  last_attempt_error            text,
+  last_reschedule_reason        text,
   input                         jsonb,
   output                        jsonb,
 
@@ -382,12 +398,9 @@ BEGIN
   IF TG_OP = 'DELETE' THEN
     DELETE FROM {{schema}}.{{table_prefix}}job_v2 WHERE id = OLD.id;
   ELSE
-    INSERT INTO {{schema}}.{{table_prefix}}job_v2 (${v1Columns})
-    VALUES (${v1Columns
-      .split(", ")
-      .map((column) => `NEW.${column}`)
-      .join(", ")})
-    ON CONFLICT (id) DO UPDATE SET ${v1Columns
+    INSERT INTO {{schema}}.{{table_prefix}}job_v2 (${v2Columns})
+    VALUES (${v2Values("NEW.")})
+    ON CONFLICT (id) DO UPDATE SET ${v2Columns
       .split(", ")
       .filter((column) => column !== "id")
       .map((column) => `${column} = EXCLUDED.${column}`)
@@ -434,8 +447,8 @@ WITH source AS (
   FOR KEY SHARE
 ),
 copied AS (
-  INSERT INTO {{schema}}.{{table_prefix}}job_v2 (${v1Columns}, blocking)
-  SELECT ${v1Columns}, chain_index = 0 AND EXISTS (
+  INSERT INTO {{schema}}.{{table_prefix}}job_v2 (${v2Columns}, blocking)
+  SELECT ${v2Values("")}, chain_index = 0 AND EXISTS (
     SELECT 1 FROM {{schema}}.{{table_prefix}}job_blocker jb WHERE jb.blocked_by_chain_id = source.id
   )
   FROM source
@@ -550,8 +563,10 @@ const DB_JOB_COLUMNS = [
   "completed_at",
   "completed_by",
   "attempt",
-  "last_attempt_error",
+  "consecutive_failures",
   "last_attempt_at",
+  "last_attempt_error",
+  "last_reschedule_reason",
   "attempt_at",
   "attempt_by",
   "attempt_token",
@@ -604,8 +619,10 @@ const mapDbJobToStateJobInfo = (dbJob: DbJob): StateJobInfo => ({
   completedBy: dbJob.completed_by,
 
   attempt: dbJob.attempt,
-  lastAttemptError: dbJob.last_attempt_error,
+  consecutiveFailures: dbJob.consecutive_failures,
   lastAttemptAt: dbJob.last_attempt_at ? new Date(dbJob.last_attempt_at) : null,
+  lastAttemptError: dbJob.last_attempt_error,
+  lastRescheduleReason: dbJob.last_reschedule_reason,
 
   attemptAt: dbJob.attempt_at ? new Date(dbJob.attempt_at) : null,
   attemptBy: dbJob.attempt_by,
@@ -795,8 +812,10 @@ export const createPgStateAdapter = <
     completed_at: t["string?"](),
     completed_by: workerIdNullableDataType,
     attempt: t.number(),
-    last_attempt_error: t["json?"]<string>(),
+    consecutive_failures: t.number(),
     last_attempt_at: t["string?"](),
+    last_attempt_error: t["string?"](),
+    last_reschedule_reason: t["string?"](),
     attempt_at: t["string?"](),
     attempt_by: workerIdNullableDataType,
     attempt_token: t["uuid?"](),
@@ -1193,7 +1212,9 @@ completed AS (
     completed_by = d.worker_id,
     continued_to_id = d.new_id,
     output = NULL,
+    consecutive_failures = 0,
     last_attempt_error = NULL,
+    last_reschedule_reason = NULL,
     attempt_at = NULL,
     attempt_by = NULL,
     attempt_token = NULL
@@ -1286,7 +1307,9 @@ WITH input_data AS (
 done AS (
   UPDATE {{schema}}.{{table_prefix}}job j
   SET status = 'completed',
+    consecutive_failures = 0,
     last_attempt_error = NULL,
+    last_reschedule_reason = NULL,
     attempt_at = NULL,
     attempt_by = NULL,
     attempt_token = NULL,
@@ -1356,16 +1379,18 @@ LEFT JOIN done dh ON dh.id = d.chain_id
           "rescheduleJobs",
           `
 WITH input_data AS (
-  SELECT job_id, at, after_ms, error, attempt_token
-  FROM unnest($1::{{job_id_type}}[], $2::timestamptz[], $3::double precision[], $4::text[], $5::uuid[])
-    AS t(job_id, at, after_ms, error, attempt_token)
+  SELECT job_id, at, after_ms, error, reason, attempt_token
+  FROM unnest($1::{{job_id_type}}[], $2::timestamptz[], $3::double precision[], $4::text[], $5::text[], $6::uuid[])
+    AS t(job_id, at, after_ms, error, reason, attempt_token)
 ),
 updated AS (
   UPDATE {{schema}}.{{table_prefix}}job j
   SET status = CASE WHEN j.status = 'running' THEN 'pending' ELSE j.status END,
     scheduled_at = GREATEST(COALESCE(d.at, statement_timestamp() + (d.after_ms * interval '1 millisecond'), statement_timestamp()), statement_timestamp()),
     last_attempt_at = CASE WHEN j.status = 'running' THEN statement_timestamp() ELSE j.last_attempt_at END,
-    last_attempt_error = CASE WHEN j.status = 'running' THEN d.error::jsonb ELSE j.last_attempt_error END,
+    consecutive_failures = CASE WHEN j.status = 'running' AND d.error IS NOT NULL THEN j.consecutive_failures + 1 ELSE 0 END,
+    last_attempt_error = CASE WHEN j.status = 'running' THEN d.error ELSE j.last_attempt_error END,
+    last_reschedule_reason = CASE WHEN j.status = 'running' AND d.error IS NOT NULL THEN NULL ELSE d.reason END,
     attempt_at = NULL,
     attempt_by = NULL,
     attempt_token = NULL
@@ -1387,6 +1412,7 @@ JOIN {{schema}}.{{table_prefix}}job h ON h.id = u.chain_id
               t.array<string | null>(),
               t.array<string | null>(),
               t.array<string | null>(),
+              t.array<string | null>(),
             ],
             columns: dbStateJobColumns,
           },
@@ -1395,7 +1421,8 @@ JOIN {{schema}}.{{table_prefix}}job h ON h.id = u.chain_id
           jobs.map((job) => job.jobId as string),
           jobs.map((job) => job.schedule?.at?.toISOString() ?? null),
           jobs.map((job) => (job.schedule?.afterMs != null ? String(job.schedule.afterMs) : null)),
-          jobs.map((job) => (job.error !== undefined ? JSON.stringify(job.error) : null)),
+          jobs.map((job) => job.error ?? null),
+          jobs.map((job) => job.reason ?? null),
           jobs.map((job) => job.attemptToken ?? null),
         ],
       );

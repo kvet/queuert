@@ -109,7 +109,11 @@ await using workerRunner = createWorkerRunner({
 
           if (response.status === 429) {
             return stateAdapter.withTransaction(async (txCtx) =>
-              complete({ ...txCtx, reschedule: { afterMs: response.retryAfterMs } }),
+              complete({
+                ...txCtx,
+                reschedule: { afterMs: response.retryAfterMs },
+                reason: "rate limited",
+              }),
             );
           }
 
@@ -160,10 +164,16 @@ const reminder = await stateAdapter.withTransaction(async (txCtx) =>
 
 // #region push-back
 const pushedBack = await stateAdapter.withTransaction(async (txCtx) =>
-  client.rescheduleJob({ ...txCtx, id: reminder.id, schedule: { afterMs: 2 * 60 * 60 * 1000 } }),
+  client.rescheduleJob({
+    ...txCtx,
+    id: reminder.id,
+    schedule: { afterMs: 2 * 60 * 60 * 1000 },
+    reason: "snoozed by user",
+  }),
 );
 // #endregion
 assert.equal(pushedBack.status, "pending");
+assert.equal(pushedBack.lastRescheduleReason, "snoozed by user");
 assert.ok(pushedBack.scheduledAt.getTime() > Date.now() + 60 * 60 * 1000);
 
 // #region run-now

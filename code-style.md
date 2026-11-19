@@ -69,6 +69,9 @@ Once a concept has a word, that word is the only one for it — everywhere, incl
 - **`attempt`**: a job has `attempt`s, not "tries" or "runs"; "try" is reserved for transaction callbacks (below).
 - **`try`**: one run of a transaction callback that a driver or loop may rerun; `txHooks.retryBoundary` separates tries. It is never called an "attempt", which is a job's.
 - **`reschedule`**: a job is `reschedule`d, not "requeued" or "retried".
+- **consecutive failures**: `consecutiveFailures` / `consecutive_failures`, the attempts in a row that failed or were reclaimed; never a "streak" or "retry count".
+- **attempt error**: `lastAttemptError` / `last_attempt_error`, the serialized error of the last attempt when it failed or was reclaimed; never a "failure reason".
+- **reschedule reason**: `lastRescheduleReason` / `last_reschedule_reason`, the `reason` a handler or client gave for the last reschedule; never a "note" or "message".
 - **`continueWith`**: a chain `continueWith`s, not "chains to" or "forwards".
 - **`entry`**: an `entry` job type is one that can start a chain; don't reuse "entry" for list items or other inputs.
 - **`input`**: a job's payload; don't use it as a suffix for "what a caller passes" when the type also carries an `input` field.

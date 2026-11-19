@@ -98,7 +98,7 @@ attemptHandler: async ({ job, complete }) => {
 
 - `complete({ ...txCtx, output })` — completes the job and its chain, and unblocks jobs waiting on the chain.
 - `complete({ ...txCtx, continueWith: { typeName, input, blockers?, schedule? } })` — completes the job and adds the next job to the chain.
-- `complete({ ...txCtx, reschedule: { afterMs } | { at } })` — returns the job to pending without counting the attempt as failed.
+- `complete({ ...txCtx, reschedule: { afterMs } | { at }, reason? })` — returns the job to pending without counting the attempt as failed, setting `consecutiveFailures` to 0 and storing `reason` as `lastRescheduleReason`.
 
 The transaction context is required, including every field the provider's context type requires, such as the `txHooks` of a provider that carries them in its context. `complete` performs several writes (for example completing the chain and unblocking its dependents), so it always needs your transaction. It throws if the state adapter's `isTransaction` reports the context as outside an open transaction, for example when you pass a pool or the root ORM handle. On PostgreSQL, Queuert supports only READ COMMITTED, the default; see [PostgreSQL State Adapter](/queuert/integrations/state-adapters/postgres/#isolation-level). On SQLite with an async provider it must hold the provider's write lock; see [SQLite State Adapter](/queuert/integrations/state-adapters/sqlite/#asyncrwlock). On Redis it must be the context the adapter's `withTransaction` passed; see [Redis State Adapter](/queuert/integrations/state-adapters/redis/#transactions).
 
@@ -152,7 +152,7 @@ See [Job Processing Reliability](../processing-reliability/) for each scenario w
 
 ## Abort Signal
 
-Every attempt handler receives a `signal` that aborts when the worker is stopping, when its worker lost its lease, or when the attempt is lost (taken by another worker, deleted, or completed externally). Your own committed `complete` never aborts it. On abort, stop working and commit a `complete` — with partial output or `{ reschedule }` — or throw to reschedule with backoff. If the attempt was lost, `complete` and `fence` write nothing and throw. A handler that returns without a committed `complete` fails the attempt.
+Every attempt handler receives a `signal` that aborts when the worker is stopping, when its worker lost its lease, or when the attempt is lost (taken by another worker, deleted, or completed externally). Your own committed `complete` never aborts it. On abort, stop working and commit a `complete` — with partial output or `{ reschedule }` — or throw, which fails the attempt: it adds to `consecutiveFailures` and reschedules with backoff. A worker that is only stopping, as on every deploy, is no fault of the job, so a handler that expects it reschedules with `complete({ reschedule })` instead of throwing. If the attempt was lost, `complete` and `fence` write nothing and throw. A handler that returns without a committed `complete` fails the attempt.
 
 The batch handler below stops at the next item once its `signal` aborts and completes with the number of items it processed, so a worker that stops mid-batch still commits partial output:
 

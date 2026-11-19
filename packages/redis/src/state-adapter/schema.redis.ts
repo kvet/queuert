@@ -91,6 +91,7 @@ export const opaqueRecordFields: string[] = [
   "input",
   "output",
   "lastAttemptError",
+  "lastRescheduleReason",
   "traceContext",
   "chainTraceContext",
   "deduplicationKey",

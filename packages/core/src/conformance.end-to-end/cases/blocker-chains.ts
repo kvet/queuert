@@ -361,9 +361,12 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
                       );
                     }
 
-                    assert.ok(job.lastAttemptError?.includes("BlockerLimitExceededError"));
+                    assert.ok(typeof job?.lastAttemptError === "string");
+
+                    assert.ok(job.lastAttemptError.includes("BlockerLimitExceededError"));
+                    assert.ok(typeof job?.lastAttemptError === "string");
                     assert.ok(
-                      job.lastAttemptError?.includes(
+                      job.lastAttemptError.includes(
                         `exceeding the limit of ${stateAdapter.config.maxBlockersPerJob}`,
                       ),
                     );

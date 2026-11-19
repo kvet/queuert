@@ -67,6 +67,38 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
       }),
     },
     {
+      name: "stores a client reschedule reason truncated to 10,000 characters",
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
+        const jobTypes = defineJobTypes<{
+          task: { entry: true; input: null; output: null };
+        }>();
+        const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+        const chain = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "task",
+              input: null,
+              schedule: { afterMs: 60 * 60 * 1000 },
+            }),
+          ),
+        );
+
+        const rescheduled = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.rescheduleJob({ ...txCtx, id: chain.id, reason: "x".repeat(20_000) }),
+          ),
+        );
+
+        assert.equal(rescheduled.lastRescheduleReason, `${"x".repeat(10_000)}… [truncated]`);
+        assert.equal(rescheduled.lastAttemptError, null);
+      }),
+    },
+    {
       name: "reschedules a pending job to a future absolute date",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));

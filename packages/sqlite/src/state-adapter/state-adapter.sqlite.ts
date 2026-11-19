@@ -70,6 +70,7 @@ const jobColumns = [
   "chain_completed_at",
   "chain_index",
   "attempt",
+  "consecutive_failures",
   "id",
   "chain_id",
   "continued_to_id",
@@ -83,6 +84,7 @@ const jobColumns = [
   "chain_trace_context",
   "trace_context",
   "last_attempt_error",
+  "last_reschedule_reason",
   "input",
   "output",
   "blocking",
@@ -165,8 +167,10 @@ const dbJobColumns = {
   completed_at: t["string?"](),
   completed_by: t["string?"](),
   attempt: t.number(),
+  consecutive_failures: t.number(),
   last_attempt_at: t["string?"](),
   last_attempt_error: t["string?"](),
+  last_reschedule_reason: t["string?"](),
   attempt_at: t["string?"](),
   attempt_by: t["string?"](),
   attempt_token: t["string?"](),
@@ -213,8 +217,10 @@ const dbChainRowColumns = {
   tail_completed_at: t["string?"](),
   tail_completed_by: t["string?"](),
   tail_attempt: t["number?"](),
+  tail_consecutive_failures: t["number?"](),
   tail_last_attempt_at: t["string?"](),
   tail_last_attempt_error: t["string?"](),
+  tail_last_reschedule_reason: t["string?"](),
   tail_attempt_at: t["string?"](),
   tail_attempt_by: t["string?"](),
   tail_attempt_token: t["string?"](),
@@ -387,6 +393,15 @@ CREATE INDEX {{table_prefix}}chain_blocking_idx
 ON {{table_prefix}}job (type_name, created_at)
 WHERE chain_index = 0 AND blocking = 1`),
       sql(/* sql */ `
+ALTER TABLE {{table_prefix}}job ADD COLUMN last_reschedule_reason TEXT`),
+      sql(/* sql */ `
+ALTER TABLE {{table_prefix}}job ADD COLUMN consecutive_failures INTEGER NOT NULL DEFAULT 0`),
+      sql(/* sql */ `
+UPDATE {{table_prefix}}job
+SET last_attempt_error = CASE WHEN json_valid(last_attempt_error) THEN json_extract(last_attempt_error, '$') ELSE last_attempt_error END,
+  consecutive_failures = 1
+WHERE last_attempt_error IS NOT NULL`),
+      sql(/* sql */ `
 CREATE TABLE {{table_prefix}}schema_fence_v2 (id INTEGER PRIMARY KEY)`),
       sql(/* sql */ `
 DROP TABLE {{table_prefix}}schema_fence_v1`),
@@ -460,8 +475,10 @@ const mapDbJobToStateJob = (row: DbJob): StateJobInfo => ({
   completedAt: row.completed_at ? sqliteDate(row.completed_at) : null,
   completedBy: row.completed_by,
   attempt: row.attempt,
-  lastAttemptError: parseJson(row.last_attempt_error) as string | null,
+  consecutiveFailures: row.consecutive_failures,
   lastAttemptAt: row.last_attempt_at ? sqliteDate(row.last_attempt_at) : null,
+  lastAttemptError: row.last_attempt_error,
+  lastRescheduleReason: row.last_reschedule_reason,
   attemptAt: row.attempt_at ? sqliteDate(row.attempt_at) : null,
   attemptBy: row.attempt_by,
   attemptToken: row.attempt_token,
@@ -1127,7 +1144,9 @@ SET status = 'completed',
   completed_by = d.worker_id,
   continued_to_id = d.new_id,
   output = NULL,
+  consecutive_failures = 0,
   last_attempt_error = NULL,
+  last_reschedule_reason = NULL,
   attempt_at = NULL,
   attempt_by = NULL,
   attempt_token = NULL
@@ -1210,7 +1229,9 @@ row_effects AS (
 )
 UPDATE {{table_prefix}}job
 SET status = CASE WHEN e.completes_job THEN 'completed' ELSE {{table_prefix}}job.status END,
+  consecutive_failures = CASE WHEN e.completes_job THEN 0 ELSE {{table_prefix}}job.consecutive_failures END,
   last_attempt_error = CASE WHEN e.completes_job THEN NULL ELSE {{table_prefix}}job.last_attempt_error END,
+  last_reschedule_reason = CASE WHEN e.completes_job THEN NULL ELSE {{table_prefix}}job.last_reschedule_reason END,
   attempt_at = CASE WHEN e.completes_job THEN NULL ELSE {{table_prefix}}job.attempt_at END,
   attempt_by = CASE WHEN e.completes_job THEN NULL ELSE {{table_prefix}}job.attempt_by END,
   attempt_token = CASE WHEN e.completes_job THEN NULL ELSE {{table_prefix}}job.attempt_token END,
@@ -1251,7 +1272,8 @@ RETURNING *
           job_id: job.jobId as string,
           at: job.schedule?.at?.toISOString().replace("T", " ").replace("Z", "") ?? null,
           after_ms: job.schedule?.afterMs ?? null,
-          error: job.error !== undefined ? JSON.stringify(job.error) : null,
+          error: job.error ?? null,
+          reason: job.reason ?? null,
           attempt_token: job.attemptToken ?? null,
         }));
         const payload = JSON.stringify(entries);
@@ -1267,6 +1289,7 @@ WITH input_data AS (
     json_extract(je.value, '$.at')       AS at,
     json_extract(je.value, '$.after_ms') AS after_ms,
     json_extract(je.value, '$.error')    AS error,
+    json_extract(je.value, '$.reason')   AS reason,
     json_extract(je.value, '$.attempt_token') AS attempt_token
   FROM json_each(?) AS je
 )
@@ -1278,7 +1301,9 @@ SET status = CASE WHEN {{table_prefix}}job.status = 'running' THEN 'pending' ELS
       datetime('now', 'subsec')),
     datetime('now', 'subsec')),
   last_attempt_at = CASE WHEN {{table_prefix}}job.status = 'running' THEN datetime('now', 'subsec') ELSE last_attempt_at END,
+  consecutive_failures = CASE WHEN {{table_prefix}}job.status = 'running' AND d.error IS NOT NULL THEN {{table_prefix}}job.consecutive_failures + 1 ELSE 0 END,
   last_attempt_error = CASE WHEN {{table_prefix}}job.status = 'running' THEN d.error ELSE last_attempt_error END,
+  last_reschedule_reason = CASE WHEN {{table_prefix}}job.status = 'running' AND d.error IS NOT NULL THEN NULL ELSE d.reason END,
   attempt_at = NULL,
   attempt_by = NULL,
   attempt_token = NULL

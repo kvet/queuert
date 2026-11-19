@@ -299,6 +299,13 @@ describe("AttemptComplete", () => {
       ).toBeFunction();
     });
 
+    it("rejects a reason without reschedule", () => {
+      expectTypeOf(async () =>
+        // @ts-expect-error reason goes only with reschedule
+        terminalCommit({ ...tx, output: { y: "done" }, reason: "why" }),
+      ).toBeFunction();
+    });
+
     it("rejects an output that does not match the job type", () => {
       expectTypeOf(async () =>
         // @ts-expect-error "terminal" outputs { y: string }

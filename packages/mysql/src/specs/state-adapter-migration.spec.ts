@@ -47,6 +47,18 @@ const killedAfterSchemaStatements = (
   };
 };
 
+const killedAt =
+  (statement: RegExp) =>
+  (stateProvider: Mysql2PoolProvider): Mysql2PoolProvider => ({
+    ...stateProvider,
+    executeSql: async (options) => {
+      if (statement.test(options.sql)) throw new Error("process killed");
+      return stateProvider.executeSql(options);
+    },
+  });
+
+const killedBeforeSchemaV2 = killedAt(/information_schema\.columns/);
+
 const defineMysqlMigrationSuite = async ({
   image,
   dialect,
@@ -109,6 +121,91 @@ const defineMysqlMigrationSuite = async ({
       },
     );
 
+    it("upgrades a schema v1 database, counting a stored error as one failure", async ({
+      createDatabase,
+    }) => {
+      const reference = await createDatabase();
+      await reference.createAdapter().migrateToLatest();
+      const database = await createDatabase();
+      await expect(database.createAdapter(killedBeforeSchemaV2).migrateToLatest()).rejects.toThrow(
+        "process killed",
+      );
+      const failedJobId = randomUUID();
+      const pendingJobId = randomUUID();
+      await database.pool.query(
+        "INSERT INTO queuert_job (id, chain_id, chain_index, type_name, chain_status, scheduled_at, attempt, last_attempt_error) VALUES (?, ?, 0, 'upgrade', 'running', UTC_TIMESTAMP(6), 2, ?), (?, ?, 0, 'upgrade', 'running', UTC_TIMESTAMP(6), 0, NULL)",
+        [
+          failedJobId,
+          failedJobId,
+          JSON.stringify('Error: "boom"\n    at handler'),
+          pendingJobId,
+          pendingJobId,
+        ],
+      );
+      const adapter = database.createAdapter();
+
+      expect(await adapter.migrateToLatest()).toEqual({
+        applied: ["002_schema_v2"],
+        skipped: ["001_schema_v1"],
+        reverted: [],
+        unrecognized: [],
+      });
+      const [failedJob, pendingJob] = await adapter.getJobs({
+        jobIds: [failedJobId, pendingJobId],
+      });
+      expect(failedJob).toMatchObject({
+        attempt: 2,
+        consecutiveFailures: 1,
+        lastAttemptError: 'Error: "boom"\n    at handler',
+        lastRescheduleReason: null,
+      });
+      expect(pendingJob).toMatchObject({
+        consecutiveFailures: 0,
+        lastAttemptError: null,
+        lastRescheduleReason: null,
+      });
+      expect(await database.shape()).toEqual(await reference.shape());
+    });
+
+    it.for([
+      ["drops the JSON last_attempt_error", /DROP COLUMN last_attempt_error/],
+      ["renames the text column into place", /RENAME COLUMN last_attempt_error_text/],
+    ] as const)(
+      "resumes a schema v2 upgrade killed before it %s",
+      async ([, killPoint], { createDatabase }) => {
+        const reference = await createDatabase();
+        await reference.createAdapter().migrateToLatest();
+        const database = await createDatabase();
+        await expect(
+          database.createAdapter(killedBeforeSchemaV2).migrateToLatest(),
+        ).rejects.toThrow("process killed");
+        const failedJobId = randomUUID();
+        await database.pool.query(
+          "INSERT INTO queuert_job (id, chain_id, chain_index, type_name, chain_status, scheduled_at, attempt, last_attempt_error) VALUES (?, ?, 0, 'upgrade', 'running', UTC_TIMESTAMP(6), 2, ?)",
+          [failedJobId, failedJobId, JSON.stringify("boom")],
+        );
+        await expect(database.createAdapter(killedAt(killPoint)).migrateToLatest()).rejects.toThrow(
+          "process killed",
+        );
+        const [fences] = await database.pool.query<RowDataPacket[]>(
+          "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name LIKE 'queuert_schema_fence_%'",
+        );
+        expect(fences).toEqual([]);
+        const adapter = database.createAdapter();
+
+        expect(await adapter.migrateToLatest()).toEqual({
+          applied: ["002_schema_v2"],
+          skipped: ["001_schema_v1"],
+          reverted: [],
+          unrecognized: [],
+        });
+        expect(await adapter.getJobs({ jobIds: [failedJobId] })).toMatchObject([
+          { consecutiveFailures: 1, lastAttemptError: "boom", lastRescheduleReason: null },
+        ]);
+        expect(await database.shape()).toEqual(await reference.shape());
+      },
+    );
+
     it("lets one of two concurrent migrators install the schema", async ({ createDatabase }) => {
       const database = await createDatabase();
 
@@ -124,12 +221,11 @@ const defineMysqlMigrationSuite = async ({
       createDatabase,
     }) => {
       const database = await createDatabase();
+      await expect(database.createAdapter(killedBeforeSchemaV2).migrateToLatest()).rejects.toThrow(
+        "process killed",
+      );
       const adapter = database.createAdapter();
-      await adapter.migrateToLatest();
       const { pool } = database;
-      await pool.query("ALTER TABLE queuert_job DROP COLUMN blocking");
-      await pool.query("RENAME TABLE queuert_schema_fence_v2 TO queuert_schema_fence_v1");
-      await pool.query("DELETE FROM queuert_migration WHERE name = '002_schema_v2'");
 
       const blockerChainId = randomUUID();
       const continuedBlockerChainId = randomUUID();

@@ -311,7 +311,9 @@ export type Client<
   /**
    * Reschedule a pending job by setting its `scheduledAt` from the optional
    * `schedule` (`{ at }` | `{ afterMs }`); omitting `schedule` reschedules to
-   * now. Past times clamp to now.
+   * now. Past times clamp to now. Sets `consecutiveFailures` to 0 and the
+   * job's `lastRescheduleReason` to the optional `reason`, keeping
+   * `lastAttemptError`.
    *
    * @throws {@link JobNotFoundError} if the job does not exist.
    * @throws {@link JobNotReschedulableError} if the job is not pending.
@@ -322,14 +324,18 @@ export type Client<
     options: {
       id: TJobId;
       schedule?: ScheduleOptions;
+      /** Why the job is rescheduled. Keep it short; longer reasons are truncated to 10,000 characters. */
+      reason?: string;
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => ModeResult<TMode, ResolvedJob<TJobId, TWorkerId, TJobTypeDefinitions, TJobTypeName>>;
 
   /**
    * Reschedule multiple pending jobs, setting each `scheduledAt` from the
-   * optional `schedule` (omitted = now, past times clamped to now). Validation
-   * is atomic — no job is rescheduled on failure. Returns jobs in input order.
-   * Empty `ids` returns `[]`.
+   * optional `schedule` (omitted = now, past times clamped to now). Sets each
+   * job's `consecutiveFailures` to 0 and its `lastRescheduleReason` to the
+   * optional `reason`, keeping `lastAttemptError`. Validation is atomic — no
+   * job is rescheduled on failure.
+   * Returns jobs in input order. Empty `ids` returns `[]`.
    *
    * @throws {@link JobsNotFoundError} (batch variant listing every offending id) if any input is missing.
    * @throws {@link JobsNotReschedulableError} (batch variant listing every offending id) if any input is not pending.
@@ -340,6 +346,8 @@ export type Client<
     options: {
       ids: TJobId[];
       schedule?: ScheduleOptions;
+      /** Why the jobs are rescheduled. Keep it short; longer reasons are truncated to 10,000 characters. */
+      reason?: string;
     } & GetStateAdapterTxContext<TStateAdapter>,
   ) => ModeResult<TMode, ResolvedJob<TJobId, TWorkerId, TJobTypeDefinitions, TJobTypeName>[]>;
 
@@ -932,17 +940,19 @@ export const createClient = <
       options: {
         id: TJobId;
         schedule?: ScheduleOptions;
+        reason?: string;
       } & GetStateAdapterTxContext<TStateAdapter>,
     ) =>
       runInMode(
         helpers,
         syncAsync(function* () {
-          const { id, schedule, ...rest } = options;
+          const { id, schedule, reason, ...rest } = options;
           try {
             const [job] = yield* step(
               client.rescheduleJobs<TJobTypeName>({
                 ids: [id],
                 schedule,
+                reason,
                 ...(rest as GetStateAdapterTxContext<TStateAdapter>),
               }),
             );
@@ -971,12 +981,13 @@ export const createClient = <
       options: {
         ids: TJobId[];
         schedule?: ScheduleOptions;
+        reason?: string;
       } & GetStateAdapterTxContext<TStateAdapter>,
     ) =>
       runInMode(
         helpers,
         syncAsync(function* () {
-          const { ids, schedule, ...rest } = options;
+          const { ids, schedule, reason, ...rest } = options;
           const txCtx = requireTxCtx(helpers.stateAdapter, rest, "rescheduleJobs");
 
           if (ids.length === 0) {
@@ -1020,7 +1031,7 @@ export const createClient = <
           assertReschedulable(existingJobs);
           const rescheduledOrMissing = yield* runRescheduleJobs.steps(helpers, {
             txCtx,
-            jobs: ids.map((id: TJobId) => ({ jobId: id, schedule })),
+            jobs: ids.map((id: TJobId) => ({ jobId: id, schedule, reason })),
           });
           return rescheduledOrMissing.map((stateJob, index) => {
             if (stateJob === undefined) {

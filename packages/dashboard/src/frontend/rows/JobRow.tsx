@@ -30,10 +30,7 @@ export const JobRow = (props: {
     props.job.status === "completed" && props.job.continuedToId === null
       ? props.job.output
       : undefined;
-  const failing = () =>
-    props.job.status !== "completed" && props.job.lastAttemptError != null
-      ? props.job.lastAttemptError
-      : undefined;
+  const failing = () => props.job.lastAttemptError ?? undefined;
 
   return (
     <Row href={`/jobs/${props.job.id}`} label={`Open job ${props.job.id}`} link={A}>

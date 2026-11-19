@@ -38,14 +38,25 @@ export const mysqlTables: SchemaTable[] = [
       { name: "completed_by", type: "same as worker.id", description: "Worker ID" },
       { name: "attempt", type: "INT", description: "Number of processing attempts" },
       {
+        name: "consecutive_failures",
+        type: "INT",
+        description:
+          "Attempts in a row that failed or were reclaimed; 0 after any other outcome or a client reschedule",
+      },
+      {
         name: "last_attempt_at",
         type: "DATETIME(6)",
-        description: "UTC — when the last failed attempt ended",
+        description: "UTC — when the last attempt that returned the job to pending ended",
       },
       {
         name: "last_attempt_error",
-        type: "JSON",
-        description: "Error from the last failed or reclaimed attempt",
+        type: "LONGTEXT",
+        description: "Serialized error of the last attempt when it failed or was reclaimed",
+      },
+      {
+        name: "last_reschedule_reason",
+        type: "TEXT",
+        description: "Reason a handler or client gave for the last reschedule",
       },
       {
         name: "attempt_at",

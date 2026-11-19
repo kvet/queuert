@@ -110,6 +110,17 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                           yield* step(
                             assertRejects(
                               () =>
+                                complete({
+                                  ...txCtx,
+                                  output: null,
+                                  ...({ reason: "why" } as object),
+                                }),
+                              /complete accepts reason only together with reschedule/,
+                            ),
+                          );
+                          yield* step(
+                            assertRejects(
+                              () =>
                                 // @ts-expect-error the caller's transaction context is required
                                 complete({ output: null }),
                               /complete requires a transaction context from the caller's transaction/,
@@ -210,7 +221,8 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                     assert.ok(job.attempt > 0);
                     if (job.attempt > 1) {
                       assert.ok(job.lastAttemptAt instanceof Date);
-                      assert.ok(job.lastAttemptError?.includes("Error: Simulated failure"));
+                      assert.ok(typeof job?.lastAttemptError === "string");
+                      assert.ok(job.lastAttemptError.includes("Error: Simulated failure"));
                     } else {
                       assert.equal(job.lastAttemptAt, null);
                       assert.equal(job.lastAttemptError, null);
@@ -247,7 +259,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
       }),
     },
     {
-      name: "clears lastAttemptError after a successful attempt following a failure",
+      name: "clears the last reschedule after a successful attempt following a failure",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -305,6 +317,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         const completedJob = yield* step(client.getJob({ id: chain.id }));
         assert.equal(completedJob?.status, "completed");
         assert.equal(completedJob?.lastAttemptError, null);
+        assert.equal(completedJob?.lastRescheduleReason, null);
       }),
     },
     {
@@ -340,7 +353,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 test: {
                   attemptHandler: async ({ job, complete }) => {
-                    if (job.lastAttemptError) {
+                    if (job.lastAttemptError !== null) {
                       errors.push(job.lastAttemptError);
                     }
 
@@ -1381,8 +1394,9 @@ export const processSavepointGroup: ConformanceGroup<EndToEndSavepointContext> =
         yield* wait(workerRunner.close());
 
         const job = yield* step(client.getJob({ id: chain.id }));
+        assert.ok(typeof job?.lastAttemptError === "string");
         assert.ok(
-          job?.lastAttemptError?.includes(
+          job.lastAttemptError.includes(
             "Attempt handler returned without a committed `complete` call",
           ),
         );

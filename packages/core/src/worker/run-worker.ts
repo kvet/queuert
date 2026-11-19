@@ -105,12 +105,14 @@ const reclaimWorkerJobs = syncAsync(function* (
     reclaimedBy,
     keepAttemptTokens,
     message,
+    backoffConfigFor,
   }: {
     txCtx?: unknown;
     workerId: string;
     reclaimedBy: string;
     keepAttemptTokens?: Set<string>;
     message: string;
+    backoffConfigFor: (typeName: string) => BackoffConfig;
   },
 ) {
   const { stateAdapter } = helpers;
@@ -124,6 +126,9 @@ const reclaimWorkerJobs = syncAsync(function* (
       txCtx,
       jobs: runningJobs.map((job) => ({
         jobId: job.id,
+        schedule: {
+          afterMs: calculateBackoffMs(job.consecutiveFailures + 1, backoffConfigFor(job.typeName)),
+        },
         attemptToken: job.attemptToken!,
         error,
       })),
@@ -207,11 +212,13 @@ const registerWorker = async (
     typeNames,
     concurrency,
     leaseConfig,
+    backoffConfigFor,
   }: {
     workerId: string;
     typeNames: string[];
     concurrency: number;
     leaseConfig: WorkerLeaseConfig;
+    backoffConfigFor: (typeName: string) => BackoffConfig;
   },
 ): Promise<{ workerToken: string; reclaimedJobs: ReclaimedJob[] }> => {
   const { stateAdapter } = helpers;
@@ -232,6 +239,7 @@ const registerWorker = async (
         workerId,
         reclaimedBy: workerId,
         message: "Worker holding the attempt lost its lease",
+        backoffConfigFor,
       });
       const worker = yield* step(
         stateAdapter.startWorker({
@@ -249,7 +257,10 @@ const registerWorker = async (
 
 const reclaimExpiredWorker = async (
   helpers: Helpers,
-  { workerId }: { workerId: string },
+  {
+    workerId,
+    backoffConfigFor,
+  }: { workerId: string; backoffConfigFor: (typeName: string) => BackoffConfig },
 ): Promise<boolean> => {
   const { stateAdapter } = helpers;
   const { items: candidates } = await stateAdapter.listWorkers({
@@ -272,6 +283,7 @@ const reclaimExpiredWorker = async (
         workerId: worker.id,
         reclaimedBy: workerId,
         message: "Worker holding the attempt lost its lease",
+        backoffConfigFor,
       });
       announceReclaimed(helpers, txCtx, { jobs, workerId });
       return true;
@@ -281,7 +293,15 @@ const reclaimExpiredWorker = async (
 
 const stopOwnWorker = async (
   helpers: Helpers,
-  { workerId, workerToken }: { workerId: string; workerToken: string },
+  {
+    workerId,
+    workerToken,
+    backoffConfigFor,
+  }: {
+    workerId: string;
+    workerToken: string;
+    backoffConfigFor: (typeName: string) => BackoffConfig;
+  },
 ): Promise<boolean> => {
   const { stateAdapter } = helpers;
   return withHelpersTransaction(
@@ -294,6 +314,7 @@ const stopOwnWorker = async (
         workerId,
         reclaimedBy: workerId,
         message: "Worker holding the attempt stopped",
+        backoffConfigFor,
       });
       announceReclaimed(helpers, txCtx, { jobs, workerId });
       return true;
@@ -325,12 +346,16 @@ export const runWorker = async ({
   stopSignal: AbortSignal;
 }): Promise<boolean> => {
   const { stateAdapter, observabilityHelper } = helpers;
+  const backoffConfigFor = (typeName: string): BackoffConfig =>
+    (Object.hasOwn(processors, typeName) ? processors[typeName].backoffConfig : undefined) ??
+    defaultBackoffConfig;
   const registrationSentAt = performance.now();
   const { workerToken, reclaimedJobs } = await registerWorker(helpers, {
     workerId,
     typeNames,
     concurrency,
     leaseConfig,
+    backoffConfigFor,
   });
   observabilityHelper.workerStarted({ workerId, jobTypeNames: typeNames });
   observabilityHelper.jobTypeIdleChange(concurrency, workerId, typeNames);
@@ -414,6 +439,7 @@ export const runWorker = async ({
           reclaimedBy: workerId,
           keepAttemptTokens: runningAttemptTokens,
           message: "Worker holding the attempt no longer runs it",
+          backoffConfigFor,
         });
         announceReclaimed(helpers, txCtx, { jobs, workerId });
         return true;
@@ -459,7 +485,7 @@ export const runWorker = async ({
         finishedJobsReclaimedAt = performance.now();
         await reclaimFinishedJobs();
       }
-      if (await reclaimExpiredWorker(helpers, { workerId })) {
+      if (await reclaimExpiredWorker(helpers, { workerId, backoffConfigFor })) {
         return;
       }
     }
@@ -499,7 +525,10 @@ export const runWorker = async ({
 
   try {
     try {
-      if (leaseLost.signal.aborted || !(await stopOwnWorker(helpers, { workerId, workerToken }))) {
+      if (
+        leaseLost.signal.aborted ||
+        !(await stopOwnWorker(helpers, { workerId, workerToken, backoffConfigFor }))
+      ) {
         loseLease();
         throw new WorkerLeaseLostError(`Worker "${workerId}" lost its lease`, {
           workerId,

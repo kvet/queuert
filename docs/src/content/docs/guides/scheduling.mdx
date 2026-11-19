@@ -21,15 +21,15 @@ Combine `schedule` with `deduplication: { key, scope }` to prevent duplicate fut
 
 ## Rescheduling from a Handler
 
-When a handler needs to defer work without treating it as a failure — for example, a rate-limited API saying "come back later" — use `complete({ reschedule })`. The handler below waits as long as the API asks before calling it again:
+When a handler needs to defer work without treating it as a failure — for example, a rate-limited API saying "come back later" — use `complete({ reschedule })`. The handler below waits as long as the API asks before calling it again, and says why in `reason`:
 
 <ExampleCode example="guides" file="src/scheduling.ts" region="reschedule-from-handler" />
 
-Because `complete({ reschedule })` is a normal outcome — not an error — the job keeps a clean slate: no `lastAttemptError`, no failure event, no error span. The attempt counter still increments, so backoff reflects total attempts if the job later fails for real. `reschedule` takes the same `{ afterMs }` or `{ at }` as `schedule`.
+`complete({ reschedule })` is a normal outcome, not an error: no failure event, no error span. It sets `consecutiveFailures` to 0, so if the job later fails for real, backoff starts again from its initial delay. The optional `reason` is stored on the job as `lastRescheduleReason`, where the next attempt and the dashboard can read it; keep it short, since longer reasons are truncated to 10,000 characters. `reschedule` takes the same `{ afterMs }` or `{ at }` as `schedule`.
 
 ## Rescheduling Pending Jobs
 
-A scheduled job is just a pending job with a future `scheduledAt`. Use `rescheduleJob` (or `rescheduleJobs` for a batch) to change when it runs. Pass `schedule: { at }` or `{ afterMs }` to move it to a different time — here the reminder moves to two hours from now:
+A scheduled job is just a pending job with a future `scheduledAt`. Use `rescheduleJob` (or `rescheduleJobs` for a batch) to change when it runs. Pass `schedule: { at }` or `{ afterMs }` to move it to a different time, and optionally a `reason` — here the reminder moves to two hours from now:
 
 <ExampleCode example="guides" file="src/scheduling.ts" region="push-back" />
 
@@ -37,7 +37,7 @@ Omit `schedule` to run it immediately — useful for admin "run now" actions or 
 
 <ExampleCode example="guides" file="src/scheduling.ts" region="run-now" />
 
-`rescheduleJob` throws `JobNotFoundError` if the job does not exist and `JobNotReschedulableError` if it is not `pending` (blocked, running or completed).
+Like a handler reschedule, `rescheduleJob` sets `consecutiveFailures` to 0, restarting backoff, and sets `lastRescheduleReason` to its `reason`, or `null` without one. It keeps `lastAttemptError`, so a job run again by hand still shows why it last failed. `rescheduleJob` throws `JobNotFoundError` if the job does not exist and `JobNotReschedulableError` if it is not `pending` (blocked, running or completed).
 
 `rescheduleJobs` validates atomically — if any id in the batch is missing or not pending, the entire call fails and no job is rescheduled. Both methods are mutating and require a transaction context.
 

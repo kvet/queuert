@@ -3,6 +3,7 @@ import type { Migration, MigrationStore } from "@queuert/typed-sql";
 import type { RedisStoreContext } from "../state-adapter/redis-transaction.ts";
 import type { IndexedJob, RedisSchema } from "../state-adapter/schema.redis.ts";
 import type { RedisStateProvider } from "../state-provider/state-provider.redis.ts";
+import { rewriteConsecutiveFailures } from "./consecutive-failures.redis.ts";
 
 const ACQUIRE_LOCK_SCRIPT = `
 return redis.call('SET', KEYS[1], ARGV[1], 'NX', 'PX', ARGV[2]) and 1 or 0
@@ -24,9 +25,11 @@ return 1
 
 export const createRedisSchemaMigrations = ({
   schema,
+  stateProvider,
   withTransaction,
 }: {
   schema: RedisSchema;
+  stateProvider: RedisStateProvider;
   withTransaction: <T>(fn: (txCtx: RedisStoreContext) => Promise<T>) => Promise<T>;
 }): Migration<RedisStoreContext>[] => {
   const { keys } = schema;
@@ -68,6 +71,7 @@ export const createRedisSchemaMigrations = ({
             }
           });
         }
+        await rewriteConsecutiveFailures({ stateProvider, schema, assertLockHeld });
         await withTransaction(async ({ transaction }) => {
           transaction.sadd(keys.schemaFences, "2");
         });

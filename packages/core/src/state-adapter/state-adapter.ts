@@ -39,10 +39,17 @@ export type StateJobInfo = {
   output: unknown;
   /** Number of processing attempts so far. */
   attempt: number;
-  /** Serialized error of the last failed or reclaimed attempt, or `null` before one. */
-  lastAttemptError: string | null;
-  /** When the last failed or reclaimed attempt ended, or `null` before one. */
+  /**
+   * Number of attempts in a row that failed or were reclaimed; any other attempt outcome or a client
+   * reschedule resets it to 0.
+   */
+  consecutiveFailures: number;
+  /** When the last attempt that returned the job to pending ended, or `null` before one. */
   lastAttemptAt: Date | null;
+  /** Serialized error of the last attempt when it failed or was reclaimed, otherwise `null`. */
+  lastAttemptError: string | null;
+  /** The reason a handler or client gave for the last reschedule, or `null` when none was given. */
+  lastRescheduleReason: string | null;
   /** When the current attempt started, or `null` when the job is not running. */
   attemptAt: Date | null;
   /** Worker that owns the current attempt, or `null` when the job is not running. */
@@ -267,15 +274,21 @@ export type StateAdapter<
     } & TransactionTxContextParam<TTxContext>,
   ) => ModeResult<TMode, (StateJob | undefined)[]>;
 
-  /** Returns jobs to pending, clearing any running attempt, or moves a blocked job's `scheduledAt`; `undefined` on a miss. */
+  /**
+   * Returns jobs to pending, clearing any running attempt, or moves a blocked job's `scheduledAt`;
+   * `undefined` on a miss. A running job given an `error` counts a failure: `consecutiveFailures`
+   * goes up by 1, `lastAttemptError` holds the error and `lastRescheduleReason` is cleared. Every
+   * other reschedule sets `consecutiveFailures` to 0 and `lastRescheduleReason` to `reason` or
+   * `null`. Ending a running attempt sets `lastAttemptAt`, and `lastAttemptError` to `null` when no
+   * `error` is given; rescheduling a job that is not running leaves both untouched.
+   */
   rescheduleJobs: (
     params: {
-      jobs: {
+      jobs: ({
         jobId: TJobId;
         schedule?: ScheduleOptions;
-        error?: string;
         attemptToken?: string;
-      }[];
+      } & ({ error?: string; reason?: never } | { error?: never; reason?: string }))[];
     } & AutocommitTxContextParam<TTxContext>,
   ) => ModeResult<TMode, (StateJob | undefined)[]>;
 

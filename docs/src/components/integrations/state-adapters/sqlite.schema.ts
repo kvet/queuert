@@ -53,8 +53,23 @@ export const sqliteTables: SchemaTable[] = [
       { name: "completed_at", type: "TEXT", description: "ISO 8601 timestamp" },
       { name: "completed_by", type: "TEXT", description: "Worker ID" },
       { name: "attempt", type: "INTEGER", description: "Attempt count" },
+      {
+        name: "consecutive_failures",
+        type: "INTEGER",
+        description:
+          "Attempts in a row that failed or were reclaimed; 0 after any other outcome or a client reschedule",
+      },
       { name: "last_attempt_at", type: "TEXT", description: "ISO 8601 timestamp" },
-      { name: "last_attempt_error", type: "TEXT", description: "Error as JSON string" },
+      {
+        name: "last_attempt_error",
+        type: "TEXT",
+        description: "Serialized error of the last attempt when it failed or was reclaimed",
+      },
+      {
+        name: "last_reschedule_reason",
+        type: "TEXT",
+        description: "Reason a handler or client gave for the last reschedule",
+      },
       {
         name: "attempt_at",
         type: "TEXT",

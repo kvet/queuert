@@ -1094,7 +1094,10 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
             async () => {
               const job = await client.getJob({ id: chain.id });
               assert.equal(job?.status, "pending");
-              assert.match(String(job.lastAttemptError), /JobAttemptReclaimedError/);
+              assert.ok(typeof job.lastAttemptError === "string");
+              assert.match(job.lastAttemptError, /JobAttemptReclaimedError/);
+              assert.equal(job.consecutiveFailures, 1);
+              assert.ok(job.scheduledAt.getTime() >= job.lastAttemptAt!.getTime() + 9_000);
             },
             { intervalMs: 20, timeoutMs: 5000 },
           ),
@@ -1198,6 +1201,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         const leaseLosingWorkerRunner = yield* resource(
           createWorkerRunner({
             client: leaseLosingClient,
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
             workerId,
             leaseConfig: { durationMs: 200, heartbeatMs: 50 },
             processors: createProcessors({
@@ -1218,6 +1222,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         const sameIdWorkerRunner = yield* resource(
           createWorkerRunner({
             client,
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
             workerId,
             recoveryBackoffConfig: { initialDelayMs: 20, multiplier: 1, maxDelayMs: 20 },
             processors: createProcessors({
@@ -1289,6 +1294,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         const frozenWorkerRunner = yield* resource(
           createWorkerRunner({
             client: frozenClient,
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
             workerId,
             leaseConfig: { durationMs: 200, heartbeatMs: 50 },
             recoveryBackoffConfig: { initialDelayMs: 20, multiplier: 1, maxDelayMs: 20 },
@@ -1312,6 +1318,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         const sameIdWorkerRunner = yield* resource(
           createWorkerRunner({
             client,
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
             workerId,
             recoveryBackoffConfig: { initialDelayMs: 20, multiplier: 1, maxDelayMs: 20 },
             processors: createProcessors({
@@ -1377,6 +1384,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         const workerRunner = yield* resource(
           createWorkerRunner({
             client,
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
             pollIntervalMs: 20,
             processors: createProcessors({
               client,
@@ -1443,6 +1451,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         const workerRunner = yield* resource(
           createWorkerRunner({
             client,
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
             pollIntervalMs: 20,
             recoveryBackoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
             processors: createProcessors({

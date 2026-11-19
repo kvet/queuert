@@ -14,6 +14,7 @@ import type {
   JobBasicData,
   JobCompletionData,
   JobProcessingData,
+  JobRescheduleData,
   Log,
 } from "./log.ts";
 import type {
@@ -266,9 +267,11 @@ export const createObservabilityHelper = ({
     }
   },
   jobRescheduled(stateJob) {
-    const data = {
+    const data: JobRescheduleData = {
       ...mapStateJobToJobBasicData(stateJob),
       scheduledAt: stateJob.scheduledAt,
+      consecutiveFailures: stateJob.consecutiveFailures,
+      ...(stateJob.lastRescheduleReason !== null && { reason: stateJob.lastRescheduleReason }),
     };
     log({
       type: "job_rescheduled",

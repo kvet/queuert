@@ -283,7 +283,9 @@ const Page = () => (
       record and adds its own when it finishes, so no process writes while it runs.{" "}
       <code>002_schema_v2</code> sets <code>blocking</code> on the head records that{" "}
       <code>blocker-references</code> names and adds them to the <code>blocking-chains:*</code>{" "}
-      indexes, in batches of 500 that each block Redis briefly.
+      indexes, and adds <code>consecutiveFailures</code> to every job record, 1 for a job that holds
+      a <code>lastAttemptError</code> and 0 otherwise, in batches of 500 that each block Redis
+      briefly.
     </p>
 
     <h2 id="redis-configuration">Redis configuration</h2>

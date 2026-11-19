@@ -377,6 +377,8 @@ export const rescheduleJobsGroup: ConformanceGroup<StateAdapterConformanceContex
         assert.equal(failed!.attemptBy, null);
         assert.equal(failed!.attemptToken, null);
         assert.equal(failed!.lastAttemptError, "transient failure");
+        assert.equal(failed!.lastRescheduleReason, null);
+        assert.equal(failed!.consecutiveFailures, 1);
         assert.ok(failed!.lastAttemptAt instanceof Date);
         assert.ok(failed!.scheduledAt.getTime() >= before + 4000);
       }),
@@ -430,8 +432,124 @@ export const rescheduleJobsGroup: ConformanceGroup<StateAdapterConformanceContex
         assert.equal(rescheduled!.attemptBy, null);
         assert.equal(rescheduled!.attemptToken, null);
         assert.equal(rescheduled!.lastAttemptError, null);
+        assert.equal(rescheduled!.lastRescheduleReason, null);
+        assert.equal(rescheduled!.consecutiveFailures, 0);
         assert.ok(rescheduled!.lastAttemptAt instanceof Date);
         assert.ok(rescheduled!.scheduledAt.getTime() >= before + 4000);
+      }),
+    },
+    {
+      name: "counts failures in a row, resets the count on any other reschedule and keeps the attempt error on a client reschedule",
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
+
+        const worker = yield* step(
+          stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["resched-count-test"],
+            concurrency: 1,
+            leaseMs: 60_000,
+          }),
+        );
+        const [createdChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "resched-count-test",
+                  input: null,
+                },
+              ],
+            }),
+          ),
+        );
+        const jobId = createdChain.head.id;
+
+        const [firstAttempt] = yield* step(
+          stateAdapter.startJobAttempts({
+            workerId: worker.id,
+            workerToken: worker.token,
+            typeNames: ["resched-count-test"],
+            limit: 1,
+          }),
+        );
+        yield* step(
+          stateAdapter.rescheduleJobs({
+            jobs: [{ jobId, error: "first", attemptToken: firstAttempt.attemptToken! }],
+          }),
+        );
+        const [secondAttempt] = yield* step(
+          stateAdapter.startJobAttempts({
+            workerId: worker.id,
+            workerToken: worker.token,
+            typeNames: ["resched-count-test"],
+            limit: 1,
+          }),
+        );
+        assert.equal(secondAttempt.consecutiveFailures, 1);
+        const [failedTwice] = yield* step(
+          stateAdapter.rescheduleJobs({
+            jobs: [{ jobId, error: "second", attemptToken: secondAttempt.attemptToken! }],
+          }),
+        );
+        assert.equal(failedTwice!.consecutiveFailures, 2);
+        assert.equal(failedTwice!.lastAttemptError, "second");
+        assert.equal(failedTwice!.lastRescheduleReason, null);
+
+        const [thirdAttempt] = yield* step(
+          stateAdapter.startJobAttempts({
+            workerId: worker.id,
+            workerToken: worker.token,
+            typeNames: ["resched-count-test"],
+            limit: 1,
+          }),
+        );
+        const [requested] = yield* step(
+          stateAdapter.rescheduleJobs({
+            jobs: [{ jobId, reason: "waiting", attemptToken: thirdAttempt.attemptToken! }],
+          }),
+        );
+        assert.equal(requested!.consecutiveFailures, 0);
+        assert.equal(requested!.lastAttemptError, null);
+        assert.equal(requested!.lastRescheduleReason, "waiting");
+        const handlerAttemptAt = requested!.lastAttemptAt;
+        assert.ok(handlerAttemptAt instanceof Date);
+
+        const [fourthAttempt] = yield* step(
+          stateAdapter.startJobAttempts({
+            workerId: worker.id,
+            workerToken: worker.token,
+            typeNames: ["resched-count-test"],
+            limit: 1,
+          }),
+        );
+        const [failedAgain] = yield* step(
+          stateAdapter.rescheduleJobs({
+            jobs: [{ jobId, error: "third", attemptToken: fourthAttempt.attemptToken! }],
+          }),
+        );
+        assert.equal(failedAgain!.consecutiveFailures, 1);
+
+        const [clientWithReason] = yield* step(
+          stateAdapter.rescheduleJobs({ jobs: [{ jobId, reason: "manual" }] }),
+        );
+        assert.equal(clientWithReason!.status, "pending");
+        assert.equal(clientWithReason!.consecutiveFailures, 0);
+        assert.equal(clientWithReason!.lastAttemptError, "third");
+        assert.equal(clientWithReason!.lastRescheduleReason, "manual");
+        assert.equal(
+          clientWithReason!.lastAttemptAt?.getTime(),
+          failedAgain!.lastAttemptAt?.getTime(),
+        );
+
+        const [clientWithoutReason] = yield* step(
+          stateAdapter.rescheduleJobs({ jobs: [{ jobId }] }),
+        );
+        assert.equal(clientWithoutReason!.consecutiveFailures, 0);
+        assert.equal(clientWithoutReason!.lastAttemptError, "third");
+        assert.equal(clientWithoutReason!.lastRescheduleReason, null);
       }),
     },
     {
@@ -467,6 +585,8 @@ export const rescheduleJobsGroup: ConformanceGroup<StateAdapterConformanceContex
         );
 
         assert.equal(rescheduled!.lastAttemptError, null);
+        assert.equal(rescheduled!.lastRescheduleReason, null);
+        assert.equal(rescheduled!.consecutiveFailures, 0);
         assert.equal(rescheduled!.lastAttemptAt, null);
         assert.ok(rescheduled!.scheduledAt.getTime() > Date.now() + 4000);
       }),
@@ -668,12 +788,16 @@ export const rescheduleJobsGroup: ConformanceGroup<StateAdapterConformanceContex
         const futureDate = new Date(Date.now() + 120_000);
         const rescheduled = yield* step(
           stateAdapter.rescheduleJobs({
-            jobs: [{ jobId: blockedChain.head.id, schedule: { at: futureDate } }],
+            jobs: [{ jobId: blockedChain.head.id, schedule: { at: futureDate }, reason: "later" }],
           }),
         );
 
         assert.equal(rescheduled.length, 1);
         assert.equal(rescheduled[0]!.status, "blocked");
+        assert.equal(rescheduled[0]!.lastAttemptError, null);
+        assert.equal(rescheduled[0]!.lastRescheduleReason, "later");
+        assert.equal(rescheduled[0]!.consecutiveFailures, 0);
+        assert.equal(rescheduled[0]!.lastAttemptAt, null);
         assert.ok(Math.abs(rescheduled[0]!.scheduledAt.getTime() - futureDate.getTime()) < 1000);
       }),
     },
@@ -952,6 +1076,8 @@ export const rescheduleJobsGroup: ConformanceGroup<StateAdapterConformanceContex
         const [stored] = yield* step(stateAdapter.getJobs({ jobIds: [createdChain.head.id] }));
         assert.equal(stored!.status, "pending");
         assert.equal(stored!.lastAttemptError, "boom");
+        assert.equal(stored!.lastRescheduleReason, null);
+        assert.equal(stored!.consecutiveFailures, 1);
         assert.equal(stored!.attemptBy, null);
         assert.equal(stored!.attemptToken, null);
       }),

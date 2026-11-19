@@ -1,3 +1,4 @@
+import { sleep } from "@queuert/helpers/sleep";
 import {
   type Client,
   type JobTypesDefinitions,
@@ -114,6 +115,18 @@ export const jobTypes = defineJobTypes<{
     input: { label: string };
     output: { done: true };
   };
+
+  /*
+   * Scenario 10 - Failures in a row:
+   *   sync-to-crm (attempt #1: fail) → (attempt #2: fail, next attempt an hour ahead)
+   */
+  "sync-to-crm": { entry: true; input: { accountId: string }; output: { synced: true } };
+
+  /*
+   * Scenario 11 - Reschedule reason:
+   *   render-invoice-pdf reschedules itself an hour ahead with a reason
+   */
+  "render-invoice-pdf": { entry: true; input: { invoiceId: string }; output: { url: string } };
 }>();
 
 const DASHBOARD_PAGE_SIZE = 100;
@@ -139,17 +152,13 @@ export const createIdGenerator = (seed: number): (() => string) => {
   };
 };
 
-const delay = async (ms: number) =>
-  new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-
 /**
  * Runs every scenario against `client`, whichever state adapter it uses: the chains of 1-4 and 6
  * run to completion under a worker runner, 5 stays scheduled an hour ahead and 7 leaves its hub
  * pending with its dependents blocked, the bulk chains of 8 are left pending with no worker, and
  * 9 leaves two workers registered with a `long-task` running under each, one of them with its
- * lease already lost. `withTransaction` runs a callback in a transaction of `stateAdapter`.
+ * lease already lost. 10 leaves a job pending after two failures in a row and 11 one its handler
+ * rescheduled with a reason, both an hour ahead. `withTransaction` runs a callback in a transaction of `stateAdapter`.
  */
 export const populateScenarios = async ({
   client,
@@ -171,7 +180,7 @@ export const populateScenarios = async ({
       processors: {
         greet: {
           attemptHandler: async ({ job, complete }) => {
-            await delay(20);
+            await sleep(20);
             return transaction((ctx) =>
               complete({ ...ctx, output: { greeting: `Hello, ${job.input.name}!` } }),
             );
@@ -180,7 +189,7 @@ export const populateScenarios = async ({
 
         "order:validate": {
           attemptHandler: async ({ job, complete }) => {
-            await delay(50);
+            await sleep(50);
             return transaction((ctx) =>
               complete({
                 ...ctx,
@@ -194,7 +203,7 @@ export const populateScenarios = async ({
         },
         "order:process": {
           attemptHandler: async ({ job, complete }) => {
-            await delay(100);
+            await sleep(100);
             return transaction((ctx) =>
               complete({
                 ...ctx,
@@ -208,7 +217,7 @@ export const populateScenarios = async ({
         },
         "order:complete": {
           attemptHandler: async ({ job, complete }) => {
-            await delay(30);
+            await sleep(30);
             return transaction((ctx) =>
               complete({ ...ctx, output: { orderId: job.input.orderId, status: "completed" } }),
             );
@@ -217,7 +226,7 @@ export const populateScenarios = async ({
 
         "fetch-user": {
           attemptHandler: async ({ job, complete }) => {
-            await delay(80);
+            await sleep(80);
             return transaction((ctx) =>
               complete({ ...ctx, output: { userId: job.input.userId, name: "Alice" } }),
             );
@@ -225,7 +234,7 @@ export const populateScenarios = async ({
         },
         "fetch-permissions": {
           attemptHandler: async ({ job, complete }) => {
-            await delay(60);
+            await sleep(60);
             return transaction((ctx) =>
               complete({
                 ...ctx,
@@ -237,7 +246,7 @@ export const populateScenarios = async ({
         "process-with-blockers": {
           attemptHandler: async ({ job, complete }) => {
             const [userBlocker, permBlocker] = job.blockers;
-            await delay(40);
+            await sleep(40);
             return transaction((ctx) =>
               complete({
                 ...ctx,
@@ -262,7 +271,7 @@ export const populateScenarios = async ({
 
         "scheduled-report": {
           attemptHandler: async ({ complete }) => {
-            await delay(50);
+            await sleep(50);
             return transaction((ctx) =>
               complete({ ...ctx, output: { generatedAt: new Date().toISOString() } }),
             );
@@ -293,6 +302,24 @@ export const populateScenarios = async ({
           attemptHandler: async ({ job, complete }) =>
             transaction((ctx) =>
               complete({ ...ctx, output: { index: job.input.index, done: true } }),
+            ),
+        },
+
+        "sync-to-crm": {
+          attemptHandler: async () => {
+            throw new Error("CRM rejected the update: 503 Service Unavailable");
+          },
+          backoffConfig: { initialDelayMs: 10, multiplier: HOUR_MS / 10, maxDelayMs: HOUR_MS },
+        },
+
+        "render-invoice-pdf": {
+          attemptHandler: async ({ complete }) =>
+            transaction((ctx) =>
+              complete({
+                ...ctx,
+                reschedule: { afterMs: HOUR_MS },
+                reason: "Renderer at capacity",
+              }),
             ),
         },
       },
@@ -377,6 +404,22 @@ export const populateScenarios = async ({
     }),
   );
 
+  // Scenario 10: Failures in a row — two failed attempts, the next one an hour ahead
+  const failingChain = transaction((ctx) =>
+    client.createChain({ ...ctx, typeName: "sync-to-crm", input: { accountId: "acct-42" } }),
+  );
+  while (client.getJob({ id: failingChain.id })?.consecutiveFailures !== 2) {
+    await sleep(10);
+  }
+
+  // Scenario 11: Reschedule reason — the handler asks to come back in an hour
+  const rescheduledChain = transaction((ctx) =>
+    client.createChain({ ...ctx, typeName: "render-invoice-pdf", input: { invoiceId: "INV-7" } }),
+  );
+  while (client.getJob({ id: rescheduledChain.id })?.lastRescheduleReason == null) {
+    await sleep(10);
+  }
+
   await workerRunner.close();
 
   // Scenario 8: Bulk volume — many root chains/jobs (chain-list + job-list pagination)
@@ -413,7 +456,7 @@ export const populateScenarios = async ({
   };
   const liveWorkerId = leaveWorkerRunning({ label: "long-runner-live", leaseMs: HOUR_MS });
   leaveWorkerRunning({ label: "long-runner-lost", leaseMs: LOST_LEASE_MS });
-  await delay(LOST_LEASE_MS);
+  await sleep(LOST_LEASE_MS);
 
-  return { orderChain, blockerChain, retryChain, liveWorkerId };
+  return { orderChain, blockerChain, failingChain, liveWorkerId };
 };

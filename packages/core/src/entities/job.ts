@@ -19,8 +19,10 @@ export const mapStateJobToJob = (
     createdAt: stateJob.createdAt,
     scheduledAt: stateJob.scheduledAt,
     attempt: stateJob.attempt,
+    consecutiveFailures: stateJob.consecutiveFailures,
     lastAttemptAt: stateJob.lastAttemptAt,
     lastAttemptError: stateJob.lastAttemptError,
+    lastRescheduleReason: stateJob.lastRescheduleReason,
     ...(stateJob.continuation && {
       continuedTo: mapStateJobToJob({ ...stateJob.continuation, chain: stateJob.chain }, jobTypes),
     }),

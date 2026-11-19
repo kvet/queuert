@@ -385,6 +385,7 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
             client: workerClient,
             concurrency: 1,
             leaseConfig: { durationMs: 200, heartbeatMs: 50 },
+            backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
             processors: createProcessors({
               client,
               jobTypes,

@@ -371,6 +371,10 @@ export const createOtelObservabilityAdapter = ({
               );
             }
 
+            if (result.rescheduled?.reason !== undefined) {
+              attemptSpan.setAttribute("queuert.reschedule.reason", result.rescheduled.reason);
+            }
+
             if (result.chainCompleted) {
               createChainConsumerSpan(
                 tracer,

@@ -356,7 +356,7 @@ export const completeJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
       }),
     },
     {
-      name: "clears lastAttemptError when completing a job that previously failed",
+      name: "clears the attempt error, reschedule reason and failure count when completing a job that previously failed",
       run: dynamicSyncAsync(function* ({ createStateAdapter }) {
         const stateAdapter = yield* resource(createStateAdapter());
 
@@ -404,6 +404,8 @@ export const completeJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
           }),
         );
         assert.equal(failed!.lastAttemptError, "first attempt failed");
+        assert.equal(failed!.lastRescheduleReason, null);
+        assert.equal(failed!.consecutiveFailures, 1);
 
         yield* step(
           stateAdapter.startJobAttempts({
@@ -425,6 +427,8 @@ export const completeJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
 
         assert.ok(completed!.completedAt instanceof Date);
         assert.equal(completed!.lastAttemptError, null);
+        assert.equal(completed!.lastRescheduleReason, null);
+        assert.equal(completed!.consecutiveFailures, 0);
         assert.equal(completed!.attemptAt, null);
       }),
     },

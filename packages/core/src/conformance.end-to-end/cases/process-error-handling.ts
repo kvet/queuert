@@ -53,7 +53,8 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
                     if (job.attempt === 1) {
                       throw new Error("Simulated handler error");
                     }
-                    assert.ok(job.lastAttemptError?.includes("Error: Simulated handler error"));
+                    assert.ok(typeof job?.lastAttemptError === "string");
+                    assert.ok(job.lastAttemptError.includes("Error: Simulated handler error"));
                     return stateAdapter.withTransaction((txCtx) =>
                       complete({ ...txCtx, output: { result: job.input.value * 2 } }),
                     );
@@ -109,7 +110,8 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
                   backoffConfig: fastBackoff,
                   attemptHandler: async ({ job, complete }) => {
                     if (job.attempt > 1) {
-                      assert.ok(job.lastAttemptError?.includes("Error: Simulated handler error"));
+                      assert.ok(typeof job?.lastAttemptError === "string");
+                      assert.ok(job.lastAttemptError.includes("Error: Simulated handler error"));
                     }
                     return stateAdapter.withTransaction((txCtx) => {
                       if (job.attempt === 1) {
@@ -172,7 +174,8 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
                   backoffConfig: fastBackoff,
                   attemptHandler: async ({ job, complete }) => {
                     if (job.attempt > 1) {
-                      assert.ok(job.lastAttemptError?.includes("Error: Error after complete"));
+                      assert.ok(typeof job?.lastAttemptError === "string");
+                      assert.ok(job.lastAttemptError.includes("Error: Error after complete"));
                     }
                     return stateAdapter.withTransaction((txCtx) =>
                       runInModeOf(
@@ -246,8 +249,9 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
                     if (job.attempt === 1) {
                       return;
                     }
+                    assert.ok(typeof job?.lastAttemptError === "string");
                     assert.ok(
-                      job.lastAttemptError?.includes(
+                      job.lastAttemptError.includes(
                         "Attempt handler returned without a committed `complete` call",
                       ),
                     );
@@ -449,7 +453,7 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
       }),
     },
     {
-      name: "serializes various error types in lastAttemptError",
+      name: "serializes various error types as the last reschedule error",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -479,13 +483,15 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
                       case 1:
                         throw new Error("plain error");
                       case 2:
-                        assert.ok(job.lastAttemptError?.includes("plain error"));
-                        assert.match(job.lastAttemptError ?? "", /at\s/);
+                        assert.ok(typeof job?.lastAttemptError === "string");
+                        assert.ok(job.lastAttemptError.includes("plain error"));
+                        assert.match(job.lastAttemptError, /at\s/);
                         // oxlint-disable-next-line typescript/only-throw-error -- test intentionally throws non-Error values
                         throw { code: "ETIMEOUT", detail: "connection lost" };
                       case 3:
-                        assert.ok(job.lastAttemptError?.includes("ETIMEOUT"));
-                        assert.ok(job.lastAttemptError?.includes("connection lost"));
+                        assert.ok(typeof job?.lastAttemptError === "string");
+                        assert.ok(job.lastAttemptError.includes("ETIMEOUT"));
+                        assert.ok(job.lastAttemptError.includes("connection lost"));
                         // oxlint-disable-next-line typescript/only-throw-error -- test intentionally throws non-Error values
                         throw "string error";
                       case 4:

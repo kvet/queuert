@@ -871,6 +871,7 @@ describe("Metrics", () => {
     await using reclaimingWorkerRunner = createWorkerRunner({
       client,
       pollIntervalMs: 20,
+      backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
       processors: createProcessors({
         client,
         jobTypes,
@@ -1502,7 +1503,7 @@ describe("Spans", () => {
             attemptHandler: async ({ job, complete }) => {
               if (job.attempt < 2) {
                 return withTransaction(async (txCtx) =>
-                  complete({ ...txCtx, reschedule: { afterMs: 100 } }),
+                  complete({ ...txCtx, reschedule: { afterMs: 100 }, reason: "waiting" }),
                 );
               }
               return withTransaction(async (txCtx) => complete({ ...txCtx, output: null }));
@@ -1533,6 +1534,7 @@ describe("Spans", () => {
         kind: "CONSUMER",
         parentName: "create job.test",
         status: "OK",
+        attributes: { "queuert.reschedule.reason": "waiting" },
       },
       // Attempt 2: completes normally
       {
@@ -2824,6 +2826,7 @@ describe("Rollback", () => {
       client: workerClient,
       concurrency: 1,
       pollIntervalMs: 50,
+      backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
       processors: createProcessors({
         client,
         jobTypes,

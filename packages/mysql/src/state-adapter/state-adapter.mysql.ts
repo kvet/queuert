@@ -67,7 +67,9 @@ const DB_JOB_COLUMNS = [
   "completed_at",
   "completed_by",
   "attempt",
+  "consecutive_failures",
   "last_attempt_error",
+  "last_reschedule_reason",
   "last_attempt_at",
   "attempt_at",
   "attempt_by",
@@ -94,7 +96,6 @@ const DB_CHAIN_COLUMNS = [
 const DB_TEXT_CAST_COLUMNS = new Set<string>([
   "input",
   "output",
-  "last_attempt_error",
   "created_at",
   "scheduled_at",
   "completed_at",
@@ -191,8 +192,10 @@ const mapDbJobToStateJobInfo = (row: Row, prefix = ""): StateJobInfo | undefined
     completedAt: parseNullableTimestamp(column("completed_at")),
     completedBy: (column("completed_by") as string | null) ?? null,
     attempt: Number(column("attempt")),
-    lastAttemptError: parseJson(column("last_attempt_error")) as string | null,
+    consecutiveFailures: Number(column("consecutive_failures")),
     lastAttemptAt: parseNullableTimestamp(column("last_attempt_at")),
+    lastAttemptError: (column("last_attempt_error") as string | null) ?? null,
+    lastRescheduleReason: (column("last_reschedule_reason") as string | null) ?? null,
     attemptAt: parseNullableTimestamp(column("attempt_at")),
     attemptBy: (column("attempt_by") as string | null) ?? null,
     attemptToken: (column("attempt_token") as string | null) ?? null,
@@ -435,7 +438,9 @@ export const createMysqlStateAdapter = <
     completed_at: t["string?"](),
     completed_by: nullableWorkerIdDataType,
     attempt: t.number(),
+    consecutive_failures: t.number(),
     last_attempt_error: t["string?"](),
+    last_reschedule_reason: t["string?"](),
     last_attempt_at: t["string?"](),
     attempt_at: t["string?"](),
     attempt_by: nullableWorkerIdDataType,
@@ -669,17 +674,20 @@ WHERE j.status = 'blocked' AND {{fence_guard}}`,
       name: "002_schema_v2",
       type: "non-transactional",
       up: async () => {
-        const [column] = await execute(
-          undefined,
-          applyTemplate(
-            sql(
-              `SELECT COUNT(*) AS count FROM information_schema.columns WHERE table_schema = ${schema === undefined ? "DATABASE()" : `'${schema}'`} AND table_name = '{{name_prefix}}job' AND column_name = 'blocking'`,
-              { columns: { count: t.number() } },
+        const hasJobColumn = async (name: string): Promise<boolean> => {
+          const [column] = await execute(
+            undefined,
+            applyTemplate(
+              sql(
+                `SELECT COUNT(*) AS count FROM information_schema.columns WHERE table_schema = ${schema === undefined ? "DATABASE()" : `'${schema}'`} AND table_name = '{{name_prefix}}job' AND column_name = '${name}'`,
+                { columns: { count: t.number() } },
+              ),
             ),
-          ),
-          [],
-        );
-        if (Number(column.count) === 0) {
+            [],
+          );
+          return Number(column.count) > 0;
+        };
+        if (!(await hasJobColumn("blocking"))) {
           await execute(
             undefined,
             applyTemplate(
@@ -711,6 +719,17 @@ WHERE j.status = 'blocked' AND {{fence_guard}}`,
             [],
           );
         }
+        if (!(await hasJobColumn("last_reschedule_reason"))) {
+          await execute(
+            undefined,
+            applyTemplate(
+              sql(
+                /* sql */ `ALTER TABLE {{prefix}}job ADD COLUMN consecutive_failures INT NOT NULL DEFAULT 0 AFTER attempt, ADD COLUMN last_attempt_error_text LONGTEXT NULL AFTER last_attempt_error, ADD COLUMN last_reschedule_reason TEXT NULL AFTER last_attempt_error_text`,
+              ),
+            ),
+            [],
+          );
+        }
         for (const statement of [
           /* sql */ `DROP TABLE IF EXISTS {{prefix}}schema_fence_v1`,
           /* sql */ `
@@ -719,10 +738,32 @@ SET h.blocking = TRUE
 WHERE h.chain_index = 0
   AND h.blocking = FALSE
   AND h.id IN (SELECT jb.blocked_by_chain_id FROM {{prefix}}job_blocker jb)`,
-          /* sql */ `CREATE TABLE IF NOT EXISTS {{prefix}}schema_fence_v2 (id INT NOT NULL PRIMARY KEY) ENGINE=InnoDB`,
         ]) {
           await execute(undefined, applyTemplate(sql(statement)), []);
         }
+        if (await hasJobColumn("last_attempt_error_text")) {
+          const statements = (await hasJobColumn("last_attempt_error"))
+            ? [
+                /* sql */ `UPDATE {{prefix}}job SET last_attempt_error_text = JSON_UNQUOTE(last_attempt_error), consecutive_failures = 1 WHERE last_attempt_error IS NOT NULL`,
+                /* sql */ `ALTER TABLE {{prefix}}job DROP COLUMN last_attempt_error`,
+              ]
+            : [];
+          for (const statement of [
+            ...statements,
+            /* sql */ `ALTER TABLE {{prefix}}job RENAME COLUMN last_attempt_error_text TO last_attempt_error`,
+          ]) {
+            await execute(undefined, applyTemplate(sql(statement)), []);
+          }
+        }
+        await execute(
+          undefined,
+          applyTemplate(
+            sql(
+              /* sql */ `CREATE TABLE IF NOT EXISTS {{prefix}}schema_fence_v2 (id INT NOT NULL PRIMARY KEY) ENGINE=InnoDB`,
+            ),
+          ),
+          [],
+        );
       },
       down: async () => {
         throw new Error("The Queuert schema cannot be reverted.");
@@ -1012,7 +1053,9 @@ SET j.status = 'completed',
   j.completed_by = d.worker_id,
   j.continued_to_id = d.new_id,
   j.output = NULL,
+  j.consecutive_failures = 0,
   j.last_attempt_error = NULL,
+  j.last_reschedule_reason = NULL,
   j.attempt_at = NULL,
   j.attempt_by = NULL,
   j.attempt_token = NULL
@@ -1111,7 +1154,9 @@ LEFT JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = j.chain_id AND h.id <>
 SET j.chain_status = CASE WHEN j.id = j.chain_id THEN 'completed' ELSE j.chain_status END,
   j.chain_completed_at = CASE WHEN j.id = j.chain_id THEN COALESCE(j.chain_completed_at, ?) ELSE j.chain_completed_at END,
   j.status = 'completed',
+  j.consecutive_failures = 0,
   j.last_attempt_error = NULL,
+  j.last_reschedule_reason = NULL,
   j.attempt_at = NULL,
   j.attempt_by = NULL,
   j.attempt_token = NULL,
@@ -1148,7 +1193,9 @@ WHERE {{fence_guard}}`,
               ...row,
               status: "completed",
               output: stringifyOptional(job.output) ?? null,
+              consecutive_failures: 0,
               last_attempt_error: null,
+              last_reschedule_reason: null,
               attempt_at: null,
               attempt_by: null,
               attempt_token: null,
@@ -1185,11 +1232,14 @@ UPDATE JSON_TABLE(?, '$[*]' COLUMNS (
   was_running INT PATH '$.was_running',
   scheduled_at DATETIME(6) PATH '$.scheduled_at',
   schedule_after_ms DOUBLE PATH '$.schedule_after_ms',
-  error LONGTEXT CHARACTER SET utf8mb4 PATH '$.error'
+  error LONGTEXT CHARACTER SET utf8mb4 PATH '$.error',
+  reason LONGTEXT CHARACTER SET utf8mb4 PATH '$.reason'
 )) d
 STRAIGHT_JOIN {{prefix}}job j FORCE INDEX (PRIMARY) ON j.id = d.job_id
 SET j.last_attempt_at = CASE WHEN d.was_running = 1 THEN UTC_TIMESTAMP(6) ELSE j.last_attempt_at END,
-  j.last_attempt_error = CASE WHEN d.was_running = 1 THEN JSON_EXTRACT(d.error, '$') ELSE j.last_attempt_error END,
+  j.consecutive_failures = CASE WHEN d.was_running = 1 AND d.error IS NOT NULL THEN j.consecutive_failures + 1 ELSE 0 END,
+  j.last_attempt_error = CASE WHEN d.was_running = 1 THEN d.error ELSE j.last_attempt_error END,
+  j.last_reschedule_reason = CASE WHEN d.was_running = 1 AND d.error IS NOT NULL THEN NULL ELSE d.reason END,
   j.status = CASE WHEN d.was_running = 1 THEN 'pending' ELSE j.status END,
   j.scheduled_at = ${scheduleExpression("d")},
   j.attempt_at = NULL,
@@ -1205,7 +1255,8 @@ WHERE {{fence_guard}}`,
                 was_running: locked.get(job.jobId)!.status === "running" ? 1 : 0,
                 scheduled_at: job.schedule?.at ? formatTimestamp(job.schedule.at) : undefined,
                 schedule_after_ms: job.schedule?.afterMs,
-                error: stringifyOptional(job.error),
+                error: job.error,
+                reason: job.reason,
               })),
             ),
           ],

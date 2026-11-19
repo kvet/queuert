@@ -169,8 +169,8 @@ Five collections, each named `{collectionPrefix}{name}` (`collectionPrefix` defa
 
 ```ts
 { _id, chainId, chainIndex, typeName, status, input, output, createdAt, scheduledAt, completedAt,
-  completedBy, continuedToId, attempt, attemptAt, attemptBy, attemptToken, lastAttemptAt,
-  lastAttemptError, traceContext, lockSeq,
+  completedBy, continuedToId, attempt, consecutiveFailures, attemptAt, attemptBy, attemptToken,
+  lastAttemptAt, lastAttemptError, lastRescheduleReason, traceContext, lockSeq,
   blockers: [{ chainId, index, traceContext }], blockersRemaining }
 ```
 

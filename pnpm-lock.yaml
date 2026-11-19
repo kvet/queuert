@@ -988,6 +988,9 @@ importers:
       '@queuert/dashboard':
         specifier: workspace:*
         version: link:../../../packages/dashboard
+      '@queuert/helpers':
+        specifier: workspace:*
+        version: link:../../../packages-internal/helpers
       '@queuert/sqlite':
         specifier: workspace:*
         version: link:../../../packages/sqlite

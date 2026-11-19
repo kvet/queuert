@@ -23,7 +23,9 @@ const jobColumns = {
   input: TEXT,
   output: TEXT,
   attempt: "INT",
+  consecutive_failures: "INT",
   last_attempt_error: TEXT,
+  last_reschedule_reason: TEXT,
   attempt_by: ID,
   attempt_token: ID,
   completed_by: ID,
@@ -52,7 +54,7 @@ const workerColumns = {
   lease_until: TIMESTAMP,
 };
 
-const jsonColumns = new Set(["input", "output", "last_attempt_error", "type_names"]);
+const jsonColumns = new Set(["input", "output", "type_names"]);
 
 export const loadStateDump = async <TTxContext extends BaseTxContext>(
   stateProvider: MysqlStateProvider<TTxContext>,

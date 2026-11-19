@@ -9,8 +9,10 @@ const base = {
   createdAt: new Date(0),
   scheduledAt: new Date(0),
   attempt: 0,
+  consecutiveFailures: 0,
   lastAttemptAt: null,
   lastAttemptError: null,
+  lastRescheduleReason: null,
 };
 
 export const blockedJob = (overrides: Partial<UnknownJob> = {}): UnknownJob =>

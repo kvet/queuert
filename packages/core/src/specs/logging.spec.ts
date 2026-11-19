@@ -783,6 +783,7 @@ describe("Logging", () => {
     await using reclaimingWorkerRunner = createWorkerRunner({
       client,
       pollIntervalMs: 20,
+      backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
       processors: createProcessors({
         client,
         jobTypes,
@@ -1375,6 +1376,7 @@ describe("Logging rollback", () => {
       client: workerClient,
       concurrency: 1,
       pollIntervalMs: 50,
+      backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
       processors: createProcessors({
         client,
         jobTypes,
@@ -1977,6 +1979,7 @@ describe("Logging rollback", () => {
           typeName: "test",
           chainId: chain.id,
           chainTypeName: "test",
+          consecutiveFailures: 0,
         },
       },
     ]);
