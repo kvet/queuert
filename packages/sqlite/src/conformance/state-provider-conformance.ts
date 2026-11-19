@@ -39,12 +39,12 @@ export type SqliteStateProviderConformanceContext = SchemaFenceConformanceContex
 
 const MISSING_TABLE = "queuert_conformance_missing";
 
-const executeSql = (
+const executeStatement = (
   stateProvider: SqliteStateProvider<any, Mode>,
   sql: string,
   txCtx?: unknown,
 ): MaybePromise<unknown[]> =>
-  stateProvider.executeSql({
+  stateProvider.executeStatement({
     txCtx,
     sql,
     params: [],
@@ -72,7 +72,7 @@ const classifyErrorGroup: ConformanceGroup<SqliteStateProviderConformanceContext
           context.createStateProvider(),
         );
         const error = yield* captureError.steps(() =>
-          executeSql(stateProvider, `SELECT 1 FROM ${MISSING_TABLE}`),
+          executeStatement(stateProvider, `SELECT 1 FROM ${MISSING_TABLE}`),
         );
         assert.deepEqual(stateProvider.classifyError({ error }), {
           kind: "undefined_table",
@@ -94,7 +94,7 @@ const classifyErrorGroup: ConformanceGroup<SqliteStateProviderConformanceContext
                 stateProvider,
                 syncAsync(function* () {
                   error = yield* captureError.steps(() =>
-                    executeSql(stateProvider, `SELECT 1 FROM ${MISSING_TABLE}`, txCtx),
+                    executeStatement(stateProvider, `SELECT 1 FROM ${MISSING_TABLE}`, txCtx),
                   );
                   throw error;
                 }),
@@ -115,7 +115,7 @@ const classifyErrorGroup: ConformanceGroup<SqliteStateProviderConformanceContext
           context.createStateProvider(),
         );
         const error = yield* captureError.steps(() =>
-          executeSql(stateProvider, "SELECT missing_column FROM (SELECT 1)"),
+          executeStatement(stateProvider, "SELECT missing_column FROM (SELECT 1)"),
         );
         assert.equal(stateProvider.classifyError({ error }), undefined);
       }),
@@ -166,14 +166,14 @@ const syncSqliteStateProviderGroup: ConformanceGroup<SqliteStateProviderConforma
   name: "SqliteStateProvider (sync)",
   cases: [
     {
-      name: "executeSql returns rows without a promise",
+      name: "executeStatement returns rows without a promise",
       run: syncProviderCase((stateProvider) => {
-        stateProvider.executeSql(
+        stateProvider.executeStatement(
           statement(`CREATE TABLE IF NOT EXISTS ${probeTable} (value INTEGER NOT NULL)`),
         );
-        stateProvider.executeSql(statement(`DELETE FROM ${probeTable}`));
-        stateProvider.executeSql(statement(`INSERT INTO ${probeTable} (value) VALUES (1)`));
-        const rows = stateProvider.executeSql({
+        stateProvider.executeStatement(statement(`DELETE FROM ${probeTable}`));
+        stateProvider.executeStatement(statement(`INSERT INTO ${probeTable} (value) VALUES (1)`));
+        const rows = stateProvider.executeStatement({
           ...statement(`SELECT COUNT(*) AS count FROM ${probeTable}`),
           columnTypes: { count: "number" },
           readOnly: true,
@@ -185,18 +185,18 @@ const syncSqliteStateProviderGroup: ConformanceGroup<SqliteStateProviderConforma
     {
       name: "withTransaction returns the callback's value and commits its writes",
       run: syncProviderCase((stateProvider) => {
-        stateProvider.executeSql(
+        stateProvider.executeStatement(
           statement(`CREATE TABLE IF NOT EXISTS ${probeTable} (value INTEGER NOT NULL)`),
         );
-        stateProvider.executeSql(statement(`DELETE FROM ${probeTable}`));
+        stateProvider.executeStatement(statement(`DELETE FROM ${probeTable}`));
         const result = stateProvider.withTransaction((txCtx) => {
-          stateProvider.executeSql(
+          stateProvider.executeStatement(
             statement(`INSERT INTO ${probeTable} (value) VALUES (1)`, txCtx),
           );
           return "committed";
         });
         assert.equal(result, "committed");
-        const rows = stateProvider.executeSql({
+        const rows = stateProvider.executeStatement({
           ...statement(`SELECT COUNT(*) AS count FROM ${probeTable}`),
           columnTypes: { count: "number" },
           readOnly: true,
@@ -207,21 +207,21 @@ const syncSqliteStateProviderGroup: ConformanceGroup<SqliteStateProviderConforma
     {
       name: "withTransaction rolls back its writes and rethrows when the callback throws",
       run: syncProviderCase((stateProvider) => {
-        stateProvider.executeSql(
+        stateProvider.executeStatement(
           statement(`CREATE TABLE IF NOT EXISTS ${probeTable} (value INTEGER NOT NULL)`),
         );
-        stateProvider.executeSql(statement(`DELETE FROM ${probeTable}`));
+        stateProvider.executeStatement(statement(`DELETE FROM ${probeTable}`));
         assert.throws(
           () =>
             stateProvider.withTransaction((txCtx) => {
-              stateProvider.executeSql(
+              stateProvider.executeStatement(
                 statement(`INSERT INTO ${probeTable} (value) VALUES (1)`, txCtx),
               );
               throw new Error("callback failed");
             }),
           /callback failed/,
         );
-        const rows = stateProvider.executeSql({
+        const rows = stateProvider.executeStatement({
           ...statement(`SELECT COUNT(*) AS count FROM ${probeTable}`),
           columnTypes: { count: "number" },
           readOnly: true,
@@ -232,19 +232,19 @@ const syncSqliteStateProviderGroup: ConformanceGroup<SqliteStateProviderConforma
     {
       name: "withTransaction rolls back and throws when the callback returns a promise",
       run: syncProviderCase((stateProvider) => {
-        stateProvider.executeSql(
+        stateProvider.executeStatement(
           statement(`CREATE TABLE IF NOT EXISTS ${probeTable} (value INTEGER NOT NULL)`),
         );
-        stateProvider.executeSql(statement(`DELETE FROM ${probeTable}`));
+        stateProvider.executeStatement(statement(`DELETE FROM ${probeTable}`));
         assert.throws(() =>
           stateProvider.withTransaction((txCtx) => {
-            stateProvider.executeSql(
+            stateProvider.executeStatement(
               statement(`INSERT INTO ${probeTable} (value) VALUES (1)`, txCtx),
             );
             return Promise.resolve("async");
           }),
         );
-        const rows = stateProvider.executeSql({
+        const rows = stateProvider.executeStatement({
           ...statement(`SELECT COUNT(*) AS count FROM ${probeTable}`),
           columnTypes: { count: "number" },
           readOnly: true,
@@ -268,21 +268,23 @@ const syncSqliteStateProviderGroup: ConformanceGroup<SqliteStateProviderConforma
     {
       name: "an autocommit statement inside an open transaction throws instead of joining it",
       run: syncProviderCase((stateProvider, withNonTransactionContext) => {
-        stateProvider.executeSql(
+        stateProvider.executeStatement(
           statement(`CREATE TABLE IF NOT EXISTS ${probeTable} (value INTEGER NOT NULL)`),
         );
-        stateProvider.executeSql(statement(`DELETE FROM ${probeTable}`));
+        stateProvider.executeStatement(statement(`DELETE FROM ${probeTable}`));
         withNonTransactionContext((txCtx) => {
-          stateProvider.executeSql(statement("BEGIN", txCtx));
+          stateProvider.executeStatement(statement("BEGIN", txCtx));
           try {
             assert.throws(() =>
-              stateProvider.executeSql(statement(`INSERT INTO ${probeTable} (value) VALUES (1)`)),
+              stateProvider.executeStatement(
+                statement(`INSERT INTO ${probeTable} (value) VALUES (1)`),
+              ),
             );
           } finally {
-            stateProvider.executeSql(statement("ROLLBACK", txCtx));
+            stateProvider.executeStatement(statement("ROLLBACK", txCtx));
           }
         });
-        const rows = stateProvider.executeSql({
+        const rows = stateProvider.executeStatement({
           ...statement(`SELECT COUNT(*) AS count FROM ${probeTable}`),
           columnTypes: { count: "number" },
           readOnly: true,
@@ -382,7 +384,7 @@ export const createSqliteStateProviderConformanceContext = ({
   const executeDdl = syncAsync(function* (sql: string) {
     const stateProvider = yield* step(createModeStateProvider());
     try {
-      yield* step(stateProvider.executeSql({ ...ddl, sql }));
+      yield* step(stateProvider.executeStatement({ ...ddl, sql }));
     } finally {
       if (stateProvider.close) yield* step(stateProvider.close());
     }
@@ -406,10 +408,12 @@ export const createSqliteStateProviderConformanceContext = ({
     const stateAdapter = createStateAdapter(stateProvider);
     try {
       yield* step(
-        stateProvider.executeSql({ ...ddl, sql: `DELETE FROM ${tablePrefix}job_blocker` }),
+        stateProvider.executeStatement({ ...ddl, sql: `DELETE FROM ${tablePrefix}job_blocker` }),
       );
-      yield* step(stateProvider.executeSql({ ...ddl, sql: `DELETE FROM ${tablePrefix}job` }));
-      yield* step(stateProvider.executeSql({ ...ddl, sql: `DELETE FROM ${tablePrefix}worker` }));
+      yield* step(stateProvider.executeStatement({ ...ddl, sql: `DELETE FROM ${tablePrefix}job` }));
+      yield* step(
+        stateProvider.executeStatement({ ...ddl, sql: `DELETE FROM ${tablePrefix}worker` }),
+      );
     } catch (error) {
       yield* step(stateAdapter.close());
       throw error;

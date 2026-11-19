@@ -14,11 +14,11 @@ import {
   createMigrator,
   createTemplateApplier,
   createTemplateCache,
+  batchStatementExecutor,
   createTypedSqlExecutor,
-  extractColumnTypes,
-  extractParamTypes,
   sql,
   t,
+  toSqlStatement,
   validateSqlIdentifier,
 } from "@queuert/typed-sql";
 import {
@@ -122,7 +122,7 @@ export const createSchemaMigrations = <TTxContext extends BaseTxContext>(
   stateProvider: PgStateProvider<TTxContext>,
   applyTemplate: TemplateApplier,
 ): Migration<TTxContext>[] => {
-  const exec = createTypedSqlExecutor(stateProvider);
+  const exec = createTypedSqlExecutor(batchStatementExecutor(stateProvider));
   const execute = async (txCtx: TTxContext | undefined, statement: TypedSqlTemplate<readonly []>) =>
     exec({ txCtx, sql: applyTemplate(statement) });
   return [
@@ -936,24 +936,27 @@ export const createPgStateAdapter = <
     );
   };
 
-  const execute = async <
-    TParams extends readonly DataType[],
-    TColumns extends Record<string, DataType>,
-  >(
+  const executeBatch = async <const TBatch extends readonly TypedSql[]>(
     txCtx: TTxContext | undefined,
-    typedSql: TypedSql<TParams, TColumns>,
-    params: [...InferParams<TParams>],
-  ): Promise<InferColumns<TColumns>[]> => {
+    statements: {
+      [K in keyof TBatch]: TBatch[K] extends TypedSql<infer TParams, any>
+        ? readonly [TBatch[K], [...InferParams<TParams>]]
+        : never;
+    },
+  ): Promise<{
+    -readonly [K in keyof TBatch]: TBatch[K] extends TypedSql<any, infer TColumns>
+      ? InferColumns<TColumns>[]
+      : never;
+  }> => {
     try {
-      return (await stateProvider.executeSql({
+      return (await stateProvider.executeStatements({
         txCtx,
-        id: typedSql.id,
-        sql: typedSql.sql,
-        params,
-        paramTypes: extractParamTypes(typedSql.params),
-        columnTypes: extractColumnTypes(typedSql.columns),
-        readOnly: typedSql.readOnly,
-      })) as InferColumns<TColumns>[];
+        statements: statements.map(([typedSql, params]) => toSqlStatement(typedSql, params)),
+      })) as {
+        -readonly [K in keyof TBatch]: TBatch[K] extends TypedSql<any, infer TColumns>
+          ? InferColumns<TColumns>[]
+          : never;
+      };
     } catch (error) {
       if (isFenceError(error)) {
         throw new SchemaFencedError(
@@ -963,6 +966,18 @@ export const createPgStateAdapter = <
       }
       throw error;
     }
+  };
+
+  const execute = async <
+    TParams extends readonly DataType[],
+    TColumns extends Record<string, DataType>,
+  >(
+    txCtx: TTxContext | undefined,
+    typedSql: TypedSql<TParams, TColumns>,
+    params: [...InferParams<TParams>],
+  ): Promise<InferColumns<TColumns>[]> => {
+    const [rows] = await executeBatch(txCtx, [[typedSql, params]]);
+    return rows;
   };
 
   const tailLateralInline = ` LEFT JOIN LATERAL (SELECT * FROM ${schema}.${tablePrefix}job WHERE chain_id = head_job.id AND chain_index > 0 ORDER BY chain_index DESC LIMIT 1) tail_job ON TRUE`;
@@ -1537,11 +1552,11 @@ SELECT origin AS id, max(height) AS height FROM climb GROUP BY origin
         ),
         [chainIds],
       );
-      await execute(
-        txCtx,
-        prepared(
-          "lockDeletedChains",
-          `
+      const [, [row]] = await executeBatch(txCtx, [
+        [
+          prepared(
+            "lockDeletedChains",
+            `
 WITH ordered AS (
   SELECT id, ord FROM unnest($1::{{job_id_type}}[]) WITH ORDINALITY AS o(id, ord)
 ),
@@ -1561,20 +1576,19 @@ JOIN {{schema}}.{{table_prefix}}job j ON j.id = t.id
 ORDER BY t.ord, j.chain_index, j.id
 FOR UPDATE OF j
 `,
-          { params: [t.array(), t.array()], columns: { id: idDataType } },
-        ),
-        [
-          heights
-            .toSorted((a, b) => a.height - b.height || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-            .map((row) => row.id),
-          chainIds,
+            { params: [t.array(), t.array()], columns: { id: idDataType } },
+          ),
+          [
+            heights
+              .toSorted((a, b) => a.height - b.height || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+              .map((row) => row.id),
+            chainIds,
+          ],
         ],
-      );
-      const [row] = await execute(
-        txCtx,
-        prepared(
-          "deleteChains",
-          `
+        [
+          prepared(
+            "deleteChains",
+            `
 WITH _members AS (
   SELECT id FROM {{schema}}.{{table_prefix}}job
   WHERE ((id = ANY($1::{{job_id_type}}[]) AND chain_index = 0)
@@ -1638,16 +1652,17 @@ SELECT
     'job', row_to_json(j)
   )) FROM _external_refs r JOIN {{schema}}.{{table_prefix}}job j ON j.id = r.job_id), '[]'::json) AS blocker_refs
 `,
-          {
-            params: [t.array()],
-            columns: {
-              deleted: t.json<DbChainRow[]>(),
-              blocker_refs: t.json<(DbBlocker & { job: DbJob })[]>(),
+            {
+              params: [t.array()],
+              columns: {
+                deleted: t.json<DbChainRow[]>(),
+                blocker_refs: t.json<(DbBlocker & { job: DbJob })[]>(),
+              },
             },
-          },
-        ),
-        [chainIds],
-      );
+          ),
+          [chainIds],
+        ],
+      ]);
 
       const deletedById = new Map(row.deleted.map((deleted) => [deleted.head_job.id, deleted]));
       const refsByChainId = Map.groupBy(row.blocker_refs, (ref) => ref.blocked_by_chain_id);

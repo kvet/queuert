@@ -1,6 +1,6 @@
 import { createMysqlStateAdapter } from "@queuert/mysql";
-import { createMysql2PoolStateProvider } from "example-mysql-state-mysql2/provider";
-import { createConnection, createPool } from "mysql2/promise";
+import { createMariadbPoolStateProvider } from "example-mysql-state-mariadb/provider";
+import { createConnection, createPool } from "mariadb";
 import { noopNotifyAdapter } from "queuert/conformance-internal";
 
 import { benchmarkNamespace, requireEnv, runBenchmark } from "./utils.ts";
@@ -15,13 +15,13 @@ const database = benchmarkNamespace();
 const admin = await createConnection(connectionOptions);
 await admin.query(`CREATE DATABASE ${database}`);
 const pool = createPool({ ...connectionOptions, database, connectionLimit: 20 });
-const stateProvider = createMysql2PoolStateProvider({ pool });
+const stateProvider = createMariadbPoolStateProvider({ pool });
 
 const stateAdapter = createMysqlStateAdapter({ stateProvider, dialect: "mariadb" });
 await stateAdapter.migrateToLatest();
 
 await runBenchmark({
-  title: "PROCESSING CAPACITY — MariaDB (mysql2)",
+  title: "PROCESSING CAPACITY — MariaDB (mariadb)",
   stateAdapter,
   notifyAdapter: noopNotifyAdapter,
 });

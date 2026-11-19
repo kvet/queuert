@@ -60,9 +60,15 @@ export const createDrizzleMysqlStateProvider = <TSchema extends Record<string, u
       const tableName = /Table '([^']+)' doesn't exist/.exec(String(driverError.message))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
     },
-    executeSql: async ({ txCtx, id, sql, params }) =>
+    executeStatements: async ({ txCtx, statements }) => {
       // Inside transaction: the connection Drizzle's session checked out of the pool
       // Outside transaction (migrations): db.$client (the pool)
-      exec(txCtx ? (txCtx.tx as any).session.client : db.$client, id, sql, params),
+      const connection = txCtx ? (txCtx.tx as any).session.client : db.$client;
+      const results: unknown[][] = [];
+      for (const { id, sql, params } of statements) {
+        results.push(await exec(connection, id, sql, params));
+      }
+      return results;
+    },
   };
 };

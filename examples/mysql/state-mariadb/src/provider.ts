@@ -11,17 +11,29 @@ export const createMariadbPoolStateProvider = ({
 }): MysqlStateProvider<MariadbPoolContext> => {
   const openTransactions = new WeakSet<PoolConnection>();
 
-  const exec = async (
+  const settle = async (pending: Promise<unknown>[]): Promise<unknown[][]> => {
+    const results = await Promise.allSettled(pending);
+    return results.map((result) => {
+      if (result.status === "rejected") throw result.reason;
+      return Array.isArray(result.value) ? result.value : [];
+    });
+  };
+
+  const executeBatch = async (
     connection: PoolConnection,
-    id: string | undefined,
-    sql: string,
-    params: unknown[],
-  ): Promise<unknown[]> => {
-    const rows: unknown =
-      id !== undefined
-        ? await connection.execute(sql, params)
-        : await connection.query(sql, params);
-    return Array.isArray(rows) ? rows : [];
+    statements: { id?: string; sql: string; params: unknown[] }[],
+  ): Promise<unknown[][]> =>
+    settle(
+      statements.map(async ({ id, sql, params }) =>
+        id !== undefined ? connection.execute(sql, params) : connection.query(sql, params),
+      ),
+    );
+
+  const finishTransaction = async (
+    connection: PoolConnection,
+    statement: "COMMIT" | "ROLLBACK",
+  ): Promise<void> => {
+    await settle([connection.query(statement), connection.query("SET autocommit = 1")]);
   };
 
   return {
@@ -30,17 +42,19 @@ export const createMariadbPoolStateProvider = ({
         const connection = await pool.getConnection();
         const txCtx: MariadbPoolContext = { connection, txHooks };
         try {
-          await connection.query("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
-          await connection.beginTransaction();
+          await settle([
+            connection.query("SET TRANSACTION ISOLATION LEVEL READ COMMITTED"),
+            connection.query("SET autocommit = 0"),
+          ]);
           openTransactions.add(connection);
           const result = await cb(txCtx);
-          await connection.commit();
+          await finishTransaction(connection, "COMMIT");
           openTransactions.delete(connection);
           await connection.release();
           return result;
         } catch (error) {
           openTransactions.delete(connection);
-          await connection.rollback().then(
+          await finishTransaction(connection, "ROLLBACK").then(
             async () => connection.release(),
             () => {
               connection.destroy();
@@ -67,11 +81,11 @@ export const createMariadbPoolStateProvider = ({
           return undefined;
       }
     },
-    executeSql: async ({ txCtx, id, sql, params }) => {
-      if (txCtx) return exec(txCtx.connection, id, sql, params);
+    executeStatements: async ({ txCtx, statements }) => {
+      if (txCtx) return executeBatch(txCtx.connection, statements);
       const connection = await pool.getConnection();
       try {
-        return await exec(connection, id, sql, params);
+        return await executeBatch(connection, statements);
       } finally {
         await connection.release();
       }

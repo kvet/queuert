@@ -1,6 +1,6 @@
 # Processing capacity
 
-Last run 2026-11-18 · commit 2748cec8 · load average 5.41 · state-mysql-mysql2, state-mariadb-mysql2
+Last run 2026-11-19 · commit c8e81133 · load average 2.92 · state-mariadb-mariadb
 
 ## Creation (chains/s): State adapter (noop notify)
 
@@ -13,7 +13,7 @@ Last run 2026-11-18 · commit 2748cec8 · load average 5.41 · state-mysql-mysql
 | PostgreSQL (postgres-js) |   1960 |         55978 |
 | PostgreSQL (pg)          |   2039 |         58644 |
 | MySQL (mysql2)           |    861 |         22582 |
-| MariaDB (mysql2)         |    845 |         25951 |
+| MariaDB (mariadb)        |    831 |         28414 |
 | Redis (redis)            |   6538 |         37979 |
 | Redis (ioredis)          |   6679 |         37995 |
 
@@ -41,7 +41,7 @@ Last run 2026-11-18 · commit 2748cec8 · load average 5.41 · state-mysql-mysql
 | PostgreSQL (postgres-js) |   1014 |    2950 |     5312 |
 | PostgreSQL (pg)          |   1050 |    3019 |     5512 |
 | MySQL (mysql2)           |    393 |    1052 |     2198 |
-| MariaDB (mysql2)         |    303 |     948 |     2202 |
+| MariaDB (mariadb)        |    360 |     900 |     1998 |
 | Redis (redis)            |   2264 |    6210 |    10380 |
 | Redis (ioredis)          |   2285 |    5553 |    12693 |
 

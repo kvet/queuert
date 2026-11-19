@@ -30,14 +30,15 @@ const spawnDeployment = createDeploymentSpawner<MigrationResult>(
 );
 
 type Provider = PgStateProvider<PgPoolContext>;
-const query = async <T = Record<string, unknown>>(provider: Provider, text: string): Promise<T[]> =>
-  provider.executeSql({
-    sql: text,
-    params: [],
-    paramTypes: {},
-    columnTypes: {},
-    readOnly: false,
-  }) as Promise<T[]>;
+const query = async <T = Record<string, unknown>>(
+  provider: Provider,
+  text: string,
+): Promise<T[]> => {
+  const [rows] = await provider.executeStatements({
+    statements: [{ sql: text, params: [], paramTypes: {}, columnTypes: {}, readOnly: false }],
+  });
+  return rows as T[];
+};
 
 const applyTemplate = createTemplateApplier({
   schema: "public",
@@ -405,8 +406,8 @@ describe("upgrading from 001_schema_v1", () => {
       const interruptedAdapter = createPgStateAdapter({
         stateProvider: {
           ...provider,
-          executeSql: async (options) => {
-            if (options.sql.includes("WITH source AS")) {
+          executeStatements: async (options) => {
+            if (options.statements.some((statement) => statement.sql.includes("WITH source AS"))) {
               batches++;
               if (batches === 2) {
                 reachCopy();
@@ -414,7 +415,7 @@ describe("upgrading from 001_schema_v1", () => {
               }
               if (batches === 3) throw new Error("copy interrupted");
             }
-            return provider.executeSql(options);
+            return provider.executeStatements(options);
           },
         },
         generateJobId: (): string => randomUUID(),

@@ -23,9 +23,9 @@ const it = baseIt
     const adapter = createSqliteStateAdapter<SqliteStateProvider<BetterSqlite3Context>, string>({
       stateProvider: {
         ...provider,
-        executeSql: async (options) => {
+        executeStatement: async (options) => {
           executed.push({ sql: options.sql, params: options.params });
-          return provider.executeSql(options);
+          return provider.executeStatement(options);
         },
       },
     });

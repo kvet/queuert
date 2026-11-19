@@ -28,7 +28,7 @@ await using drivers = new AsyncDisposableStack();
 console.log("Starting PostgreSQL...");
 const pg = drivers.use(await acquirePostgres("postgres:18", import.meta.url));
 const statePool = drivers.adopt(
-  new Pool({ connectionString: pg.connectionString, max: 10 }),
+  new Pool({ connectionString: pg.connectionString, max: 10, pipeline: true }),
   async (pool) => pool.end(),
 );
 await using stateAdapter = createPgStateAdapter({

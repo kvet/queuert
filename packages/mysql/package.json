@@ -59,6 +59,7 @@
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@queuert/typed-sql": "workspace:*",
+    "mariadb": "3.5.5",
     "mysql2": "3.24.6",
     "queuert": "workspace:*"
   },

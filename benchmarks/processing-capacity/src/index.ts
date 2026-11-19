@@ -66,9 +66,9 @@ const benchmarkModules: Record<
     axis: "state",
     service: "mysql",
   },
-  "state-mariadb-mysql2": {
-    modulePath: "state-mariadb-mysql2.ts",
-    label: "MariaDB (mysql2)",
+  "state-mariadb-mariadb": {
+    modulePath: "state-mariadb-mariadb.ts",
+    label: "MariaDB (mariadb)",
     axis: "state",
     service: "mariadb",
   },

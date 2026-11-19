@@ -12,7 +12,7 @@ export const createMysql2PoolStateProvider = ({
   const openTransactions = new WeakSet<PoolConnection>();
 
   const exec = async (
-    connection: PoolConnection,
+    connection: Pool | PoolConnection,
     id: string | undefined,
     sql: string,
     params: unknown[],
@@ -69,14 +69,13 @@ export const createMysql2PoolStateProvider = ({
           return undefined;
       }
     },
-    executeSql: async ({ txCtx, id, sql, params }) => {
-      if (txCtx) return exec(txCtx.connection, id, sql, params);
-      const connection = await pool.getConnection();
-      try {
-        return await exec(connection, id, sql, params);
-      } finally {
-        connection.release();
+    executeStatements: async ({ txCtx, statements }) => {
+      const connection = txCtx?.connection ?? pool;
+      const results: unknown[][] = [];
+      for (const { id, sql, params } of statements) {
+        results.push(await exec(connection, id, sql, params));
       }
+      return results;
     },
   };
 };

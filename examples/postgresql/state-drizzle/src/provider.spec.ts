@@ -21,7 +21,11 @@ describe("postgresql/state-drizzle provider conformance", () => {
 
   beforeAll(async () => {
     pg = await acquirePostgres("postgres:18", import.meta.url);
-    pool = new Pool({ connectionString: pg.connectionString, idleTimeoutMillis: 0 });
+    pool = new Pool({
+      connectionString: pg.connectionString,
+      idleTimeoutMillis: 0,
+      pipeline: true,
+    });
     db = drizzle(pool, { schema: {} });
   }, 60_000);
 
@@ -48,7 +52,11 @@ describe("postgresql/state-drizzle migrator conformance", () => {
 
   beforeAll(async () => {
     pg = await acquirePostgres("postgres:18", `${import.meta.url}#migrator`);
-    pool = new Pool({ connectionString: pg.connectionString, idleTimeoutMillis: 0 });
+    pool = new Pool({
+      connectionString: pg.connectionString,
+      idleTimeoutMillis: 0,
+      pipeline: true,
+    });
     db = drizzle(pool, { schema: {} });
   }, 60_000);
 

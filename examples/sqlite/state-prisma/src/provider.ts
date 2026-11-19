@@ -41,7 +41,7 @@ export const createPrismaSqliteStateProvider = <TPrisma extends PrismaLikeClient
         : undefined;
     },
     // `id` not forwarded: Prisma's engine caches plans by SQL text per connection.
-    executeSql: async ({ txCtx, sql, params, columnTypes, readOnly }) => {
+    executeStatement: async ({ txCtx, sql, params, columnTypes, readOnly }) => {
       const runQuery = async (): Promise<unknown[]> => {
         const prismaClient = (txCtx?.prisma ?? prisma) as PrismaLikeClient;
         return prismaClient.$queryRawUnsafe(sql, ...params);

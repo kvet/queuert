@@ -28,28 +28,28 @@ import {
 
 const createFlakyStateAdapter = (
   pool: Pool,
-  failStatement: (
-    executeSql: PgPoolProvider["executeSql"],
-    options: Parameters<PgPoolProvider["executeSql"]>[0],
-  ) => ReturnType<PgPoolProvider["executeSql"]>,
+  failStatements: (
+    executeStatements: PgPoolProvider["executeStatements"],
+    options: Parameters<PgPoolProvider["executeStatements"]>[0],
+  ) => ReturnType<PgPoolProvider["executeStatements"]>,
 ): StateAdapter<any, any, any, "async"> => {
   const stateProvider = createPgPoolProvider({ pool });
-  const executeSql = stateProvider.executeSql.bind(stateProvider);
+  const executeStatements = stateProvider.executeStatements.bind(stateProvider);
   const shouldError = createFlakyBatchGenerator();
   let enabled = true;
-  let statementCount = 0;
+  let batchCount = 0;
   let errorCount = 0;
 
   const stateAdapter = createPgStateAdapter({
     stateProvider: {
       ...stateProvider,
-      executeSql: async (options) => {
-        statementCount++;
+      executeStatements: async (options) => {
+        batchCount++;
         if (enabled && shouldError()) {
           errorCount++;
-          return failStatement(executeSql, options);
+          return failStatements(executeStatements, options);
         }
-        return executeSql(options);
+        return executeStatements(options);
       },
     },
   });
@@ -58,8 +58,8 @@ const createFlakyStateAdapter = (
     enabled = false;
     await sleep(50);
     await stateAdapter.close();
-    if (statementCount > 5 && errorCount === 0) {
-      throw new Error(`the flaky provider failed none of its ${statementCount} statements`);
+    if (batchCount > 5 && errorCount === 0) {
+      throw new Error(`the flaky provider failed none of its ${batchCount} batches`);
     }
   };
   return { ...stateAdapter, close, [Symbol.asyncDispose]: close };
@@ -83,14 +83,18 @@ export const createEndToEndContext = async (
     await poolClient.query("SELECT 1 FROM nonexistent_table_queuert_poison_xyz");
   },
   createFlakyDbStateAdapter: async () =>
-    createFlakyStateAdapter(pool, async (executeSql, options) =>
-      executeSql({
+    createFlakyStateAdapter(pool, async (executeStatements, options) =>
+      executeStatements({
         txCtx: options.txCtx,
-        sql: "SELECT 1 FROM nonexistent_table_queuert_poison_xyz",
-        params: [],
-        paramTypes: {},
-        columnTypes: {},
-        readOnly: true,
+        statements: [
+          {
+            sql: "SELECT 1 FROM nonexistent_table_queuert_poison_xyz",
+            params: [],
+            paramTypes: {},
+            columnTypes: {},
+            readOnly: true,
+          },
+        ],
       }),
     ),
   createFlakyConnectionStateAdapter: async () =>

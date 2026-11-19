@@ -23,6 +23,162 @@ export type MysqlStateProviderConformanceContext = SchemaFenceConformanceContext
     createStateProvider: () => Promise<MysqlStateProvider<any>>;
   };
 
+const textStatement = (sql: string) => ({
+  sql,
+  params: [],
+  paramTypes: {},
+  columnTypes: {},
+  readOnly: false,
+});
+
+export const executeStatementsGroup: ConformanceGroup<MysqlStateProviderConformanceContext> = {
+  name: "executeStatements",
+  cases: [
+    {
+      name: "executeStatements returns one row array per statement in statement order",
+      run: async ({ createStateProvider }) => {
+        const stateProvider = await createStateProvider();
+        try {
+          const results = await stateProvider.executeStatements({
+            statements: [
+              textStatement("SELECT 1 AS value"),
+              textStatement("DO 0"),
+              { ...textStatement("SELECT ? AS value"), params: [2] },
+              textStatement("SELECT 3 AS value UNION ALL SELECT 4"),
+            ],
+          });
+          assert.equal(results.length, 4);
+          assert.deepEqual(
+            results.map((rows) => (rows as { value: unknown }[]).map((row) => Number(row.value))),
+            [[1], [], [2], [3, 4]],
+          );
+        } finally {
+          await stateProvider.close?.();
+        }
+      },
+    },
+    {
+      name: "executeStatements resolves an empty batch to no results",
+      run: async ({ createStateProvider }) => {
+        const stateProvider = await createStateProvider();
+        try {
+          assert.deepEqual(await stateProvider.executeStatements({ statements: [] }), []);
+          await stateProvider.withTransaction(async (txCtx) => {
+            assert.deepEqual(await stateProvider.executeStatements({ txCtx, statements: [] }), []);
+          });
+        } finally {
+          await stateProvider.close?.();
+        }
+      },
+    },
+    {
+      name: "executeStatements runs a single statement inside and outside a transaction",
+      run: async ({ createStateProvider }) => {
+        const stateProvider = await createStateProvider();
+        try {
+          const outside = await stateProvider.executeStatements({
+            statements: [textStatement("SELECT 1 AS value")],
+          });
+          const inside = await stateProvider.withTransaction(async (txCtx) =>
+            stateProvider.executeStatements({
+              txCtx,
+              statements: [textStatement("SELECT 1 AS value")],
+            }),
+          );
+          for (const results of [outside, inside]) {
+            assert.equal(results.length, 1);
+            assert.deepEqual(
+              (results[0] as { value: unknown }[]).map((row) => Number(row.value)),
+              [1],
+            );
+          }
+        } finally {
+          await stateProvider.close?.();
+        }
+      },
+    },
+    {
+      name: "executeStatements without a transaction runs the batch in order",
+      run: async ({ createStateProvider }) => {
+        const stateProvider = await createStateProvider();
+        const orderTable = "queuert_conformance_batch_order";
+        try {
+          const results = await stateProvider.executeStatements({
+            statements: [
+              textStatement(`DROP TABLE IF EXISTS ${orderTable}`),
+              textStatement(
+                `CREATE TABLE ${orderTable} (id INT NOT NULL PRIMARY KEY) ENGINE=InnoDB`,
+              ),
+              textStatement(`INSERT INTO ${orderTable} (id) VALUES (1)`),
+              textStatement(`SELECT COUNT(*) AS count FROM ${orderTable}`),
+              textStatement(`INSERT INTO ${orderTable} (id) VALUES (2)`),
+              textStatement(`SELECT COUNT(*) AS count FROM ${orderTable}`),
+            ],
+          });
+          assert.deepEqual(
+            [results[3], results[5]].map((rows) => Number((rows as { count: unknown }[])[0].count)),
+            [1, 2],
+          );
+        } finally {
+          await stateProvider.executeStatements({
+            statements: [textStatement(`DROP TABLE IF EXISTS ${orderTable}`)],
+          });
+          await stateProvider.close?.();
+        }
+      },
+    },
+    {
+      name: "executeStatements rejects with the failing statement's error and the transaction rolls back",
+      run: async ({ createStateProvider }) => {
+        const stateProvider = await createStateProvider();
+        const probeTable = "queuert_conformance_batch_probe";
+        const missingTable = "queuert_conformance_batch_missing";
+        try {
+          await stateProvider.executeStatements({
+            statements: [
+              textStatement(`DROP TABLE IF EXISTS ${missingTable}`),
+              textStatement(`DROP TABLE IF EXISTS ${missingTable}_later`),
+              textStatement(
+                `CREATE TABLE IF NOT EXISTS ${probeTable} (id INT NOT NULL PRIMARY KEY) ENGINE=InnoDB`,
+              ),
+              textStatement(`DELETE FROM ${probeTable}`),
+            ],
+          });
+          await assert.rejects(
+            stateProvider.withTransaction(async (txCtx) =>
+              stateProvider.executeStatements({
+                txCtx,
+                statements: [
+                  textStatement(`INSERT INTO ${probeTable} (id) VALUES (1)`),
+                  textStatement(`SELECT id FROM ${missingTable}`),
+                  textStatement(`INSERT INTO ${probeTable} (id) VALUES (2)`),
+                  textStatement(`SELECT id FROM ${missingTable}_later`),
+                ],
+              }),
+            ),
+            (error: unknown) => {
+              const classified = stateProvider.classifyError({ error });
+              assert.ok(classified !== undefined);
+              assert.equal(classified.kind, "undefined_table");
+              assert.ok(classified.tableName.endsWith(`.${missingTable}`));
+              return true;
+            },
+          );
+          const [rows] = await stateProvider.executeStatements({
+            statements: [textStatement(`SELECT COUNT(*) AS count FROM ${probeTable}`)],
+          });
+          assert.equal(Number((rows as { count: unknown }[])[0].count), 0);
+        } finally {
+          await stateProvider.executeStatements({
+            statements: [textStatement(`DROP TABLE IF EXISTS ${probeTable}`)],
+          });
+          await stateProvider.close?.();
+        }
+      },
+    },
+  ],
+};
+
 export const isolationLevelGroup: ConformanceGroup<MysqlStateProviderConformanceContext> = {
   name: "isolationLevel",
   cases: [
@@ -30,15 +186,13 @@ export const isolationLevelGroup: ConformanceGroup<MysqlStateProviderConformance
       name: "withTransaction opens transactions at READ COMMITTED",
       run: async ({ createStateProvider }) => {
         const stateProvider = await createStateProvider();
-        const query = async (sql: string, txCtx?: unknown) =>
-          stateProvider.executeSql({
+        const query = async (sql: string, txCtx?: unknown) => {
+          const [rows] = await stateProvider.executeStatements({
             txCtx,
-            sql,
-            params: [],
-            paramTypes: {},
-            columnTypes: {},
-            readOnly: false,
+            statements: [textStatement(sql)],
           });
+          return rows;
+        };
 
         try {
           await query(
@@ -76,6 +230,7 @@ export const mysqlStateProviderConformanceGroups: ConformanceGroup<MysqlStatePro
     ...stateAdapterConcurrentTransactionGroups,
     ...stateAdapterSchemaFenceConcurrentTransactionGroups,
     ...stateAdapterSavepointGroups,
+    executeStatementsGroup,
     isolationLevelGroup,
   ];
 
@@ -89,18 +244,10 @@ export const createMysqlStateProviderConformanceContext = ({
   typeof createMysqlStateProviderConformanceCases
 >[0]): MysqlStateProviderConformanceContext => {
   const tables = `${stateAdapterOptions?.schema === undefined ? "" : `${stateAdapterOptions.schema}.`}${stateAdapterOptions?.tablePrefix ?? "queuert_"}`;
-  const executeStatements = async (statements: string[]): Promise<void> => {
+  const runStatements = async (statements: string[]): Promise<void> => {
     const stateProvider = await createStateProvider();
     try {
-      for (const sql of statements) {
-        await stateProvider.executeSql({
-          sql,
-          params: [],
-          paramTypes: {},
-          columnTypes: {},
-          readOnly: false,
-        });
-      }
+      await stateProvider.executeStatements({ statements: statements.map(textStatement) });
     } finally {
       await stateProvider.close?.();
     }
@@ -125,7 +272,7 @@ export const createMysqlStateProviderConformanceContext = ({
     withSavepoint,
     createStateAdapter: async () => {
       await migrate();
-      await executeStatements([
+      await runStatements([
         `DELETE FROM ${tables}job_blocker`,
         `DELETE FROM ${tables}job`,
         `DELETE FROM ${tables}worker`,
@@ -138,11 +285,11 @@ export const createMysqlStateProviderConformanceContext = ({
     },
     withWritesFenced: async (fn) => {
       await migrate();
-      await executeStatements([`DROP TABLE ${tables}schema_fence_v2`]);
+      await runStatements([`DROP TABLE ${tables}schema_fence_v2`]);
       try {
         return await fn();
       } finally {
-        await executeStatements([
+        await runStatements([
           `CREATE TABLE ${tables}schema_fence_v2 (id INT NOT NULL PRIMARY KEY) ENGINE=InnoDB`,
         ]);
       }

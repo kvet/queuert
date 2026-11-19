@@ -97,28 +97,35 @@ const withoutEstimates = (explain: string): string =>
 
 let capturing = false;
 const captured: CapturedQuery[] = [];
-const stateProvider = {
+const captureQueryPlan = async (
+  txCtx: Mysql2PoolContext | undefined,
+  statement: { id?: string; sql: string; params: unknown[] },
+) => {
+  if (!/^\s*(SELECT|UPDATE|DELETE|INSERT)/i.test(statement.sql)) return;
+  try {
+    const explained = await explain(txCtx, statement.sql, statement.params);
+    captured.push({
+      id: statement.id,
+      sql: statement.sql,
+      explain: explained,
+      plan: withoutEstimates(explained),
+    });
+  } catch (error) {
+    captured.push({
+      id: statement.id,
+      sql: statement.sql,
+      explain: `-- EXPLAIN failed: ${String(error)}`,
+      plan: `EXPLAIN failed: ${String(error)}`,
+    });
+  }
+};
+const stateProvider: typeof baseProvider = {
   ...baseProvider,
-  executeSql: async (args: Parameters<typeof baseProvider.executeSql>[0]) => {
-    if (capturing && /^\s*(SELECT|UPDATE|DELETE|INSERT)/i.test(args.sql)) {
-      try {
-        const explained = await explain(args.txCtx, args.sql, args.params);
-        captured.push({
-          id: args.id,
-          sql: args.sql,
-          explain: explained,
-          plan: withoutEstimates(explained),
-        });
-      } catch (error) {
-        captured.push({
-          id: args.id,
-          sql: args.sql,
-          explain: `-- EXPLAIN failed: ${String(error)}`,
-          plan: `EXPLAIN failed: ${String(error)}`,
-        });
-      }
+  executeStatements: async (options) => {
+    if (capturing) {
+      for (const statement of options.statements) await captureQueryPlan(options.txCtx, statement);
     }
-    return baseProvider.executeSql(args);
+    return baseProvider.executeStatements(options);
   },
 };
 

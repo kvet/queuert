@@ -170,10 +170,10 @@ const createValidatingProvider = (
   const inner = createBetterSqlite3Provider({ db, mode });
   return {
     ...inner,
-    executeSql: (args: Parameters<typeof inner.executeSql>[0]) => {
+    executeStatement: (args: Parameters<typeof inner.executeStatement>[0]) => {
       const validated = syncAsync(function* () {
         const stmt = validateBeforeExecute(db, args);
-        const rows = yield* step(inner.executeSql(args));
+        const rows = yield* step(inner.executeStatement(args));
         if (stmt) validateAfterExecute(stmt, args, rows);
         return rows;
       });

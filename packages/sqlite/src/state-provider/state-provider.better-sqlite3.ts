@@ -7,7 +7,9 @@ import type { SqliteStateProvider } from "./state-provider.sqlite.ts";
 
 export type BetterSqlite3Context = { db: Database.Database; txHooks: TxHooks };
 
-type StatementOptions = Parameters<SqliteStateProvider<BetterSqlite3Context>["executeSql"]>[0];
+type StatementOptions = Parameters<
+  SqliteStateProvider<BetterSqlite3Context>["executeStatement"]
+>[0];
 
 const requireTxHooks = (txCtx: Partial<BetterSqlite3Context>): TxHooks => {
   if (txCtx.txHooks === undefined) {
@@ -65,7 +67,7 @@ export function createBetterSqlite3Provider({
   const runOutsideTransaction = (options: StatementOptions): unknown[] => {
     if (db.inTransaction) {
       throw new Error(
-        "executeSql without txCtx ran while the connection is inside a transaction: pass that transaction's context",
+        "executeStatement without txCtx ran while the connection is inside a transaction: pass that transaction's context",
       );
     }
     return runSql(db, options);
@@ -111,7 +113,7 @@ export function createBetterSqlite3Provider({
         ...members,
         withTransaction: <T>(fn: (txCtx: BetterSqlite3Context) => T) =>
           withTxHooks((txHooks) => runInTransaction.sync(txHooks, fn) as T),
-        executeSql: (options) =>
+        executeStatement: (options) =>
           options.txCtx ? runSql(options.txCtx.db, options) : runOutsideTransaction(options),
         close: () => {
           stmtCache.clear();
@@ -124,7 +126,7 @@ export function createBetterSqlite3Provider({
             using _writeLock = await lock.acquireWrite();
             return (await runInTransaction.async(txHooks, fn)) as T;
           }),
-        executeSql: async (options) => {
+        executeStatement: async (options) => {
           if (options.txCtx) return runSql(options.txCtx.db, options);
           using _lock = options.readOnly ? await lock.acquireRead() : await lock.acquireWrite();
           return runOutsideTransaction(options);

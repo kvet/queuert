@@ -52,32 +52,42 @@ export type PgStateProvider<TTxContext extends BaseTxContext> = {
   onTransactionRollback: (txCtx: TTxContext, callback: () => void) => void;
 
   /**
-   * Executes a SQL query.
-   * When txCtx is provided, uses that transaction connection.
-   * When txCtx is omitted, acquires a connection from the pool, executes, and releases.
+   * Executes a batch of SQL statements in order, each one seeing the effects of the ones
+   * before it, and returns one row array per statement, in statement order. When `txCtx`
+   * is provided, runs on that transaction's connection. When it is omitted, each statement
+   * autocommits on its own: a provider that runs the statements one at a time may use any
+   * connection for each, and one that pipelines sends the batch on one connection it acquires.
    *
-   * `id` is a stable cache key for server-side prepared statements. It uniquely
-   * identifies the resolved SQL within this provider instance (the adapter folds
-   * template variants like `schema` / `tablePrefix` into the suffix), so providers
-   * MAY use it directly as the prepared-statement name or as a signal to opt into
-   * driver-level statement caching. When omitted, the provider must execute the
-   * statement unprepared — the adapter omits `id` for one-off or dynamic SQL.
+   * The provider may send the batch pipelined, issuing every statement without awaiting between
+   * them, or run it statement by statement. A pipelining provider waits for every statement to
+   * settle and throws the first rejection in statement order. When a statement fails, the call
+   * rejects with that statement's driver error, the first failure in statement order; whether
+   * later statements ran is unspecified, and inside a transaction the caller rolls it back.
    *
-   * `paramTypes` / `columnTypes` are type hints for drivers that don't serialize parameters
-   * or parse result columns themselves. Drivers that handle these natively can ignore them.
+   * `id` is a stable cache key for server-side prepared statements. It uniquely identifies the
+   * resolved SQL within this provider instance (the adapter folds template variants like `schema`
+   * / `tablePrefix` into the suffix), so providers MAY use it directly as the prepared-statement
+   * name or as a signal to opt into driver-level statement caching. When omitted, the provider
+   * must execute the statement unprepared — the adapter omits `id` for one-off or dynamic SQL.
    *
-   * `readOnly` indicates whether the statement reads only (pure `SELECT` with no `FOR UPDATE`).
-   * Providers MAY use this to route to a read replica or a separate reader pool.
+   * `paramTypes` / `columnTypes` are type hints for drivers that don't serialize parameters or
+   * parse result columns themselves. Drivers that handle these natively can ignore them.
+   *
+   * `readOnly` indicates whether the statement reads only (pure `SELECT` with no `FOR UPDATE`). A
+   * provider MAY route a batch to a read replica or a separate reader pool only when every
+   * statement in it is `readOnly`.
    */
-  executeSql: (options: {
+  executeStatements: (options: {
     txCtx?: TTxContext;
-    id?: string;
-    sql: string;
-    params: unknown[];
-    paramTypes: Record<number, RuntimeType>;
-    columnTypes: Record<string, RuntimeType>;
-    readOnly: boolean;
-  }) => Promise<unknown[]>;
+    statements: {
+      id?: string;
+      sql: string;
+      params: unknown[];
+      paramTypes: Record<number, RuntimeType>;
+      columnTypes: Record<string, RuntimeType>;
+      readOnly: boolean;
+    }[];
+  }) => Promise<unknown[][]>;
 
   /**
    * Classifies an error thrown by this provider's driver. Returns `undefined` for an error it

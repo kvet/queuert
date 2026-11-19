@@ -27,23 +27,23 @@ export const createPgMigratorConformanceContext = ({
     createMigrationStore: ({ migrationTableName, lockTableName }) =>
       createPgMigratorStore({ stateProvider: provider(), migrationTableName, lockTableName }),
     executeSql: async (sql, txCtx) => {
-      await provider().executeSql({
+      await provider().executeStatements({
         txCtx,
-        sql,
-        params: [],
-        paramTypes: {},
-        columnTypes: {},
-        readOnly: false,
+        statements: [{ sql, params: [], paramTypes: {}, columnTypes: {}, readOnly: false }],
       });
     },
     countRows: async (table) => {
-      const [row] = (await provider().executeSql({
-        sql: `SELECT CAST(count(*) AS integer) AS count FROM ${table}`,
-        params: [],
-        paramTypes: {},
-        columnTypes: { count: "number" },
-        readOnly: true,
-      })) as { count: number }[];
+      const [[row]] = (await provider().executeStatements({
+        statements: [
+          {
+            sql: `SELECT CAST(count(*) AS integer) AS count FROM ${table}`,
+            params: [],
+            paramTypes: {},
+            columnTypes: { count: "number" },
+            readOnly: true,
+          },
+        ],
+      })) as { count: number }[][];
       return row.count;
     },
   };

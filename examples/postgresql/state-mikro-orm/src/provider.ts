@@ -100,14 +100,18 @@ export const createMikroOrmPgStateProvider = ({
       const tableName = /relation "([^"]+)" does not exist/.exec(String(driverError.message))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
     },
-    executeSql: async ({ txCtx, sql, params }) => {
+    executeStatements: async ({ txCtx, statements }) => {
       const transaction = txCtx?.em.getTransactionContext<Kysely<unknown>>();
       if (txCtx !== undefined && transaction === undefined) {
         throw new Error("Provided context is not in a transaction");
       }
       const client = transaction ?? orm.em.getConnection().getClient<unknown>();
-      const result = await client.executeQuery(CompiledQuery.raw(sql, params));
-      return result.rows;
+      const results: unknown[][] = [];
+      for (const { sql, params } of statements) {
+        const result = await client.executeQuery(CompiledQuery.raw(sql, params));
+        results.push(result.rows);
+      }
+      return results;
     },
   };
 };

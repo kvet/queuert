@@ -23,11 +23,11 @@ const createFlakyStateAdapter = (
   mode: Mode,
   stateProvider: SqliteStateProvider<BetterSqlite3Context, Mode>,
   failStatement: (
-    executeSql: SqliteStateProvider<BetterSqlite3Context, Mode>["executeSql"],
-    options: Parameters<SqliteStateProvider<BetterSqlite3Context, Mode>["executeSql"]>[0],
+    executeStatement: SqliteStateProvider<BetterSqlite3Context, Mode>["executeStatement"],
+    options: Parameters<SqliteStateProvider<BetterSqlite3Context, Mode>["executeStatement"]>[0],
   ) => MaybePromise<unknown[]>,
 ): StateAdapter<any, any, any, Mode> => {
-  const executeSql = stateProvider.executeSql.bind(stateProvider);
+  const executeStatement = stateProvider.executeStatement.bind(stateProvider);
   const shouldError = createFlakyBatchGenerator();
   let enabled = true;
   let statementCount = 0;
@@ -36,13 +36,13 @@ const createFlakyStateAdapter = (
   const stateAdapter: StateAdapter<any, any, any, Mode> = createSqliteStateAdapter({
     stateProvider: {
       ...stateProvider,
-      executeSql: (options) => {
+      executeStatement: (options) => {
         statementCount++;
         if (enabled && shouldError()) {
           errorCount++;
-          return failStatement(executeSql, options);
+          return failStatement(executeStatement, options);
         }
-        return executeSql(options);
+        return executeStatement(options);
       },
     },
   });
@@ -95,8 +95,8 @@ export const createEndToEndContext = async (
       createFlakyStateAdapter(
         mode,
         createBetterSqlite3Provider({ db, lock, mode }),
-        (executeSql, options) =>
-          executeSql({
+        (executeStatement, options) =>
+          executeStatement({
             txCtx: options.txCtx,
             sql: "SELECT 1 FROM nonexistent_table_queuert_poison_xyz",
             params: [],

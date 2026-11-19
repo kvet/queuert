@@ -55,7 +55,7 @@ export const createSqliteMigratorConformanceContext = ({
         provider(),
         syncAsync(function* () {
           yield* step(
-            provider().executeSql({
+            provider().executeStatement({
               txCtx,
               sql,
               params: [],
@@ -71,7 +71,7 @@ export const createSqliteMigratorConformanceContext = ({
         provider(),
         syncAsync(function* () {
           const rows = yield* step(
-            provider().executeSql({
+            provider().executeStatement({
               sql: `SELECT CAST(count(*) AS integer) AS count FROM ${table}`,
               params: [],
               paramTypes: {},

@@ -44,9 +44,9 @@ export const createDrizzleSqliteStateProvider = ({
       )?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
     },
-    executeSql: ({ txCtx, id, sql, params, columnTypes }) => {
+    executeStatement: ({ txCtx, id, sql, params, columnTypes }) => {
       if (!txCtx && db.inTransaction) {
-        throw new Error("executeSql without txCtx ran inside an open transaction");
+        throw new Error("executeStatement without txCtx ran inside an open transaction");
       }
       const statement = id !== undefined ? prepareCached(id, sql) : db.prepare(sql);
       if (Object.keys(columnTypes).length > 0) return statement.all(...params);

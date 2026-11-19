@@ -43,7 +43,7 @@ const stateAdapters = [
   { label: "PostgreSQL (postgres-js)", backend: "postgres" },
   { label: "PostgreSQL (pg)", backend: "postgres" },
   { label: "MySQL (mysql2)", backend: "mysql" },
-  { label: "MariaDB (mysql2)", backend: "mariadb" },
+  { label: "MariaDB (mariadb)", backend: "mariadb" },
   { label: "Redis (redis)", backend: "redis" },
   { label: "Redis (ioredis)", backend: "redis" },
 ] satisfies { label: string; backend: Backend }[];

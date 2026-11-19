@@ -25,7 +25,6 @@
 
 # Long term
 
-- [IDEA] PostgreSQL pipelining
 - [IDEA] Bring back the wake budget
 - [IDEA] Built-in job priority
 - [IDEA] Reset jobs in chains + dashboard

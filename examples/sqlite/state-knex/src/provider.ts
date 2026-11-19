@@ -34,7 +34,7 @@ export const createKnexSqliteStateProvider = ({
     // `id` not forwarded: knex re-prepares every raw query and exposes no hook
     // to cache statement handles through the dialect. Bypass knex for statement
     // caching (see sqlite/state-better-sqlite3).
-    executeSql: async ({ txCtx, sql, params }) => {
+    executeStatement: async ({ txCtx, sql, params }) => {
       // The better-sqlite3 dialect returns rows for read statements and a
       // `{ changes, lastInsertRowid }` summary for writes.
       const result: unknown = await (txCtx?.trx ?? knex).raw(sql, params as Knex.RawBinding[]);

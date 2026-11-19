@@ -45,7 +45,12 @@ const valueMatchesRuntime = (value: unknown, runtime: RuntimeType): boolean => {
 };
 
 const findViolations = (
-  { sql, params, paramTypes, columnTypes }: Parameters<Mysql2PoolProvider["executeSql"]>[0],
+  {
+    sql,
+    params,
+    paramTypes,
+    columnTypes,
+  }: Parameters<Mysql2PoolProvider["executeStatements"]>[0]["statements"][number],
   rows: unknown[],
 ): string[] => {
   const statement = sql.trim().replace(/\s+/g, " ").slice(0, 120);
@@ -86,10 +91,14 @@ const createValidatingProvider = (pool: Pool, violations: Set<string>): Mysql2Po
   const inner = createMysql2PoolProvider({ pool });
   return {
     ...inner,
-    executeSql: async (options) => {
-      const rows = await inner.executeSql(options);
-      for (const violation of findViolations(options, rows)) violations.add(violation);
-      return rows;
+    executeStatements: async (options) => {
+      const results = await inner.executeStatements(options);
+      options.statements.forEach((statement, index) => {
+        for (const violation of findViolations(statement, results[index])) {
+          violations.add(violation);
+        }
+      });
+      return results;
     },
   };
 };

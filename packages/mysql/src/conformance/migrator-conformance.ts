@@ -25,23 +25,23 @@ export const createMysqlMigratorConformanceContext = ({
     createMigrationStore: ({ migrationTableName, lockTableName }) =>
       createMysqlMigratorStore({ stateProvider: provider(), migrationTableName, lockTableName }),
     executeSql: async (sql, txCtx) => {
-      await provider().executeSql({
+      await provider().executeStatements({
         txCtx,
-        sql,
-        params: [],
-        paramTypes: {},
-        columnTypes: {},
-        readOnly: false,
+        statements: [{ sql, params: [], paramTypes: {}, columnTypes: {}, readOnly: false }],
       });
     },
     countRows: async (table) => {
-      const [row] = (await provider().executeSql({
-        sql: `SELECT COUNT(*) AS count FROM ${table}`,
-        params: [],
-        paramTypes: {},
-        columnTypes: {},
-        readOnly: true,
-      })) as { count: unknown }[];
+      const [[row]] = (await provider().executeStatements({
+        statements: [
+          {
+            sql: `SELECT COUNT(*) AS count FROM ${table}`,
+            params: [],
+            paramTypes: {},
+            columnTypes: {},
+            readOnly: true,
+          },
+        ],
+      })) as { count: unknown }[][];
       return Number(row.count);
     },
   };

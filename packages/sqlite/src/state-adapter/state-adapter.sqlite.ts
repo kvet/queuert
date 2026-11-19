@@ -691,11 +691,11 @@ export function createSqliteStateAdapter<
     }
     return error;
   };
-  const executeSql = syncAsync(function* (
-    args: Parameters<SqliteStateProvider<TTxContext, Mode>["executeSql"]>[0],
+  const executeStatement = syncAsync(function* (
+    args: Parameters<SqliteStateProvider<TTxContext, Mode>["executeStatement"]>[0],
   ) {
     try {
-      return yield* step(stateProvider.executeSql(args));
+      return yield* step(stateProvider.executeStatement(args));
     } catch (error) {
       // oxlint-disable-next-line typescript/only-throw-error -- rethrows the driver's error unless it is the fence's
       throw fencedError(error);
@@ -722,7 +722,7 @@ export function createSqliteStateAdapter<
     typedSql: TypedSql<TParams, TColumns>,
     params?: InferParams<TParams>,
   ): MaybePromise<InferColumns<TColumns>[]> =>
-    pick(executeSql)({
+    pick(executeStatement)({
       txCtx,
       id: typedSql.id,
       sql: typedSql.sql,

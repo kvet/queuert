@@ -6,6 +6,7 @@ import {
   assertMigrationLockOptions,
   createMigrator,
   createTemplateApplier,
+  batchStatementExecutor,
   createTypedSqlExecutor,
   sql,
   t,
@@ -77,7 +78,7 @@ export const createMysqlMigrationStore = <TTxContext extends BaseTxContext>({
   migrationTable: string;
   lockTable: string;
 }): MigrationStore<TTxContext> => {
-  const exec = createTypedSqlExecutor(stateProvider);
+  const exec = createTypedSqlExecutor(batchStatementExecutor(stateProvider));
   const applyTemplate = createTemplateApplier({
     migration_table: migrationTable,
     lock_table: lockTable,

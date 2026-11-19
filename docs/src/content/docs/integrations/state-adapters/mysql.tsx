@@ -132,6 +132,49 @@ const providerRequirements = (): FieldItem[] => [
   },
 ];
 
+const pipelining = (): FieldItem[] => [
+  {
+    name: "mariadb",
+    chips: ["pipelined"],
+    description: (
+      <>
+        <code>pipelining</code> is on by default, against MariaDB and MySQL servers alike. The
+        provider opens its transactions with <code>SET autocommit = 0</code>.
+      </>
+    ),
+  },
+  {
+    name: "mysql2",
+    chips: ["one by one"],
+    description: (
+      <>
+        The driver cannot pipeline, directly or under Drizzle, Kysely, Knex or MikroORM, so these
+        providers run the batch statement by statement.
+      </>
+    ),
+  },
+  {
+    name: "Prisma",
+    chips: ["one by one"],
+    description: (
+      <>
+        Interactive transactions with <code>@prisma/adapter-mariadb</code> chain their operations
+        through a queue.
+      </>
+    ),
+  },
+  {
+    name: "Bun SQL",
+    chips: ["one by one"],
+    description: (
+      <>
+        Bun runs the queries issued on one MySQL connection one at a time, so the provider runs the
+        batch statement by statement.
+      </>
+    ),
+  },
+];
+
 const Page = () => (
   <>
     <p>
@@ -386,6 +429,31 @@ const Page = () => (
     </Tabs>
     <p>
       The full API is in the <A href="/api/mysql-conformance/readme/">conformance reference</A>.
+    </p>
+
+    <h2 id="pipelining">Pipelining</h2>
+    <p>
+      The adapter sends the statements of one operation whose parameters it knows up front to{" "}
+      <code>executeStatements</code> as one batch. A provider whose client pipelines issues them all
+      without waiting for each result, so the batch costs one round trip; any other provider runs it
+      statement by statement, which is just as correct. The Setup providers:
+    </p>
+    <FieldList title="Pipelining by client" proseNames items={pipelining()} />
+    <p>
+      A provider that pipelines opens its transactions with <code>SET autocommit = 0</code> after{" "}
+      <code>SET TRANSACTION ISOLATION LEVEL READ COMMITTED</code>, and restores{" "}
+      <code>autocommit = 1</code> after COMMIT or ROLLBACK. A deadlock (1213) makes InnoDB roll back
+      and end the transaction while the rest of the batch is still in flight. With{" "}
+      <code>autocommit = 0</code> those statements open a new implicit transaction that the
+      provider's ROLLBACK discards; after <code>START TRANSACTION</code> they would autocommit.
+    </p>
+    <p>
+      The mariadb connector sends a statement's PREPARE together with its EXECUTE only to MariaDB
+      servers (10.2.4 or later). Against a MySQL server, an EXECUTE whose statement the connector
+      has not prepared yet waits for its PREPARE, while one already in its prepare cache goes out at
+      once and can overtake it. A provider for MySQL servers therefore prepares the batch's
+      statements first, all in one round trip, and then pipelines their EXECUTEs in order, as the
+      mariadb example does.
     </p>
 
     <h2>Isolation level</h2>

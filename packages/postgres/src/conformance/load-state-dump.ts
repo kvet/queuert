@@ -26,12 +26,16 @@ export const loadStateDump = async <TTxContext extends BaseTxContext>(
   ): Promise<void> => {
     const qualifiedTable = `${schema}.${tablePrefix}${table}`;
     for (const batch of chunkItems(items, BATCH_SIZE)) {
-      await stateProvider.executeSql({
-        sql: `INSERT INTO ${qualifiedTable} SELECT * FROM jsonb_populate_recordset(NULL::${qualifiedTable}, $1::jsonb)`,
-        params: [JSON.stringify(batch.map(toRow))],
-        paramTypes: {},
-        columnTypes: {},
-        readOnly: false,
+      await stateProvider.executeStatements({
+        statements: [
+          {
+            sql: `INSERT INTO ${qualifiedTable} SELECT * FROM jsonb_populate_recordset(NULL::${qualifiedTable}, $1::jsonb)`,
+            params: [JSON.stringify(batch.map(toRow))],
+            paramTypes: {},
+            columnTypes: {},
+            readOnly: false,
+          },
+        ],
       });
     }
   };

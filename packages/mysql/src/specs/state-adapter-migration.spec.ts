@@ -37,12 +37,18 @@ const killedAfterSchemaStatements = (
   const executed: string[] = [];
   return {
     ...stateProvider,
-    executeSql: async (options) => {
-      if (SCHEMA_STATEMENT.test(options.sql)) {
-        if (executed.length === count) throw new Error("process killed");
-        executed.push(options.sql);
+    executeStatements: async (options) => {
+      const results: unknown[][] = [];
+      for (const statement of options.statements) {
+        if (SCHEMA_STATEMENT.test(statement.sql)) {
+          if (executed.length === count) throw new Error("process killed");
+          executed.push(statement.sql);
+        }
+        results.push(
+          ...(await stateProvider.executeStatements({ ...options, statements: [statement] })),
+        );
       }
-      return stateProvider.executeSql(options);
+      return results;
     },
   };
 };
@@ -51,9 +57,11 @@ const killedAt =
   (statement: RegExp) =>
   (stateProvider: Mysql2PoolProvider): Mysql2PoolProvider => ({
     ...stateProvider,
-    executeSql: async (options) => {
-      if (statement.test(options.sql)) throw new Error("process killed");
-      return stateProvider.executeSql(options);
+    executeStatements: async (options) => {
+      if (options.statements.some((executed) => statement.test(executed.sql))) {
+        throw new Error("process killed");
+      }
+      return stateProvider.executeStatements(options);
     },
   });
 

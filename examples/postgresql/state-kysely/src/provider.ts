@@ -33,12 +33,16 @@ export const createKyselyPgStateProvider = <TDatabase>({
     // `id` not forwarded: Kysely's CompiledQuery.raw has no name field; the pg
     // dialect calls `client.query(sql, params)` unprepared. Bypass Kysely for
     // server-side prepared statements (see postgresql/state-pg).
-    executeSql: async ({ txCtx, sql, params }) => {
+    executeStatements: async ({ txCtx, statements }) => {
       if (txCtx && !txCtx.db.isTransaction) {
         throw new Error("Provided context is not in a transaction");
       }
-      const result = await (txCtx?.db ?? db).executeQuery(CompiledQuery.raw(sql, params));
-      return result.rows;
+      const results: unknown[][] = [];
+      for (const { sql, params } of statements) {
+        const result = await (txCtx?.db ?? db).executeQuery(CompiledQuery.raw(sql, params));
+        results.push(result.rows);
+      }
+      return results;
     },
   };
 };

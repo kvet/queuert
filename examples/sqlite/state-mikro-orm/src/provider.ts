@@ -92,7 +92,7 @@ export const createMikroOrmSqliteStateProvider = ({
       )?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
     },
-    executeSql: async ({ txCtx, sql, params }) => {
+    executeStatement: async ({ txCtx, sql, params }) => {
       const transaction = txCtx?.em.getTransactionContext<Kysely<unknown>>();
       if (txCtx !== undefined && transaction === undefined) {
         throw new Error("Provided context is not in a transaction");

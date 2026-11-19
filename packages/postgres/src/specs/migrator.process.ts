@@ -14,15 +14,13 @@ export const LEASE_TTL_MS = 2_000;
 export const createAppMigrations = (
   provider: PgStateProvider<PgPoolContext>,
 ): Migration<PgPoolContext>[] => {
-  const execute = async (sql: string, txCtx?: PgPoolContext): Promise<unknown[]> =>
-    provider.executeSql({
+  const execute = async (sql: string, txCtx?: PgPoolContext): Promise<unknown[]> => {
+    const [rows] = await provider.executeStatements({
       txCtx,
-      sql,
-      params: [],
-      paramTypes: {},
-      columnTypes: {},
-      readOnly: false,
+      statements: [{ sql, params: [], paramTypes: {}, columnTypes: {}, readOnly: false }],
     });
+    return rows;
+  };
   return [
     {
       name: "create_invoices",

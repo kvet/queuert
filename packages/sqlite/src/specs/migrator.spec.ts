@@ -39,7 +39,7 @@ const deploymentRuns = async (provider: Provider): Promise<unknown[]> =>
   query(provider, "SELECT pid FROM deployment_runs");
 
 const queryInMode = <T>(provider: Provider, text: string): MaybePromise<T[]> =>
-  provider.executeSql({
+  provider.executeStatement({
     sql: text,
     params: [],
     paramTypes: {},
@@ -55,7 +55,7 @@ const execute = (provider: Provider, text: string): MaybePromise<void> =>
     provider,
     syncAsync(function* () {
       yield* step(
-        provider.executeSql({
+        provider.executeStatement({
           sql: text,
           params: [],
           paramTypes: {},

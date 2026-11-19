@@ -24,7 +24,7 @@ await using drivers = new AsyncDisposableStack();
 // #hide
 // Create the state adapter
 const statePool = drivers.adopt(
-  new Pool({ connectionString: pg.connectionString, max: 10 }),
+  new Pool({ connectionString: pg.connectionString, max: 10, pipeline: true }),
   async (pool) => pool.end(),
 );
 await using stateAdapter = createPgStateAdapter({

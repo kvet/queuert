@@ -36,7 +36,7 @@ const stateProvider: PgStateProvider<PostgresJsContext> = {
   onTransactionRollback: (txCtx, callback) => {
     txCtx.txHooks.onRollback(callback);
   },
-  // isTransaction, executeSql, classifyError
+  // isTransaction, executeStatements, classifyError
 };
 ```
 

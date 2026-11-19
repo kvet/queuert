@@ -51,7 +51,7 @@ let capturing = false;
 const captured: CapturedQuery[] = [];
 const stateProvider: typeof baseProvider = {
   ...baseProvider,
-  executeSql: (args) => {
+  executeStatement: (args) => {
     if (capturing) {
       try {
         const stmt = db.prepare(`EXPLAIN QUERY PLAN ${args.sql}`);
@@ -64,7 +64,7 @@ const stateProvider: typeof baseProvider = {
         captured.push({ id: args.id, sql: args.sql, plan: [`EXPLAIN failed: ${String(error)}`] });
       }
     }
-    return baseProvider.executeSql(args);
+    return baseProvider.executeStatement(args);
   },
 };
 

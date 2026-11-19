@@ -43,6 +43,30 @@ export const createPostgresJsStateProvider = ({
     return value;
   };
 
+  const executeBatch = async (
+    client: postgres.TransactionSql | postgres.ReservedSql,
+    statements: {
+      id?: string;
+      sql: string;
+      params: unknown[];
+      paramTypes: Record<number, RuntimeType>;
+    }[],
+  ): Promise<unknown[][]> => {
+    const results = await Promise.allSettled(
+      statements.map(({ id, sql: query, params, paramTypes }) =>
+        client.unsafe(
+          query,
+          params.map((value, index) => serializeParam(value, paramTypes[index])) as any[],
+          { prepare: prepareStatements && id !== undefined },
+        ),
+      ),
+    );
+    return results.map((result) => {
+      if (result.status === "rejected") throw result.reason;
+      return [...result.value];
+    });
+  };
+
   return {
     withTransaction: async (cb) =>
       withTxHooks(async (txHooks) =>
@@ -61,14 +85,14 @@ export const createPostgresJsStateProvider = ({
       const tableName = /relation "([^"]+)" does not exist/.exec(String(driverError.message))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
     },
-    executeSql: async ({ txCtx, id, sql: query, params, paramTypes }) => {
-      const client = txCtx?.txSql ?? sql;
-      const prepare = prepareStatements && id !== undefined;
-      if (!params || params.length === 0) {
-        return client.unsafe(query, [], { prepare }) as any;
+    executeStatements: async ({ txCtx, statements }) => {
+      if (txCtx) return executeBatch(txCtx.txSql, statements);
+      const reservedSql = await sql.reserve();
+      try {
+        return await executeBatch(reservedSql, statements);
+      } finally {
+        reservedSql.release();
       }
-      const serialized = params.map((value, i) => serializeParam(value, paramTypes[i]));
-      return client.unsafe(query, serialized as any[], { prepare }) as any;
     },
   };
 };

@@ -38,7 +38,7 @@ const spawnerIn = (mode: Mode) =>
 type Provider = SqliteStateProvider<BetterSqlite3Context, Mode>;
 
 const query = async <T>(provider: Provider, text: string): Promise<T[]> =>
-  provider.executeSql({
+  provider.executeStatement({
     sql: text,
     params: [],
     paramTypes: {},
@@ -53,7 +53,7 @@ const appliedNames = async (provider: Provider): Promise<string[]> =>
   names(provider, "SELECT name FROM queuert_migration ORDER BY name");
 
 const execute = async (provider: Provider, text: string): Promise<void> => {
-  await provider.executeSql({
+  await provider.executeStatement({
     sql: text,
     params: [],
     paramTypes: {},

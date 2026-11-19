@@ -37,12 +37,16 @@ export const createKyselyMysqlStateProvider = <TDatabase>({
     },
     // `id` not forwarded: Kysely's MySQL dialect sends every query with mysql2's `query`
     // (text protocol). Bypass Kysely for server-side prepared statements (see mysql/state-mysql2).
-    executeSql: async ({ txCtx, sql, params }) => {
+    executeStatements: async ({ txCtx, statements }) => {
       if (txCtx && !txCtx.db.isTransaction) {
         throw new Error("Provided context is not in a transaction");
       }
-      const result = await (txCtx?.db ?? db).executeQuery(CompiledQuery.raw(sql, params));
-      return result.rows;
+      const results: unknown[][] = [];
+      for (const { sql, params } of statements) {
+        const result = await (txCtx?.db ?? db).executeQuery(CompiledQuery.raw(sql, params));
+        results.push(result.rows);
+      }
+      return results;
     },
   };
 };

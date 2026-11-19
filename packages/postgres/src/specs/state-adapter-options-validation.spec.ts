@@ -7,7 +7,7 @@ const dummyProvider = {
   isTransaction: () => true,
   onTransactionCommit: () => {},
   onTransactionRollback: () => {},
-  executeSql: async () => [],
+  executeStatements: async () => [],
   classifyError: () => undefined,
 };
 

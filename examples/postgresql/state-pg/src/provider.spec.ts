@@ -26,7 +26,11 @@ describe("postgresql/state-pg provider conformance", () => {
 
   beforeAll(async () => {
     pg = await acquirePostgres("postgres:18", import.meta.url);
-    pool = new Pool({ connectionString: pg.connectionString, idleTimeoutMillis: 0 });
+    pool = new Pool({
+      connectionString: pg.connectionString,
+      idleTimeoutMillis: 0,
+      pipeline: true,
+    });
   }, 60_000);
 
   afterAll(async () => {
@@ -51,7 +55,11 @@ describe("postgresql/state-pg migrator conformance", () => {
 
   beforeAll(async () => {
     pg = await acquirePostgres("postgres:18", `${import.meta.url}#migrator`);
-    pool = new Pool({ connectionString: pg.connectionString, idleTimeoutMillis: 0 });
+    pool = new Pool({
+      connectionString: pg.connectionString,
+      idleTimeoutMillis: 0,
+      pipeline: true,
+    });
   }, 60_000);
 
   afterAll(async () => {

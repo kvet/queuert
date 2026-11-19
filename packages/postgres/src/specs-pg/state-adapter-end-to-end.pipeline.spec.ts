@@ -1,28 +1,36 @@
 // oxlint-disable no-empty-pattern -- vitest fixtures must destructure their context
 import { conformanceTestSuite } from "@queuert/helpers/conformance";
-import { acquireMysql } from "@queuert/testcontainers";
-import { createPool } from "mysql2/promise";
+import { detectResourceLeaks } from "@queuert/helpers/testing";
+import { TESTCONTAINERS_RESOURCE_TYPES, acquirePostgres } from "@queuert/testcontainers";
+import { Pool } from "pg";
 import { endToEndAsyncGroups, endToEndBaseGroups } from "queuert/conformance-internal";
 import { it as baseIt, describe } from "vitest";
 
 import { capabilityGroups, createEndToEndContext } from "./state-adapter-end-to-end.spec-helper.ts";
 
-const { connectionOptions } = await acquireMysql("mariadb:11.4", import.meta.url);
+const pg = await acquirePostgres("postgres:14", import.meta.url);
 
 const it = baseIt
   .extend("pool", { scope: "file" }, async ({}, { onCleanup }) => {
-    const pool = createPool({ ...connectionOptions, connectionLimit: 20 });
+    const pool = new Pool({
+      connectionString: pg.connectionString,
+      idleTimeoutMillis: 0,
+      pipeline: true,
+    });
     onCleanup(async () => pool.end());
     return pool;
   })
-  .extend("conformance", { scope: "file" }, async ({ pool }) =>
-    createEndToEndContext(pool, "mariadb", undefined),
-  );
+  .extend(
+    "resourceLeakCheck",
+    { auto: true },
+    detectResourceLeaks({ additionalAllowedTypes: TESTCONTAINERS_RESOURCE_TYPES }),
+  )
+  .extend("conformance", { scope: "file" }, async ({ pool }) => createEndToEndContext(pool));
 
 // NOTE: hack for vitest plugin
 baseIt("index");
 
-describe("mariadb:11.4 End-to-End Conformance, in-process notify", () => {
+describe("PostgreSQL End-to-End Conformance, pipelined pool, in-process notify", () => {
   conformanceTestSuite({
     it,
     groups: [...endToEndBaseGroups, ...endToEndAsyncGroups, ...capabilityGroups],

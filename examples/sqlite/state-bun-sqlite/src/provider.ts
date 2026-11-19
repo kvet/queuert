@@ -44,9 +44,9 @@ export const createBunSqliteStateProvider = ({
       )?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
     },
-    executeSql: ({ txCtx, id, sql, params }) => {
+    executeStatement: ({ txCtx, id, sql, params }) => {
       if (!txCtx && db.inTransaction) {
-        throw new Error("executeSql without txCtx ran inside an open transaction");
+        throw new Error("executeStatement without txCtx ran inside an open transaction");
       }
       const statement =
         id !== undefined

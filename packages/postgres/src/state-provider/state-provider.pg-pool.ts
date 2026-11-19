@@ -22,18 +22,23 @@ export type PgPoolProvider = PgStateProvider<PgPoolContext>;
 
 /** A PostgreSQL state provider over a `pg` pool; each transaction holds one pool client. */
 export const createPgPoolProvider = ({ pool }: { pool: Pool }): PgPoolProvider => {
-  const exec = async (
-    client: PoolClient,
-    id: string | undefined,
-    sql: string,
-    params: unknown[],
-  ): Promise<unknown[]> => {
-    if (id !== undefined) {
-      const result = await client.query({ name: id, text: sql, values: params });
-      return result.rows;
-    }
-    const result = await client.query(sql, params);
-    return result.rows;
+  const runStatements = async (
+    poolClient: PoolClient,
+    statements: Parameters<PgPoolProvider["executeStatements"]>[0]["statements"],
+  ): Promise<unknown[][]> => {
+    const settled = await Promise.allSettled(
+      statements.map(async ({ id, sql, params }) => {
+        const result =
+          id === undefined
+            ? await poolClient.query(sql, params)
+            : await poolClient.query({ name: id, text: sql, values: params });
+        return result.rows as unknown[];
+      }),
+    );
+    return settled.map((outcome) => {
+      if (outcome.status === "rejected") throw outcome.reason;
+      return outcome.value;
+    });
   };
 
   return {
@@ -68,11 +73,12 @@ export const createPgPoolProvider = ({ pool }: { pool: Pool }): PgPoolProvider =
       const tableName = /relation "([^"]+)" does not exist/.exec(String(driverError.message))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
     },
-    executeSql: async ({ txCtx, id, sql, params }) => {
-      if (txCtx) return exec(txCtx.poolClient, id, sql, params);
+    executeStatements: async ({ txCtx, statements }) => {
+      if (statements.length === 0) return [];
+      if (txCtx) return runStatements(txCtx.poolClient, statements);
       const poolClient = await pool.connect();
       try {
-        return await exec(poolClient, id, sql, params);
+        return await runStatements(poolClient, statements);
       } finally {
         poolClient.release();
       }

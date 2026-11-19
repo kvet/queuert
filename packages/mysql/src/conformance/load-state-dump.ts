@@ -80,12 +80,16 @@ export const loadStateDump = async <TTxContext extends BaseTxContext>(
         ${names.map((name) => `\`${name}\` ${columns[name]} PATH '$.${name}'`).join(",\n        ")}
       )) d`;
     for (const batch of chunkItems(items, BATCH_SIZE)) {
-      await stateProvider.executeSql({
-        sql,
-        params: [JSON.stringify(batch.map(toRow))],
-        paramTypes: {},
-        columnTypes: {},
-        readOnly: false,
+      await stateProvider.executeStatements({
+        statements: [
+          {
+            sql,
+            params: [JSON.stringify(batch.map(toRow))],
+            paramTypes: {},
+            columnTypes: {},
+            readOnly: false,
+          },
+        ],
       });
     }
   };

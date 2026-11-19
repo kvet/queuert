@@ -29,9 +29,10 @@ export type MysqlErrorClassification = { kind: "undefined_table"; tableName: str
 export type MysqlStateProvider<TTxContext extends BaseTxContext> = {
   /**
    * Executes a callback within a database transaction at READ COMMITTED: issues
-   * `SET TRANSACTION ISOLATION LEVEL READ COMMITTED` and then `START TRANSACTION` on the same
-   * connection with nothing between them, commits on success, rolls back on error, and releases
-   * the connection.
+   * `SET TRANSACTION ISOLATION LEVEL READ COMMITTED` and then opens the transaction on the same
+   * connection with nothing between them (`START TRANSACTION`, or `SET autocommit = 0` for a
+   * provider that pipelines), commits on success, rolls back on error, and releases the
+   * connection.
    */
   withTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
 
@@ -51,21 +52,39 @@ export type MysqlStateProvider<TTxContext extends BaseTxContext> = {
   onTransactionRollback: (txCtx: TTxContext, callback: () => void) => void;
 
   /**
-   * Executes one SQL statement with `?` placeholders and returns its rows, or an empty array for a
-   * statement that returns none. When `txCtx` is omitted, runs on a connection of its own.
+   * Executes a batch of SQL statements with `?` placeholders in order, each one seeing the
+   * effects of the ones before it, and returns one row array per statement, in statement order,
+   * with an empty array for a statement that returns no rows. When `txCtx` is provided, runs on
+   * that transaction's connection. When it is omitted, each statement autocommits on its own: a
+   * provider that runs the statements one at a time may use any connection for each, and one that
+   * pipelines sends the batch on one connection it acquires.
+   *
+   * The provider may send the batch pipelined, issuing every statement without awaiting between
+   * them, or run it statement by statement. A pipelining provider waits for every statement to
+   * settle and throws the first rejection in statement order. When a statement fails, the call
+   * rejects with that statement's driver error, the first failure in statement order; whether
+   * later statements ran is unspecified, and inside a transaction the caller rolls it back.
+   *
+   * A provider that pipelines opens its transactions with `SET autocommit = 0` and restores it
+   * after COMMIT or ROLLBACK, instead of `START TRANSACTION`: when a deadlock makes InnoDB roll
+   * the transaction back while the rest of a batch is in flight, those statements then open a new
+   * implicit transaction that the provider's ROLLBACK discards, rather than autocommit.
    *
    * `id` marks a statement worth preparing server-side; without it the provider may use the text
-   * protocol. Providers must not enable multiple statements per call.
+   * protocol. Providers must not enable multiple statements per call. A provider MAY route a batch
+   * to a replica only when every statement in it is `readOnly`.
    */
-  executeSql: (options: {
+  executeStatements: (options: {
     txCtx?: TTxContext;
-    id?: string;
-    sql: string;
-    params: unknown[];
-    paramTypes: Record<number, RuntimeType>;
-    columnTypes: Record<string, RuntimeType>;
-    readOnly: boolean;
-  }) => Promise<unknown[]>;
+    statements: {
+      id?: string;
+      sql: string;
+      params: unknown[];
+      paramTypes: Record<number, RuntimeType>;
+      columnTypes: Record<string, RuntimeType>;
+      readOnly: boolean;
+    }[];
+  }) => Promise<unknown[][]>;
 
   /** Classifies an error thrown by this provider's driver. Returns `undefined` for any other. */
   classifyError: (options: { error: unknown }) => MysqlErrorClassification | undefined;

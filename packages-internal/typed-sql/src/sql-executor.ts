@@ -1,4 +1,4 @@
-import type { MaybePromise, ResultModeOf, ModeResult } from "@queuert/sync-async";
+import type { MaybePromise, ModeResult, ResultModeOf } from "@queuert/sync-async";
 
 import {
   type DataType,
@@ -20,18 +20,45 @@ export const validateSqlIdentifier = (value: string, name: string): void => {
   }
 };
 
+export type SqlStatement = {
+  id?: string;
+  sql: string;
+  params: unknown[];
+  paramTypes: Record<number, RuntimeType>;
+  columnTypes: Record<string, RuntimeType>;
+  readOnly: boolean;
+};
+
+export const toSqlStatement = (
+  typedSql: TypedSql,
+  params: readonly unknown[] = [],
+): SqlStatement => ({
+  id: typedSql.id,
+  sql: typedSql.sql,
+  params: params as unknown[],
+  paramTypes: extractParamTypes(typedSql.params),
+  columnTypes: extractColumnTypes(typedSql.columns),
+  readOnly: typedSql.readOnly,
+});
+
+export const batchStatementExecutor = <TTxContext>(executor: {
+  executeStatements(options: {
+    txCtx?: TTxContext;
+    statements: SqlStatement[];
+  }): Promise<unknown[][]>;
+}): {
+  executeStatement: (options: { txCtx?: TTxContext } & SqlStatement) => Promise<unknown[]>;
+} => ({
+  executeStatement: async ({ txCtx, ...statement }) => {
+    const [rows] = await executor.executeStatements({ txCtx, statements: [statement] });
+    return rows;
+  },
+});
+
 export const createTypedSqlExecutor =
   <
     TExecutor extends {
-      executeSql(options: {
-        txCtx?: any;
-        id?: string;
-        sql: string;
-        params: unknown[];
-        paramTypes: Record<number, RuntimeType>;
-        columnTypes: Record<string, RuntimeType>;
-        readOnly: boolean;
-      }): MaybePromise<unknown[]>;
+      executeStatement(options: { txCtx?: any } & SqlStatement): MaybePromise<unknown[]>;
     },
   >(
     executor: TExecutor,
@@ -41,20 +68,15 @@ export const createTypedSqlExecutor =
     sql: typedSql,
     params,
   }: {
-    txCtx?: Parameters<TExecutor["executeSql"]>[0]["txCtx"];
+    txCtx?: Parameters<TExecutor["executeStatement"]>[0]["txCtx"];
     sql: TypedSql<TParams, TColumns>;
   } & (TParams extends readonly []
     ? { params?: undefined }
     : { params: [...InferParams<TParams>] })): ModeResult<
-    ResultModeOf<ReturnType<TExecutor["executeSql"]>>,
+    ResultModeOf<ReturnType<TExecutor["executeStatement"]>>,
     InferColumns<TColumns>[]
   > =>
-    executor.executeSql({
-      txCtx,
-      id: typedSql.id,
-      sql: typedSql.sql,
-      params: params ?? [],
-      paramTypes: extractParamTypes(typedSql.params),
-      columnTypes: extractColumnTypes(typedSql.columns),
-      readOnly: typedSql.readOnly,
-    }) as ModeResult<ResultModeOf<ReturnType<TExecutor["executeSql"]>>, InferColumns<TColumns>[]>;
+    executor.executeStatement({ txCtx, ...toSqlStatement(typedSql, params) }) as ModeResult<
+      ResultModeOf<ReturnType<TExecutor["executeStatement"]>>,
+      InferColumns<TColumns>[]
+    >;

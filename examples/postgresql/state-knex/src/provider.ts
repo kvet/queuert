@@ -29,6 +29,19 @@ export const createKnexPgStateProvider = ({
 }: {
   knex: Knex;
 }): PgStateProvider<KnexPgContext> => {
+  const executeBatch = async (
+    run: (query: { sql: string; bindings: Knex.RawBinding[] }) => PromiseLike<{ rows: unknown[] }>,
+    statements: { sql: string; params: unknown[] }[],
+  ): Promise<unknown[][]> => {
+    const results = await Promise.allSettled(
+      statements.map(async ({ sql, params }) => (await run(toKnexQuery(sql, params))).rows),
+    );
+    return results.map((result) => {
+      if (result.status === "rejected") throw result.reason;
+      return result.value;
+    });
+  };
+
   return {
     withTransaction: async (cb) =>
       withTxHooks(async (txHooks) =>
@@ -53,10 +66,19 @@ export const createKnexPgStateProvider = ({
     // `id` not forwarded: knex has no server-side prepared statement support —
     // every `raw` call is sent unprepared. Bypass knex for prepared statements
     // (see postgresql/state-pg).
-    executeSql: async ({ txCtx, sql, params }) => {
-      const query = toKnexQuery(sql, params);
-      const result = await (txCtx?.trx ?? knex).raw(query.sql, query.bindings);
-      return result.rows;
+    executeStatements: async ({ txCtx, statements }) => {
+      if (txCtx) {
+        return executeBatch((query) => txCtx.trx.raw(query.sql, query.bindings), statements);
+      }
+      const connection = await knex.client.acquireConnection();
+      try {
+        return await executeBatch(
+          (query) => knex.raw(query.sql, query.bindings).connection(connection),
+          statements,
+        );
+      } finally {
+        await knex.client.releaseConnection(connection);
+      }
     },
   };
 };

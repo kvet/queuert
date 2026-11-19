@@ -23,14 +23,15 @@ const spawnDeployment = createDeploymentSpawner<MigrationResult>(
   join(import.meta.dirname, "..", ".."),
 );
 
-const query = async <T = Record<string, unknown>>(provider: Provider, text: string): Promise<T[]> =>
-  provider.executeSql({
-    sql: text,
-    params: [],
-    paramTypes: {},
-    columnTypes: {},
-    readOnly: false,
-  }) as Promise<T[]>;
+const query = async <T = Record<string, unknown>>(
+  provider: Provider,
+  text: string,
+): Promise<T[]> => {
+  const [rows] = await provider.executeStatements({
+    statements: [{ sql: text, params: [], paramTypes: {}, columnTypes: {}, readOnly: false }],
+  });
+  return rows as T[];
+};
 
 const ALL = createAppMigrations(undefined as unknown as Provider).map((m) => m.name);
 

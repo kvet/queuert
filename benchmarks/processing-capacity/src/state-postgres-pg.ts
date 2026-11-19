@@ -5,7 +5,11 @@ import { noopNotifyAdapter } from "queuert/conformance-internal";
 
 import { benchmarkNamespace, requireEnv, runBenchmark } from "./utils.ts";
 
-const pool = new Pool({ connectionString: requireEnv("BENCHMARK_POSTGRES_URL"), max: 20 });
+const pool = new Pool({
+  connectionString: requireEnv("BENCHMARK_POSTGRES_URL"),
+  max: 20,
+  pipeline: true,
+});
 const schema = benchmarkNamespace();
 await pool.query(`CREATE SCHEMA ${schema}`);
 const stateProvider = createPgPoolStateProvider({ pool });

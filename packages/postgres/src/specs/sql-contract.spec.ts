@@ -257,13 +257,15 @@ const createValidatingProvider = (
     onTransactionCommit: inner.onTransactionCommit,
     onTransactionRollback: inner.onTransactionRollback,
     classifyError: inner.classifyError,
-    executeSql: async (args) => {
-      const next = validationQueue.then(async () =>
-        validateInline(validationClient, args, formatType, enumTypes),
-      );
+    executeStatements: async (args) => {
+      const next = validationQueue.then(async () => {
+        for (const statement of args.statements) {
+          await validateInline(validationClient, statement, formatType, enumTypes);
+        }
+      });
       validationQueue = next.catch(() => {});
       await next;
-      return inner.executeSql(args);
+      return inner.executeStatements(args);
     },
     close: inner.close,
   };

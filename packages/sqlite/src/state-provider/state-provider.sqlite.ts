@@ -25,7 +25,7 @@ export type SqliteErrorClassification = { kind: "undefined_table"; tableName: st
  * The `"sync"` mode is for drivers that run statements synchronously (better-sqlite3,
  * node:sqlite, bun:sqlite): the provider sets `sync: true` and its members return their results
  * directly. A synchronous transaction cannot interleave with anything else on the thread, so it
- * takes no lock. An `executeSql` without `txCtx` must throw when the connection is already inside
+ * takes no lock. An `executeStatement` without `txCtx` must throw when the connection is already inside
  * a transaction, rather than run inside it.
  *
  * @typeParam TTxContext - The transaction context type containing database client/connection info
@@ -84,7 +84,7 @@ export type SqliteStateProvider<TTxContext extends BaseTxContext, TMode extends 
    * `readOnly` indicates whether the statement reads only (SELECT without FOR UPDATE).
    * Providers MAY use this to pick between shared/exclusive locks or reader/writer connections.
    */
-  executeSql: (options: {
+  executeStatement: (options: {
     txCtx?: TTxContext;
     id?: string;
     sql: string;

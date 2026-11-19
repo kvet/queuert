@@ -25,7 +25,7 @@ pnpm start:state-sqlite-node-sqlite       # SQLite state via node:sqlite
 pnpm start:state-postgres-postgres-js     # PostgreSQL state via postgres-js
 pnpm start:state-postgres-pg              # PostgreSQL state via pg
 pnpm start:state-mysql-mysql2             # MySQL state via mysql2
-pnpm start:state-mariadb-mysql2           # MariaDB state via mysql2
+pnpm start:state-mariadb-mariadb          # MariaDB state via the mariadb connector (pipelined)
 pnpm start:state-redis-redis              # Redis state via node-redis
 pnpm start:state-redis-ioredis            # Redis state via ioredis
 

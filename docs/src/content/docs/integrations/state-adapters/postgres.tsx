@@ -60,6 +60,83 @@ const options = (): FieldItem[] => [
   ...stateAdapterConfigItems(),
 ];
 
+const pipelining = (): FieldItem[] => [
+  {
+    name: "pg",
+    chips: [{ label: "pipeline: true", mono: true }],
+    description: (
+      <>
+        Pipelines with <code>pipeline: true</code> on the <code>Pool</code> or <code>Client</code>{" "}
+        (pg 8.23 or later): the client sends queued queries without waiting for their results.
+        Without the option it queues them and runs them one at a time.
+      </>
+    ),
+  },
+  {
+    name: "postgres.js",
+    chips: ["pipelined"],
+    description: (
+      <>
+        Pipelines the queries issued on one connection, including inside <code>sql.begin</code>.
+      </>
+    ),
+  },
+  {
+    name: "Drizzle",
+    chips: [{ label: "pipeline: true", mono: true }],
+    description: (
+      <>
+        On node-postgres, with <code>pipeline: true</code> on the pool: the provider queries the
+        transaction's pg client directly.
+      </>
+    ),
+  },
+  {
+    name: "Knex",
+    chips: [{ label: "pipeline: true", mono: true }],
+    description: (
+      <>
+        On pg, with <code>pipeline: true</code> in the connection config: its transaction calls the
+        pg connection directly, with no queue of its own.
+      </>
+    ),
+  },
+  {
+    name: "Kysely",
+    chips: ["one by one"],
+    description: (
+      <>
+        Its transactions run one query at a time on a single connection and do not expose the pg
+        client.
+      </>
+    ),
+  },
+  {
+    name: "MikroORM",
+    chips: ["one by one"],
+    description: "Its transactions run on Kysely.",
+  },
+  {
+    name: "Prisma",
+    chips: ["one by one"],
+    description: (
+      <>
+        Interactive transactions with <code>@prisma/adapter-pg</code> chain their operations through
+        a queue.
+      </>
+    ),
+  },
+  {
+    name: "Bun SQL",
+    chips: ["pipelined"],
+    description: (
+      <>
+        Pipelines the queries issued on one connection, including inside <code>sql.begin</code>.
+      </>
+    ),
+  },
+];
+
 const Page = () => (
   <>
     <p>
@@ -300,6 +377,23 @@ const Page = () => (
     </Tabs>
     <p>
       The full API is in the <A href="/api/postgres-conformance/readme/">conformance reference</A>.
+    </p>
+
+    <h2 id="pipelining">Pipelining</h2>
+    <p>
+      The adapter sends the statements of one operation whose parameters it knows up front to{" "}
+      <code>executeStatements</code> as one batch. A provider whose client pipelines issues them all
+      without waiting for each result, so the batch costs one round trip; any other provider runs it
+      statement by statement, which is just as correct. Inside a transaction, the statements after a
+      failed one reject with <code>25P02</code> (transaction aborted), so the provider throws the
+      first rejection in statement order, which carries the real cause. The Setup providers:
+    </p>
+    <FieldList title="Pipelining by client" proseNames items={pipelining()} />
+    <p>
+      <code>pipeline: true</code> is set per pg client or pool, so it applies to your application's
+      own queries on that pool too. In pipeline mode pg rejects queries that keep a portal open
+      across round trips (<code>pg-cursor</code>, <code>pg-query-stream</code>), so an application
+      that uses them gives Queuert its own pool.
     </p>
 
     <h2>Isolation level</h2>

@@ -41,17 +41,24 @@ export const createBunSqlStateProvider = ({
       txCtx.txHooks.onRollback(callback);
     },
     classifyError,
-    executeSql: async ({ txCtx, sql: query, params }) => {
-      const failures = missingTableFailures.get(query) ?? 0;
-      try {
-        return await (txCtx?.txSql ?? sql).unsafe(
-          failures === 0 ? query : `${query} /* reprepare ${failures} */`,
-          params,
-        );
-      } catch (error) {
-        if (classifyError({ error }) !== undefined) missingTableFailures.set(query, failures + 1);
-        throw error;
+    executeStatements: async ({ txCtx, statements }) => {
+      const client = txCtx?.txSql ?? sql;
+      const results: unknown[][] = [];
+      for (const { sql: query, params } of statements) {
+        const failures = missingTableFailures.get(query) ?? 0;
+        try {
+          results.push(
+            await client.unsafe(
+              failures === 0 ? query : `${query} /* reprepare ${failures} */`,
+              params,
+            ),
+          );
+        } catch (error) {
+          if (classifyError({ error }) !== undefined) missingTableFailures.set(query, failures + 1);
+          throw error;
+        }
       }
+      return results;
     },
   };
 };

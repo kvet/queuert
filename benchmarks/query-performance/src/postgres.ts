@@ -49,36 +49,44 @@ type CapturedQuery = { id: string | undefined; sql: string; explain: string; pla
 console.log("\nStarting PostgreSQL container...");
 const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
 
-const pool = new Pool({ connectionString: pgContainer.getConnectionUri(), max: 20 });
+const pool = new Pool({
+  connectionString: pgContainer.getConnectionUri(),
+  max: 20,
+  pipeline: true,
+});
 const baseProvider = createPgPoolStateProvider({ pool });
 
 let capturing = false;
 const captured: CapturedQuery[] = [];
-const stateProvider = {
+const captureQueryPlan = async (statement: { id?: string; sql: string; params: unknown[] }) => {
+  if (!/^\s*(SELECT|UPDATE|DELETE|INSERT|WITH)/i.test(statement.sql)) return;
+  const lines = async (options: string) =>
+    (await pool.query(`EXPLAIN (${options}) ${statement.sql}`, statement.params)).rows
+      .map((r: { "QUERY PLAN": string }) => r["QUERY PLAN"])
+      .join("\n");
+  try {
+    captured.push({
+      id: statement.id,
+      sql: statement.sql,
+      explain: await lines("VERBOSE, COSTS"),
+      plan: await lines("COSTS OFF"),
+    });
+  } catch (error) {
+    captured.push({
+      id: statement.id,
+      sql: statement.sql,
+      explain: `-- EXPLAIN failed: ${String(error)}`,
+      plan: `EXPLAIN failed: ${String(error)}`,
+    });
+  }
+};
+const stateProvider: typeof baseProvider = {
   ...baseProvider,
-  executeSql: async (args: Parameters<typeof baseProvider.executeSql>[0]) => {
-    if (capturing && /^\s*(SELECT|UPDATE|DELETE|INSERT|WITH)/i.test(args.sql)) {
-      const lines = async (options: string) =>
-        (await pool.query(`EXPLAIN (${options}) ${args.sql}`, args.params)).rows
-          .map((r: { "QUERY PLAN": string }) => r["QUERY PLAN"])
-          .join("\n");
-      try {
-        captured.push({
-          id: args.id,
-          sql: args.sql,
-          explain: await lines("VERBOSE, COSTS"),
-          plan: await lines("COSTS OFF"),
-        });
-      } catch (error) {
-        captured.push({
-          id: args.id,
-          sql: args.sql,
-          explain: `-- EXPLAIN failed: ${String(error)}`,
-          plan: `EXPLAIN failed: ${String(error)}`,
-        });
-      }
+  executeStatements: async (options) => {
+    if (capturing) {
+      for (const statement of options.statements) await captureQueryPlan(statement);
     }
-    return baseProvider.executeSql(args);
+    return baseProvider.executeStatements(options);
   },
 };
 

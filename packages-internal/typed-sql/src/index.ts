@@ -12,7 +12,13 @@ export {
 } from "./sql.ts";
 export { type TemplateApplier, createTemplateApplier } from "./template-applier.ts";
 export { createTemplateCache } from "./template-cache.ts";
-export { createTypedSqlExecutor, validateSqlIdentifier } from "./sql-executor.ts";
+export {
+  type SqlStatement,
+  batchStatementExecutor,
+  createTypedSqlExecutor,
+  toSqlStatement,
+  validateSqlIdentifier,
+} from "./sql-executor.ts";
 export {
   type Migration,
   type MigrationResult,

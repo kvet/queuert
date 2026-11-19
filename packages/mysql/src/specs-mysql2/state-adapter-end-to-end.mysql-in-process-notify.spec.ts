@@ -5,7 +5,8 @@ import { createPool } from "mysql2/promise";
 import { endToEndAsyncGroups, endToEndBaseGroups } from "queuert/conformance-internal";
 import { it as baseIt, describe } from "vitest";
 
-import { capabilityGroups, createEndToEndContext } from "./state-adapter-end-to-end.spec-helper.ts";
+import { capabilityGroups } from "../specs/state-adapter-end-to-end.spec-helper.ts";
+import { createEndToEndContext } from "./state-adapter-end-to-end.spec-helper.ts";
 
 const { connectionOptions } = await acquireMysql("mysql:8.4", import.meta.url);
 

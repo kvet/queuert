@@ -230,8 +230,8 @@ const Page = () => (
       better-sqlite3, node:sqlite and bun:sqlite execute every statement synchronously. A{" "}
       <code>SqliteStateProvider</code> in the <code>"sync"</code> mode exposes that: it sets{" "}
       <code>sync: true</code>, <code>withTransaction</code> runs a synchronous callback and returns
-      its value, <code>executeSql</code> returns rows, and the optional <code>close</code> returns
-      nothing. Over it, <code>createSqliteStateAdapter</code> returns a <code>"sync"</code>{" "}
+      its value, <code>executeStatement</code> returns rows, and the optional <code>close</code>{" "}
+      returns nothing. Over it, <code>createSqliteStateAdapter</code> returns a <code>"sync"</code>{" "}
       <code>SqliteStateAdapter</code> whose methods and <code>migrateToLatest</code> return their
       results directly. The adapter's type follows the provider's type, so annotate the provider as{" "}
       <code>{'SqliteStateProvider<TTxContext, "sync">'}</code>: a provider object whose{" "}
@@ -255,9 +255,9 @@ const Page = () => (
     <p>
       A synchronous transaction cannot interleave with anything else on the thread, so a synchronous
       provider takes no lock. It guards the one remaining hazard, a raw <code>BEGIN</code> held
-      across an <code>await</code>: <code>executeSql</code> without <code>txCtx</code> throws when
-      the connection is already inside a transaction, instead of running inside someone else's. This
-      also rejects a client read without a context inside your own transaction; pass that
+      across an <code>await</code>: <code>executeStatement</code> without <code>txCtx</code> throws
+      when the connection is already inside a transaction, instead of running inside someone else's.
+      This also rejects a client read without a context inside your own transaction; pass that
       transaction's context.
     </p>
 

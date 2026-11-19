@@ -18,7 +18,7 @@ await using pg = await acquirePostgres("postgres:18", import.meta.url);
 // Create database connection and schema
 await using drivers = new AsyncDisposableStack();
 const db = drivers.adopt(
-  new Pool({ connectionString: pg.connectionString, max: 10 }),
+  new Pool({ connectionString: pg.connectionString, max: 10, pipeline: true }),
   async (pool) => pool.end(),
 );
 

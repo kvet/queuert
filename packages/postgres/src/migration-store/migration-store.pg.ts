@@ -6,6 +6,7 @@ import {
   assertMigrationLockOptions,
   createMigrator,
   createTemplateApplier,
+  batchStatementExecutor,
   createTypedSqlExecutor,
   sql,
   t,
@@ -109,7 +110,7 @@ export const createPgMigrationStore = <TTxContext extends BaseTxContext>({
   migrationTable: string;
   lockTable: string;
 }): MigrationStore<TTxContext> => {
-  const exec = createTypedSqlExecutor(stateProvider);
+  const exec = createTypedSqlExecutor(batchStatementExecutor(stateProvider));
 
   const applyTemplate = createTemplateApplier({
     schema,

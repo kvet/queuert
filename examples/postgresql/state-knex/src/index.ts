@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { createPgMigrator, createPgStateAdapter } from "@queuert/postgres";
 import { acquirePostgres } from "@queuert/testcontainers";
-import knexFactory from "knex";
+import knexFactory, { type Knex } from "knex";
 import {
   createClient,
   createWorkerRunner,
@@ -22,7 +22,10 @@ await using drivers = new AsyncDisposableStack();
 const knex = drivers.adopt(
   knexFactory({
     client: "pg",
-    connection: pg.connectionString,
+    connection: {
+      connectionString: pg.connectionString,
+      pipeline: true,
+    } as Knex.PgConnectionConfig,
     pool: { min: 0, max: 10 },
   }),
   async (knex) => knex.destroy(),

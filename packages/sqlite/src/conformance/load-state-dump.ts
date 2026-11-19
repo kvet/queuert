@@ -24,7 +24,7 @@ export const loadStateDump = async <TTxContext extends BaseTxContext>(
     for (const batch of chunkItems(items, BATCH_SIZE)) {
       const rows = batch.map(toRow);
       const columns = Object.keys(rows[0]);
-      await stateProvider.executeSql({
+      await stateProvider.executeStatement({
         sql: `INSERT INTO ${tablePrefix}${table} (${columns.map((column) => `"${column}"`).join(", ")})
               SELECT ${columns.map((column) => `json_extract(value, '$.${column}')`).join(", ")}
               FROM json_each(?)`,

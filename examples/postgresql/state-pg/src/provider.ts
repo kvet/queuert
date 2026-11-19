@@ -18,18 +18,28 @@ export const createPgPoolStateProvider = ({
    */
   prepareStatements?: boolean;
 }): PgStateProvider<PgPoolContext> => {
-  const exec = async (
+  const execute = async (
     client: PoolClient,
-    id: string | undefined,
-    sql: string,
-    params: unknown[],
+    { id, sql, params }: { id?: string; sql: string; params: unknown[] },
   ): Promise<unknown[]> => {
-    if (id !== undefined && prepareStatements) {
-      const result = await client.query({ name: id, text: sql, values: params });
-      return result.rows;
-    }
-    const result = await client.query(sql, params);
+    const result =
+      id !== undefined && prepareStatements
+        ? await client.query({ name: id, text: sql, values: params })
+        : await client.query(sql, params);
     return result.rows;
+  };
+
+  const executeBatch = async (
+    client: PoolClient,
+    statements: { id?: string; sql: string; params: unknown[] }[],
+  ): Promise<unknown[][]> => {
+    const results = await Promise.allSettled(
+      statements.map(async (statement) => execute(client, statement)),
+    );
+    return results.map((result) => {
+      if (result.status === "rejected") throw result.reason;
+      return result.value;
+    });
   };
 
   return {
@@ -64,11 +74,11 @@ export const createPgPoolStateProvider = ({
       const tableName = /relation "([^"]+)" does not exist/.exec(String(driverError.message))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
     },
-    executeSql: async ({ txCtx, id, sql, params }) => {
-      if (txCtx) return exec(txCtx.poolClient, id, sql, params);
+    executeStatements: async ({ txCtx, statements }) => {
+      if (txCtx) return executeBatch(txCtx.poolClient, statements);
       const poolClient = await pool.connect();
       try {
-        return await exec(poolClient, id, sql, params);
+        return await executeBatch(poolClient, statements);
       } finally {
         poolClient.release();
       }

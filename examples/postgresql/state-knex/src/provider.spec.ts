@@ -21,7 +21,10 @@ describe("postgresql/state-knex provider conformance", () => {
     pg = await acquirePostgres("postgres:18", import.meta.url);
     knex = knexFactory({
       client: "pg",
-      connection: pg.connectionString,
+      connection: {
+        connectionString: pg.connectionString,
+        pipeline: true,
+      } as Knex.PgConnectionConfig,
       pool: { min: 0, max: 10 },
     });
   }, 60_000);
@@ -50,7 +53,10 @@ describe("postgresql/state-knex migrator conformance", () => {
     pg = await acquirePostgres("postgres:18", `${import.meta.url}#migrator`);
     knex = knexFactory({
       client: "pg",
-      connection: pg.connectionString,
+      connection: {
+        connectionString: pg.connectionString,
+        pipeline: true,
+      } as Knex.PgConnectionConfig,
       pool: { min: 0, max: 10 },
     });
   }, 60_000);

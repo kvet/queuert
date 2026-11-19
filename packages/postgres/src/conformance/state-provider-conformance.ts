@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 
 import type { ConformanceTestCase } from "queuert/conformance";
 import {
@@ -24,19 +25,22 @@ export type PgStateProviderConformanceContext = SchemaFenceConformanceContext &
 
 const MISSING_TABLE = "public.queuert_conformance_missing";
 
-const executeSql = async (
+const statement = (sql: string, params: unknown[] = []) => ({
+  sql,
+  params,
+  paramTypes: {},
+  columnTypes: {},
+  readOnly: false,
+});
+
+const executeStatement = async (
   stateProvider: PgStateProvider<any>,
   sql: string,
   txCtx?: unknown,
-): Promise<unknown[]> =>
-  stateProvider.executeSql({
-    txCtx,
-    sql,
-    params: [],
-    paramTypes: {},
-    columnTypes: {},
-    readOnly: true,
-  });
+): Promise<unknown[]> => {
+  const [rows] = await stateProvider.executeStatements({ txCtx, statements: [statement(sql)] });
+  return rows;
+};
 
 const captureError = async (run: () => Promise<unknown>): Promise<unknown> => {
   try {
@@ -57,7 +61,7 @@ export const classifyErrorGroup: ConformanceGroup<PgStateProviderConformanceCont
 
         try {
           const error = await captureError(async () =>
-            executeSql(stateProvider, `SELECT 1 FROM ${MISSING_TABLE}`),
+            executeStatement(stateProvider, `SELECT 1 FROM ${MISSING_TABLE}`),
           );
           assert.deepEqual(stateProvider.classifyError({ error }), {
             kind: "undefined_table",
@@ -78,7 +82,7 @@ export const classifyErrorGroup: ConformanceGroup<PgStateProviderConformanceCont
           await assert.rejects(
             stateProvider.withTransaction(async (txCtx) => {
               error = await captureError(async () =>
-                executeSql(stateProvider, `SELECT 1 FROM ${MISSING_TABLE}`, txCtx),
+                executeStatement(stateProvider, `SELECT 1 FROM ${MISSING_TABLE}`, txCtx),
               );
               throw error;
             }),
@@ -99,7 +103,7 @@ export const classifyErrorGroup: ConformanceGroup<PgStateProviderConformanceCont
 
         try {
           const error = await captureError(async () =>
-            executeSql(stateProvider, "SELECT missing_column FROM (SELECT 1) AS probe"),
+            executeStatement(stateProvider, "SELECT missing_column FROM (SELECT 1) AS probe"),
           );
           assert.equal(stateProvider.classifyError({ error }), undefined);
         } finally {
@@ -123,6 +127,140 @@ export const classifyErrorGroup: ConformanceGroup<PgStateProviderConformanceCont
   ],
 };
 
+export const executeStatementsGroup: ConformanceGroup<PgStateProviderConformanceContext> = {
+  name: "executeStatements",
+  cases: [
+    {
+      name: "returns one row array per statement, in statement order",
+      run: async ({ createStateProvider }) => {
+        const stateProvider = await createStateProvider();
+
+        try {
+          const results = await stateProvider.executeStatements({
+            statements: [
+              statement("SELECT $1::integer AS value", [1]),
+              statement("SELECT value FROM generate_series(2, 3) AS value ORDER BY value"),
+              statement("SELECT 1 AS value WHERE false"),
+              statement("SELECT $1::text AS value", ["four"]),
+            ],
+          });
+          assert.deepEqual(results, [
+            [{ value: 1 }],
+            [{ value: 2 }, { value: 3 }],
+            [],
+            [{ value: "four" }],
+          ]);
+        } finally {
+          await stateProvider.close?.();
+        }
+      },
+    },
+    {
+      name: "returns no results for an empty batch",
+      run: async ({ createStateProvider }) => {
+        const stateProvider = await createStateProvider();
+
+        try {
+          assert.deepEqual(await stateProvider.executeStatements({ statements: [] }), []);
+          const results = await stateProvider.withTransaction(async (txCtx) =>
+            stateProvider.executeStatements({ txCtx, statements: [] }),
+          );
+          assert.deepEqual(results, []);
+        } finally {
+          await stateProvider.close?.();
+        }
+      },
+    },
+    {
+      name: "runs a single statement, prepared when it has an id",
+      run: async ({ createStateProvider }) => {
+        const stateProvider = await createStateProvider();
+
+        try {
+          const [unprepared] = await stateProvider.executeStatements({
+            statements: [statement("SELECT $1::integer + 1 AS value", [1])],
+          });
+          assert.deepEqual(unprepared, [{ value: 2 }]);
+          for (const input of [1, 2]) {
+            const [prepared] = await stateProvider.withTransaction(async (txCtx) =>
+              stateProvider.executeStatements({
+                txCtx,
+                statements: [
+                  {
+                    ...statement("SELECT $1::integer * 10 AS value", [input]),
+                    id: "queuert_conformance_execute_statements",
+                  },
+                ],
+              }),
+            );
+            assert.deepEqual(prepared, [{ value: input * 10 }]);
+          }
+        } finally {
+          await stateProvider.close?.();
+        }
+      },
+    },
+    {
+      name: "rejects with the failing statement's error and rolls back the transaction",
+      run: async ({ createStateProvider }) => {
+        const stateProvider = await createStateProvider();
+        const table = `public.queuert_conformance_batch_${randomUUID().replaceAll("-", "")}`;
+
+        try {
+          await executeStatement(stateProvider, `CREATE TABLE ${table} (id integer PRIMARY KEY)`);
+          let error: unknown;
+          await assert.rejects(
+            stateProvider.withTransaction(async (txCtx) => {
+              error = await captureError(async () =>
+                stateProvider.executeStatements({
+                  txCtx,
+                  statements: [
+                    statement(`INSERT INTO ${table} (id) VALUES (1)`),
+                    statement(`SELECT 1 FROM ${MISSING_TABLE}`),
+                    statement(`INSERT INTO ${table} (id) VALUES (2)`),
+                  ],
+                }),
+              );
+              throw error;
+            }),
+          );
+          assert.deepEqual(stateProvider.classifyError({ error }), {
+            kind: "undefined_table",
+            tableName: MISSING_TABLE,
+          });
+          assert.deepEqual(await executeStatement(stateProvider, `SELECT id FROM ${table}`), []);
+        } finally {
+          await executeStatement(stateProvider, `DROP TABLE IF EXISTS ${table}`);
+          await stateProvider.close?.();
+        }
+      },
+    },
+    {
+      name: "runs a batch without a transaction context in order",
+      run: async ({ createStateProvider }) => {
+        const stateProvider = await createStateProvider();
+        const table = `public.queuert_conformance_order_${randomUUID().replaceAll("-", "")}`;
+
+        try {
+          const results = (await stateProvider.executeStatements({
+            statements: [
+              statement(`CREATE TABLE ${table} (id integer PRIMARY KEY)`),
+              statement(`INSERT INTO ${table} (id) VALUES (1)`),
+              statement(`SELECT count(*)::integer AS count FROM ${table}`),
+              statement(`INSERT INTO ${table} (id) VALUES (2)`),
+              statement(`SELECT count(*)::integer AS count FROM ${table}`),
+            ],
+          })) as [[], [], { count: number }[], [], { count: number }[]];
+          assert.deepEqual([results[2], results[4]], [[{ count: 1 }], [{ count: 2 }]]);
+        } finally {
+          await executeStatement(stateProvider, `DROP TABLE IF EXISTS ${table}`);
+          await stateProvider.close?.();
+        }
+      },
+    },
+  ],
+};
+
 export const isolationLevelGroup: ConformanceGroup<PgStateProviderConformanceContext> = {
   name: "isolationLevel",
   cases: [
@@ -133,7 +271,7 @@ export const isolationLevelGroup: ConformanceGroup<PgStateProviderConformanceCon
 
         try {
           const rows = await stateProvider.withTransaction(async (txCtx) =>
-            executeSql(
+            executeStatement(
               stateProvider,
               "SELECT current_setting('transaction_isolation') AS level",
               txCtx,
@@ -161,6 +299,7 @@ export const pgStateProviderConformanceGroups: ConformanceGroup<PgStateProviderC
     ...pgStateAdapterConformanceGroups,
     ...stateAdapterSavepointGroups,
     classifyErrorGroup,
+    executeStatementsGroup,
     isolationLevelGroup,
   ];
 
@@ -173,11 +312,10 @@ export const createPgStateProviderConformanceContext = ({
   typeof createPgStateProviderConformanceCases
 >[0]): PgStateProviderConformanceContext => {
   const tables = `${stateAdapterOptions?.schema ?? "public"}.${stateAdapterOptions?.tablePrefix ?? "queuert_"}`;
-  const ddl = { params: [], paramTypes: {}, columnTypes: {}, readOnly: false };
   const executeDdl = async (sql: string): Promise<void> => {
     const stateProvider = await createStateProvider();
     try {
-      await stateProvider.executeSql({ ...ddl, sql });
+      await executeStatement(stateProvider, sql);
     } finally {
       await stateProvider.close?.();
     }
@@ -203,10 +341,10 @@ export const createPgStateProviderConformanceContext = ({
       const stateProvider = await createStateProvider();
       const stateAdapter = createPgStateAdapter({ ...stateAdapterOptions, stateProvider });
       try {
-        await stateProvider.executeSql({
-          ...ddl,
-          sql: `TRUNCATE ${tables}job_blocker, ${tables}job, ${tables}worker CASCADE`,
-        });
+        await executeStatement(
+          stateProvider,
+          `TRUNCATE ${tables}job_blocker, ${tables}job, ${tables}worker CASCADE`,
+        );
       } catch (error) {
         await stateAdapter.close();
         throw error;
@@ -228,7 +366,8 @@ export const createPgStateProviderConformanceContext = ({
 /**
  * Prepares the state adapter contract cases for a provider, ready to run. The cases are every state
  * adapter contract case, including those that hold two transactions open at once, run through
- * `createPgStateAdapter` over a provider, plus checks of the provider's `classifyError`. The cases
+ * `createPgStateAdapter` over a provider, plus checks of the provider's `classifyError`,
+ * `executeStatements` and transaction isolation level. The cases
  * migrate the schema once, before the first case, through a provider from `createStateProvider`;
  * each case then builds its own adapter over a new provider from it, with the tables cleared. The
  * test file owns the database and releases it itself. Works with any test runner.

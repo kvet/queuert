@@ -226,6 +226,9 @@ importers:
       better-sqlite3:
         specifier: 13.0.3
         version: 13.0.3
+      example-mysql-state-mariadb:
+        specifier: workspace:*
+        version: link:../../examples/mysql/state-mariadb
       example-mysql-state-mysql2:
         specifier: workspace:*
         version: link:../../examples/mysql/state-mysql2
@@ -262,6 +265,9 @@ importers:
       ioredis:
         specifier: 6.0.0
         version: 6.0.0
+      mariadb:
+        specifier: 3.5.5
+        version: 3.5.5
       mysql2:
         specifier: 3.24.6
         version: 3.24.6(@types/node@24.19.1)
@@ -2117,6 +2123,9 @@ importers:
       '@queuert/typed-sql':
         specifier: workspace:*
         version: link:../../packages-internal/typed-sql
+      mariadb:
+        specifier: 3.5.5
+        version: 3.5.5
       mysql2:
         specifier: 3.24.6
         version: 3.24.6(@types/node@24.19.1)

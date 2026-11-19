@@ -83,11 +83,19 @@ export const createMysql2PoolProvider = ({ pool }: { pool: Pool }): Mysql2PoolPr
     },
     isTransaction: (txCtx) => openTransactions.has(txCtx.connection),
     classifyError: classifyMysqlError,
-    executeSql: async ({ txCtx, id, sql, params }) => {
-      if (txCtx) return exec(txCtx.connection, id, sql, params);
+    executeStatements: async ({ txCtx, statements }) => {
+      if (statements.length === 0) return [];
+      const run = async (connection: PoolConnection) => {
+        const results: unknown[][] = [];
+        for (const { id, sql, params } of statements) {
+          results.push(await exec(connection, id, sql, params));
+        }
+        return results;
+      };
+      if (txCtx) return run(txCtx.connection);
       const connection = await pool.getConnection();
       try {
-        return await exec(connection, id, sql, params);
+        return await run(connection);
       } finally {
         connection.release();
       }

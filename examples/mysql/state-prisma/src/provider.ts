@@ -48,9 +48,13 @@ export const createPrismaMysqlStateProvider = <TPrisma extends PrismaLikeClient>
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
     },
     // `id` not forwarded: Prisma decides itself how each raw query is sent.
-    executeSql: async ({ txCtx, sql, params }) => {
+    executeStatements: async ({ txCtx, statements }) => {
       const prismaClient = (txCtx?.prisma ?? prisma) as PrismaLikeClient;
-      return prismaClient.$queryRawUnsafe(sql, ...params);
+      const results: unknown[][] = [];
+      for (const { sql, params } of statements) {
+        results.push(await prismaClient.$queryRawUnsafe(sql, ...params));
+      }
+      return results;
     },
   };
 };

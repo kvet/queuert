@@ -32,7 +32,7 @@ export const createBunSqlSqliteStateProvider = ({
       )?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
     },
-    executeSql: async ({ txCtx, sql: query, params, readOnly }) => {
+    executeStatement: async ({ txCtx, sql: query, params, readOnly }) => {
       if (txCtx) return txCtx.txSql.unsafe(query, params ?? []);
       using _h = readOnly ? await lock.acquireRead() : await lock.acquireWrite();
       return await sql.unsafe(query, params ?? []);
