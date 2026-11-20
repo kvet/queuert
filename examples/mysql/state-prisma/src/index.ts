@@ -75,10 +75,8 @@ await using workerRunner = createWorkerRunner({
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
           return withTxHooks(async (txHooks) =>
-            prisma.$transaction(
-              async (prisma) =>
-                complete({ prisma, txHooks, output: { sentAt: new Date().toISOString() } }),
-              { isolationLevel: "ReadCommitted" },
+            prisma.$transaction(async (prisma) =>
+              complete({ prisma, txHooks, output: { sentAt: new Date().toISOString() } }),
             ),
           );
         },
@@ -91,22 +89,19 @@ await workerRunner.start();
 
 // Register a new user and queue welcome email atomically
 const chain = await withTxHooks(async (txHooks) =>
-  prisma.$transaction(
-    async (prisma) => {
-      const user = await prisma.user.create({
-        data: { name: "Alice", email: "alice@example.com" },
-      });
+  prisma.$transaction(async (prisma) => {
+    const user = await prisma.user.create({
+      data: { name: "Alice", email: "alice@example.com" },
+    });
 
-      // Queue welcome email - if user creation fails, no email job is created
-      return client.createChain({
-        prisma,
-        txHooks,
-        typeName: "send_welcome_email",
-        input: { userId: user.id },
-      });
-    },
-    { isolationLevel: "ReadCommitted" },
-  ),
+    // Queue welcome email - if user creation fails, no email job is created
+    return client.createChain({
+      prisma,
+      txHooks,
+      typeName: "send_welcome_email",
+      input: { userId: user.id },
+    });
+  }),
 );
 
 // Wait for the chain to complete

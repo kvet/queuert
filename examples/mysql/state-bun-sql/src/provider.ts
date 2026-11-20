@@ -19,6 +19,9 @@ export const createBunSqlStateProvider = ({
 
   const classifyError: MysqlStateProvider<BunSqlContext>["classifyError"] = ({ error }) => {
     const driverError = error as { errno?: unknown; message?: unknown } | undefined;
+    if (driverError?.errno === 1213 || driverError?.errno === 1020) {
+      return { kind: "transaction_conflict" };
+    }
     if (driverError?.errno !== 1146) return undefined;
     const tableName = /Table '([^']+)' doesn't exist/.exec(String(driverError.message))?.[1];
     return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
@@ -49,7 +52,9 @@ export const createBunSqlStateProvider = ({
           params,
         );
       } catch (error) {
-        if (classifyError({ error }) !== undefined) missingTableFailures.set(query, failures + 1);
+        if (classifyError({ error })?.kind === "undefined_table") {
+          missingTableFailures.set(query, failures + 1);
+        }
         throw error;
       }
     },

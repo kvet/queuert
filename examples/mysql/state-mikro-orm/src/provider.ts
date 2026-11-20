@@ -96,6 +96,9 @@ export const createMikroOrmMysqlStateProvider = ({
     },
     classifyError: ({ error }) => {
       const driverError = error as { errno?: unknown; message?: unknown } | undefined;
+      if (driverError?.errno === 1213 || driverError?.errno === 1020) {
+        return { kind: "transaction_conflict" };
+      }
       if (driverError?.errno !== 1146) return undefined;
       const tableName = /Table '([^']+)' doesn't exist/.exec(String(driverError.message))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { IsolationLevel, MikroORM, defineEntity, p } from "@mikro-orm/mysql";
+import { MikroORM, defineEntity, p } from "@mikro-orm/mysql";
 import { createMysqlStateAdapter } from "@queuert/mysql";
 import { acquireMysql } from "@queuert/testcontainers";
 import { createClient, createProcessors, createWorkerRunner, defineJobTypes } from "queuert";
@@ -41,8 +41,6 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-const readCommitted = { isolationLevel: IsolationLevel.READ_COMMITTED };
-
 // #region adapter
 const stateProvider = createMikroOrmMysqlStateProvider({ orm });
 await using stateAdapter = createMysqlStateAdapter({ stateProvider, dialect: "mysql" });
@@ -65,9 +63,8 @@ await using workerRunner = createWorkerRunner({
 
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          return orm.em.transactional(
-            async (em) => complete({ em, output: { sentAt: new Date().toISOString() } }),
-            readCommitted,
+          return orm.em.transactional(async (em) =>
+            complete({ em, output: { sentAt: new Date().toISOString() } }),
           );
         },
       },
@@ -87,7 +84,7 @@ const chain = await orm.em.transactional(async (em) => {
     typeName: "send_welcome_email",
     input: { userId: user.id },
   });
-}, readCommitted);
+});
 // #endregion
 
 const result = await client.awaitChain(chain, { timeoutMs: 5000 });
@@ -113,7 +110,7 @@ await orm.em.transactional(async (em) => {
     });
 
   em.create(User, { name: "Carol", email: "carol@example.com" });
-}, readCommitted);
+});
 // #endregion
 
 assert.equal(await client.getChain({ id: cancelledChainId }), undefined);

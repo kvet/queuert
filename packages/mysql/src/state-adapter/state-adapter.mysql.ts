@@ -18,6 +18,7 @@ import {
 } from "@queuert/typed-sql";
 import {
   type BaseTxContext,
+  type RetryConfig,
   SchemaFencedError,
   type StateAdapter,
   type StateBlockedJob,
@@ -36,6 +37,8 @@ import {
   decodeTimestampWithIdCursor,
   encodeCursor,
   resolveStateAdapterConfig,
+  retryConfigViolations,
+  withRetry,
 } from "queuert/internal";
 
 import { createMysqlMigrationStore } from "../migration-store/migration-store.mysql.ts";
@@ -323,12 +326,16 @@ CREATE TABLE IF NOT EXISTS {{prefix}}worker (
  * Create a state adapter backed by MySQL 8.4+ or MariaDB 11.4+ (InnoDB). Returns the adapter
  * with a `migrateToLatest()` method for schema migrations.
  *
- * Queuert supports READ COMMITTED only: transactions the adapter opens run at READ COMMITTED, and
- * transactions passed in must run at READ COMMITTED too.
+ * Transactions passed to Queuert may run at READ COMMITTED, REPEATABLE READ or SERIALIZABLE, mixed
+ * freely; transactions the adapter opens run at READ COMMITTED. The adapter retries deadlocks
+ * (`1213`) and MariaDB snapshot conflicts (`1020`) in the transactions and statements it runs
+ * itself, as `transactionRetry` configures; transactions passed to Queuert raise them to the
+ * caller.
  *
  * @param options - MySQL state adapter configuration.
  * @throws Error if `schema` or `tablePrefix` is not a valid SQL identifier, or if `jobIdType` or
  * `workerIdType` is not a supported preset.
+ * @throws TypeError if a `transactionRetry` field holds an invalid value.
  *
  * @experimental
  */
@@ -349,6 +356,7 @@ export const createMysqlStateAdapter = <
   validateWorkerId,
   maxBlockersPerJob,
   countCap: countCapOption,
+  transactionRetry = { maxTries: 5, initialDelayMs: 50, maxDelayMs: 50 },
 }: {
   /** MySQL state provider wrapping the database connection. */
   stateProvider: MysqlStateProvider<TTxContext>;
@@ -380,9 +388,23 @@ export const createMysqlStateAdapter = <
   maxBlockersPerJob?: number;
   /** Per-status count at which counts stop and report `hasMore`. @defaultValue `10_000` */
   countCap?: number;
+  /**
+   * Retries of the transactions and statements the adapter runs itself, such as acquisition, lease
+   * renewal or a reclaim, after a deadlock (`1213`) or a MariaDB snapshot conflict (`1020`); the
+   * failure of the last try is thrown.
+   *
+   * @defaultValue `{ maxTries: 5, initialDelayMs: 50, maxDelayMs: 50 }`
+   */
+  transactionRetry?: RetryConfig;
 }): MysqlStateAdapter<TTxContext, TJobId, TWorkerId> => {
   if (schema !== undefined) validateSqlIdentifier(schema, "schema");
   validateSqlIdentifier(tablePrefix, "tablePrefix");
+  const transactionRetryViolations = retryConfigViolations("transactionRetry", transactionRetry);
+  if (transactionRetryViolations.length > 0) {
+    throw new TypeError(
+      `createMysqlStateAdapter: invalid configuration:\n${transactionRetryViolations.map((v) => `  - ${v}`).join("\n")}`,
+    );
+  }
   const collation = COLLATIONS[dialect];
 
   const closed = createLatch();
@@ -411,6 +433,8 @@ export const createMysqlStateAdapter = <
     {
       for_update: (...aliases: string[]) =>
         dialect === "mysql" ? `FOR UPDATE OF ${aliases.join(", ")}` : "FOR UPDATE",
+      for_share: (...aliases: string[]) =>
+        dialect === "mysql" ? `FOR SHARE OF ${aliases.join(", ")}` : "LOCK IN SHARE MODE",
     },
   );
   const templateCache = createTemplateCache();
@@ -483,13 +507,20 @@ export const createMysqlStateAdapter = <
       : tableName === `${schema.toLowerCase()}.${fenceTableName}`;
   };
 
+  const retryOwnWork = async <T>(fn: () => Promise<T>): Promise<T> =>
+    withRetry(
+      fn,
+      transactionRetry,
+      (error) => stateProvider.classifyError({ error })?.kind === "transaction_conflict",
+    );
+
   const execute = async (
     txCtx: TTxContext | undefined,
     typedSql: TypedSql,
     params: unknown[] = [],
   ): Promise<Row[]> => {
-    try {
-      return (await stateProvider.executeSql({
+    const run = async () =>
+      (await stateProvider.executeSql({
         txCtx,
         id: typedSql.id,
         sql: typedSql.sql,
@@ -498,6 +529,8 @@ export const createMysqlStateAdapter = <
         columnTypes: extractColumnTypes(typedSql.columns),
         readOnly: typedSql.readOnly,
       })) as Row[];
+    try {
+      return await (txCtx === undefined ? retryOwnWork(run) : run());
     } catch (error) {
       if (isFenceError(error)) {
         throw new SchemaFencedError(
@@ -512,7 +545,8 @@ export const createMysqlStateAdapter = <
   const withOwnTransaction = async <T>(
     txCtx: TTxContext | undefined,
     fn: (txCtx: TTxContext) => Promise<T>,
-  ): Promise<T> => (txCtx ? fn(txCtx) : stateProvider.withTransaction(fn));
+  ): Promise<T> =>
+    txCtx ? fn(txCtx) : retryOwnWork(async () => stateProvider.withTransaction(fn));
 
   const jobIds = (alias = "id_list") =>
     `SELECT ${alias}.id FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) ${alias}`;
@@ -769,7 +803,7 @@ WHERE j.status = 'running'
   return {
     config,
 
-    withTransaction: stateProvider.withTransaction,
+    withTransaction: async (fn) => retryOwnWork(async () => stateProvider.withTransaction(fn)),
 
     isTransaction: stateProvider.isTransaction,
 
@@ -797,17 +831,28 @@ WHERE j.status = 'running'
       }
       const sortedChainIds = JSON.stringify([...new Set(chainIds)].sort());
       if (dialect === "mariadb") {
-        await execute(
+        const lockedHeads = await execute(
           txCtx,
           prepared(
             "lockChainHeads",
-            `SELECT h.id FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.id WHERE h.chain_index = 0 {{for_update:h}}`,
-            { params: [t.string()], columns: { id: jobIdDataType } },
+            `SELECT ${selectJob("h", "h_")} FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.id WHERE h.chain_index = 0 {{for_update:h}}`,
+            { params: [t.string()], columns: prefixColumns(dbJobColumns, "h_") },
           ),
           [sortedChainIds],
         );
+        const heads = new Map(lockedHeads.map((row) => [row.h_id as string, row]));
         const chains = await readChains(txCtx, chainIds);
-        return chainIds.map((id) => chains.get(id));
+        return chainIds.map((id) => {
+          const head = heads.get(id);
+          const chain = chains.get(id);
+          return (
+            head && {
+              ...mapDbHeadToStateChainInfo(head, "h_"),
+              head: mapDbJobToStateJobInfo(head, "h_")!,
+              tail: chain?.tail,
+            }
+          );
+        });
       }
       const rows = await execute(
         txCtx,
@@ -1318,11 +1363,8 @@ SELECT origin AS id, MAX(height) AS height FROM climb GROUP BY origin`,
         txCtx,
         prepared(
           "lockDeletedChains",
-          `SELECT j.id, j.chain_index, j.blocking FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job j FORCE INDEX ({{name_prefix}}chain_index_idx) ON j.chain_id = d.id {{for_update:j}}`,
-          {
-            params: [t.string()],
-            columns: { id: jobIdDataType, chain_index: t.number(), blocking: t.number() },
-          },
+          `SELECT ${selectJob("j")} FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job j FORCE INDEX ({{name_prefix}}chain_index_idx) ON j.chain_id = d.id {{for_update:j}}`,
+          { params: [t.string()], columns: dbJobColumns },
         ),
         [chainIdsParam],
       );
@@ -1340,7 +1382,8 @@ FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d
 STRAIGHT_JOIN {{prefix}}job_blocker jb FORCE INDEX ({{name_prefix}}job_blocker_chain_idx) ON jb.blocked_by_chain_id = d.id
 STRAIGHT_JOIN {{prefix}}job j FORCE INDEX (PRIMARY) ON j.id = jb.job_id
 WHERE j.chain_id NOT IN (${jobIds("member_list")})
-ORDER BY jb.job_id, jb.\`index\``,
+ORDER BY jb.job_id, jb.\`index\`
+{{for_share:jb:j}}`,
             { params: [t.string(), t.string()], columns: { ...dbBlockerColumns, ...dbJobColumns } },
           ),
           [sortedIdsParam(blockingChainIds), chainIdsParam],
@@ -1358,8 +1401,47 @@ ORDER BY jb.job_id, jb.\`index\``,
         }
       }
 
-      const chains = await readChains(txCtx, chainIds);
+      const membersByChainId = Map.groupBy(members, (row) => row.chain_id as string);
+      const chains = new Map(
+        members
+          .filter((row) => Number(row.chain_index) === 0)
+          .map((head): [string, StateChain] => {
+            const tail = membersByChainId
+              .get(head.id as string)!
+              .filter((row) => Number(row.chain_index) > 0)
+              .reduce<Row | undefined>(
+                (last, row) =>
+                  last === undefined || Number(row.chain_index) > Number(last.chain_index)
+                    ? row
+                    : last,
+                undefined,
+              );
+            return [
+              head.id as string,
+              {
+                ...mapDbHeadToStateChainInfo(head, ""),
+                head: mapDbJobToStateJobInfo(head)!,
+                tail: tail && mapDbJobToStateJobInfo(tail),
+              },
+            ];
+          }),
+      );
       if (members.length > 0) {
+        const memberBlockerHeads = await execute(
+          txCtx,
+          prepared(
+            "lockDeletedChainBlockers",
+            `SELECT DISTINCT jb.blocked_by_chain_id AS id FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job_blocker jb FORCE INDEX (PRIMARY) ON jb.job_id = d.id {{for_share:jb}}`,
+            { params: [t.string()], columns: { id: jobIdDataType } },
+          ),
+          [sortedIdsParam(members.map((row) => row.id as string))],
+        );
+        for (const row of memberBlockerHeads) {
+          const id = row.id as string;
+          if (!deletedChainIds.has(id) && !referencedHeadIds.includes(id)) {
+            referencedHeadIds.push(id);
+          }
+        }
         await execute(
           txCtx,
           prepared(
@@ -1379,8 +1461,8 @@ WHERE {{fence_guard}}`,
             txCtx,
             prepared(
               "findStillReferencedBlockerHeads",
-              `SELECT DISTINCT jb.blocked_by_chain_id AS id FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job_blocker jb FORCE INDEX ({{name_prefix}}job_blocker_chain_idx) ON jb.blocked_by_chain_id = d.id`,
-              { params: [t.string()], columns: { id: jobIdDataType }, readOnly: true },
+              `SELECT DISTINCT jb.blocked_by_chain_id AS id FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job_blocker jb FORCE INDEX ({{name_prefix}}job_blocker_chain_idx) ON jb.blocked_by_chain_id = d.id {{for_share:jb}}`,
+              { params: [t.string()], columns: { id: jobIdDataType } },
             ),
             [sortedIdsParam(referencedHeadIds)],
           );

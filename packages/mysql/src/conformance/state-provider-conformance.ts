@@ -23,6 +23,69 @@ export type MysqlStateProviderConformanceContext = SchemaFenceConformanceContext
     createStateProvider: () => Promise<MysqlStateProvider<any>>;
   };
 
+export const classifyErrorGroup: ConformanceGroup<MysqlStateProviderConformanceContext> = {
+  name: "classifyError",
+  cases: [
+    {
+      name: "classifies a deadlock as transaction_conflict",
+      run: async ({ createStateProvider }) => {
+        const stateProvider = await createStateProvider();
+        const write = async (sql: string, txCtx?: unknown) =>
+          stateProvider.executeSql({
+            txCtx,
+            sql,
+            params: [],
+            paramTypes: {},
+            columnTypes: {},
+            readOnly: false,
+          });
+
+        try {
+          await write(
+            "CREATE TABLE IF NOT EXISTS queuert_conformance_conflict (id INT NOT NULL PRIMARY KEY, value INT NOT NULL) ENGINE=InnoDB",
+          );
+          await write("INSERT IGNORE INTO queuert_conformance_conflict VALUES (1, 0), (2, 0)");
+          const firstLocked = Promise.withResolvers<void>();
+          const secondLocked = Promise.withResolvers<void>();
+          const lockInOrder = async (
+            first: number,
+            second: number,
+            locked: PromiseWithResolvers<void>,
+            otherLocked: Promise<void>,
+          ) =>
+            stateProvider.withTransaction(async (txCtx) => {
+              await write(
+                `UPDATE queuert_conformance_conflict SET value = value + 1 WHERE id = ${first}`,
+                txCtx,
+              );
+              locked.resolve();
+              await otherLocked;
+              await write(
+                `UPDATE queuert_conformance_conflict SET value = value + 1 WHERE id = ${second}`,
+                txCtx,
+              );
+            });
+
+          const outcomes = await Promise.allSettled([
+            lockInOrder(1, 2, firstLocked, secondLocked.promise),
+            lockInOrder(2, 1, secondLocked, firstLocked.promise),
+          ]);
+          const errors = outcomes.flatMap((outcome) =>
+            outcome.status === "rejected" ? [outcome.reason as unknown] : [],
+          );
+          assert.equal(errors.length, 1);
+          assert.deepEqual(stateProvider.classifyError({ error: errors[0] }), {
+            kind: "transaction_conflict",
+          });
+        } finally {
+          await write("DROP TABLE IF EXISTS queuert_conformance_conflict");
+          await stateProvider.close?.();
+        }
+      },
+    },
+  ],
+};
+
 export const isolationLevelGroup: ConformanceGroup<MysqlStateProviderConformanceContext> = {
   name: "isolationLevel",
   cases: [
@@ -76,6 +139,7 @@ export const mysqlStateProviderConformanceGroups: ConformanceGroup<MysqlStatePro
     ...stateAdapterConcurrentTransactionGroups,
     ...stateAdapterSchemaFenceConcurrentTransactionGroups,
     ...stateAdapterSavepointGroups,
+    classifyErrorGroup,
     isolationLevelGroup,
   ];
 
@@ -152,10 +216,15 @@ export const createMysqlStateProviderConformanceContext = ({
 
 /**
  * Prepares the state adapter contract cases for a provider, ready to run. The cases are every state
- * adapter contract case run through `createMysqlStateAdapter` over a provider. The cases migrate
- * the schema once, before the first case, through a provider from `createStateProvider`; each case
- * then builds its own adapter over a new provider from it, with the tables cleared. Works with any
- * test runner.
+ * adapter contract case run through `createMysqlStateAdapter` over a provider, plus checks that the
+ * provider's `classifyError` reports a deadlock and that its `withTransaction` opens transactions at
+ * READ COMMITTED. The cases open their transactions through the provider, so they run at READ
+ * COMMITTED, and only the statements the adapter runs outside a transaction take the connection's
+ * default level; to cover several defaults, create the cases once per level over providers whose
+ * connections default to it, and register each list under its own name, since the case titles
+ * repeat. The cases migrate the schema once, before the first case, through a provider from
+ * `createStateProvider`; each case then builds its own adapter over a new provider from it, with
+ * the tables cleared. Works with any test runner.
  *
  * @param options - Suite configuration.
  *

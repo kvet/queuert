@@ -27,6 +27,9 @@ export const classifyMysqlError = ({
       const tableName = /Table '([^']+)' doesn't exist/.exec(String(driverError.message))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
     }
+    case 1020:
+    case 1213:
+      return { kind: "transaction_conflict" };
     default:
       return undefined;
   }

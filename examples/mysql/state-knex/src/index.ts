@@ -81,7 +81,7 @@ await using workerRunner = createWorkerRunner({
             knex.transaction(
               async (trx) =>
                 complete({ trx, txHooks, output: { sentAt: new Date().toISOString() } }),
-              { isolationLevel: "read committed", doNotRejectOnRollback: false },
+              { doNotRejectOnRollback: false },
             ),
           );
         },
@@ -106,7 +106,7 @@ const chain = await withTxHooks(async (txHooks) =>
         input: { userId },
       });
     },
-    { isolationLevel: "read committed", doNotRejectOnRollback: false },
+    { doNotRejectOnRollback: false },
   ),
 );
 

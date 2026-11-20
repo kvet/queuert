@@ -39,9 +39,9 @@ const unrecordMigrationStatement = sql(/* sql */ `DELETE FROM {{migration_table}
   params: [t.string()],
   columns: {},
 });
-const lockMigrationTableStatement = sql(
-  /* sql */ `SELECT name FROM {{migration_table}} ORDER BY name FOR UPDATE`,
-  { id: "lockMigrationTable", params: [], columns: { name: t.string() } },
+const takeMigrationTurnStatement = sql(
+  /* sql */ `INSERT INTO {{lock_table}} (id, locked_by, locked_until) VALUES (2, '', UTC_TIMESTAMP(6)) ON DUPLICATE KEY UPDATE id = 2`,
+  { id: "takeMigrationTurn", params: [], columns: {} },
 );
 const acquireMigrationLockStatement = sql(
   /* sql */ `
@@ -87,7 +87,7 @@ export const createMysqlMigrationStore = <TTxContext extends BaseTxContext>({
   const getAppliedMigrationsSql = applyTemplate(getAppliedMigrationsStatement);
   const recordMigrationSql = applyTemplate(recordMigrationStatement);
   const unrecordMigrationSql = applyTemplate(unrecordMigrationStatement);
-  const lockMigrationTableSql = applyTemplate(lockMigrationTableStatement);
+  const takeMigrationTurnSql = applyTemplate(takeMigrationTurnStatement);
   const acquireMigrationLockSql = applyTemplate(acquireMigrationLockStatement);
   const extendMigrationLockSql = applyTemplate(extendMigrationLockStatement);
   const readMigrationLockSql = applyTemplate(readMigrationLockStatement);
@@ -105,7 +105,7 @@ export const createMysqlMigrationStore = <TTxContext extends BaseTxContext>({
     },
     runInTransaction: async (fn) =>
       stateProvider.withTransaction(async (txCtx) => {
-        await exec({ txCtx, sql: lockMigrationTableSql });
+        await exec({ txCtx, sql: takeMigrationTurnSql });
         return fn(txCtx);
       }),
     getAppliedMigrationNames: async (txCtx) => {
@@ -119,7 +119,12 @@ export const createMysqlMigrationStore = <TTxContext extends BaseTxContext>({
       await exec({ txCtx, sql: unrecordMigrationSql, params: [name] });
     },
     acquireMigrationLock: async (ownerId, ttlMs) => {
-      await exec({ sql: acquireMigrationLockSql, params: [ownerId, ttlMs] });
+      try {
+        await exec({ sql: acquireMigrationLockSql, params: [ownerId, ttlMs] });
+      } catch (error) {
+        if (stateProvider.classifyError({ error })?.kind === "transaction_conflict") return false;
+        throw error;
+      }
       return holdsMigrationLock(ownerId);
     },
     extendMigrationLock: async (ownerId, ttlMs) => {
@@ -161,7 +166,10 @@ export const createMysqlMigratorStore = <TTxContext extends BaseTxContext>({
  *
  * The migrator creates its history and lease tables on the first run, if they are missing. Every
  * run claims a lease row first, so processes migrating at once take turns: one migrates and
- * extends the lease while it works, the others wait and then skip what it applied.
+ * extends the lease while it works, the others wait and then skip what it applied. Migration
+ * transactions also write a second, turn row of the lease table first, so they take turns until
+ * their first DDL statement commits implicitly, and run at READ COMMITTED as every transaction the
+ * provider opens.
  *
  * DDL commits implicitly on both servers, so a migration that changes the schema is never atomic:
  * a failure after its first DDL statement leaves that statement applied and the migration

@@ -179,18 +179,18 @@ export const mysqlTables: SchemaTable[] = [
   {
     name: "migration_lock",
     purpose:
-      "Holds a single-row lease that gives migrateToLatest() cross-process mutual exclusion.",
+      "Holds the lease that gives migrateToLatest() cross-process mutual exclusion, and a turn row every migration transaction writes first, so they serialize even before the history has rows.",
     columns: [
-      { name: "id", type: "INT", description: "Always 1 (single-row constraint)" },
+      { name: "id", type: "INT", description: "1 for the lease row, 2 for the turn row" },
       {
         name: "locked_by",
         type: "VARCHAR(255)",
-        description: "Owner id of the current migration run",
+        description: "Owner id of the current migration run (empty on the turn row)",
       },
       {
         name: "locked_until",
         type: "DATETIME(6)",
-        description: "UTC — lease expiry (heartbeat-extended)",
+        description: "UTC — lease expiry (heartbeat-extended; unused on the turn row)",
       },
     ],
   },

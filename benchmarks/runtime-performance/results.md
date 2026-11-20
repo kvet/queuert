@@ -1,6 +1,6 @@
 # Runtime performance
 
-Last run 2026-11-18 · commit 2748cec8 · load average 5.18 · all measurements
+Last run 2026-11-20 · commit 9939bcf9 · load average 6.16 · state-mysql, state-mariadb
 
 ## Memory (KB)
 
@@ -10,8 +10,8 @@ Last run 2026-11-18 · commit 2748cec8 · load average 5.18 · all measurements
 | state-in-process       |   100 |            260 |                5 |               135 |
 | state-in-process-async |   105 |            270 |                5 |               135 |
 | state-sqlite           |    90 |            150 |               10 |               110 |
-| state-mysql            |    70 |            180 |               20 |                90 |
-| state-mariadb          |    70 |            175 |               20 |                80 |
+| state-mysql            |    70 |            200 |               20 |               105 |
+| state-mariadb          |    70 |            180 |               20 |                80 |
 | state-redis            |   110 |            240 |               20 |               165 |
 | notify-redis           |    65 |            280 |               20 |               130 |
 | notify-postgres        |    75 |            285 |               15 |               120 |
@@ -28,8 +28,8 @@ Last run 2026-11-18 · commit 2748cec8 · load average 5.18 · all measurements
 | state-in-process       |           11 |       9 |            0 |       5 |
 | state-in-process-async |           16 |       7 |            0 |       8 |
 | state-sqlite           |           13 |      10 |           10 |      54 |
-| state-mysql            |           57 |      79 |          222 |     245 |
-| state-mariadb          |           52 |      70 |          208 |     251 |
+| state-mysql            |           49 |      78 |          194 |     207 |
+| state-mariadb          |           42 |      80 |          185 |     213 |
 | state-redis            |           33 |     110 |           22 |      74 |
 | notify-redis           |           38 |      16 |           19 |      65 |
 | notify-postgres        |           44 |      21 |           31 |      68 |
@@ -46,8 +46,8 @@ Last run 2026-11-18 · commit 2748cec8 · load average 5.18 · all measurements
 | state-in-process       |      32.7 |
 | state-in-process-async |      50.5 |
 | state-sqlite           |      45.7 |
-| state-mysql            |     243.0 |
-| state-mariadb          |     241.3 |
+| state-mysql            |     245.9 |
+| state-mariadb          |     243.7 |
 | state-redis            |     207.9 |
 | notify-redis           |      80.6 |
 | notify-postgres        |      82.4 |

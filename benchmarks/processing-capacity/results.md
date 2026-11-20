@@ -1,6 +1,6 @@
 # Processing capacity
 
-Last run 2026-11-18 · commit 2748cec8 · load average 5.41 · state-mysql-mysql2, state-mariadb-mysql2
+Last run 2026-11-20 · commit 9939bcf9 · load average 4.25 · state-mysql-mysql2, state-mariadb-mysql2
 
 ## Creation (chains/s): State adapter (noop notify)
 
@@ -12,8 +12,8 @@ Last run 2026-11-18 · commit 2748cec8 · load average 5.41 · state-mysql-mysql
 | SQLite (node:sqlite)     |  60002 |        128835 |
 | PostgreSQL (postgres-js) |   1960 |         55978 |
 | PostgreSQL (pg)          |   2039 |         58644 |
-| MySQL (mysql2)           |    861 |         22582 |
-| MariaDB (mysql2)         |    845 |         25951 |
+| MySQL (mysql2)           |    884 |         23324 |
+| MariaDB (mysql2)         |    874 |         27833 |
 | Redis (redis)            |   6538 |         37979 |
 | Redis (ioredis)          |   6679 |         37995 |
 
@@ -40,8 +40,8 @@ Last run 2026-11-18 · commit 2748cec8 · load average 5.41 · state-mysql-mysql
 | SQLite (node:sqlite)     |  19484 |   22913 |    24477 |
 | PostgreSQL (postgres-js) |   1014 |    2950 |     5312 |
 | PostgreSQL (pg)          |   1050 |    3019 |     5512 |
-| MySQL (mysql2)           |    393 |    1052 |     2198 |
-| MariaDB (mysql2)         |    303 |     948 |     2202 |
+| MySQL (mysql2)           |    380 |    1056 |     2419 |
+| MariaDB (mysql2)         |    369 |     997 |     2581 |
 | Redis (redis)            |   2264 |    6210 |    10380 |
 | Redis (ioredis)          |   2285 |    5553 |    12693 |
 

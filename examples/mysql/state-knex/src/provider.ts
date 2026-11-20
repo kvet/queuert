@@ -26,6 +26,9 @@ export const createKnexMysqlStateProvider = ({
     },
     classifyError: ({ error }) => {
       const driverError = error as { errno?: unknown; sqlMessage?: unknown } | undefined;
+      if (driverError?.errno === 1213 || driverError?.errno === 1020) {
+        return { kind: "transaction_conflict" };
+      }
       if (driverError?.errno !== 1146) return undefined;
       const tableName = /Table '([^']+)' doesn't exist/.exec(String(driverError.sqlMessage))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };

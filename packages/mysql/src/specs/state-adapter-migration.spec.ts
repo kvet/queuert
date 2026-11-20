@@ -6,6 +6,7 @@ import { type Pool, type RowDataPacket, createPool } from "mysql2/promise";
 import { it as baseIt, describe, expect } from "vitest";
 
 import { createMysqlStateAdapter } from "../state-adapter/state-adapter.mysql.ts";
+import { createMysql2PoolAtLevel } from "../state-provider/state-provider.mysql2-pool.spec-helper.ts";
 import {
   type Mysql2PoolProvider,
   createMysql2PoolProvider,
@@ -77,16 +78,22 @@ const defineMysqlMigrationSuite = async ({
     });
     return async () => {
       const { connectionOptions } = await acquireMysql(image, `${callerId}-${randomUUID()}`);
-      const createPoolForDatabase = () => {
-        const pool = createPool({ ...connectionOptions, connectionLimit: 5 });
+      const createPoolForDatabase = (level?: "SERIALIZABLE") => {
+        const pool =
+          level === undefined
+            ? createPool({ ...connectionOptions, connectionLimit: 5 })
+            : createMysql2PoolAtLevel({ ...connectionOptions, connectionLimit: 5 }, level);
         pools.push(pool);
         return pool;
       };
       const shapePool = createPoolForDatabase();
       return {
-        createAdapter: (wrap = (provider: Mysql2PoolProvider) => provider) =>
+        createAdapter: (
+          wrap = (provider: Mysql2PoolProvider) => provider,
+          level?: "SERIALIZABLE",
+        ) =>
           createMysqlStateAdapter({
-            stateProvider: wrap(createMysql2PoolProvider({ pool: createPoolForDatabase() })),
+            stateProvider: wrap(createMysql2PoolProvider({ pool: createPoolForDatabase(level) })),
             dialect,
           }),
         shape: async () => schemaShape(shapePool),
@@ -215,6 +222,28 @@ const defineMysqlMigrationSuite = async ({
       ]);
 
       expect(results).toEqual(expect.arrayContaining([INSTALLED, UP_TO_DATE]));
+    });
+
+    it("lets one of several concurrent migrators with a serializable session default install the schema", async ({
+      createDatabase,
+    }) => {
+      const database = await createDatabase();
+      const reference = await createDatabase();
+      await reference.createAdapter().migrateToLatest();
+
+      const results = await Promise.all(
+        Array.from({ length: 4 }, async () =>
+          database.createAdapter(undefined, "SERIALIZABLE").migrateToLatest(),
+        ),
+      );
+
+      expect(results.filter((result) => result.applied.length > 0)).toEqual([INSTALLED]);
+      expect(results.filter((result) => result.applied.length === 0)).toEqual([
+        UP_TO_DATE,
+        UP_TO_DATE,
+        UP_TO_DATE,
+      ]);
+      expect(await database.shape()).toEqual(await reference.shape());
     });
 
     it("upgrades a 001_schema_v1 database, flagging the chains that blocker rows reference and replacing its write fence", async ({

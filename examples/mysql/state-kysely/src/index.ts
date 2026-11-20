@@ -80,7 +80,6 @@ await using workerRunner = createWorkerRunner({
           return withTxHooks(async (txHooks) =>
             db
               .transaction()
-              .setIsolationLevel("read committed")
               .execute(async (db) =>
                 complete({ db, txHooks, output: { sentAt: new Date().toISOString() } }),
               ),
@@ -95,23 +94,20 @@ await workerRunner.start();
 
 // Register a new user and queue welcome email atomically
 const chain = await withTxHooks(async (txHooks) =>
-  db
-    .transaction()
-    .setIsolationLevel("read committed")
-    .execute(async (db) => {
-      const { insertId } = await db
-        .insertInto("users")
-        .values({ name: "Alice", email: "alice@example.com" })
-        .executeTakeFirstOrThrow();
+  db.transaction().execute(async (db) => {
+    const { insertId } = await db
+      .insertInto("users")
+      .values({ name: "Alice", email: "alice@example.com" })
+      .executeTakeFirstOrThrow();
 
-      // Queue welcome email - if user creation fails, no email job is created
-      return client.createChain({
-        db,
-        txHooks,
-        typeName: "send_welcome_email",
-        input: { userId: Number(insertId) },
-      });
-    }),
+    // Queue welcome email - if user creation fails, no email job is created
+    return client.createChain({
+      db,
+      txHooks,
+      typeName: "send_welcome_email",
+      input: { userId: Number(insertId) },
+    });
+  }),
 );
 
 // Wait for the chain to complete

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 
 import { assertRejects } from "@queuert/helpers/assert-rejects";
-import { sleep } from "@queuert/helpers/sleep";
+import { raceWithSleep, sleep } from "@queuert/helpers/sleep";
 import {
   dynamicSyncAsync,
   type Mode,
@@ -486,6 +486,59 @@ export const migrationStoreLeaseGroups: MigratorConformanceGroup[] = [
           } finally {
             yield* step(context.executeSql(`DROP TABLE IF EXISTS ${item}`));
           }
+        }),
+      },
+      {
+        name: "makes a migration transaction wait for an open one while the history is empty",
+        run: dynamicSyncAsync(function* (context: MigratorConformanceContext<Mode>) {
+          const prefix = `conformance_${randomBytes(4).toString("hex")}`;
+          const tables = {
+            migrationTableName: `${prefix}_migration`,
+            lockTableName: `${prefix}_lock`,
+          };
+          const holder = yield* resource({
+            ...context.createMigrationStore(tables),
+            [Symbol.asyncDispose]: async () => {
+              await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_migration`);
+              await context.executeSql(`DROP TABLE IF EXISTS ${prefix}_lock`);
+            },
+          });
+          if (holder.sync) return;
+          const waiter = context.createMigrationStore(tables) as MigrationStore<any>;
+
+          yield* step(holder.initialize?.());
+          const opened = Promise.withResolvers<void>();
+          const release = Promise.withResolvers<void>();
+          const holderTransaction = (holder as MigrationStore<any>).runInTransaction(
+            async (txCtx) => {
+              opened.resolve();
+              await release.promise;
+              await holder.recordMigration(txCtx, "create_items");
+            },
+          );
+          yield* wait(opened.promise);
+          const waiterTransaction = waiter.runInTransaction(async (txCtx) =>
+            waiter.getAppliedMigrationNames(txCtx),
+          );
+
+          try {
+            assert.equal(
+              yield* wait(
+                raceWithSleep(
+                  waiterTransaction.then(
+                    () => "settled",
+                    () => "settled",
+                  ),
+                  100,
+                ),
+              ),
+              undefined,
+            );
+          } finally {
+            release.resolve();
+            yield* wait(holderTransaction);
+          }
+          assert.deepEqual(yield* wait(waiterTransaction), ["create_items"]);
         }),
       },
     ],

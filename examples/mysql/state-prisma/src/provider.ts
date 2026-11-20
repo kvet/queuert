@@ -43,6 +43,9 @@ export const createPrismaMysqlStateProvider = <TPrisma extends PrismaLikeClient>
     classifyError: ({ error }) => {
       const cause = (error as PrismaDriverAdapterError | undefined)?.meta?.driverAdapterError
         ?.cause;
+      if (cause?.originalCode === "1213" || cause?.originalCode === "1020") {
+        return { kind: "transaction_conflict" };
+      }
       if (cause?.originalCode !== "1146") return undefined;
       const tableName = /Table '([^']+)' doesn't exist/.exec(String(cause.originalMessage))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };

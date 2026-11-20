@@ -146,6 +146,13 @@ export const stateProviderMembers = (dialect: "postgres" | "sqlite" | "mysql"): 
             (SQLSTATE <code>40001</code>) or a deadlock (<code>40P01</code>), which the adapter
             retries in the work it runs itself; see <a href="#isolation-level">Isolation level</a>.
           </>
+        ) : dialect === "mysql" ? (
+          <>
+            {" "}
+            It returns <code>{'{ kind: "transaction_conflict" }'}</code> for a deadlock (error{" "}
+            <code>1213</code>) or a MariaDB snapshot conflict (<code>1020</code>), which the adapter
+            retries in the work it runs itself; see <a href="#isolation-level">Isolation level</a>.
+          </>
         ) : null}
       </>
     ),

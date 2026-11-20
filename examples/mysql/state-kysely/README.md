@@ -2,7 +2,7 @@
 
 MySQL state storage via `@queuert/mysql` with Kysely's `MysqlDialect` over a mysql2 pool — job creation and completion inside application transactions.
 
-Every transaction the provider opens runs at READ COMMITTED, the only isolation level Queuert supports, so open the transactions you pass to Queuert with `db.transaction().setIsolationLevel("read committed")` as the example does. Kysely sends every statement with mysql2's text protocol, so the provider prepares none server-side.
+Every transaction the provider opens runs at READ COMMITTED, where Queuert keeps its own work; the transactions you pass to Queuert can run at any level, and the example opens them at the server's default, REPEATABLE READ. Kysely sends every statement with mysql2's text protocol, so the provider prepares none server-side.
 
 ## Running
 

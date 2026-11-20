@@ -1,6 +1,5 @@
 # Short term
 
-- [TASK] MySQL/MariaDB REPEATABLE READ and SERIALIZABLE. `blockers_remaining` already ships in `002_schema_v2`. See `design/mysql-isolation-levels.md`.
 - [EPIC] MongoDB adapter. See `design/mongodb-adapter.md`.
 - [TASK] Lock-order race between job creation and `deleteChains` (PostgreSQL, MySQL/MariaDB) — creation locks blocker chain heads by id (`getChains({ lock: "exclusive" })`), while `deleteChains` and completion lock blocker-first by height, so a create and a delete that reference the same two blocker heads deadlock when the lower id has the higher height; creation and completion can collide the same way with non-time-ordered ids. Options: a shared lock order that does not put a recursive read on creation, or retrying on deadlock.
 - [TASK] Best-effort `rescheduleJobs` — today it fails the whole batch if any job is not pending, so apps hand-roll "wake a sleeping chain" loops (`listChainJobs` + `rescheduleJob` + catch `JobNotReschedulableError`). Add an option such as `skipNotReschedulable: true` that returns a per-job outcome (`rescheduled` / `not-pending` / `completed`) instead of throwing.

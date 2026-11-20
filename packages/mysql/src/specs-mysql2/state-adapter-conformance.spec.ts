@@ -9,6 +9,7 @@ import {
   mysqlStateProviderConformanceGroups,
 } from "../conformance/state-provider-conformance.ts";
 import {
+  createMysql2PoolAtLevel,
   withMysql2PoolNonTransactionContext,
   withMysql2PoolSavepoint,
 } from "../state-provider/state-provider.mysql2-pool.spec-helper.ts";
@@ -36,6 +37,18 @@ const defineMysqlStateAdapterConformanceSuite = async ({
     });
   });
 
+  const createLevelIt = (level: "REPEATABLE READ" | "SERIALIZABLE") =>
+    baseIt.extend("conformance", { scope: "file" }, async ({}, { onCleanup }) => {
+      const pool = createMysql2PoolAtLevel({ ...connectionOptions, connectionLimit: 10 }, level);
+      onCleanup(async () => pool.end());
+      return createMysqlStateProviderConformanceContext({
+        createStateProvider: async () => createMysql2PoolProvider({ pool }),
+        dialect,
+        withNonTransactionContext: withMysql2PoolNonTransactionContext(pool),
+        withSavepoint: withMysql2PoolSavepoint,
+      });
+    });
+
   const customOptionsIt = baseIt.extend(
     "conformance",
     { scope: "file" },
@@ -60,6 +73,17 @@ const defineMysqlStateAdapterConformanceSuite = async ({
 
   describe(`${image} State Provider Conformance`, () => {
     conformanceTestSuite({ it, groups: mysqlStateProviderConformanceGroups });
+  });
+
+  const repeatableReadIt = createLevelIt("REPEATABLE READ");
+  const serializableIt = createLevelIt("SERIALIZABLE");
+
+  describe(`${image} State Provider Conformance - REPEATABLE READ`, () => {
+    conformanceTestSuite({ it: repeatableReadIt, groups: mysqlStateProviderConformanceGroups });
+  });
+
+  describe(`${image} State Provider Conformance - SERIALIZABLE`, () => {
+    conformanceTestSuite({ it: serializableIt, groups: mysqlStateProviderConformanceGroups });
   });
 
   describe(`${image} State Provider Conformance - Custom Options`, () => {

@@ -77,9 +77,8 @@ await using workerRunner = createWorkerRunner({
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
           return withTxHooks(async (txHooks) =>
-            db.transaction(
-              async (tx) => complete({ tx, txHooks, output: { sentAt: new Date().toISOString() } }),
-              { isolationLevel: "read committed" },
+            db.transaction(async (tx) =>
+              complete({ tx, txHooks, output: { sentAt: new Date().toISOString() } }),
             ),
           );
         },
@@ -92,23 +91,20 @@ await workerRunner.start();
 
 // Register a new user and queue welcome email atomically
 const chain = await withTxHooks(async (txHooks) =>
-  db.transaction(
-    async (tx) => {
-      const [user] = await tx
-        .insert(users)
-        .values({ name: "Alice", email: "alice@example.com" })
-        .$returningId();
+  db.transaction(async (tx) => {
+    const [user] = await tx
+      .insert(users)
+      .values({ name: "Alice", email: "alice@example.com" })
+      .$returningId();
 
-      // Queue welcome email - if user creation fails, no email job is created
-      return client.createChain({
-        tx,
-        txHooks,
-        typeName: "send_welcome_email",
-        input: { userId: user.id },
-      });
-    },
-    { isolationLevel: "read committed" },
-  ),
+    // Queue welcome email - if user creation fails, no email job is created
+    return client.createChain({
+      tx,
+      txHooks,
+      typeName: "send_welcome_email",
+      input: { userId: user.id },
+    });
+  }),
 );
 
 // Wait for the chain to complete
