@@ -26,6 +26,7 @@ const singleIt = it.extend(
   { scope: "file" },
   async ({ directory }): Promise<NotifyAdapterConformanceContext> => ({
     createNotifyAdapter: async () => createIpcNotifyAdapter({ directory }),
+    mode: "sync",
   }),
 );
 
@@ -66,6 +67,7 @@ const sharedDirectoryIt = it.extend(
       };
       return notifyAdapter;
     },
+    mode: "sync",
   }),
 );
 

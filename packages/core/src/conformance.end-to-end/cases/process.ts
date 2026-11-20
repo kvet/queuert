@@ -19,7 +19,7 @@ import { createCaseNotifyAdapter } from "../support/create-case-notify-adapter.t
 import { createCaseStateAdapter } from "../support/create-case-state-adapter.ts";
 import { createLogCollector } from "../support/log-collector.ts";
 import { createSpyStateAdapter } from "../support/spy-state-adapter.ts";
-import type { EndToEndSavepointContext } from "../types.ts";
+import type { EndToEndNotifyContext, EndToEndSavepointContext } from "../types.ts";
 
 const completionOptions = {
   pollIntervalMs: 100,
@@ -1190,13 +1190,13 @@ export const processAsyncGroup: ConformanceGroup<StateAdapterConformanceContext>
   ],
 };
 
-export const processNotifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
+export const processNotifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
   name: "process",
   cases: [
     {
       name: "aborts the signal when the attempt is lost after its `complete` call rolled back",
-      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
-        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, mode }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter, mode));
         const notifyAdapter = yield* resource(
           createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
         );
@@ -1267,8 +1267,8 @@ export const processNotifyGroup: ConformanceGroup<StateAdapterConformanceContext
     },
     {
       name: "reschedules a failed attempt when disposing its attempt-lost listener fails",
-      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
-        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, mode }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter, mode));
         const notifyAdapter = yield* resource(
           createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
         );

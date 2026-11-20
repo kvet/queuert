@@ -25,8 +25,8 @@ import {
   endToEndAsyncGroups,
   endToEndBaseGroups,
   endToEndConcurrentTransactionGroups,
+  endToEndNotifyConcurrentTransactionGroups,
   endToEndNotifyGroups,
-  notifyAdapterEndToEndGroups,
 } from "./groups.ts";
 
 const titlesOf = (groups: { name: string; cases: { name: string }[] }[]): string[] =>
@@ -56,6 +56,7 @@ const stateContext: StateAdapterConformanceContext = {
 };
 const notifyContext = {
   createNotifyAdapter: async () => createInProcessNotifyAdapter({ mode: "async" }),
+  mode: "async" as const,
 };
 
 describe("public case lists", () => {
@@ -113,6 +114,7 @@ describe("createStateAdapterEndToEndConformanceCases", () => {
         ...endToEndNotifyGroups,
         ...endToEndAsyncGroups,
         ...endToEndConcurrentTransactionGroups,
+        ...endToEndNotifyConcurrentTransactionGroups,
       ]),
     );
   });
@@ -170,8 +172,7 @@ describe("createNotifyAdapterEndToEndConformanceCases", () => {
     );
     expect(
       createNotifyAdapterEndToEndConformanceCases(notifyContext).map(({ title }) => title),
-    ).toEqual(titlesOf(notifyAdapterEndToEndGroups));
-    expect(titlesOf(notifyAdapterEndToEndGroups)).toEqual(titlesOf(endToEndNotifyGroups));
+    ).toEqual(titlesOf(endToEndNotifyGroups));
   });
 
   it("runs each case over a notify adapter from the context and closes it when it ends", async () => {
@@ -187,6 +188,7 @@ describe("createNotifyAdapterEndToEndConformanceCases", () => {
           label,
         );
       },
+      mode: "async" as const,
     };
 
     const notifyCases = createNotifyAdapterEndToEndConformanceCases(context).filter(
@@ -198,26 +200,5 @@ describe("createNotifyAdapterEndToEndConformanceCases", () => {
 
     expect(created).toHaveLength(notifyCases.length);
     expect(new Set(closed)).toEqual(new Set(created));
-  });
-
-  it("closes the notify adapter when a case fails before taking it", async () => {
-    const closed: string[] = [];
-    const notifyAdapter = trackClose<NotifyAdapter<"async">>(
-      createInProcessNotifyAdapter({ mode: "async" }),
-      closed,
-      "notify",
-    );
-    const context = {
-      createNotifyAdapter: async () =>
-        ({
-          ...notifyAdapter,
-          [Symbol.asyncDispose]: undefined,
-        }) as unknown as NotifyAdapter<"async">,
-    };
-
-    await expect(createNotifyAdapterEndToEndConformanceCases(context)[0].run()).rejects.toThrow(
-      "A resource got a value that is neither async disposable nor disposable",
-    );
-    expect(closed).toEqual(["notify"]);
   });
 });

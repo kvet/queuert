@@ -1,7 +1,7 @@
 // oxlint-disable no-empty-pattern -- vitest fixtures must destructure their context
 import { conformanceTestSuite } from "@queuert/helpers/conformance";
 import { acquireRedisCluster } from "@queuert/testcontainers";
-import { notifyAdapterEndToEndGroups } from "queuert/conformance-internal";
+import { endToEndNotifyGroups } from "queuert/conformance-internal";
 import { createCluster, type RedisClusterType } from "redis";
 import { it as baseIt, describe } from "vitest";
 
@@ -34,6 +34,6 @@ baseIt("index");
 describe("Redis Cluster Notify Provider Conformance", () => {
   conformanceTestSuite({
     it,
-    groups: [...redisNotifyProviderConformanceGroups, ...notifyAdapterEndToEndGroups],
+    groups: [...redisNotifyProviderConformanceGroups, ...endToEndNotifyGroups],
   });
 });

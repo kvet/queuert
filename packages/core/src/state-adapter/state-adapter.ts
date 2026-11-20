@@ -203,10 +203,14 @@ export type StateAdapter<
   onTransactionCommit: (txCtx: TTxContext, callback: () => void | ModeResult<TMode, void>) => void;
 
   /**
-   * Runs `callback` synchronously when `txCtx`'s transaction, or the savepoint `txCtx` belongs to,
-   * rolls back. Commit callbacks registered there never run.
+   * Runs `callback` when `txCtx`'s transaction, or the savepoint `txCtx` belongs to, rolls back,
+   * before the call that opened the transaction settles. Commit callbacks registered there never
+   * run.
    */
-  onTransactionRollback: (txCtx: TTxContext, callback: () => void) => void;
+  onTransactionRollback: (
+    txCtx: TTxContext,
+    callback: () => void | ModeResult<TMode, void>,
+  ) => void;
 
   /** Gets chains by ID in input order; `lock` locks each head row. */
   getChains: (

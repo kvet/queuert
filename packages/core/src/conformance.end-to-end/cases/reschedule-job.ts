@@ -792,3 +792,246 @@ export const rescheduleJobGroup: ConformanceGroup<StateAdapterConformanceContext
     },
   ],
 };
+
+export const rescheduleJobNotifyConcurrentTransactionsGroup: ConformanceGroup<StateAdapterConformanceContext> =
+  {
+    name: "reschedule-job",
+    cases: [
+      {
+        name: "starts a pending job once a rescheduleJobs call that failed on another job rolls back",
+        run: async ({ createStateAdapter, createNotifyAdapter }) => {
+          await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
+          await using notifyAdapter = await createCaseNotifyAdapter(
+            createNotifyAdapter,
+            stateAdapter,
+          );
+          const jobTypes = defineJobTypes<{
+            task: { entry: true; input: null; output: null };
+          }>();
+
+          const workerIdle = Promise.withResolvers<void>();
+          const client = createClient({
+            stateAdapter: {
+              ...stateAdapter,
+              getStartAttemptDelayMs: async (params) => {
+                const delayMs = await stateAdapter.getStartAttemptDelayMs(params);
+                workerIdle.resolve();
+                return delayMs;
+              },
+            },
+            notifyAdapter,
+            jobTypes,
+          });
+
+          await using workerRunner = createWorkerRunner({
+            client,
+            concurrency: 1,
+            pollIntervalMs: 60_000,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                task: {
+                  attemptHandler: async ({ complete }) =>
+                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                },
+              },
+            }),
+          });
+
+          const completedChain = await stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "task", input: null }),
+          );
+          await stateAdapter.withTransaction((txCtx) =>
+            client.completeChain({
+              ...txCtx,
+              ...completedChain,
+              handler: async ({ job, completeJob }) =>
+                completeJob(job, ({ complete }) => complete({ output: null })),
+            }),
+          );
+          const pendingChain = await stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "task", input: null }),
+          );
+
+          const failed = Promise.withResolvers<void>();
+          const release = Promise.withResolvers<void>();
+          const rolledBack = assertRejects(
+            async () =>
+              stateAdapter.withTransaction(async (txCtx) => {
+                await assertRejects(
+                  async () =>
+                    client.rescheduleJobs({
+                      ...txCtx,
+                      ids: [pendingChain.id, completedChain.id],
+                    }),
+                  JobsNotReschedulableError,
+                );
+                failed.resolve();
+                await release.promise;
+                throw new Error("rollback");
+              }),
+            Error,
+          );
+
+          await failed.promise;
+          await workerRunner.start();
+          await workerIdle.promise;
+          release.resolve();
+          await rolledBack;
+
+          await client.awaitChain(pendingChain, { timeoutMs: 5000, pollIntervalMs: 100 });
+        },
+      },
+      {
+        name: "starts a pending job once a transaction that caught a rescheduleJobs call failing on another job commits",
+        run: async ({ createStateAdapter, createNotifyAdapter }) => {
+          await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
+          await using notifyAdapter = await createCaseNotifyAdapter(
+            createNotifyAdapter,
+            stateAdapter,
+          );
+          const jobTypes = defineJobTypes<{
+            task: { entry: true; input: null; output: null };
+          }>();
+
+          const workerIdle = Promise.withResolvers<void>();
+          const client = createClient({
+            stateAdapter: {
+              ...stateAdapter,
+              getStartAttemptDelayMs: async (params) => {
+                const delayMs = await stateAdapter.getStartAttemptDelayMs(params);
+                workerIdle.resolve();
+                return delayMs;
+              },
+            },
+            notifyAdapter,
+            jobTypes,
+          });
+
+          await using workerRunner = createWorkerRunner({
+            client,
+            concurrency: 1,
+            pollIntervalMs: 60_000,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                task: {
+                  attemptHandler: async ({ complete }) =>
+                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                },
+              },
+            }),
+          });
+
+          const completedChain = await stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "task", input: null }),
+          );
+          await stateAdapter.withTransaction((txCtx) =>
+            client.completeChain({
+              ...txCtx,
+              ...completedChain,
+              handler: async ({ job, completeJob }) =>
+                completeJob(job, ({ complete }) => complete({ output: null })),
+            }),
+          );
+          const pendingChain = await stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "task", input: null }),
+          );
+
+          const failed = Promise.withResolvers<void>();
+          const release = Promise.withResolvers<void>();
+          const transaction = stateAdapter.withTransaction(async (txCtx) => {
+            await assertRejects(
+              async () =>
+                client.rescheduleJobs({ ...txCtx, ids: [pendingChain.id, completedChain.id] }),
+              JobsNotReschedulableError,
+            );
+            failed.resolve();
+            await release.promise;
+          });
+
+          await failed.promise;
+          await workerRunner.start();
+          await workerIdle.promise;
+          release.resolve();
+          await transaction;
+
+          await client.awaitChain(pendingChain, { timeoutMs: 5000, pollIntervalMs: 100 });
+        },
+      },
+      {
+        name: "starts a pending job once the transaction rescheduling it rolls back",
+        run: async ({ createStateAdapter, createNotifyAdapter }) => {
+          await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
+          await using notifyAdapter = await createCaseNotifyAdapter(
+            createNotifyAdapter,
+            stateAdapter,
+          );
+          const jobTypes = defineJobTypes<{
+            task: { entry: true; input: null; output: null };
+          }>();
+
+          const workerIdle = Promise.withResolvers<void>();
+          const client = createClient({
+            stateAdapter: {
+              ...stateAdapter,
+              getStartAttemptDelayMs: async (params) => {
+                const delayMs = await stateAdapter.getStartAttemptDelayMs(params);
+                workerIdle.resolve();
+                return delayMs;
+              },
+            },
+            notifyAdapter,
+            jobTypes,
+          });
+
+          await using workerRunner = createWorkerRunner({
+            client,
+            concurrency: 1,
+            pollIntervalMs: 60_000,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                task: {
+                  attemptHandler: async ({ complete }) =>
+                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                },
+              },
+            }),
+          });
+
+          const chain = await stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "task", input: null }),
+          );
+
+          const rescheduled = Promise.withResolvers<void>();
+          const release = Promise.withResolvers<void>();
+          const transaction = assertRejects(
+            async () =>
+              stateAdapter.withTransaction(async (txCtx) => {
+                await client.rescheduleJobs({
+                  ...txCtx,
+                  ids: [chain.id],
+                  schedule: { afterMs: 0 },
+                });
+                rescheduled.resolve();
+                await release.promise;
+                throw new Error("rollback");
+              }),
+            Error,
+          );
+
+          await rescheduled.promise;
+          await workerRunner.start();
+          await workerIdle.promise;
+          release.resolve();
+          await transaction;
+
+          await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 100 });
+        },
+      },
+    ],
+  };

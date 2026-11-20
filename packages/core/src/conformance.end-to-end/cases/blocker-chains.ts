@@ -1645,3 +1645,379 @@ export const blockerChainsConcurrentTransactionsGroup: ConformanceGroup<StateAda
       },
     ],
   };
+
+export const blockerChainsNotifyConcurrentTransactionsGroup: ConformanceGroup<StateAdapterConformanceContext> =
+  {
+    name: "blocker-chains",
+    cases: [
+      {
+        name: "starts a pending blocker job once the transaction attaching a dependent to it commits",
+        run: async ({ createStateAdapter, createNotifyAdapter }) => {
+          await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
+          await using notifyAdapter = await createCaseNotifyAdapter(
+            createNotifyAdapter,
+            stateAdapter,
+          );
+
+          const jobTypes = defineJobTypes<{
+            blocker: {
+              entry: true;
+              input: null;
+              output: null;
+            };
+            main: {
+              entry: true;
+              input: null;
+              output: null;
+              blockers: [{ typeName: "blocker" }];
+            };
+          }>();
+
+          const workerIdle = Promise.withResolvers<void>();
+          const client = createClient({
+            stateAdapter: {
+              ...stateAdapter,
+              getStartAttemptDelayMs: async (params) => {
+                const delayMs = await stateAdapter.getStartAttemptDelayMs(params);
+                workerIdle.resolve();
+                return delayMs;
+              },
+            },
+            notifyAdapter,
+            jobTypes,
+          });
+
+          await using workerRunner = createWorkerRunner({
+            client,
+            concurrency: 1,
+            pollIntervalMs: 60_000,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                blocker: {
+                  attemptHandler: async ({ complete }) =>
+                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                },
+                main: {
+                  attemptHandler: async ({ complete }) =>
+                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                },
+              },
+            }),
+          });
+
+          const blockerChain = await stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "blocker", input: null }),
+          );
+
+          const attached = Promise.withResolvers<void>();
+          const release = Promise.withResolvers<void>();
+          const mainChainPromise = stateAdapter.withTransaction(async (txCtx) => {
+            const chain = await client.createChain({
+              ...txCtx,
+              typeName: "main",
+              input: null,
+              blockers: [blockerChain],
+            });
+            attached.resolve();
+            await release.promise;
+            return chain;
+          });
+
+          await attached.promise;
+          await workerRunner.start();
+          await workerIdle.promise;
+          release.resolve();
+          const mainChain = await mainChainPromise;
+
+          await client.awaitChain(blockerChain, completionOptions);
+          await client.awaitChain(mainChain, completionOptions);
+        },
+      },
+      {
+        name: "starts a pending blocker job once the transaction attaching a dependent to it rolls back",
+        run: async ({ createStateAdapter, createNotifyAdapter }) => {
+          await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
+          await using notifyAdapter = await createCaseNotifyAdapter(
+            createNotifyAdapter,
+            stateAdapter,
+          );
+
+          const jobTypes = defineJobTypes<{
+            blocker: {
+              entry: true;
+              input: null;
+              output: null;
+            };
+            main: {
+              entry: true;
+              input: null;
+              output: null;
+              blockers: [{ typeName: "blocker" }];
+            };
+          }>();
+
+          const workerIdle = Promise.withResolvers<void>();
+          const client = createClient({
+            stateAdapter: {
+              ...stateAdapter,
+              getStartAttemptDelayMs: async (params) => {
+                const delayMs = await stateAdapter.getStartAttemptDelayMs(params);
+                workerIdle.resolve();
+                return delayMs;
+              },
+            },
+            notifyAdapter,
+            jobTypes,
+          });
+
+          await using workerRunner = createWorkerRunner({
+            client,
+            concurrency: 1,
+            pollIntervalMs: 60_000,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                blocker: {
+                  attemptHandler: async ({ complete }) =>
+                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                },
+                main: {
+                  attemptHandler: async ({ complete }) =>
+                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                },
+              },
+            }),
+          });
+
+          const blockerChain = await stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "blocker", input: null }),
+          );
+
+          const attached = Promise.withResolvers<void>();
+          const release = Promise.withResolvers<void>();
+          const rolledBack = assertRejects(
+            async () =>
+              stateAdapter.withTransaction(async (txCtx) => {
+                await client.createChain({
+                  ...txCtx,
+                  typeName: "main",
+                  input: null,
+                  blockers: [blockerChain],
+                });
+                attached.resolve();
+                await release.promise;
+                throw new Error("rollback");
+              }),
+            Error,
+          );
+
+          await attached.promise;
+          await workerRunner.start();
+          await workerIdle.promise;
+          release.resolve();
+          await rolledBack;
+
+          await client.awaitChain(blockerChain, completionOptions);
+        },
+      },
+      {
+        name: "starts a pending blocker job once the attempt continuing with a dependent on it commits",
+        run: async ({ createStateAdapter, createNotifyAdapter }) => {
+          await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
+          await using notifyAdapter = await createCaseNotifyAdapter(
+            createNotifyAdapter,
+            stateAdapter,
+          );
+
+          const jobTypes = defineJobTypes<{
+            blocker: {
+              entry: true;
+              input: null;
+              output: null;
+            };
+            first: {
+              entry: true;
+              input: null;
+              continueWith: { typeName: "main" };
+            };
+            main: {
+              input: null;
+              output: null;
+              blockers: [{ typeName: "blocker" }];
+            };
+          }>();
+
+          const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+          const blockerChain = await stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "blocker", input: null }),
+          );
+
+          const attached = Promise.withResolvers<void>();
+          const release = Promise.withResolvers<void>();
+          await using continuingWorkerRunner = createWorkerRunner({
+            client,
+            concurrency: 1,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                first: {
+                  attemptHandler: async ({ complete }) =>
+                    stateAdapter.withTransaction(async (txCtx) => {
+                      const continued = await complete({
+                        ...txCtx,
+                        continueWith: { typeName: "main", input: null, blockers: [blockerChain] },
+                      });
+                      attached.resolve();
+                      await release.promise;
+                      return continued;
+                    }),
+                },
+              },
+            }),
+          });
+
+          const blockerWorkerIdle = Promise.withResolvers<void>();
+          const blockerClient = createClient({
+            stateAdapter: {
+              ...stateAdapter,
+              getStartAttemptDelayMs: async (params) => {
+                const delayMs = await stateAdapter.getStartAttemptDelayMs(params);
+                blockerWorkerIdle.resolve();
+                return delayMs;
+              },
+            },
+            notifyAdapter,
+            jobTypes,
+          });
+          await using blockerWorkerRunner = createWorkerRunner({
+            client: blockerClient,
+            concurrency: 1,
+            pollIntervalMs: 60_000,
+            processors: createProcessors({
+              client: blockerClient,
+              jobTypes,
+              processors: {
+                blocker: {
+                  attemptHandler: async ({ complete }) =>
+                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                },
+              },
+            }),
+          });
+
+          await stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "first", input: null }),
+          );
+          await continuingWorkerRunner.start();
+          await attached.promise;
+          await blockerWorkerRunner.start();
+          await blockerWorkerIdle.promise;
+          release.resolve();
+
+          await client.awaitChain(blockerChain, completionOptions);
+        },
+      },
+      {
+        name: "starts a pending blocker job once the attempt continuing with a dependent on it rolls back",
+        run: async ({ createStateAdapter, createNotifyAdapter }) => {
+          await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
+          await using notifyAdapter = await createCaseNotifyAdapter(
+            createNotifyAdapter,
+            stateAdapter,
+          );
+
+          const jobTypes = defineJobTypes<{
+            blocker: {
+              entry: true;
+              input: null;
+              output: null;
+            };
+            first: {
+              entry: true;
+              input: null;
+              continueWith: { typeName: "main" };
+            };
+            main: {
+              input: null;
+              output: null;
+              blockers: [{ typeName: "blocker" }];
+            };
+          }>();
+
+          const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+          const blockerChain = await stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "blocker", input: null }),
+          );
+
+          const attached = Promise.withResolvers<void>();
+          const release = Promise.withResolvers<void>();
+          await using continuingWorkerRunner = createWorkerRunner({
+            client,
+            concurrency: 1,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                first: {
+                  attemptHandler: async ({ complete }) =>
+                    stateAdapter.withTransaction(async (txCtx) => {
+                      await complete({
+                        ...txCtx,
+                        continueWith: { typeName: "main", input: null, blockers: [blockerChain] },
+                      });
+                      attached.resolve();
+                      await release.promise;
+                      throw new Error("rollback");
+                    }),
+                },
+              },
+            }),
+          });
+
+          const blockerWorkerIdle = Promise.withResolvers<void>();
+          const blockerClient = createClient({
+            stateAdapter: {
+              ...stateAdapter,
+              getStartAttemptDelayMs: async (params) => {
+                const delayMs = await stateAdapter.getStartAttemptDelayMs(params);
+                blockerWorkerIdle.resolve();
+                return delayMs;
+              },
+            },
+            notifyAdapter,
+            jobTypes,
+          });
+          await using blockerWorkerRunner = createWorkerRunner({
+            client: blockerClient,
+            concurrency: 1,
+            pollIntervalMs: 60_000,
+            processors: createProcessors({
+              client: blockerClient,
+              jobTypes,
+              processors: {
+                blocker: {
+                  attemptHandler: async ({ complete }) =>
+                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                },
+              },
+            }),
+          });
+
+          await stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "first", input: null }),
+          );
+          await continuingWorkerRunner.start();
+          await attached.promise;
+          await blockerWorkerRunner.start();
+          await blockerWorkerIdle.promise;
+          release.resolve();
+
+          await client.awaitChain(blockerChain, completionOptions);
+        },
+      },
+    ],
+  };

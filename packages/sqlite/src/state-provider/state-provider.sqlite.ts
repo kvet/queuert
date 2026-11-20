@@ -57,10 +57,14 @@ export type SqliteStateProvider<TTxContext extends BaseTxContext, TMode extends 
   onTransactionCommit: (txCtx: TTxContext, callback: () => void | ModeResult<TMode, void>) => void;
 
   /**
-   * Runs `callback` synchronously when `txCtx`'s transaction, or the savepoint `txCtx` belongs to,
-   * rolls back. Commit callbacks registered there never run.
+   * Runs `callback` when `txCtx`'s transaction, or the savepoint `txCtx` belongs to, rolls back,
+   * before the call that opened the transaction settles. Commit callbacks registered there never
+   * run.
    */
-  onTransactionRollback: (txCtx: TTxContext, callback: () => void) => void;
+  onTransactionRollback: (
+    txCtx: TTxContext,
+    callback: () => void | ModeResult<TMode, void>,
+  ) => void;
 
   /**
    * Executes a SQL query.

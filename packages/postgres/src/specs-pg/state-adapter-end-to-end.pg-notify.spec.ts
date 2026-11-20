@@ -6,6 +6,7 @@ import { Pool } from "pg";
 import {
   endToEndAsyncGroups,
   endToEndBaseGroups,
+  endToEndNotifyConcurrentTransactionGroups,
   endToEndNotifyGroups,
 } from "queuert/conformance-internal";
 import { it as baseIt, describe } from "vitest";
@@ -52,6 +53,7 @@ describe("PostgreSQL End-to-End Conformance, PostgreSQL notify", () => {
       ...endToEndAsyncGroups,
       ...endToEndNotifyGroups,
       ...capabilityGroups,
+      ...endToEndNotifyConcurrentTransactionGroups,
     ],
   });
 });

@@ -1,7 +1,7 @@
 import { conformanceTestSuite } from "@queuert/helpers/conformance";
 import { it as baseIt, describe } from "vitest";
 
-import { notifyAdapterEndToEndGroups } from "../conformance.end-to-end/groups.ts";
+import { endToEndNotifyGroups } from "../conformance.end-to-end/groups.ts";
 import { notifyAdapterBaseGroups } from "../conformance.notify-adapter/groups.ts";
 import type { NotifyAdapterConformanceContext } from "../conformance.notify-adapter/types.ts";
 import { createInProcessNotifyAdapter } from "../notify-adapter.in-process/notify-adapter.in-process.ts";
@@ -11,6 +11,7 @@ const it = baseIt.extend(
   { scope: "file" },
   async (): Promise<NotifyAdapterConformanceContext> => ({
     createNotifyAdapter: async () => createInProcessNotifyAdapter({ mode: "async" }),
+    mode: "async",
   }),
 );
 
@@ -19,6 +20,7 @@ const syncIt = baseIt.extend(
   { scope: "file" },
   async (): Promise<NotifyAdapterConformanceContext> => ({
     createNotifyAdapter: () => createInProcessNotifyAdapter(),
+    mode: "sync",
   }),
 );
 
@@ -33,5 +35,5 @@ describe("Sync In-Process Notify Adapter Conformance", () => {
 });
 
 describe("Sync In-Process Notify Adapter End-to-End Conformance", () => {
-  conformanceTestSuite({ it: syncIt, groups: notifyAdapterEndToEndGroups });
+  conformanceTestSuite({ it: syncIt, groups: endToEndNotifyGroups });
 });

@@ -2,7 +2,11 @@
 import { conformanceTestSuite } from "@queuert/helpers/conformance";
 import { acquireMysql } from "@queuert/testcontainers";
 import { createPool } from "mysql2/promise";
-import { endToEndAsyncGroups, endToEndBaseGroups } from "queuert/conformance-internal";
+import {
+  endToEndAsyncGroups,
+  endToEndBaseGroups,
+  endToEndNotifyConcurrentTransactionGroups,
+} from "queuert/conformance-internal";
 import { it as baseIt, describe } from "vitest";
 
 import { capabilityGroups, createEndToEndContext } from "./state-adapter-end-to-end.spec-helper.ts";
@@ -25,6 +29,11 @@ baseIt("index");
 describe("mariadb:11.4 End-to-End Conformance, in-process notify", () => {
   conformanceTestSuite({
     it,
-    groups: [...endToEndBaseGroups, ...endToEndAsyncGroups, ...capabilityGroups],
+    groups: [
+      ...endToEndBaseGroups,
+      ...endToEndAsyncGroups,
+      ...capabilityGroups,
+      ...endToEndNotifyConcurrentTransactionGroups,
+    ],
   });
 });

@@ -10,9 +10,11 @@ import { createMemoryNotifyAdapter } from "./notify-adapter.ts";
 for (const conformanceCase of [
   ...createNotifyAdapterConformanceCases({
     createNotifyAdapter: async () => createMemoryNotifyAdapter(),
+    mode: "async",
   }),
   ...createNotifyAdapterEndToEndConformanceCases({
     createNotifyAdapter: async () => createMemoryNotifyAdapter(),
+    mode: "async",
   }),
 ]) {
   test(conformanceCase.title, async () => {

@@ -139,6 +139,15 @@ const lockBlockerChains = syncAsync(function* (
           }),
         )
       : noChains;
+  const lockedPendingTypeNames = lockedChains.flatMap((chain) =>
+    chain?.head.status === "pending" ? [chain.head.typeName] : [],
+  );
+  notifyOnCommit(helpers, txCtx, helpers.notifyHelper.notifyJobsScheduled, lockedPendingTypeNames);
+  if (lockedPendingTypeNames.length > 0) {
+    helpers.stateAdapter.onTransactionRollback(txCtx, () =>
+      helpers.notifyHelper.notifyJobsScheduled(lockedPendingTypeNames),
+    );
+  }
 
   const fetched = lockedChains.values();
   return items.map((item): LockedJob => {

@@ -4,10 +4,10 @@ export {
   endToEndConcurrentTransactionGroups,
   endToEndFlakyDbConcurrentTransactionGroups,
   endToEndFlakyDbGroups,
+  endToEndNotifyConcurrentTransactionGroups,
   endToEndNotifyGroups,
   endToEndPoisonTransactionGroups,
   endToEndSavepointGroups,
-  notifyAdapterEndToEndGroups,
 } from "./conformance.end-to-end/groups.ts";
 export type {
   EndToEndFlakyDbContext,

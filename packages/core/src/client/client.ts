@@ -891,6 +891,24 @@ export const createClient = <
               : [],
           );
           if (blockerRefs.length > 0) {
+            const lockedChains = yield* step(
+              helpers.stateAdapter.getChains({ txCtx, chainIds: ids }),
+            );
+            const lockedPendingTypeNames = lockedChains.flatMap((chain) => {
+              const currentJob = chain?.tail ?? chain?.head;
+              return currentJob?.status === "pending" ? [currentJob.typeName] : [];
+            });
+            notifyOnCommit(
+              helpers,
+              txCtx,
+              helpers.notifyHelper.notifyJobsScheduled,
+              lockedPendingTypeNames,
+            );
+            if (lockedPendingTypeNames.length > 0) {
+              helpers.stateAdapter.onTransactionRollback(txCtx, () =>
+                helpers.notifyHelper.notifyJobsScheduled(lockedPendingTypeNames),
+              );
+            }
             throw new BlockerReferenceError(
               `Cannot delete chains: ${[...new Set(blockerRefs.map((r) => r.chainId))].join(", ")} referenced as blockers`,
               { references: blockerRefs },
@@ -916,6 +934,16 @@ export const createClient = <
                 helpers.observabilityHelper.chainDeleted(stateChain);
               });
             }
+          }
+          const deletedPendingTypeNames = verdicts.flatMap((verdict) => {
+            if (verdict === undefined || Array.isArray(verdict)) return [];
+            const currentJob = verdict.tail ?? verdict.head;
+            return currentJob.status === "pending" ? [currentJob.typeName] : [];
+          });
+          if (deletedPendingTypeNames.length > 0) {
+            helpers.stateAdapter.onTransactionRollback(txCtx, () =>
+              helpers.notifyHelper.notifyJobsScheduled(deletedPendingTypeNames),
+            );
           }
           notifyOnCommit(
             helpers,
@@ -1028,7 +1056,25 @@ export const createClient = <
               lock: "exclusive",
             }),
           );
-          assertReschedulable(existingJobs);
+          const lockedPendingTypeNames = existingJobs.flatMap((job) =>
+            job?.status === "pending" ? [job.typeName] : [],
+          );
+          if (lockedPendingTypeNames.length > 0) {
+            helpers.stateAdapter.onTransactionRollback(txCtx, () =>
+              helpers.notifyHelper.notifyJobsScheduled(lockedPendingTypeNames),
+            );
+          }
+          try {
+            assertReschedulable(existingJobs);
+          } catch (error) {
+            notifyOnCommit(
+              helpers,
+              txCtx,
+              helpers.notifyHelper.notifyJobsScheduled,
+              lockedPendingTypeNames,
+            );
+            throw error;
+          }
           const rescheduledOrMissing = yield* runRescheduleJobs.steps(helpers, {
             txCtx,
             jobs: ids.map((id: TJobId) => ({ jobId: id, schedule, reason })),
@@ -1110,6 +1156,11 @@ export const createClient = <
             throw new Error(`Current job of chain ${id} not found under the chain lock`);
           }
           const currentJob = lockedJob;
+          if (currentJob.status === "pending") {
+            helpers.stateAdapter.onTransactionRollback(txCtx, () =>
+              helpers.notifyHelper.notifyJobsScheduled([currentJob.typeName]),
+            );
+          }
 
           const completeJob = (
             job: AnyJob,
@@ -1233,6 +1284,16 @@ export const createClient = <
             throw new ChainNotFoundError(`Chain with id ${id} not found after complete`, {
               chainId: id as string,
             });
+          }
+          const updatedCurrentJob = updatedChain.tail ?? updatedChain.head;
+          if (
+            currentJob.status === "pending" &&
+            updatedCurrentJob.id === currentJob.id &&
+            updatedCurrentJob.status === "pending"
+          ) {
+            notifyOnCommit(helpers, txCtx, helpers.notifyHelper.notifyJobsScheduled, [
+              currentJob.typeName,
+            ]);
           }
           return mapStateChainToChain(updatedChain, helpers.jobTypes) as TResult;
         }),

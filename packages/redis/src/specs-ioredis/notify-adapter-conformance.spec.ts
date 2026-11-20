@@ -2,7 +2,7 @@
 import { conformanceTestSuite } from "@queuert/helpers/conformance";
 import { acquireRedis } from "@queuert/testcontainers";
 import { Redis } from "ioredis";
-import { notifyAdapterEndToEndGroups } from "queuert/conformance-internal";
+import { endToEndNotifyGroups } from "queuert/conformance-internal";
 import { it as baseIt, describe } from "vitest";
 
 import {
@@ -31,6 +31,6 @@ baseIt("index");
 describe("Redis Notify Provider Conformance (ioredis)", () => {
   conformanceTestSuite({
     it,
-    groups: [...redisNotifyProviderConformanceGroups, ...notifyAdapterEndToEndGroups],
+    groups: [...redisNotifyProviderConformanceGroups, ...endToEndNotifyGroups],
   });
 });

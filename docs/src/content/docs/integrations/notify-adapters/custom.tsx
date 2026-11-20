@@ -51,8 +51,11 @@ const Page = () => (
     </p>
     <p>
       The suite drives no test runner: your test file registers one test per case. Both functions
-      take a <code>createNotifyAdapter</code> factory; each case creates its own adapter from it and
-      closes it when the case ends:
+      take a <code>createNotifyAdapter</code> factory, from which each case creates its own adapter
+      and closes it when the case ends, and your adapter's <code>mode</code>: <code>"sync"</code>{" "}
+      for an adapter with <code>sync: true</code>, <code>"async"</code> otherwise. The contract
+      cases check your adapter's <code>sync</code> marker against it, and the end-to-end cases run
+      with an in-memory state adapter of that mode:
     </p>
     <ExampleCode
       example="custom/notify-memory"
@@ -65,11 +68,11 @@ const Page = () => (
     </p>
     <p>
       For a <code>"sync"</code> <code>NotifyAdapter</code>, register the same cases, with a{" "}
-      <code>createNotifyAdapter</code> that may return the sync adapter directly. The contract cases
-      call it synchronously, fail when a call returns a promise, and still wait for delivery; the
-      end-to-end cases build a client over your adapter and an in-memory sync state adapter. Every
-      case takes its mode from your adapter's <code>sync</code> marker, so over an async adapter it
-      checks that the calls return promises.
+      <code>createNotifyAdapter</code> that may return the sync adapter directly and{" "}
+      <code>mode: "sync"</code>. The contract cases call it synchronously, fail when a call returns
+      a promise, and still wait for delivery; the end-to-end cases build a client over your adapter
+      and an in-memory sync state adapter. Over an async adapter, the contract cases check that the
+      calls return promises.
     </p>
     <p>
       A provider for PostgreSQL or Redis has its own cases and a helper that builds the adapter over

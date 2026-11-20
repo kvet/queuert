@@ -13,4 +13,10 @@ export type NotifyAdapterConformanceContext = {
    * must not release resources the next one needs.
    */
   createNotifyAdapter: () => MaybePromise<NotifyAdapter<Mode>>;
+  /**
+   * The adapter's mode: `"sync"` for an adapter with `sync: true`, `"async"` otherwise. The contract
+   * cases check the adapter's `sync` marker against it, and the end-to-end cases run the adapter
+   * with an in-process state adapter of this mode.
+   */
+  mode: Mode;
 };

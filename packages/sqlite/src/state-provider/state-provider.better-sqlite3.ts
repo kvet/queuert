@@ -94,7 +94,7 @@ export function createBetterSqlite3Provider({
     onTransactionCommit: (txCtx: BetterSqlite3Context, callback: () => MaybePromise<void>) => {
       requireTxHooks(txCtx).onCommit(callback);
     },
-    onTransactionRollback: (txCtx: BetterSqlite3Context, callback: () => void) => {
+    onTransactionRollback: (txCtx: BetterSqlite3Context, callback: () => MaybePromise<void>) => {
       requireTxHooks(txCtx).onRollback(callback);
     },
     isTransaction: (txCtx: BetterSqlite3Context) => txCtx.db.inTransaction,

@@ -18,6 +18,7 @@ import { defineJobTypes } from "../../job-types/define-job-types.ts";
 import { createWorkerRunner } from "../../worker/worker-runner.ts";
 import { createCaseNotifyAdapter } from "../support/create-case-notify-adapter.ts";
 import { createCaseStateAdapter } from "../support/create-case-state-adapter.ts";
+import { createSpyNotifyAdapter } from "../support/spy-notify-adapter.ts";
 
 const completionOptions = {
   pollIntervalMs: 100,
@@ -510,6 +511,58 @@ export const workerlessCompletionGroup: ConformanceGroup<StateAdapterConformance
           id: chain.id,
           status: "running",
         });
+      }),
+    },
+    {
+      name: "wakes workers on commit only when the handler leaves the current job pending",
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
+        const jobTypes = defineJobTypes<{
+          test: {
+            entry: true;
+            input: null;
+            output: null;
+          };
+        }>();
+
+        const spyNotifyAdapter = createSpyNotifyAdapter(notifyAdapter);
+        const client = createClient({ stateAdapter, notifyAdapter: spyNotifyAdapter, jobTypes });
+
+        const chain = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "test", input: null }),
+          ),
+        );
+
+        spyNotifyAdapter.calls.length = 0;
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.completeChain({ ...txCtx, ...chain, handler: () => {} }),
+          ),
+        );
+        assert.deepEqual(
+          spyNotifyAdapter.calls.filter(({ name }) => name === "notifyJobsScheduled"),
+          [{ name: "notifyJobsScheduled", args: ["test"] }],
+        );
+
+        spyNotifyAdapter.calls.length = 0;
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.completeChain({
+              ...txCtx,
+              ...chain,
+              handler: ({ job, completeJob }) =>
+                completeJob(job, ({ complete }) => complete({ output: null })),
+            }),
+          ),
+        );
+        assert.deepEqual(
+          spyNotifyAdapter.calls.filter(({ name }) => name === "notifyJobsScheduled"),
+          [],
+        );
       }),
     },
     {
@@ -1074,6 +1127,154 @@ export const workerlessCompletionConcurrentTransactionsGroup: ConformanceGroup<S
           const completed = await completion;
           assert.equal(completed.status, "completed");
           assert.deepEqual(completed.output, { done: true });
+        },
+      },
+    ],
+  };
+
+export const workerlessCompletionNotifyConcurrentTransactionsGroup: ConformanceGroup<StateAdapterConformanceContext> =
+  {
+    name: "workerless-completion",
+    cases: [
+      {
+        name: "starts the current job once a completeChain handler that left it pending commits",
+        run: async ({ createStateAdapter, createNotifyAdapter }) => {
+          await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
+          await using notifyAdapter = await createCaseNotifyAdapter(
+            createNotifyAdapter,
+            stateAdapter,
+          );
+          const jobTypes = defineJobTypes<{
+            task: { entry: true; input: null; output: null };
+          }>();
+
+          const workerIdle = Promise.withResolvers<void>();
+          const client = createClient({
+            stateAdapter: {
+              ...stateAdapter,
+              getStartAttemptDelayMs: async (params) => {
+                const delayMs = await stateAdapter.getStartAttemptDelayMs(params);
+                workerIdle.resolve();
+                return delayMs;
+              },
+            },
+            notifyAdapter,
+            jobTypes,
+          });
+
+          await using workerRunner = createWorkerRunner({
+            client,
+            concurrency: 1,
+            pollIntervalMs: 60_000,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                task: {
+                  attemptHandler: async ({ complete }) =>
+                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                },
+              },
+            }),
+          });
+
+          const chain = await stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "task", input: null }),
+          );
+
+          const handlerEntered = Promise.withResolvers<void>();
+          const release = Promise.withResolvers<void>();
+          const completion = stateAdapter.withTransaction((txCtx) =>
+            client.completeChain({
+              ...txCtx,
+              ...chain,
+              handler: async () => {
+                handlerEntered.resolve();
+                await release.promise;
+              },
+            }),
+          );
+
+          await handlerEntered.promise;
+          await workerRunner.start();
+          await workerIdle.promise;
+          release.resolve();
+          await completion;
+
+          await client.awaitChain(chain, completionOptions);
+        },
+      },
+      {
+        name: "starts the current job once a completeChain handler that left it pending rolls back",
+        run: async ({ createStateAdapter, createNotifyAdapter }) => {
+          await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
+          await using notifyAdapter = await createCaseNotifyAdapter(
+            createNotifyAdapter,
+            stateAdapter,
+          );
+          const jobTypes = defineJobTypes<{
+            task: { entry: true; input: null; output: null };
+          }>();
+
+          const workerIdle = Promise.withResolvers<void>();
+          const client = createClient({
+            stateAdapter: {
+              ...stateAdapter,
+              getStartAttemptDelayMs: async (params) => {
+                const delayMs = await stateAdapter.getStartAttemptDelayMs(params);
+                workerIdle.resolve();
+                return delayMs;
+              },
+            },
+            notifyAdapter,
+            jobTypes,
+          });
+
+          await using workerRunner = createWorkerRunner({
+            client,
+            concurrency: 1,
+            pollIntervalMs: 60_000,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                task: {
+                  attemptHandler: async ({ complete }) =>
+                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                },
+              },
+            }),
+          });
+
+          const chain = await stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "task", input: null }),
+          );
+
+          const handlerEntered = Promise.withResolvers<void>();
+          const release = Promise.withResolvers<void>();
+          const completion = assertRejects(
+            async () =>
+              stateAdapter.withTransaction((txCtx) =>
+                client.completeChain({
+                  ...txCtx,
+                  ...chain,
+                  handler: async () => {
+                    handlerEntered.resolve();
+                    await release.promise;
+                    throw new Error("rollback");
+                  },
+                }),
+              ),
+            Error,
+          );
+
+          await handlerEntered.promise;
+          await workerRunner.start();
+          await workerIdle.promise;
+          release.resolve();
+          await completion;
+
+          await client.awaitChain(chain, completionOptions);
         },
       },
     ],

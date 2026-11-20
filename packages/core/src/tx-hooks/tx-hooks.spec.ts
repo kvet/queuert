@@ -115,6 +115,26 @@ describe("withTxHooks", () => {
     expect(calls).toEqual(["rollback-second", "rollback-first"]);
   });
 
+  test("awaits async rollback callbacks before rejecting with the original error", async () => {
+    const { calls, record } = createRecorder();
+    const txError = new Error("transaction failed");
+
+    await expect(async () => {
+      await withTxHooks(async (txHooks) => {
+        txHooks.onRollback(async () => {
+          await sleep(10);
+          record("rollback")();
+        });
+        txHooks.onRollback(async () => {
+          throw new Error("rollback callback failed");
+        });
+        throw txError;
+      });
+    }).rejects.toThrow(txError);
+
+    expect(calls).toEqual(["rollback"]);
+  });
+
   test("discard: runs every rollback callback even if one throws, then rethrows the original error", async () => {
     const remaining = vi.fn();
     const txError = new Error("transaction failed");
@@ -180,8 +200,7 @@ describe("createTxHooks", () => {
     txHooks.onCommit(record("commit"));
     txHooks.onRollback(record("rollback"));
 
-    discard();
-
+    expect(discard()).toBeUndefined();
     expect(calls).toEqual(["rollback"]);
   });
 
@@ -194,29 +213,31 @@ describe("createTxHooks", () => {
       throw error;
     });
 
-    expect(() => {
-      discard();
-    }).toThrow(error);
+    expect(() => discard()).toThrow(error);
     expect(remaining).toHaveBeenCalledOnce();
   });
 
-  test("manual lifecycle - discard does not leave a rejected promise from a rollback callback unhandled", async () => {
-    const onUnhandledRejection = vi.fn();
-    process.on("unhandledRejection", onUnhandledRejection);
-    try {
-      const { txHooks, discard } = createTxHooks();
-      // oxlint-disable-next-line typescript/no-misused-promises -- asserts that a misused async rollback callback is silenced
-      txHooks.onRollback(async () => {
-        throw new Error("async rollback callback failed");
-      });
+  test("manual lifecycle - discard returns nothing when every rollback callback is synchronous", () => {
+    const { txHooks, discard } = createTxHooks();
+    txHooks.onRollback(() => {});
 
-      discard();
-      await sleep(0);
+    expect(discard()).toBeUndefined();
+  });
 
-      expect(onUnhandledRejection).not.toHaveBeenCalled();
-    } finally {
-      process.off("unhandledRejection", onUnhandledRejection);
-    }
+  test("manual lifecycle - discard awaits async rollback callbacks and rejects with the first error", async () => {
+    const { calls, record } = createRecorder();
+    const error = new Error("async rollback callback failed");
+    const { txHooks, discard } = createTxHooks();
+    txHooks.onRollback(async () => {
+      await sleep(10);
+      record("slow")();
+    });
+    txHooks.onRollback(async () => {
+      throw error;
+    });
+
+    await expect(discard()).rejects.toThrow(error);
+    expect(calls).toEqual(["slow"]);
   });
 });
 
@@ -321,14 +342,14 @@ describe("createSavepoint", () => {
     expect(calls).toEqual(["undo-event-2", "event-1", "event-3"]);
   });
 
-  test("release keeps callbacks, so a later discard runs their rollback callbacks", () => {
+  test("release keeps callbacks, so a later discard runs their rollback callbacks", async () => {
     const { calls, record } = createRecorder();
     const { txHooks, discard } = createTxHooks();
 
     const sp = txHooks.createSavepoint();
     txHooks.onRollback(record("promoted"));
     sp.release();
-    discard();
+    await discard();
 
     expect(calls).toEqual(["promoted"]);
   });
@@ -381,14 +402,14 @@ describe("createSavepoint", () => {
     expect(remaining).toHaveBeenCalledOnce();
   });
 
-  test("rolled-back rollback callbacks do not run again on discard", () => {
+  test("rolled-back rollback callbacks do not run again on discard", async () => {
     const rollback = vi.fn();
     const { txHooks, discard } = createTxHooks();
 
     const sp = txHooks.createSavepoint();
     txHooks.onRollback(rollback);
     sp.rollback();
-    discard();
+    await discard();
 
     expect(rollback).toHaveBeenCalledOnce();
   });
@@ -443,7 +464,7 @@ describe("after flush or discard", () => {
     const runTry = txHooks.retryBoundary(async () => {});
     const sp = txHooks.createSavepoint();
     txHooks.onRollback(rollback);
-    discard();
+    await discard();
 
     expect(() => txHooks.createSavepoint()).toThrow(settledError);
     await expect(async () => {
@@ -464,11 +485,58 @@ describe("after flush or discard", () => {
     discarded.txHooks.onCommit(record("commit"));
 
     await flushed.flush();
-    flushed.discard();
-    discarded.discard();
+    await flushed.discard();
+    await discarded.discard();
     await discarded.flush();
 
     expect(calls).toEqual([]);
+  });
+});
+
+describe("async rollback callbacks of a savepoint", () => {
+  test("flush awaits them and ignores their rejections", async () => {
+    const { calls, record } = createRecorder();
+
+    await withTxHooks(async (txHooks) => {
+      const savepoint = txHooks.createSavepoint();
+      txHooks.onRollback(async () => {
+        await sleep(10);
+        record("rollback")();
+      });
+      txHooks.onRollback(async () => {
+        throw new Error("rollback callback failed");
+      });
+      savepoint.rollback();
+      expect(calls).toEqual([]);
+      txHooks.onCommit(record("commit"));
+    });
+
+    expect(calls).toEqual(["commit", "rollback"]);
+  });
+
+  test("discard awaits them and ignores their rejections", async () => {
+    const { calls, record } = createRecorder();
+    const txError = new Error("transaction failed");
+
+    await expect(async () => {
+      await withTxHooks(async (txHooks) => {
+        await expect(async () => {
+          await txHooks.withSavepoint(async () => {
+            txHooks.onRollback(async () => {
+              await sleep(10);
+              record("savepoint-rollback")();
+            });
+            txHooks.onRollback(async () => {
+              throw new Error("rollback callback failed");
+            });
+            throw new Error("savepoint rolled back");
+          });
+        }).rejects.toThrow("savepoint rolled back");
+        throw txError;
+      });
+    }).rejects.toThrow(txError);
+
+    expect(calls).toEqual(["savepoint-rollback"]);
   });
 });
 
@@ -666,6 +734,18 @@ describe("synchronous transactions", () => {
     });
 
     expect(calls).toEqual(["try-2"]);
+  });
+
+  test("flush throws when a savepoint's rollback callback returned a promise", () => {
+    expect(() => {
+      withTxHooks((txHooks) => {
+        const savepoint = txHooks.createSavepoint();
+        txHooks.onRollback(async () => {});
+        savepoint.rollback();
+      });
+    }).toThrow(
+      "txHooks of a synchronous transaction require synchronous rollback callbacks: a rollback callback returned a promise",
+    );
   });
 
   test("createTxHooks: flush returns nothing when every commit callback is synchronous", () => {

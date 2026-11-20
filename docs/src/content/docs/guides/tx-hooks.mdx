@@ -8,13 +8,13 @@ sidebar:
 import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/diagram";
 
-Queuert writes chains and jobs in your transaction, and the side effects of those writes (notify events that wake workers, observability events) must not leak out of a transaction that rolls back. The state provider owns this: it implements `onTransactionCommit(txCtx, callback)`, which runs `callback` after the transaction commits and before the call that opened it settles, and `onTransactionRollback(txCtx, callback)`, which runs `callback` synchronously when the transaction, or the savepoint `txCtx` belongs to, rolls back. The client and the worker register every side effect through these two members, so what you pass to a mutating call or to `complete` is your transaction context and nothing else.
+Queuert writes chains and jobs in your transaction, and the side effects of those writes (notify events that wake workers, observability events) must not leak out of a transaction that rolls back. The state provider owns this: it implements `onTransactionCommit(txCtx, callback)`, which runs `callback` after the transaction commits and before the call that opened it settles, and `onTransactionRollback(txCtx, callback)`, which runs `callback` when the transaction, or the savepoint `txCtx` belongs to, rolls back, also before the call that opened it settles. The client and the worker register every side effect through these two members, so what you pass to a mutating call or to `complete` is your transaction context and nothing else.
 
 ## Two kinds of providers
 
 How a provider implements `onTransactionCommit` and `onTransactionRollback` depends on its database client.
 
-**A client with transaction events** (MikroORM's `afterTransactionCommit` and `beforeTransactionRollback`) lets the provider implement them natively: it looks the transaction up from the context and runs the callbacks from those events. The context is the client's own transaction handle, and you pass it alone:
+**A client with transaction events** (MikroORM's `afterTransactionCommit` and `afterTransactionRollback`) lets the provider implement them natively: it looks the transaction up from the context and runs the callbacks from those events. The context is the client's own transaction handle, and you pass it alone:
 
 ```ts
 await orm.em.transactional(async (em) =>
@@ -80,7 +80,7 @@ const stateProvider: PgStateProvider<PostgresJsContext> = {
       return result;
     } catch (error) {
       await poolClient.query("ROLLBACK").catch(() => {});
-      discard();
+      await discard();
       throw error;
     } finally {
       poolClient.release();
@@ -128,7 +128,7 @@ await withTxHooks(async (txHooks) =>
 );
 ```
 
-`onCommit` callbacks run after the outer callback completes successfully. They start in registration order and run concurrently; `flush` awaits every returned promise and rethrows the first error once all of them have run. If the callback throws, the commit callbacks are dropped and the `onRollback` callbacks run instead, newest first. Rollback callbacks must be synchronous, because they also run when a savepoint or a `retryBoundary` try rolls back.
+`onCommit` callbacks run after the outer callback completes successfully. They start in registration order and run concurrently; `flush` awaits every returned promise and rethrows the first error once all of them have run. If the callback throws, the commit callbacks are dropped and the `onRollback` callbacks run instead, newest first; `discard` awaits every returned promise. Rollback callbacks that run when a savepoint or a `retryBoundary` try rolls back start right away, and the `flush` or `discard` that ends the transaction awaits their promises.
 
 One `TxHooks` instance serves one transaction: once it is flushed or discarded, registering another callback throws, so a call that reuses it fails instead of buffering side effects that never run.
 
@@ -228,7 +228,7 @@ Every callback belongs to the innermost savepoint open when it was registered. R
 
 ## Synchronous transactions
 
-Over a [synchronous provider](/queuert/integrations/state-adapters/sqlite/#synchronous-providers), the client runs inside the driver's own synchronous transaction, such as better-sqlite3's `db.transaction(() => …)()`, so a synchronous provider without transaction events of its own carries `TxHooks` in its context, from `withTxHooks` or `createTxHooks`. The hooks follow the transaction they wrap: when the callback passed to `withTxHooks` returns a plain value, `withTxHooks` returns that value and runs the commit callbacks synchronously, and `flush` from `createTxHooks` returns a promise only when a commit callback returned one.
+Over a [synchronous provider](/queuert/integrations/state-adapters/sqlite/#synchronous-providers), the client runs inside the driver's own synchronous transaction, such as better-sqlite3's `db.transaction(() => …)()`, so a synchronous provider without transaction events of its own carries `TxHooks` in its context, from `withTxHooks` or `createTxHooks`. The hooks follow the transaction they wrap: when the callback passed to `withTxHooks` returns a plain value, `withTxHooks` returns that value and runs the commit callbacks synchronously, and `flush` and `discard` from `createTxHooks` return a promise only when a callback they run, or one a savepoint rollback ran, returned one.
 
 ```ts
 const chain = withTxHooks((txHooks) =>
@@ -236,4 +236,4 @@ const chain = withTxHooks((txHooks) =>
 );
 ```
 
-In a synchronous transaction, commit callbacks must be synchronous too: a commit callback that returns a promise makes the flush throw after every callback has run.
+In a synchronous transaction, commit and rollback callbacks must be synchronous too: a commit callback that returns a promise makes the flush throw after every callback has run, and so does a rollback callback that returned one when a savepoint rolled back.

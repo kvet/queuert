@@ -1,10 +1,7 @@
 import { connect, type NatsConnection } from "@nats-io/transport-node";
 import { createNatsNotifyAdapter } from "@queuert/nats";
 import { acquireNats, type AcquiredNats } from "@queuert/testcontainers";
-import {
-  createNotifyAdapterConformanceCases,
-  createNotifyAdapterEndToEndConformanceCases,
-} from "queuert/conformance";
+import { createNotifyAdapterConformanceCases } from "queuert/conformance";
 import { afterAll, beforeAll, describe, test } from "vitest";
 
 // #region conformance
@@ -22,22 +19,14 @@ describe("postgresql/notify-nats adapter conformance", () => {
     await nats[Symbol.asyncDispose]();
   });
 
-  for (const conformanceCase of [
-    ...createNotifyAdapterConformanceCases({
-      createNotifyAdapter: async () =>
-        createNatsNotifyAdapter({
-          nc,
-          subjectPrefix: `queuert.spec.${Date.now()}.${Math.random().toString(36).slice(2)}`,
-        }),
-    }),
-    ...createNotifyAdapterEndToEndConformanceCases({
-      createNotifyAdapter: async () =>
-        createNatsNotifyAdapter({
-          nc,
-          subjectPrefix: `queuert.spec.${Date.now()}.${Math.random().toString(36).slice(2)}`,
-        }),
-    }),
-  ]) {
+  for (const conformanceCase of createNotifyAdapterConformanceCases({
+    createNotifyAdapter: async () =>
+      createNatsNotifyAdapter({
+        nc,
+        subjectPrefix: `queuert.spec.${Date.now()}.${Math.random().toString(36).slice(2)}`,
+      }),
+    mode: "async",
+  })) {
     test(conformanceCase.title, async () => {
       await conformanceCase.run();
     });

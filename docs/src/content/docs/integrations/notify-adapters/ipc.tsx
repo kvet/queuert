@@ -63,15 +63,6 @@ const Page = () => (
       ]}
     />
 
-    <h2 id="conformance">Conformance</h2>
-    <p>
-      The example's <code>src/adapter.spec.ts</code> registers one test per case of{" "}
-      <code>createNotifyAdapterConformanceCases</code> and is a working template. To run it under
-      another test runner, see{" "}
-      <A href="/integrations/notify-adapters/custom/#conformance">Custom Notify Adapter</A>.
-    </p>
-    <ExampleCode example="ipc/notify" file="src/adapter.spec.ts" region="conformance" />
-
     <h2 id="delivery">Delivery</h2>
     <p>
       The first <code>listen*</code> call starts a server on a Unix socket in the operating system's

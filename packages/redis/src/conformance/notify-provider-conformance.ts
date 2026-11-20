@@ -19,6 +19,7 @@ export const createRedisNotifyProviderConformanceContext = ({
 }: Parameters<
   typeof createRedisNotifyProviderConformanceCases
 >[0]): NotifyAdapterConformanceContext => ({
+  mode: "async",
   // A channel prefix per adapter keeps one case's notifications away from the next.
   createNotifyAdapter: async () =>
     createRedisNotifyAdapter({

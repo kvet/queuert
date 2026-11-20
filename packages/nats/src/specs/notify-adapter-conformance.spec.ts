@@ -3,8 +3,8 @@ import { connect } from "@nats-io/transport-node";
 import { conformanceTestSuite } from "@queuert/helpers/conformance";
 import { acquireNats } from "@queuert/testcontainers";
 import {
+  endToEndNotifyGroups,
   notifyAdapterBaseGroups,
-  notifyAdapterEndToEndGroups,
   type NotifyAdapterConformanceContext,
 } from "queuert/conformance-internal";
 import { it as baseIt, describe } from "vitest";
@@ -26,6 +26,7 @@ const defaultPrefixIt = it.extend(
   { scope: "file" },
   async ({ nc }): Promise<NotifyAdapterConformanceContext> => ({
     createNotifyAdapter: async () => createNatsNotifyAdapter({ nc }),
+    mode: "async",
   }),
 );
 
@@ -35,6 +36,7 @@ const customPrefixIt = it.extend(
   async ({ nc }): Promise<NotifyAdapterConformanceContext> => ({
     createNotifyAdapter: async () =>
       createNatsNotifyAdapter({ nc, subjectPrefix: `myapp.notifications.${crypto.randomUUID()}` }),
+    mode: "async",
   }),
 );
 
@@ -52,6 +54,6 @@ describe("NATS Notify Adapter Conformance - Custom Subject Prefix", () => {
 describe("NATS Notify Adapter End-to-End Conformance", () => {
   conformanceTestSuite({
     it: defaultPrefixIt,
-    groups: [...notifyAdapterEndToEndGroups],
+    groups: [...endToEndNotifyGroups],
   });
 });

@@ -2,6 +2,7 @@
 
 - [EPIC] MongoDB adapter. See `design/mongodb-adapter.md`.
 - [TASK] Lock-order race between job creation and `deleteChains` (PostgreSQL, MySQL/MariaDB) — creation locks blocker chain heads by id (`getChains({ lock: "exclusive" })`), while `deleteChains` and completion lock blocker-first by height, so a create and a delete that reference the same two blocker heads deadlock when the lower id has the higher height; creation and completion can collide the same way with non-time-ordered ids. Options: a shared lock order that does not put a recursive read on creation, or retrying on deadlock.
+- [TASK] Wake workers for blocker heads `deleteChains` locks (PostgreSQL, MySQL/MariaDB) — `lockDeletedChains` also locks the head of every blocker chain the deleted chains' jobs wait on, so a worker can skip a pending blocker head while the delete runs and nothing wakes it when the transaction ends; the client only wakes the deleted or refused chains' own jobs. Options: `deleteChains` returns the blocker chains it locked, or the client reads the deleted jobs' blockers first.
 - [TASK] Best-effort `rescheduleJobs` — today it fails the whole batch if any job is not pending, so apps hand-roll "wake a sleeping chain" loops (`listChainJobs` + `rescheduleJob` + catch `JobNotReschedulableError`). Add an option such as `skipNotReschedulable: true` that returns a per-job outcome (`rescheduled` / `not-pending` / `completed`) instead of throwing.
 - [EPIC] State gauges — OTel gauges and dashboard signals (incl. stuck) from a periodic job-table snapshot. Direction only. See `design/state-gauges.md`.
 - [EPIC] Redis state adapter performance and open problems — claim cache, fewer index updates, lock-wait divergences, notify latency. See `design/redis-state-adapter-performance.md`.
@@ -11,7 +12,6 @@
 - [IDEA] Change complete job chain to something more empirical? (leverages rescheduleJob, new completeJob (maybe even some))
 - [TASK] Unify workerless and worker tracing — workerless completion (`completeChain`) should create an attempt span like the worker path, eliminating the asymmetric `completeJobSpan` adapter method
 - [TASK] Built-in cleanup. See `design/builtin-cleanup.md`.
-- [EPIC] Decouple chain from jobs. See `design/chain-table.md`.
 - [EPIC] Chain identity. Closing [#3](https://github.com/kvet/queuert/issues/3). See `design/chain-identity.md`.
   - [TASK] List chains by identity — `listChains` gains an `identity` filter to page through the full recurrence history of a key
 - [EPIC] Unbounded blockers. See `design/unbounded-blockers.md`.

@@ -14,6 +14,7 @@ import { defineJobTypes } from "../../job-types/define-job-types.ts";
 import { createWorkerRunner } from "../../worker/worker-runner.ts";
 import { createCaseNotifyAdapter } from "../support/create-case-notify-adapter.ts";
 import { createCaseStateAdapter } from "../support/create-case-state-adapter.ts";
+import type { EndToEndNotifyContext } from "../types.ts";
 
 const completionOptions = {
   pollIntervalMs: 100,
@@ -1040,13 +1041,13 @@ export const createChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
   ],
 };
 
-export const createChainsNotifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
+export const createChainsNotifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
   name: "create-chains",
   cases: [
     {
       name: "createChain > does not notify workers about a chain created blocked",
-      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
-        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, mode }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter, mode));
         const notifyAdapter = yield* resource(
           createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
         );

@@ -3,6 +3,7 @@ import { conformanceTestSuite } from "@queuert/helpers/conformance";
 import { detectResourceLeaks } from "@queuert/helpers/testing";
 import { TESTCONTAINERS_RESOURCE_TYPES, acquirePostgres } from "@queuert/testcontainers";
 import { Pool } from "pg";
+import { endToEndNotifyConcurrentTransactionGroups } from "queuert/conformance-internal";
 import { it as baseIt, describe } from "vitest";
 
 import { capabilityGroups, createEndToEndContext } from "./state-adapter-end-to-end.spec-helper.ts";
@@ -26,5 +27,8 @@ const it = baseIt
 baseIt("index");
 
 describe("PostgreSQL End-to-End Conformance, in-process notify", () => {
-  conformanceTestSuite({ it, groups: capabilityGroups });
+  conformanceTestSuite({
+    it,
+    groups: [...capabilityGroups, ...endToEndNotifyConcurrentTransactionGroups],
+  });
 });

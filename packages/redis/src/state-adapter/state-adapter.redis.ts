@@ -537,9 +537,9 @@ export const createRedisStateAdapter = ({
       async (tryNumber) => {
         closed.throwIfTripped();
         const { txHooks, flush, discard } = createTxHooks();
-        const discardQuietly = () => {
+        const discardQuietly = async () => {
           try {
-            discard();
+            await discard();
           } catch {}
         };
         const tx = createRedisTransaction(store, txHooks, tryNumber);
@@ -548,7 +548,7 @@ export const createRedisStateAdapter = ({
           result = await fn(tx, tryNumber);
         } catch (error) {
           const { stale } = await tx.rollback().catch(() => ({ stale: false }));
-          discardQuietly();
+          await discardQuietly();
           if (!stale) throw error;
           conflict = new RedisTransactionConflictError(
             `The Redis transaction conflicted with concurrent commits on each of its ${tryNumber} tries`,
@@ -560,14 +560,14 @@ export const createRedisStateAdapter = ({
         try {
           committed = await tx.commit();
         } catch (error) {
-          discardQuietly();
+          await discardQuietly();
           throw error;
         }
         if (committed) {
           await flush();
           return result;
         }
-        discardQuietly();
+        await discardQuietly();
         conflict = new RedisTransactionConflictError(
           `The Redis transaction conflicted with concurrent commits on each of its ${tryNumber} tries`,
           { tries: tryNumber },

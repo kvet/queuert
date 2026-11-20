@@ -4,7 +4,6 @@ import { sleep } from "@queuert/helpers/sleep";
 import { dynamicSyncAsync, syncAsync, resource, step, wait } from "@queuert/sync-async";
 
 import { createClient } from "../../client/client.ts";
-import type { StateAdapterConformanceContext } from "../../conformance.state-adapter/types.ts";
 import { runInModeOf } from "../../conformance/adapters.ts";
 import { retryUntilPasses } from "../../conformance/retry-until-passes.ts";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
@@ -14,14 +13,15 @@ import { createWorkerRunner } from "../../worker/worker-runner.ts";
 import { createCaseNotifyAdapter } from "../support/create-case-notify-adapter.ts";
 import { createCaseStateAdapter } from "../support/create-case-state-adapter.ts";
 import { createSpyNotifyAdapter } from "../support/spy-notify-adapter.ts";
+import type { EndToEndNotifyContext } from "../types.ts";
 
-export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
+export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
   name: "notify",
   cases: [
     {
       name: "schedules processing immediately",
-      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
-        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, mode }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter, mode));
         const notifyAdapter = yield* resource(
           createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
         );
@@ -66,8 +66,8 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
     },
     {
       name: "distributes processing to multiple workers",
-      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
-        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, mode }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter, mode));
         const notifyAdapter = yield* resource(
           createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
         );
@@ -124,8 +124,8 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
     },
     {
       name: "handles distributed blocker jobs",
-      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
-        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, mode }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter, mode));
         const notifyAdapter = yield* resource(
           createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
         );
@@ -216,8 +216,8 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
     },
     {
       name: "handles distributed chain jobs",
-      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
-        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, mode }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter, mode));
         const notifyAdapter = yield* resource(
           createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
         );
@@ -287,8 +287,8 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
     },
     {
       name: "notifies workers about workerless completed jobs",
-      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
-        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, mode }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter, mode));
         const notifyAdapter = yield* resource(
           createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
         );
@@ -351,8 +351,8 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
     },
     {
       name: "notifies the expired worker's attempts as lost when another worker reclaims them",
-      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
-        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, mode }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter, mode));
         const notifyAdapter = yield* resource(
           createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
         );
@@ -436,8 +436,8 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
     },
     {
       name: "wakes an idle worker for a retry after a failed attempt",
-      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
-        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, mode }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter, mode));
         const notifyAdapter = yield* resource(
           createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
         );
@@ -511,8 +511,8 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
     },
     {
       name: "publishes every type scheduled in a commit in one call",
-      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
-        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, mode }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter, mode));
         const notifyAdapter = yield* resource(
           createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
         );
@@ -543,8 +543,8 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
     },
     {
       name: "wakes every idle worker when a job is scheduled",
-      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
-        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, mode }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter, mode));
         const notifyAdapter = yield* resource(
           createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
         );
@@ -634,8 +634,8 @@ export const notifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
     },
     {
       name: "publishes a commit's completed chains and lost attempts together over an async adapter and one by one over a sync one",
-      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
-        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, mode }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter, mode));
         const notifyAdapter = yield* resource(
           createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
         );

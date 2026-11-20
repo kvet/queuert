@@ -1,13 +1,14 @@
-import { notifyAdapterEndToEndGroups } from "../conformance.end-to-end/groups.ts";
+import { endToEndNotifyGroups } from "../conformance.end-to-end/groups.ts";
 import { type ConformanceTestCase, toConformanceTestCases } from "../conformance/suite.ts";
 import { notifyAdapterBaseGroups } from "./groups.ts";
 import type { NotifyAdapterConformanceContext } from "./types.ts";
 
 /**
  * Prepares the notify adapter conformance cases, ready to run. Each case creates its own adapter
- * with `createNotifyAdapter` and closes it when the case ends, and runs in the adapter's mode: over
- * a sync adapter (`sync: true`) every call must return a plain value and throw rather than reject,
- * and the cases wait only for delivery. Works with any test runner.
+ * with `createNotifyAdapter` and closes it when the case ends, and runs in the adapter's mode, which
+ * must match `mode`: over a sync adapter (`sync: true`, `mode: "sync"`) every call must return a
+ * plain value and throw rather than reject, and the cases wait only for delivery. Works with any
+ * test runner.
  *
  * @param options - Suite configuration.
  *
@@ -17,6 +18,7 @@ import type { NotifyAdapterConformanceContext } from "./types.ts";
  *
  * const cases = createNotifyAdapterConformanceCases({
  *   createNotifyAdapter: async () => createMyNotifyAdapter({ url: process.env.BROKER_URL }),
+ *   mode: "async",
  * });
  *
  * for (const conformanceCase of cases) {
@@ -32,10 +34,10 @@ export const createNotifyAdapterConformanceCases = (
 
 /**
  * Prepares the end-to-end conformance cases, ready to run: each builds a client and worker runners
- * over the notify adapter and an in-process state adapter of its mode.
+ * over the notify adapter and an in-process state adapter of the given `mode`.
  *
  * @param options - Suite configuration.
  */
 export const createNotifyAdapterEndToEndConformanceCases = (
   options: NotifyAdapterConformanceContext,
-): ConformanceTestCase[] => toConformanceTestCases(notifyAdapterEndToEndGroups, options);
+): ConformanceTestCase[] => toConformanceTestCases(endToEndNotifyGroups, options);

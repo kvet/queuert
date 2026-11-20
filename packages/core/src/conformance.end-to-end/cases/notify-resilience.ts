@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { dynamicSyncAsync, resource, step, wait } from "@queuert/sync-async";
 
 import { createClient } from "../../client/client.ts";
-import type { StateAdapterConformanceContext } from "../../conformance.state-adapter/types.ts";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
 import { createProcessors } from "../../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../../job-types/define-job-types.ts";
@@ -11,14 +10,15 @@ import { createWorkerRunner } from "../../worker/worker-runner.ts";
 import { createCaseNotifyAdapter } from "../support/create-case-notify-adapter.ts";
 import { createCaseStateAdapter } from "../support/create-case-state-adapter.ts";
 import { createFlakyNotifyAdapter } from "../support/flaky-notify-adapter.ts";
+import type { EndToEndNotifyContext } from "../types.ts";
 
-export const notifyResilienceGroup: ConformanceGroup<StateAdapterConformanceContext> = {
+export const notifyResilienceGroup: ConformanceGroup<EndToEndNotifyContext> = {
   name: "notify-resilience",
   cases: [
     {
       name: "handles transient notify adapter errors gracefully",
-      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
-        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, mode }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter, mode));
         const notifyAdapter = yield* resource(
           createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
         );

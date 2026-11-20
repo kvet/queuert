@@ -2,6 +2,7 @@ import {
   endToEndAsyncGroups,
   endToEndBaseGroups,
   endToEndConcurrentTransactionGroups,
+  endToEndNotifyConcurrentTransactionGroups,
   endToEndNotifyGroups,
 } from "../conformance.end-to-end/groups.ts";
 import { type ConformanceTestCase, toConformanceTestCases } from "../conformance/suite.ts";
@@ -93,7 +94,9 @@ export const createStateAdapterEndToEndConformanceCases = ({
       ...endToEndBaseGroups,
       ...endToEndNotifyGroups,
       ...(mode === "async" ? endToEndAsyncGroups : []),
-      ...(concurrent === true ? endToEndConcurrentTransactionGroups : []),
+      ...(concurrent === true
+        ? [...endToEndConcurrentTransactionGroups, ...endToEndNotifyConcurrentTransactionGroups]
+        : []),
     ],
     context,
   );

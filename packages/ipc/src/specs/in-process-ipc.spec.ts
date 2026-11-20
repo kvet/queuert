@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import { conformanceTestSuite } from "@queuert/helpers/conformance";
 import {
-  notifyAdapterEndToEndGroups,
+  endToEndNotifyGroups,
   type NotifyAdapterConformanceContext,
 } from "queuert/conformance-internal";
 import { it as baseIt, describe } from "vitest";
@@ -22,6 +22,7 @@ const it = baseIt.extend(
     });
     return {
       createNotifyAdapter: () => createIpcNotifyAdapter({ directory }),
+      mode: "sync",
     };
   },
 );
@@ -30,5 +31,5 @@ const it = baseIt.extend(
 baseIt("index");
 
 describe("IPC Notify Adapter End-to-End Conformance", () => {
-  conformanceTestSuite({ it, groups: notifyAdapterEndToEndGroups });
+  conformanceTestSuite({ it, groups: endToEndNotifyGroups });
 });

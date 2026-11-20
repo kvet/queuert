@@ -81,9 +81,9 @@ export const stateProviderMembers = (dialect: "postgres" | "sqlite" | "mysql"): 
     name: "onTransactionRollback",
     description: (
       <>
-        Runs a callback synchronously when the context's transaction, or the savepoint the context
-        belongs to, rolls back; the commit callbacks registered there never run. Implemented the
-        same way as <code>onTransactionCommit</code>.
+        Runs a callback when the context's transaction, or the savepoint the context belongs to,
+        rolls back, before the call that opened it settles; the commit callbacks registered there
+        never run. Implemented the same way as <code>onTransactionCommit</code>.
       </>
     ),
   },

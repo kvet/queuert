@@ -1,6 +1,6 @@
 # MongoDB adapter
 
-Add `@queuert/mongodb`: a state adapter and a notify adapter for MongoDB replica sets, with providers that join the user's `ClientSession` so chains are created and completed in the same transaction as their domain writes. MongoDB transactions run at snapshot isolation, with no lock waits, no `SKIP LOCKED` and no savepoints. The adapter therefore applies the write-based bookkeeping of the PostgreSQL adapter and the chain/job split of `design/chain-table.md` from its first release, and adds a retry helper for user transactions.
+Add `@queuert/mongodb`: a state adapter and a notify adapter for MongoDB replica sets, with providers that join the user's `ClientSession` so chains are created and completed in the same transaction as their domain writes. MongoDB transactions run at snapshot isolation, with no lock waits, no `SKIP LOCKED` and no savepoints. The adapter therefore applies the write-based bookkeeping of the PostgreSQL adapter and keeps chains and jobs in separate collections from its first release, and adds a retry helper for user transactions.
 
 ## Goals
 
@@ -158,7 +158,7 @@ MongoDB has none. Core never issues database savepoints (`txHooks.withSavepoint`
 
 Five collections, each named `{collectionPrefix}{name}` (`collectionPrefix` defaults to `queuert_`, mirroring `tablePrefix`).
 
-**`chains`**: one document per chain, `_id` = the head job's id (the contract's `chain.id === head.id` holds; the separate chain id of `design/chain-table.md` can follow when the contract adopts it).
+**`chains`**: one document per chain, `_id` = the head job's id (the contract's `chain.id === head.id` holds).
 
 ```ts
 { _id, typeName, status: "running" | "completed", deduplicationKey, createdAt, completedAt,
@@ -339,10 +339,9 @@ Replication latency (`w: majority` across three nodes), failover and multi-node 
 3. `withMongoTransaction`, the notify adapter, examples, docs.
 4. Query-performance benchmark and the three-node throughput run; decide whether the autocommit claim and its orphan sweep are worth a follow-up.
 
-The adapter does not wait on `design/chain-table.md`: it implements today's contract, with chain documents and counters internal to it. Each chain document stores `blocking`, set by `addJobsBlockers` and cleared by `deleteChains`; when core adopts separate chain ids, the MongoDB adapter maps them directly.
+The adapter implements today's contract, with chain documents and counters internal to it. Each chain document stores `blocking`, set by `addJobsBlockers` and cleared by `deleteChains`.
 
 ## Related designs
 
 - **PostgreSQL isolation levels** (implemented in `@queuert/postgres`): the rule and counters this adapter uses from the start.
-- **Chain table** (`design/chain-table.md`): the chain/job split, here as two collections.
 - **Unbounded blockers** (`design/unbounded-blockers.md`): would move the embedded `blockers` array into its own collection, since the array is bounded by `maxBlockersPerJob` and a 16 MB document.

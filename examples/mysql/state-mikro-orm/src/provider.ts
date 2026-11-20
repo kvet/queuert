@@ -17,7 +17,7 @@ export const createMikroOrmMysqlStateProvider = ({
 }): MysqlStateProvider<MikroOrmMysqlContext> => {
   const settlers = new WeakMap<
     Transaction,
-    { txHooks: TxHooks; commit: () => Promise<void> | void; rollback: () => void }
+    { txHooks: TxHooks; commit: () => Promise<void> | void; rollback: () => Promise<void> | void }
   >();
   const parents = new WeakMap<object>();
   const takeSettler = (transaction: Transaction) => {
@@ -56,9 +56,9 @@ export const createMikroOrmMysqlStateProvider = ({
       if (transaction === undefined) return;
       await takeSettler(transaction)?.commit();
     },
-    beforeTransactionRollback: ({ transaction }) => {
+    afterTransactionRollback: async ({ transaction }) => {
       if (transaction === undefined) return;
-      takeSettler(transaction)?.rollback();
+      await takeSettler(transaction)?.rollback();
     },
   });
 
@@ -83,7 +83,7 @@ export const createMikroOrmMysqlStateProvider = ({
           { isolationLevel: IsolationLevel.READ_COMMITTED },
         );
       } catch (error) {
-        if (transaction !== undefined) takeSettler(transaction)?.rollback();
+        if (transaction !== undefined) await takeSettler(transaction)?.rollback();
         throw error;
       }
     },

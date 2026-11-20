@@ -15,6 +15,7 @@ import { createWorkerRunner } from "../../worker/worker-runner.ts";
 import { createCaseNotifyAdapter } from "../support/create-case-notify-adapter.ts";
 import { createCaseStateAdapter } from "../support/create-case-state-adapter.ts";
 import { createLogCollector } from "../support/log-collector.ts";
+import type { EndToEndNotifyContext } from "../types.ts";
 
 const completionOptions = {
   pollIntervalMs: 100,
@@ -898,13 +899,13 @@ export const deletionAsyncGroup: ConformanceGroup<StateAdapterConformanceContext
   ],
 };
 
-export const deletionNotifyGroup: ConformanceGroup<StateAdapterConformanceContext> = {
+export const deletionNotifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
   name: "deletion",
   cases: [
     {
       name: "running job receives deletion signal and its fence and complete fail",
-      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
-        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, mode }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter, mode));
         const notifyAdapter = yield* resource(
           createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
         );
@@ -992,3 +993,251 @@ export const deletionNotifyGroup: ConformanceGroup<StateAdapterConformanceContex
     },
   ],
 };
+
+export const deletionNotifyConcurrentTransactionsGroup: ConformanceGroup<StateAdapterConformanceContext> =
+  {
+    name: "deletion",
+    cases: [
+      {
+        name: "starts a pending job once the transaction deleting its chain rolls back",
+        run: async ({ createStateAdapter, createNotifyAdapter }) => {
+          await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
+          await using notifyAdapter = await createCaseNotifyAdapter(
+            createNotifyAdapter,
+            stateAdapter,
+          );
+          const jobTypes = defineJobTypes<{
+            task: { entry: true; input: null; output: null };
+          }>();
+
+          const workerIdle = Promise.withResolvers<void>();
+          const client = createClient({
+            stateAdapter: {
+              ...stateAdapter,
+              getStartAttemptDelayMs: async (params) => {
+                const delayMs = await stateAdapter.getStartAttemptDelayMs(params);
+                workerIdle.resolve();
+                return delayMs;
+              },
+            },
+            notifyAdapter,
+            jobTypes,
+          });
+
+          await using workerRunner = createWorkerRunner({
+            client,
+            concurrency: 1,
+            pollIntervalMs: 60_000,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                task: {
+                  attemptHandler: async ({ complete }) =>
+                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                },
+              },
+            }),
+          });
+
+          const chain = await stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "task", input: null }),
+          );
+
+          const deleted = Promise.withResolvers<void>();
+          const release = Promise.withResolvers<void>();
+          const transaction = assertRejects(
+            async () =>
+              stateAdapter.withTransaction(async (txCtx) => {
+                await client.deleteChains({ ...txCtx, ids: [chain.id] });
+                deleted.resolve();
+                await release.promise;
+                throw new Error("rollback");
+              }),
+            Error,
+          );
+
+          await deleted.promise;
+          await workerRunner.start();
+          await workerIdle.promise;
+          release.resolve();
+          await transaction;
+
+          await client.awaitChain(chain, completionOptions);
+        },
+      },
+      {
+        name: "starts a pending blocker job once the transaction whose delete it refused commits",
+        run: async ({ createStateAdapter, createNotifyAdapter }) => {
+          await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
+          await using notifyAdapter = await createCaseNotifyAdapter(
+            createNotifyAdapter,
+            stateAdapter,
+          );
+          const jobTypes = defineJobTypes<{
+            blocker: { entry: true; input: null; output: null };
+            main: {
+              entry: true;
+              input: null;
+              output: null;
+              blockers: [{ typeName: "blocker" }];
+            };
+          }>();
+
+          const workerIdle = Promise.withResolvers<void>();
+          const client = createClient({
+            stateAdapter: {
+              ...stateAdapter,
+              getStartAttemptDelayMs: async (params) => {
+                const delayMs = await stateAdapter.getStartAttemptDelayMs(params);
+                workerIdle.resolve();
+                return delayMs;
+              },
+            },
+            notifyAdapter,
+            jobTypes,
+          });
+
+          await using workerRunner = createWorkerRunner({
+            client,
+            concurrency: 1,
+            pollIntervalMs: 60_000,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                blocker: {
+                  attemptHandler: async ({ complete }) =>
+                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                },
+                main: {
+                  attemptHandler: async ({ complete }) =>
+                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                },
+              },
+            }),
+          });
+
+          const blockerChain = await stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "blocker", input: null }),
+          );
+          await stateAdapter.withTransaction((txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "main",
+              input: null,
+              blockers: [blockerChain],
+            }),
+          );
+
+          const deleted = Promise.withResolvers<void>();
+          const release = Promise.withResolvers<void>();
+          const transaction = stateAdapter.withTransaction(async (txCtx) => {
+            await assertRejects(
+              async () => client.deleteChains({ ...txCtx, ids: [blockerChain.id] }),
+              BlockerReferenceError,
+            );
+            deleted.resolve();
+            await release.promise;
+          });
+
+          await deleted.promise;
+          await workerRunner.start();
+          await workerIdle.promise;
+          release.resolve();
+          await transaction;
+
+          await client.awaitChain(blockerChain, completionOptions);
+        },
+      },
+      {
+        name: "starts a pending blocker job once the transaction whose delete it refused rolls back",
+        run: async ({ createStateAdapter, createNotifyAdapter }) => {
+          await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
+          await using notifyAdapter = await createCaseNotifyAdapter(
+            createNotifyAdapter,
+            stateAdapter,
+          );
+          const jobTypes = defineJobTypes<{
+            blocker: { entry: true; input: null; output: null };
+            main: {
+              entry: true;
+              input: null;
+              output: null;
+              blockers: [{ typeName: "blocker" }];
+            };
+          }>();
+
+          const workerIdle = Promise.withResolvers<void>();
+          const client = createClient({
+            stateAdapter: {
+              ...stateAdapter,
+              getStartAttemptDelayMs: async (params) => {
+                const delayMs = await stateAdapter.getStartAttemptDelayMs(params);
+                workerIdle.resolve();
+                return delayMs;
+              },
+            },
+            notifyAdapter,
+            jobTypes,
+          });
+
+          await using workerRunner = createWorkerRunner({
+            client,
+            concurrency: 1,
+            pollIntervalMs: 60_000,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                blocker: {
+                  attemptHandler: async ({ complete }) =>
+                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                },
+                main: {
+                  attemptHandler: async ({ complete }) =>
+                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                },
+              },
+            }),
+          });
+
+          const blockerChain = await stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "blocker", input: null }),
+          );
+          await stateAdapter.withTransaction((txCtx) =>
+            client.createChain({
+              ...txCtx,
+              typeName: "main",
+              input: null,
+              blockers: [blockerChain],
+            }),
+          );
+
+          const deleted = Promise.withResolvers<void>();
+          const release = Promise.withResolvers<void>();
+          const transaction = assertRejects(
+            async () =>
+              stateAdapter.withTransaction(async (txCtx) => {
+                await assertRejects(
+                  async () => client.deleteChains({ ...txCtx, ids: [blockerChain.id] }),
+                  BlockerReferenceError,
+                );
+                deleted.resolve();
+                await release.promise;
+                throw new Error("rollback");
+              }),
+            Error,
+          );
+
+          await deleted.promise;
+          await workerRunner.start();
+          await workerIdle.promise;
+          release.resolve();
+          await transaction;
+
+          await client.awaitChain(blockerChain, completionOptions);
+        },
+      },
+    ],
+  };

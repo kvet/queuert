@@ -124,11 +124,28 @@ describe("conformance cases check the adapter's mode", () => {
       createNotifyAdapterConformanceCases({
         createNotifyAdapter: () =>
           withPromiseFrom(createInProcessNotifyAdapter(), "notifyJobsScheduled"),
+        mode: "sync",
       }),
       "notifyJobsScheduled / listenJobScheduled",
     );
 
     expect(failures).toContain("A synchronous step got a promise: the value must be synchronous");
+  });
+
+  it("fail a notify adapter whose sync marker does not match the mode", async () => {
+    for (const context of [
+      {
+        createNotifyAdapter: async () => createInProcessNotifyAdapter({ mode: "async" }),
+        mode: "sync",
+      },
+      { createNotifyAdapter: () => createInProcessNotifyAdapter(), mode: "async" },
+    ] as const) {
+      const [modeCase] = createNotifyAdapterConformanceCases(context).filter(
+        ({ name }) =>
+          name === "marks the adapter sync: true exactly when the suite runs in sync mode",
+      );
+      await expect(modeCase.run()).rejects.toThrow("Expected values to be strictly equal");
+    }
   });
 
   it("fail a sync state adapter that returns a promise end to end", async () => {
@@ -176,6 +193,7 @@ describe("the base case lists pass an adapter of either mode", () => {
     const failures = await failuresOf(
       createNotifyAdapterEndToEndConformanceCases({
         createNotifyAdapter: () => createInProcessNotifyAdapter(),
+        mode: "sync",
       }),
       "notify",
     );

@@ -3,7 +3,7 @@ import { conformanceTestSuite } from "@queuert/helpers/conformance";
 import { detectResourceLeaks } from "@queuert/helpers/testing";
 import { TESTCONTAINERS_RESOURCE_TYPES, acquirePostgres } from "@queuert/testcontainers";
 import { Pool } from "pg";
-import { notifyAdapterEndToEndGroups } from "queuert/conformance-internal";
+import { endToEndNotifyGroups } from "queuert/conformance-internal";
 import { it as baseIt, describe } from "vitest";
 
 import {
@@ -34,6 +34,6 @@ baseIt("index");
 describe("PostgreSQL Notify Provider Conformance", () => {
   conformanceTestSuite({
     it,
-    groups: [...pgNotifyProviderConformanceGroups, ...notifyAdapterEndToEndGroups],
+    groups: [...pgNotifyProviderConformanceGroups, ...endToEndNotifyGroups],
   });
 });

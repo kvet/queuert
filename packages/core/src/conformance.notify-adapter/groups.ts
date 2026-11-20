@@ -440,6 +440,14 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
     name: "cross-cutting behavior",
     cases: [
       {
+        name: "marks the adapter sync: true exactly when the suite runs in sync mode",
+        run: dynamicSyncAsync(function* ({ createNotifyAdapter, mode }) {
+          const notifyAdapter = yield* resource(createNotifyAdapter());
+
+          assert.equal(notifyAdapter.sync === true, mode === "sync");
+        }),
+      },
+      {
         name: "a notification reaches only the listeners of its own kind",
         run: dynamicSyncAsync(function* ({ createNotifyAdapter }) {
           const notifyAdapter = yield* resource(createNotifyAdapter());

@@ -12,7 +12,7 @@ export const createMikroOrmPgStateProvider = ({
 }): PgStateProvider<MikroOrmPgContext> => {
   const settlers = new WeakMap<
     Transaction,
-    { txHooks: TxHooks; commit: () => Promise<void> | void; rollback: () => void }
+    { txHooks: TxHooks; commit: () => Promise<void> | void; rollback: () => Promise<void> | void }
   >();
   const parents = new WeakMap<object>();
   const takeSettler = (transaction: Transaction) => {
@@ -51,9 +51,9 @@ export const createMikroOrmPgStateProvider = ({
       if (transaction === undefined) return;
       await takeSettler(transaction)?.commit();
     },
-    beforeTransactionRollback: ({ transaction }) => {
+    afterTransactionRollback: async ({ transaction }) => {
       if (transaction === undefined) return;
-      takeSettler(transaction)?.rollback();
+      await takeSettler(transaction)?.rollback();
     },
   });
 
@@ -75,7 +75,7 @@ export const createMikroOrmPgStateProvider = ({
           return fn({ em });
         });
       } catch (error) {
-        if (transaction !== undefined) takeSettler(transaction)?.rollback();
+        if (transaction !== undefined) await takeSettler(transaction)?.rollback();
         throw error;
       }
     },

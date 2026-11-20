@@ -4,6 +4,12 @@ import type { StateAdapterConformanceContext } from "../conformance.state-adapte
 import type { StateAdapter } from "../state-adapter/state-adapter.ts";
 import type { TxHooks } from "../tx-hooks/tx-hooks.ts";
 
+export type EndToEndNotifyContext = {
+  createStateAdapter?: StateAdapterConformanceContext["createStateAdapter"];
+  createNotifyAdapter?: StateAdapterConformanceContext["createNotifyAdapter"];
+  mode?: Mode;
+};
+
 export type EndToEndTxContext = { readonly $endToEndConformance: true; txHooks: TxHooks };
 
 export type EndToEndSavepointContext = StateAdapterConformanceContext & {

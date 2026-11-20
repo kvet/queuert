@@ -68,12 +68,12 @@ const Page = () => (
     <p>
       Your adapter owns the transaction's side effects: <code>onTransactionCommit</code> runs a
       callback after the context's transaction commits, before the call that opened it settles, and{" "}
-      <code>onTransactionRollback</code> runs one synchronously when the transaction, or the
-      savepoint the context belongs to, rolls back. The client and the worker register every notify
-      and observability event through them. Implement them from your database client's transaction
-      events if it has them, or carry <code>TxHooks</code> in your transaction context, create them
-      in <code>withTransaction</code> with <code>withTxHooks</code>, and register the callbacks on
-      them; see <A href="/guides/tx-hooks/">Tx Hooks</A>.
+      <code>onTransactionRollback</code> runs one when the transaction, or the savepoint the context
+      belongs to, rolls back, also before the call that opened it settles. The client and the worker
+      register every notify and observability event through them. Implement them from your database
+      client's transaction events if it has them, or carry <code>TxHooks</code> in your transaction
+      context, create them in <code>withTransaction</code> with <code>withTxHooks</code>, and
+      register the callbacks on them; see <A href="/guides/tx-hooks/">Tx Hooks</A>.
     </p>
     <p>
       <a href="https://github.com/kvet/queuert/tree/main/examples/custom/state-memory">

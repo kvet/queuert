@@ -2,7 +2,7 @@
 import { conformanceTestSuite } from "@queuert/helpers/conformance";
 import { detectResourceLeaks } from "@queuert/helpers/testing";
 import { TESTCONTAINERS_RESOURCE_TYPES, acquireRedis } from "@queuert/testcontainers";
-import { notifyAdapterEndToEndGroups } from "queuert/conformance-internal";
+import { endToEndNotifyGroups } from "queuert/conformance-internal";
 import { type RedisClientType, createClient } from "redis";
 import { it as baseIt, describe } from "vitest";
 
@@ -40,6 +40,6 @@ baseIt("index");
 describe("Redis Notify Provider Conformance", () => {
   conformanceTestSuite({
     it,
-    groups: [...redisNotifyProviderConformanceGroups, ...notifyAdapterEndToEndGroups],
+    groups: [...redisNotifyProviderConformanceGroups, ...endToEndNotifyGroups],
   });
 });

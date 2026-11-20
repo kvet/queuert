@@ -19,6 +19,7 @@ export const createPgNotifyProviderConformanceContext = ({
 }: Parameters<
   typeof createPgNotifyProviderConformanceCases
 >[0]): NotifyAdapterConformanceContext => ({
+  mode: "async",
   // A channel prefix per adapter keeps one case's notifications away from the next.
   createNotifyAdapter: async () =>
     createPgNotifyAdapter({
