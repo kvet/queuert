@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { assertRejects } from "@queuert/helpers/assert-rejects";
-import { sleep } from "@queuert/helpers/sleep";
+import { raceWithSleep, sleep } from "@queuert/helpers/sleep";
 import { dynamicSyncAsync, syncAsync, resource, step, wait } from "@queuert/sync-async";
 
 import { createClient } from "../../client/client.ts";
@@ -19,6 +19,8 @@ import { defineJobTypes } from "../../job-types/define-job-types.ts";
 import { createWorkerRunner } from "../../worker/worker-runner.ts";
 import { createCaseNotifyAdapter } from "../support/create-case-notify-adapter.ts";
 import { createCaseStateAdapter } from "../support/create-case-state-adapter.ts";
+import { createSpyNotifyAdapter } from "../support/spy-notify-adapter.ts";
+import type { EndToEndSavepointContext } from "../types.ts";
 
 const completionOptions = {
   pollIntervalMs: 100,
@@ -4171,6 +4173,844 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
 
         assert.equal(chains.items.length, 1);
         assert.equal(jobs.items.length, 1);
+      }),
+    },
+  ],
+};
+
+export const clientQueriesLockedReadsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
+  name: "client-queries-locked-reads",
+  cases: [
+    {
+      name: "locked reads throw without a transaction context",
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, ...context }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
+        const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+
+        const orderChain = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "order", input: { amount: 3 } }),
+          ),
+        );
+
+        yield* step(
+          assertRejects(
+            // @ts-expect-error lock: "exclusive" requires a transaction context
+            () => client.getJob({ id: orderChain.id, lock: "exclusive" }),
+            /requires a transaction context/,
+          ),
+        );
+        yield* step(
+          assertRejects(
+            // @ts-expect-error lock: "exclusive" requires a transaction context
+            () => client.getJobs({ ids: [orderChain.id], lock: "exclusive" }),
+            /requires a transaction context/,
+          ),
+        );
+        yield* step(
+          assertRejects(
+            // @ts-expect-error lock: "exclusive" requires a transaction context
+            () => client.getChain({ id: orderChain.id, lock: "exclusive" }),
+            /requires a transaction context/,
+          ),
+        );
+        yield* step(
+          assertRejects(
+            // @ts-expect-error lock: "exclusive" requires a transaction context
+            () => client.getChains({ ids: [orderChain.id], lock: "exclusive" }),
+            /requires a transaction context/,
+          ),
+        );
+        yield* step(
+          assertRejects(
+            // @ts-expect-error lock: "exclusive" requires a transaction context
+            () => client.getChainTailJob({ chainId: orderChain.id, lock: "exclusive" }),
+            /requires a transaction context/,
+          ),
+        );
+        yield* step(
+          assertRejects(
+            // @ts-expect-error lock: "exclusive" requires a transaction context
+            () => client.getChainTailJobs({ chainIds: [orderChain.id], lock: "exclusive" }),
+            /requires a transaction context/,
+          ),
+        );
+
+        yield* step(
+          context.withNonTransactionContext((txCtx) =>
+            runInModeOf(
+              stateAdapter,
+              syncAsync(function* () {
+                yield* step(
+                  assertRejects(
+                    () => client.getJob({ ...txCtx, id: orderChain.id, lock: "exclusive" }),
+                    /not in a transaction/,
+                  ),
+                );
+                yield* step(
+                  assertRejects(
+                    () => client.getJobs({ ...txCtx, ids: [orderChain.id], lock: "exclusive" }),
+                    /not in a transaction/,
+                  ),
+                );
+                yield* step(
+                  assertRejects(
+                    () => client.getChain({ ...txCtx, id: orderChain.id, lock: "exclusive" }),
+                    /not in a transaction/,
+                  ),
+                );
+                yield* step(
+                  assertRejects(
+                    () => client.getChains({ ...txCtx, ids: [orderChain.id], lock: "exclusive" }),
+                    /not in a transaction/,
+                  ),
+                );
+                yield* step(
+                  assertRejects(
+                    () =>
+                      client.getChainTailJob({
+                        ...txCtx,
+                        chainId: orderChain.id,
+                        lock: "exclusive",
+                      }),
+                    /not in a transaction/,
+                  ),
+                );
+                yield* step(
+                  assertRejects(
+                    () =>
+                      client.getChainTailJobs({
+                        ...txCtx,
+                        chainIds: [orderChain.id],
+                        lock: "exclusive",
+                      }),
+                    /not in a transaction/,
+                  ),
+                );
+              }),
+            ),
+          ),
+        );
+      }),
+    },
+    {
+      name: "locked reads inside a transaction return the same data as unlocked reads",
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
+        const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+
+        const [orderChain, notificationChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.createChains({
+              ...txCtx,
+              items: [
+                { typeName: "order", input: { amount: 7 } },
+                { typeName: "notification", input: { message: "hi" } },
+              ],
+            }),
+          ),
+        );
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.completeChain({
+              ...txCtx,
+              ...orderChain,
+              handler: ({ job, completeJob }) => {
+                if (job.typeName !== "order") throw new Error(`Unexpected job ${job.typeName}`);
+                return completeJob(job, ({ complete }) =>
+                  complete({
+                    continueWith: { typeName: "order_fulfill", input: { orderId: orderChain.id } },
+                  }),
+                );
+              },
+            }),
+          ),
+        );
+        const {
+          items: [, continuation],
+        } = yield* step(client.listChainJobs({ chainId: orderChain.id }));
+        const missingId = "00000000-0000-0000-0000-000000000000";
+
+        const unlockedJob = yield* step(client.getJob({ id: continuation.id }));
+        const unlockedJobs = yield* step(
+          client.getJobs({ ids: [orderChain.id, notificationChain.id, missingId] }),
+        );
+        const unlockedChain = yield* step(client.getChain({ id: orderChain.id }));
+        const unlockedChains = yield* step(
+          client.getChains({ ids: [orderChain.id, notificationChain.id, missingId] }),
+        );
+        const unlockedTail = yield* step(client.getChainTailJob({ chainId: orderChain.id }));
+        const unlockedTails = yield* step(
+          client.getChainTailJobs({ chainIds: [orderChain.id, notificationChain.id, missingId] }),
+        );
+
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            runInModeOf(
+              stateAdapter,
+              syncAsync(function* () {
+                assert.deepEqual(
+                  yield* step(client.getJob({ ...txCtx, id: continuation.id, lock: "exclusive" })),
+                  unlockedJob,
+                );
+                assert.deepEqual(
+                  yield* step(
+                    client.getJobs({
+                      ...txCtx,
+                      ids: [orderChain.id, notificationChain.id, missingId],
+                      lock: "exclusive",
+                    }),
+                  ),
+                  unlockedJobs,
+                );
+                assert.deepEqual(
+                  yield* step(client.getChain({ ...txCtx, id: orderChain.id, lock: "exclusive" })),
+                  unlockedChain,
+                );
+                assert.deepEqual(
+                  yield* step(
+                    client.getChains({
+                      ...txCtx,
+                      ids: [orderChain.id, notificationChain.id, missingId],
+                      lock: "exclusive",
+                    }),
+                  ),
+                  unlockedChains,
+                );
+                assert.deepEqual(
+                  yield* step(
+                    client.getChainTailJob({ ...txCtx, chainId: orderChain.id, lock: "exclusive" }),
+                  ),
+                  unlockedTail,
+                );
+                assert.deepEqual(
+                  yield* step(
+                    client.getChainTailJobs({
+                      ...txCtx,
+                      chainIds: [orderChain.id, notificationChain.id, missingId],
+                      lock: "exclusive",
+                    }),
+                  ),
+                  unlockedTails,
+                );
+              }),
+            ),
+          ),
+        );
+
+        assert.equal(unlockedTail!.id, continuation.id);
+        assert.deepEqual(
+          unlockedTails.map((job) => job?.id),
+          [continuation.id, notificationChain.id, undefined],
+        );
+      }),
+    },
+    {
+      name: "a locked read whose transaction commits wakes workers for the job it left pending",
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+        const notifyAdapter = createSpyNotifyAdapter(
+          yield* resource(createCaseNotifyAdapter(createNotifyAdapter, stateAdapter)),
+        );
+        const jobTypes = defineJobTypes<{
+          "await-approval": {
+            entry: true;
+            input: null;
+            output: { approved: boolean };
+            continueWith: { typeName: "process-request" };
+          };
+          "process-request": { input: null; output: null };
+        }>();
+        const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+
+        const chain = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "await-approval", input: null }),
+          ),
+        );
+        notifyAdapter.calls.length = 0;
+
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.getChainTailJob({ ...txCtx, chainId: chain.id, lock: "exclusive" }),
+          ),
+        );
+
+        assert.deepEqual(
+          [
+            ...new Set(
+              notifyAdapter.calls.flatMap(({ name, args }) =>
+                name === "notifyJobsScheduled" ? args : [],
+              ),
+            ),
+          ],
+          ["await-approval"],
+        );
+      }),
+    },
+    {
+      name: "a locked read whose transaction rolls back wakes workers for the job it locked",
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+        const notifyAdapter = createSpyNotifyAdapter(
+          yield* resource(createCaseNotifyAdapter(createNotifyAdapter, stateAdapter)),
+        );
+        const jobTypes = defineJobTypes<{
+          "await-approval": {
+            entry: true;
+            input: null;
+            output: { approved: boolean };
+            continueWith: { typeName: "process-request" };
+          };
+          "process-request": { input: null; output: null };
+        }>();
+        const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+
+        const chain = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "await-approval", input: null }),
+          ),
+        );
+        notifyAdapter.calls.length = 0;
+
+        yield* step(
+          assertRejects(
+            () =>
+              stateAdapter.withTransaction((txCtx) =>
+                runInModeOf(
+                  stateAdapter,
+                  syncAsync(function* () {
+                    yield* step(
+                      client.getJob({
+                        ...txCtx,
+                        id: chain.id,
+                        typeName: "await-approval",
+                        lock: "exclusive",
+                      }),
+                    );
+                    throw new Error("rollback");
+                  }),
+                ),
+              ),
+            Error,
+          ),
+        );
+
+        assert.deepEqual(
+          [
+            ...new Set(
+              notifyAdapter.calls.flatMap(({ name, args }) =>
+                name === "notifyJobsScheduled" ? args : [],
+              ),
+            ),
+          ],
+          ["await-approval"],
+        );
+      }),
+    },
+  ],
+};
+
+export const clientQueriesLockedReadsConcurrentTransactionsLockWaitGroup: ConformanceGroup<StateAdapterConformanceContext> =
+  {
+    name: "client-queries-locked-reads",
+    cases: [
+      {
+        name: "a locked getJob blocks a concurrent rescheduleJob until commit",
+        run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
+          const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+          const notifyAdapter = yield* resource(
+            createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+          );
+          const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+
+          const [, notificationChain] = yield* step(
+            stateAdapter.withTransaction((txCtx) =>
+              client.createChains({
+                ...txCtx,
+                items: [
+                  { typeName: "order", input: { amount: 9 } },
+                  { typeName: "notification", input: { message: "second" } },
+                ],
+              }),
+            ),
+          );
+
+          const lockHeld = Promise.withResolvers<void>();
+          const holderGate = Promise.withResolvers<void>();
+          const holderTransaction = stateAdapter.withTransaction(async (txCtx) => {
+            await client.getJob({ ...txCtx, id: notificationChain.id, lock: "exclusive" });
+            lockHeld.resolve();
+            await holderGate.promise;
+          });
+          yield* wait(lockHeld.promise);
+
+          const waiterTransaction = Promise.resolve(
+            stateAdapter.withTransaction(async (txCtx) =>
+              client.rescheduleJob({ ...txCtx, id: notificationChain.id }),
+            ),
+          );
+
+          assert.equal(
+            yield* wait(
+              raceWithSleep(
+                waiterTransaction.then(() => "settled"),
+                100,
+              ),
+            ),
+            undefined,
+          );
+
+          holderGate.resolve();
+          yield* wait(holderTransaction);
+          yield* wait(waiterTransaction);
+        }),
+      },
+      {
+        name: "a locked getJobs blocks a concurrent locked getJobs until commit",
+        run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
+          const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+          const notifyAdapter = yield* resource(
+            createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+          );
+          const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+
+          const [orderChain, notificationChain] = yield* step(
+            stateAdapter.withTransaction((txCtx) =>
+              client.createChains({
+                ...txCtx,
+                items: [
+                  { typeName: "order", input: { amount: 9 } },
+                  { typeName: "notification", input: { message: "second" } },
+                ],
+              }),
+            ),
+          );
+
+          const lockHeld = Promise.withResolvers<void>();
+          const holderGate = Promise.withResolvers<void>();
+          const holderTransaction = stateAdapter.withTransaction(async (txCtx) => {
+            await client.getJobs({
+              ...txCtx,
+              ids: [orderChain.id, notificationChain.id],
+              lock: "exclusive",
+            });
+            lockHeld.resolve();
+            await holderGate.promise;
+          });
+          yield* wait(lockHeld.promise);
+
+          const waiterTransaction = Promise.resolve(
+            stateAdapter.withTransaction(async (txCtx) =>
+              client.getJobs({ ...txCtx, ids: [notificationChain.id], lock: "exclusive" }),
+            ),
+          );
+
+          assert.equal(
+            yield* wait(
+              raceWithSleep(
+                waiterTransaction.then(() => "settled"),
+                100,
+              ),
+            ),
+            undefined,
+          );
+
+          holderGate.resolve();
+          yield* wait(holderTransaction);
+          yield* wait(waiterTransaction);
+        }),
+      },
+      {
+        name: "a locked getChain blocks a concurrent completeChain until commit",
+        run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
+          const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+          const notifyAdapter = yield* resource(
+            createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+          );
+          const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+
+          const [, notificationChain] = yield* step(
+            stateAdapter.withTransaction((txCtx) =>
+              client.createChains({
+                ...txCtx,
+                items: [
+                  { typeName: "order", input: { amount: 9 } },
+                  { typeName: "notification", input: { message: "second" } },
+                ],
+              }),
+            ),
+          );
+
+          const lockHeld = Promise.withResolvers<void>();
+          const holderGate = Promise.withResolvers<void>();
+          const holderTransaction = stateAdapter.withTransaction(async (txCtx) => {
+            await client.getChain({ ...txCtx, id: notificationChain.id, lock: "exclusive" });
+            lockHeld.resolve();
+            await holderGate.promise;
+          });
+          yield* wait(lockHeld.promise);
+
+          const waiterTransaction = Promise.resolve(
+            stateAdapter.withTransaction(async (txCtx) =>
+              client.completeChain({
+                ...txCtx,
+                ...notificationChain,
+                handler: ({ job, completeJob }) =>
+                  completeJob(job, ({ complete }) => complete({ output: { sent: true } })),
+              }),
+            ),
+          );
+
+          assert.equal(
+            yield* wait(
+              raceWithSleep(
+                waiterTransaction.then(() => "settled"),
+                100,
+              ),
+            ),
+            undefined,
+          );
+
+          holderGate.resolve();
+          yield* wait(holderTransaction);
+          yield* wait(waiterTransaction);
+        }),
+      },
+      {
+        name: "a locked getChains blocks a concurrent locked getChains until commit",
+        run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
+          const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+          const notifyAdapter = yield* resource(
+            createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+          );
+          const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+
+          const [orderChain, notificationChain] = yield* step(
+            stateAdapter.withTransaction((txCtx) =>
+              client.createChains({
+                ...txCtx,
+                items: [
+                  { typeName: "order", input: { amount: 9 } },
+                  { typeName: "notification", input: { message: "second" } },
+                ],
+              }),
+            ),
+          );
+
+          const lockHeld = Promise.withResolvers<void>();
+          const holderGate = Promise.withResolvers<void>();
+          const holderTransaction = stateAdapter.withTransaction(async (txCtx) => {
+            await client.getChains({
+              ...txCtx,
+              ids: [orderChain.id, notificationChain.id],
+              lock: "exclusive",
+            });
+            lockHeld.resolve();
+            await holderGate.promise;
+          });
+          yield* wait(lockHeld.promise);
+
+          const waiterTransaction = Promise.resolve(
+            stateAdapter.withTransaction(async (txCtx) =>
+              client.getChains({ ...txCtx, ids: [notificationChain.id], lock: "exclusive" }),
+            ),
+          );
+
+          assert.equal(
+            yield* wait(
+              raceWithSleep(
+                waiterTransaction.then(() => "settled"),
+                100,
+              ),
+            ),
+            undefined,
+          );
+
+          holderGate.resolve();
+          yield* wait(holderTransaction);
+          yield* wait(waiterTransaction);
+        }),
+      },
+      {
+        name: "a locked getChainTailJob blocks a concurrent completeChain of the tail until commit",
+        run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
+          const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+          const notifyAdapter = yield* resource(
+            createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+          );
+          const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+
+          const [orderChain] = yield* step(
+            stateAdapter.withTransaction((txCtx) =>
+              client.createChains({
+                ...txCtx,
+                items: [
+                  { typeName: "order", input: { amount: 9 } },
+                  { typeName: "notification", input: { message: "second" } },
+                ],
+              }),
+            ),
+          );
+          yield* step(
+            stateAdapter.withTransaction((txCtx) =>
+              client.completeChain({
+                ...txCtx,
+                ...orderChain,
+                handler: ({ job, completeJob }) => {
+                  if (job.typeName !== "order") throw new Error(`Unexpected job ${job.typeName}`);
+                  return completeJob(job, ({ complete }) =>
+                    complete({
+                      continueWith: {
+                        typeName: "order_fulfill",
+                        input: { orderId: orderChain.id },
+                      },
+                    }),
+                  );
+                },
+              }),
+            ),
+          );
+
+          const lockHeld = Promise.withResolvers<void>();
+          const holderGate = Promise.withResolvers<void>();
+          const holderTransaction = stateAdapter.withTransaction(async (txCtx) => {
+            await client.getChainTailJob({ ...txCtx, chainId: orderChain.id, lock: "exclusive" });
+            lockHeld.resolve();
+            await holderGate.promise;
+          });
+          yield* wait(lockHeld.promise);
+
+          const waiterTransaction = Promise.resolve(
+            stateAdapter.withTransaction(async (txCtx) =>
+              client.completeChain({
+                ...txCtx,
+                ...orderChain,
+                handler: ({ job, completeJob }) => {
+                  if (job.typeName !== "order_fulfill")
+                    throw new Error(`Unexpected job ${job.typeName}`);
+                  return completeJob(job, ({ complete }) =>
+                    complete({ output: { shipped: true } }),
+                  );
+                },
+              }),
+            ),
+          );
+
+          assert.equal(
+            yield* wait(
+              raceWithSleep(
+                waiterTransaction.then(() => "settled"),
+                100,
+              ),
+            ),
+            undefined,
+          );
+
+          holderGate.resolve();
+          yield* wait(holderTransaction);
+          yield* wait(waiterTransaction);
+        }),
+      },
+      {
+        name: "a locked getChainTailJobs blocks a concurrent locked getChainTailJobs until commit",
+        run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
+          const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+          const notifyAdapter = yield* resource(
+            createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+          );
+          const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+
+          const [orderChain, notificationChain] = yield* step(
+            stateAdapter.withTransaction((txCtx) =>
+              client.createChains({
+                ...txCtx,
+                items: [
+                  { typeName: "order", input: { amount: 9 } },
+                  { typeName: "notification", input: { message: "second" } },
+                ],
+              }),
+            ),
+          );
+
+          const lockHeld = Promise.withResolvers<void>();
+          const holderGate = Promise.withResolvers<void>();
+          const holderTransaction = stateAdapter.withTransaction(async (txCtx) => {
+            await client.getChainTailJobs({
+              ...txCtx,
+              chainIds: [orderChain.id, notificationChain.id],
+              lock: "exclusive",
+            });
+            lockHeld.resolve();
+            await holderGate.promise;
+          });
+          yield* wait(lockHeld.promise);
+
+          const waiterTransaction = Promise.resolve(
+            stateAdapter.withTransaction(async (txCtx) =>
+              client.getChainTailJobs({ ...txCtx, chainIds: [orderChain.id], lock: "exclusive" }),
+            ),
+          );
+
+          assert.equal(
+            yield* wait(
+              raceWithSleep(
+                waiterTransaction.then(() => "settled"),
+                100,
+              ),
+            ),
+            undefined,
+          );
+
+          holderGate.resolve();
+          yield* wait(holderTransaction);
+          yield* wait(waiterTransaction);
+        }),
+      },
+      {
+        name: "a locked getChainTailJob returns the continuation a worker committed while it waited on the old tail",
+        run: async ({ createStateAdapter, createNotifyAdapter }) => {
+          await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
+          await using notifyAdapter = await createCaseNotifyAdapter(
+            createNotifyAdapter,
+            stateAdapter,
+          );
+          const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+
+          const orderChain = await stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "order", input: { amount: 9 } }),
+          );
+
+          const continued = Promise.withResolvers<void>();
+          const commitGate = Promise.withResolvers<void>();
+          await using workerRunner = createWorkerRunner({
+            client,
+            concurrency: 1,
+            processors: createProcessors({
+              client,
+              jobTypes,
+              processors: {
+                order: {
+                  attemptHandler: async ({ job, complete }) =>
+                    stateAdapter.withTransaction(async (txCtx) => {
+                      const result = await complete({
+                        ...txCtx,
+                        continueWith: { typeName: "order_fulfill", input: { orderId: job.id } },
+                      });
+                      continued.resolve();
+                      await commitGate.promise;
+                      return result;
+                    }),
+                },
+              },
+            }),
+          });
+          await workerRunner.start();
+          await continued.promise;
+
+          const completion = stateAdapter.withTransaction(async (txCtx) => {
+            const job = await client.getChainTailJob({
+              ...txCtx,
+              chainId: orderChain.id,
+              chainTypeName: "order",
+              lock: "exclusive",
+            });
+            if (job?.typeName !== "order_fulfill" || job.status === "completed") {
+              throw new Error(`unexpected tail ${job?.typeName} ${job?.status}`);
+            }
+            return client.completeChain({
+              ...txCtx,
+              ...orderChain,
+              handler: ({ job: tail, completeJob }) => {
+                if (tail.typeName !== "order_fulfill")
+                  throw new Error(`Unexpected job ${tail.typeName}`);
+                return completeJob(tail, ({ complete }) => complete({ output: { shipped: true } }));
+              },
+            });
+          });
+          assert.equal(
+            await raceWithSleep(
+              completion.then(() => "settled"),
+              100,
+            ),
+            undefined,
+          );
+          commitGate.resolve();
+
+          const completed = await completion;
+          assert.equal(completed.status, "completed");
+          assert.deepEqual(completed.output, { shipped: true });
+        },
+      },
+    ],
+  };
+
+export const clientQueriesLockedReadsSavepointGroup: ConformanceGroup<EndToEndSavepointContext> = {
+  name: "client-queries-locked-reads",
+  cases: [
+    {
+      name: "a locked read in a savepoint that rolls back wakes workers for the job it locked again when the transaction commits",
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, ...context }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+        const notifyAdapter = createSpyNotifyAdapter(
+          yield* resource(createCaseNotifyAdapter(createNotifyAdapter, stateAdapter)),
+        );
+        const jobTypes = defineJobTypes<{
+          "await-approval": {
+            entry: true;
+            input: null;
+            output: { approved: boolean };
+            continueWith: { typeName: "process-request" };
+          };
+          "process-request": { input: null; output: null };
+        }>();
+        const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+
+        const chain = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "await-approval", input: null }),
+          ),
+        );
+        notifyAdapter.calls.length = 0;
+
+        const callsBeforeCommit = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            runInModeOf(
+              stateAdapter,
+              syncAsync(function* () {
+                try {
+                  yield* step(
+                    context.withSavepoint(txCtx, (txCtx) =>
+                      runInModeOf(
+                        stateAdapter,
+                        syncAsync(function* () {
+                          yield* step(
+                            client.getChain({ ...txCtx, id: chain.id, lock: "exclusive" }),
+                          );
+                          throw new Error("rollback to savepoint");
+                        }),
+                      ),
+                    ),
+                  );
+                } catch {}
+                return notifyAdapter.calls.length;
+              }),
+            ),
+          ),
+        );
+
+        assert.deepEqual(notifyAdapter.calls.slice(0, callsBeforeCommit), [
+          { name: "notifyJobsScheduled", args: ["await-approval"] },
+        ]);
+        assert.deepEqual(notifyAdapter.calls.slice(callsBeforeCommit), [
+          { name: "notifyJobsScheduled", args: ["await-approval"] },
+        ]);
       }),
     },
   ],

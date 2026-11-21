@@ -676,6 +676,16 @@ export const createInProcessState = (
         }),
       ),
 
+    getChainTails: ({ txCtx, chainIds }) =>
+      read(txCtx, () =>
+        chainIds.map((chainId) => {
+          const chain = chains.get(chainId);
+          if (chain === undefined) return undefined;
+          const { head, tail, ...info } = chainView(chain);
+          return { ...(tail ?? head), chain: info };
+        }),
+      ),
+
     getJobs: ({ txCtx, jobIds }) =>
       read(txCtx, () =>
         jobIds.map((jobId) => {

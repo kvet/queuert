@@ -1025,6 +1025,21 @@ WHERE head_job.id = ANY($1::{{job_id_type}}[]) AND head_job.chain_index = 0${
     }
 `;
 
+  const chainTailsLockedSelect = `
+WITH head_job AS MATERIALIZED (
+  SELECT *
+  FROM {{schema}}.{{table_prefix}}job
+  WHERE id = ANY($1::{{job_id_type}}[]) AND chain_index = 0
+  ORDER BY id
+  FOR UPDATE
+)
+SELECT
+  row_to_json(head_job) AS head_job,
+  row_to_json(tail_job) AS tail_job
+FROM head_job${tailLateral("head_job", "\n  FOR UPDATE")}
+WHERE (SELECT count(*) FROM head_job) > 0
+`;
+
   const lockedIds = `
 WITH lock_ids AS (
   SELECT c.id FROM {{schema}}.{{table_prefix}}job c WHERE c.id = ANY($1::{{job_id_type}}[])
@@ -1043,6 +1058,31 @@ SELECT *, lease_until <= statement_timestamp() AS expired
 FROM {{schema}}.{{table_prefix}}worker
 WHERE id = ANY($1::{{worker_id_type}}[])${locked ? "\nORDER BY id\nFOR UPDATE" : ""}
 `;
+
+  const followContinuedTails = async (
+    txCtx: TTxContext | undefined,
+    tails: (StateJob | undefined)[],
+  ): Promise<(StateJob | undefined)[]> => {
+    const continuedToIds = tails.flatMap((tail) =>
+      tail?.continuedToId != null ? [tail.continuedToId] : [],
+    );
+    if (continuedToIds.length === 0) return tails;
+    const rows = await execute(
+      txCtx,
+      prepared("getJobsLocked", jobsSelect(true), {
+        params: [t.array()],
+        columns: dbStateJobColumns,
+      }),
+      [continuedToIds],
+    );
+    const continuations = new Map(rows.map((row) => [row.id, mapDbJobRowToStateJob(row)]));
+    return followContinuedTails(
+      txCtx,
+      tails.map((tail) =>
+        tail?.continuedToId != null ? continuations.get(tail.continuedToId) : tail,
+      ),
+    );
+  };
 
   const close = async (): Promise<void> => {
     if (!closed.trip()) return;
@@ -1090,6 +1130,43 @@ WHERE id = ANY($1::{{worker_id_type}}[])${locked ? "\nORDER BY id\nFOR UPDATE" :
       );
       const byId = new Map(rows.map((row) => [row.head_job.id, mapDbChainRowToStateChain(row)]));
       return chainIds.map((id) => byId.get(id));
+    },
+
+    getChainTails: async ({
+      txCtx,
+      chainIds,
+      lock,
+    }: {
+      txCtx?: TTxContext;
+      chainIds: TJobId[];
+      lock?: "exclusive";
+    }) => {
+      if (chainIds.length === 0) return [];
+      const rows = await execute(
+        txCtx,
+        lock === "exclusive"
+          ? prepared("getChainTailsLocked", chainTailsLockedSelect, {
+              params: [t.array()],
+              columns: rowToJsonJobColumns,
+            })
+          : prepared("getChainTails", chainsSelect(false), {
+              params: [t.array()],
+              columns: rowToJsonJobColumns,
+              readOnly: true,
+            }),
+        [chainIds as string[]],
+      );
+      const byId = new Map(
+        rows.map((row) => [
+          row.head_job.id,
+          {
+            ...mapDbJobToStateJobInfo(row.tail_job ?? row.head_job),
+            chain: mapDbHeadToStateChainInfo(row.head_job),
+          },
+        ]),
+      );
+      const tails = chainIds.map((id) => byId.get(id));
+      return lock === "exclusive" ? followContinuedTails(txCtx, tails) : tails;
     },
 
     getJobs: async ({

@@ -492,7 +492,11 @@ export const createRedisStateAdapter = ({
     return ids;
   };
 
-  const chainViews = async (tx: RedisStoreTransaction, heads: DbJob[]): Promise<StateChain[]> => {
+  const chainViews = async (
+    tx: RedisStoreTransaction,
+    heads: DbJob[],
+    options?: { lockTails?: boolean },
+  ): Promise<StateChain[]> => {
     const lasts = await tx.zlastMany(heads.map((head) => keys.chainJobs(head.id)));
     const tailIds = lasts.map((last, index) =>
       last === undefined || last.member === heads[index].id ? undefined : last.member,
@@ -500,6 +504,7 @@ export const createRedisStateAdapter = ({
     const tails = await loadJobs(
       tx,
       tailIds.filter((id) => id !== undefined),
+      { lock: options?.lockTails },
     );
     let tailIndex = 0;
     return heads.map((head, index) => {
@@ -592,6 +597,31 @@ export const createRedisStateAdapter = ({
     const tx = transactionOf(txCtx);
     return tx === undefined ? runTransaction(fn) : fn(tx);
   };
+
+  const readChains = async ({
+    txCtx,
+    chainIds,
+    lock,
+    lockTails,
+  }: {
+    txCtx: Partial<RedisContext> | undefined;
+    chainIds: string[];
+    lock: "exclusive" | undefined;
+    lockTails: boolean;
+  }): Promise<(StateChain | undefined)[]> =>
+    withRead(txCtx, async (tx) => {
+      const locked = lock === "exclusive" && transactionOf(txCtx) !== undefined;
+      const heads = (await loadJobs(tx, chainIds, { lock: locked })).map((head) =>
+        head && head.id === head.chainId ? head : undefined,
+      );
+      const views = await chainViews(
+        tx,
+        heads.filter((head) => head !== undefined),
+        { lockTails: lockTails && locked },
+      );
+      let viewIndex = 0;
+      return heads.map((head) => (head === undefined ? undefined : views[viewIndex++]));
+    });
 
   const withWrite = async <T>(
     txCtx: Partial<RedisContext> | undefined,
@@ -745,17 +775,13 @@ export const createRedisStateAdapter = ({
     },
 
     getChains: async ({ txCtx, chainIds, lock }) =>
-      withRead(txCtx, async (tx) => {
-        const locked = lock === "exclusive" && transactionOf(txCtx) !== undefined;
-        const heads = (await loadJobs(tx, chainIds, { lock: locked })).map((head) =>
-          head && head.id === head.chainId ? head : undefined,
-        );
-        const views = await chainViews(
-          tx,
-          heads.filter((head) => head !== undefined),
-        );
-        let viewIndex = 0;
-        return heads.map((head) => (head === undefined ? undefined : views[viewIndex++]));
+      readChains({ txCtx, chainIds, lock, lockTails: false }),
+
+    getChainTails: async ({ txCtx, chainIds, lock }) =>
+      (await readChains({ txCtx, chainIds, lock, lockTails: true })).map((view) => {
+        if (view === undefined) return undefined;
+        const { head, tail, ...chain } = view;
+        return { ...(tail ?? head), chain };
       }),
 
     getJobs: async ({ txCtx, jobIds, lock }) =>

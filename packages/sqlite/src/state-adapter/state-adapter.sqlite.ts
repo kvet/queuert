@@ -804,6 +804,17 @@ ORDER BY head_job.id
       }),
     ),
 
+    getChainTails: pick(
+      syncAsync(function* (params: Parameters<typeof adapter.getChains>[0]) {
+        const chains = yield* step(adapter.getChains(params));
+        return chains.map((view): StateJob | undefined => {
+          if (view === undefined) return undefined;
+          const { head, tail, ...chain } = view;
+          return { ...(tail ?? head), chain };
+        });
+      }),
+    ),
+
     getJobs: pick(
       syncAsync(function* ({
         txCtx,

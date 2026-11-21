@@ -15,7 +15,7 @@ Look up a single chain or job by ID, or a batch of them in one round trip. Batch
 
 `getChain`, `getChains`, `getJob`, `getJobs`, `getJobBlockers`, and `listBlockedJobs` accept an optional `typeName` for type narrowing (`listChainJobs`, `getChainTailJob` and `getChainTailJobs` take `chainTypeName`) — the return type narrows to the specified type, so a completed `process-order` chain exposes its typed `output`. If the entity exists but has a different type, `ChainTypeMismatchError` or `JobTypeMismatchError` is thrown; `getChains` and `getChainTailJobs` throw `ChainsTypeMismatchError` and `getJobs` throws `JobsTypeMismatchError` instead, listing every mismatched id.
 
-All query methods accept an optional transaction context in which every field is optional, so a read needs only the transaction handle, not the `txHooks` some providers carry in their context:
+Query methods called without `lock` accept an optional transaction context in which every field is optional, so a read needs only the transaction handle, not the `txHooks` some providers carry in their context:
 
 <ExampleCode example="guides" file="src/queries.ts" region="in-transaction" />
 
@@ -39,7 +39,13 @@ Discover which chain and job types exist in the data, and get per-status counts 
 
 <ExampleCode example="guides" file="src/queries.ts" region="chain-jobs" />
 
-`getChainTailJob` and `getChainTailJobs` are experimental: they may change in a minor release.
+## Locked Reads
+
+`getChain`, `getChains`, `getJob`, `getJobs`, `getChainTailJob` and `getChainTailJobs` take `lock: "exclusive"`, which locks the rows they match until the transaction ends: a chain read locks the chain's head job, a job read locks the job and its chain's head job, and a tail read locks the chain's head job and its tail job. Inside one transaction, read with a lock, check the result, then write with [`completeChain`](../workerless-completion/) or [`rescheduleJob`](../scheduling/), and no worker or other caller changes or deletes those rows in between: another caller that locks the same rows waits for your transaction to end. A tail read that waits on a transaction that continues the chain returns the continuation. On PostgreSQL at REPEATABLE READ or SERIALIZABLE, a locked read of a row another transaction changed after your transaction's snapshot fails with a serialization failure for you to retry; see [Isolation level](/queuert/integrations/state-adapters/postgres/#isolation-level). On MySQL and MariaDB, a locked read can fail with a deadlock or a lock wait timeout; see [Lock errors](/queuert/integrations/state-adapters/mysql/#lock-errors). On Redis nothing waits: the transaction that commits second runs again; see [Locks](/queuert/integrations/state-adapters/redis/#locks).
+
+<ExampleCode example="guides" file="src/queries.ts" region="locked-reads" />
+
+`lock: "exclusive"` requires a transaction context with every field the provider's context type requires, so a locked read without one does not compile. A read that matches nothing locks nothing, so a lock does not serialize a "create if absent" against a concurrent create; close that race with [deduplication](../deduplication/). Keep locked transactions short, since workers cannot start the locked jobs until they end. Two transactions that lock the same rows in a different order can deadlock, so take every lock you need in one read and retry the transaction on a deadlock error.
 
 ## Blockers
 

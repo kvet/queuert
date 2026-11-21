@@ -7,7 +7,12 @@ import {
   blockerChainsNotifyConcurrentTransactionsGroup,
 } from "./cases/blocker-chains.ts";
 import { chainsGroup } from "./cases/chains.ts";
-import { clientQueriesGroup } from "./cases/client-queries.ts";
+import {
+  clientQueriesGroup,
+  clientQueriesLockedReadsConcurrentTransactionsLockWaitGroup,
+  clientQueriesLockedReadsGroup,
+  clientQueriesLockedReadsSavepointGroup,
+} from "./cases/client-queries.ts";
 import { createChainsGroup, createChainsNotifyGroup } from "./cases/create-chains.ts";
 import { deduplicationGroup } from "./cases/deduplication.ts";
 import {
@@ -66,6 +71,7 @@ export const endToEndBaseGroups: ConformanceGroup<StateAdapterConformanceContext
   schedulingGroup,
   validationGroup,
   clientQueriesGroup,
+  clientQueriesLockedReadsGroup,
   processGroup,
   processErrorHandlingGroup,
   workerGroup,
@@ -101,10 +107,14 @@ export const endToEndNotifyConcurrentTransactionGroups: ConformanceGroup<StateAd
   ];
 
 export const endToEndConcurrentTransactionLockWaitGroups: ConformanceGroup<StateAdapterConformanceContext>[] =
-  [workerlessCompletionConcurrentTransactionsLockWaitGroup];
+  [
+    workerlessCompletionConcurrentTransactionsLockWaitGroup,
+    clientQueriesLockedReadsConcurrentTransactionsLockWaitGroup,
+  ];
 
 export const endToEndSavepointGroups: ConformanceGroup<EndToEndSavepointContext>[] = [
   processSavepointGroup,
+  clientQueriesLockedReadsSavepointGroup,
 ];
 
 export const endToEndPoisonTransactionGroups: ConformanceGroup<EndToEndPoisonTransactionContext>[] =

@@ -33,6 +33,45 @@ LockRows
                           Index Cond: (chain_id = head_job.id)
 ```
 
+## getChainTails/default
+
+1. `getChainTails`
+
+```
+Nested Loop Left Join
+  ->  Index Scan using queuert_job_pkey on queuert_job head_job
+        Index Cond: (id = ANY ('{<uuid>}'::uuid[]))
+        Filter: (chain_index = 0)
+  ->  Subquery Scan on tail_job
+        ->  Limit
+              ->  Index Scan Backward using queuert_chain_index_idx on queuert_job
+                    Index Cond: (chain_id = head_job.id)
+```
+
+## getChainTails/lock
+
+1. `getChainTailsLocked`
+
+```
+Result
+  One-Time Filter: ((InitPlan 2).col1 > 0)
+  CTE head_job
+    ->  LockRows
+          ->  Index Scan using queuert_job_pkey on queuert_job queuert_job_1
+                Index Cond: (id = ANY ('{<uuid>}'::uuid[]))
+                Filter: (chain_index = 0)
+  InitPlan 2
+    ->  Aggregate
+          ->  CTE Scan on head_job head_job_1
+  ->  Nested Loop Left Join
+        ->  CTE Scan on head_job
+        ->  Subquery Scan on tail_job
+              ->  Limit
+                    ->  LockRows
+                          ->  Index Scan Backward using queuert_chain_index_idx on queuert_job
+                                Index Cond: ((chain_id = head_job.id) AND (chain_index > 0))
+```
+
 ## getJobs/default
 
 1. `getJobs`
@@ -109,9 +148,11 @@ Sort
                 ->  Nested Loop
                       ->  CTE Scan on input_data id2
                             Filter: ((dedup_key IS NOT NULL) AND ((dedup_scope = 'running'::text) OR (dedup_scope = 'any'::text)))
-                      ->  Index Scan using queuert_chain_deduplication_idx on queuert_job j
-                            Index Cond: (chain_deduplication_key = id2.dedup_key)
+                      ->  Bitmap Heap Scan on queuert_job j
+                            Recheck Cond: ((id2.dedup_key = chain_deduplication_key) AND (chain_index = 0))
                             Filter: ((id2.type_name = type_name) AND (((id2.dedup_scope = 'running'::text) AND (chain_status = 'running'::text)) OR (id2.dedup_scope = 'any'::text)))
+                            ->  Bitmap Index Scan on queuert_chain_deduplication_idx
+                                  Index Cond: (chain_deduplication_key = id2.dedup_key)
   CTE to_insert_all
     ->  Nested Loop Anti Join
           Join Filter: (ed_1.ord = id2_1.ord)
@@ -171,9 +212,11 @@ Sort
                 ->  Nested Loop
                       ->  CTE Scan on input_data id2
                             Filter: ((dedup_key IS NOT NULL) AND ((dedup_scope = 'running'::text) OR (dedup_scope = 'any'::text)))
-                      ->  Index Scan using queuert_chain_deduplication_idx on queuert_job j
-                            Index Cond: (chain_deduplication_key = id2.dedup_key)
+                      ->  Bitmap Heap Scan on queuert_job j
+                            Recheck Cond: ((id2.dedup_key = chain_deduplication_key) AND (chain_index = 0))
                             Filter: ((id2.type_name = type_name) AND (((id2.dedup_scope = 'running'::text) AND (chain_status = 'running'::text)) OR (id2.dedup_scope = 'any'::text)))
+                            ->  Bitmap Index Scan on queuert_chain_deduplication_idx
+                                  Index Cond: (chain_deduplication_key = id2.dedup_key)
   CTE to_insert_all
     ->  Nested Loop Anti Join
           Join Filter: (ed_1.ord = id2_1.ord)
@@ -284,7 +327,7 @@ Nested Loop Left Join
                       Join Filter: (d_1.blocked_by_chain_id = h_2.id)
                       ->  CTE Scan on input_data d_1
                       ->  CTE Scan on locked_blocker_heads h_2
-  CTE has_incomplete_blockers
+  CTE incomplete_blocker_counts
     ->  HashAggregate
           Group Key: d_2.job_id
           ->  Nested Loop
@@ -292,33 +335,31 @@ Nested Loop Left Join
                 ->  CTE Scan on input_data d_2
                 ->  CTE Scan on locked_blocker_heads h_3
                       Filter: (chain_status = 'running'::text)
-  CTE unflagged_blocker_heads
-    ->  CTE Scan on locked_blocker_heads
-          Filter: (NOT blocking)
   CTE updated_jobs
     ->  Update on queuert_job j_1
-          InitPlan 10
+          InitPlan 8
             ->  Result
                   One-Time Filter: false
           ->  Result
-                One-Time Filter: (NOT (InitPlan 10).col1)
-                ->  Nested Loop
-                      ->  Subquery Scan on t_1
-                            ->  Unique
-                                  ->  Sort
-                                        Sort Key: unflagged_blocker_heads_2.id
-                                        ->  Append
-                                              ->  CTE Scan on unflagged_blocker_heads unflagged_blocker_heads_2
-                                              ->  CTE Scan on has_incomplete_blockers has_incomplete_blockers_1
-                      ->  Index Scan using queuert_job_pkey on queuert_job j_1
-                            Index Cond: (id = t_1.id)
-                            Filter: ((status = 'pending'::text) OR (ANY (id = (hashed SubPlan 9).col1)))
-                            SubPlan 9
-                              ->  CTE Scan on unflagged_blocker_heads unflagged_blocker_heads_1
-                SubPlan 7
-                  ->  CTE Scan on has_incomplete_blockers
-                SubPlan 8
-                  ->  CTE Scan on unflagged_blocker_heads
+                One-Time Filter: (NOT (InitPlan 8).col1)
+                ->  Nested Loop Left Join
+                      Join Filter: (c.job_id = t_1.id)
+                      ->  Nested Loop
+                            ->  Subquery Scan on t_1
+                                  ->  Unique
+                                        ->  Sort
+                                              Sort Key: locked_blocker_heads_2.id
+                                              ->  Append
+                                                    ->  CTE Scan on locked_blocker_heads locked_blocker_heads_2
+                                                    ->  CTE Scan on incomplete_blocker_counts
+                            ->  Index Scan using queuert_job_pkey on queuert_job j_1
+                                  Index Cond: (id = t_1.id)
+                                  Filter: ((status = ANY ('{pending,blocked}'::text[])) OR (ANY (id = (hashed SubPlan 7).col1)))
+                                  SubPlan 7
+                                    ->  CTE Scan on locked_blocker_heads locked_blocker_heads_1
+                      ->  CTE Scan on incomplete_blocker_counts c
+                SubPlan 6
+                  ->  CTE Scan on locked_blocker_heads
   ->  Nested Loop
         ->  Nested Loop
               Join Filter: (d.job_id = updated_jobs.id)
@@ -361,78 +402,57 @@ Sort
 
 ## unblockJobs/default
 
-1. `lockBlockedJobs`
-
-```
-Subquery Scan on all_blocked_dependents_locked
-  CTE locked_blocked_dependents
-    ->  LockRows
-          ->  Nested Loop
-                ->  Subquery Scan on "ANY_subquery"
-                      ->  Unique
-                            ->  Sort
-                                  Sort Key: jb.job_id
-                                  ->  Bitmap Heap Scan on queuert_job_blocker jb
-                                        Recheck Cond: (blocked_by_chain_id = '<uuid>'::uuid)
-                                        ->  Bitmap Index Scan on queuert_job_blocker_chain_idx
-                                              Index Cond: (blocked_by_chain_id = '<uuid>'::uuid)
-                ->  Index Scan using queuert_job_pkey on queuert_job j
-                      Index Cond: (id = "ANY_subquery".job_id)
-                      Filter: (status = 'blocked'::text)
-  InitPlan 2
-    ->  Index Only Scan using queuert_job_blocker_chain_idx on queuert_job_blocker jb_1
-          Index Cond: (blocked_by_chain_id = '<uuid>'::uuid)
-  ->  Aggregate
-        ->  CTE Scan on locked_blocked_dependents
-```
-
-2. `unblockJobs`
+1. `unblockJobs`
 
 ```
 Result
-  CTE updated
-    ->  Update on queuert_job j
-          InitPlan 1
-            ->  Result
-                  One-Time Filter: false
-          ->  Result
-                One-Time Filter: (NOT (InitPlan 1).col1)
-                ->  Nested Loop Anti Join
-                      ->  Nested Loop
-                            ->  HashAggregate
-                                  Group Key: jb_1.job_id
-                                  ->  Bitmap Heap Scan on queuert_job_blocker jb_1
-                                        Recheck Cond: (blocked_by_chain_id = '<uuid>'::uuid)
-                                        ->  Bitmap Index Scan on queuert_job_blocker_chain_idx
-                                              Index Cond: (blocked_by_chain_id = '<uuid>'::uuid)
-                            ->  Index Scan using queuert_job_pkey on queuert_job j
-                                  Index Cond: (id = jb_1.job_id)
-                                  Filter: (status = 'blocked'::text)
-                      ->  Nested Loop Left Join
-                            Filter: (h.chain_status IS DISTINCT FROM 'completed'::text)
-                            ->  Index Scan using queuert_job_blocker_pkey on queuert_job_blocker jb
-                                  Index Cond: (job_id = j.id)
-                            ->  Index Scan using queuert_job_pkey on queuert_job h
-                                  Index Cond: (id = jb.blocked_by_chain_id)
-  InitPlan 6
-    ->  Aggregate
+  CTE dependent_blocker_counts
+    ->  GroupAggregate
+          Group Key: jb.job_id
           ->  Sort
-                Sort Key: jb_2.job_id, jb_2.index
-                ->  Bitmap Heap Scan on queuert_job_blocker jb_2
+                Sort Key: jb.job_id
+                ->  Bitmap Heap Scan on queuert_job_blocker jb
                       Recheck Cond: (blocked_by_chain_id = '<uuid>'::uuid)
                       ->  Bitmap Index Scan on queuert_job_blocker_chain_idx
                             Index Cond: (blocked_by_chain_id = '<uuid>'::uuid)
-          SubPlan 3
-            ->  CTE Scan on updated u
-                  Filter: (id = jb_2.job_id)
-          SubPlan 4
-            ->  Index Scan using queuert_job_pkey on queuert_job j_1
-                  Index Cond: (id = jb_2.job_id)
+  CTE locked_dependents
+    ->  LockRows
+          ->  Nested Loop
+                ->  CTE Scan on dependent_blocker_counts c
+                ->  Index Scan using queuert_job_pkey on queuert_job j
+                      Index Cond: (id = c.job_id)
+                      Filter: (status = 'blocked'::text)
+  CTE updated
+    ->  Update on queuert_job j_1
+          InitPlan 3
+            ->  Result
+                  One-Time Filter: false
+          ->  Result
+                One-Time Filter: (NOT (InitPlan 3).col1)
+                ->  Nested Loop
+                      ->  CTE Scan on locked_dependents l
+                      ->  Index Scan using queuert_job_pkey on queuert_job j_1
+                            Index Cond: (id = l.id)
+                            Filter: (status = 'blocked'::text)
+  InitPlan 8
+    ->  Aggregate
+          ->  Sort
+                Sort Key: jb_1.job_id, jb_1.index
+                ->  Bitmap Heap Scan on queuert_job_blocker jb_1
+                      Recheck Cond: (blocked_by_chain_id = '<uuid>'::uuid)
+                      ->  Bitmap Index Scan on queuert_job_blocker_chain_idx
+                            Index Cond: (blocked_by_chain_id = '<uuid>'::uuid)
           SubPlan 5
+            ->  CTE Scan on updated u
+                  Filter: (id = jb_1.job_id)
+          SubPlan 6
+            ->  Index Scan using queuert_job_pkey on queuert_job j_2
+                  Index Cond: (id = jb_1.job_id)
+          SubPlan 7
             ->  Nested Loop
                   ->  Index Scan using queuert_job_pkey on queuert_job d
-                        Index Cond: (id = jb_2.job_id)
-                  ->  Index Scan using queuert_job_pkey on queuert_job h_1
+                        Index Cond: (id = jb_1.job_id)
+                  ->  Index Scan using queuert_job_pkey on queuert_job h
                         Index Cond: (id = d.chain_id)
 ```
 
@@ -487,15 +507,20 @@ Delete on queuert_worker
 ```
 Nested Loop
   CTE live_worker
-    ->  LockRows
-          ->  Seq Scan on queuert_worker w
-                Filter: ((id = '<uuid>'::uuid) AND (token = '<uuid>'::uuid) AND (lease_until > statement_timestamp()))
+    ->  Update on queuert_worker w
+          InitPlan 1
+            ->  Result
+                  One-Time Filter: false
+          ->  Result
+                One-Time Filter: (NOT (InitPlan 1).col1)
+                ->  Seq Scan on queuert_worker w
+                      Filter: ((id = '<uuid>'::uuid) AND (token = '<uuid>'::uuid) AND (lease_until > statement_timestamp()))
   CTE acquired_jobs
     ->  Limit
-          InitPlan 2
+          InitPlan 3
             ->  CTE Scan on live_worker
           ->  Result
-                One-Time Filter: (InitPlan 2).col1
+                One-Time Filter: (InitPlan 3).col1
                 ->  Nested Loop
                       ->  Sort
                             Sort Key: (random())
@@ -508,11 +533,11 @@ Nested Loop
                                               Filter: (status = 'pending'::text)
   CTE updated
     ->  Update on queuert_job job
-          InitPlan 4
+          InitPlan 5
             ->  Result
                   One-Time Filter: false
           ->  Result
-                One-Time Filter: (NOT (InitPlan 4).col1)
+                One-Time Filter: (NOT (InitPlan 5).col1)
                 ->  Nested Loop
                       ->  CTE Scan on acquired_jobs a
                       ->  Index Scan using queuert_job_pkey on queuert_job job
@@ -520,7 +545,7 @@ Nested Loop
   ->  CTE Scan on updated u
   ->  Index Scan using queuert_job_pkey on queuert_job h
         Index Cond: (id = u.chain_id)
-  SubPlan 6
+  SubPlan 7
     ->  Index Only Scan using queuert_job_blocker_pkey on queuert_job_blocker jb
           Index Cond: (job_id = u.id)
 ```
@@ -532,15 +557,20 @@ Nested Loop
 ```
 Nested Loop
   CTE live_worker
-    ->  LockRows
-          ->  Seq Scan on queuert_worker w
-                Filter: ((id = '<uuid>'::uuid) AND (token = '<uuid>'::uuid) AND (lease_until > statement_timestamp()))
+    ->  Update on queuert_worker w
+          InitPlan 1
+            ->  Result
+                  One-Time Filter: false
+          ->  Result
+                One-Time Filter: (NOT (InitPlan 1).col1)
+                ->  Seq Scan on queuert_worker w
+                      Filter: ((id = '<uuid>'::uuid) AND (token = '<uuid>'::uuid) AND (lease_until > statement_timestamp()))
   CTE acquired_jobs
     ->  Limit
-          InitPlan 2
+          InitPlan 3
             ->  CTE Scan on live_worker
           ->  Result
-                One-Time Filter: (InitPlan 2).col1
+                One-Time Filter: (InitPlan 3).col1
                 ->  Nested Loop
                       ->  Sort
                             Sort Key: (random())
@@ -553,11 +583,11 @@ Nested Loop
                                               Filter: (status = 'pending'::text)
   CTE updated
     ->  Update on queuert_job job
-          InitPlan 4
+          InitPlan 5
             ->  Result
                   One-Time Filter: false
           ->  Result
-                One-Time Filter: (NOT (InitPlan 4).col1)
+                One-Time Filter: (NOT (InitPlan 5).col1)
                 ->  Nested Loop
                       ->  CTE Scan on acquired_jobs a
                       ->  Index Scan using queuert_job_pkey on queuert_job job
@@ -568,7 +598,7 @@ Nested Loop
         Cache Mode: logical
         ->  Index Scan using queuert_job_pkey on queuert_job h
               Index Cond: (id = u.chain_id)
-  SubPlan 6
+  SubPlan 7
     ->  Index Only Scan using queuert_job_blocker_pkey on queuert_job_blocker jb
           Index Cond: (job_id = u.id)
 ```
@@ -789,45 +819,45 @@ Result
                                   Index Cond: (job_id = _members.id)
   CTE _cleared_heads
     ->  Update on queuert_job h
-          InitPlan 7
+          InitPlan 10
             ->  CTE Scan on _external_refs _external_refs_1
           ->  Result
-                One-Time Filter: (NOT (InitPlan 7).col1)
-                ->  Nested Loop Anti Join
-                      ->  Nested Loop
-                            ->  HashAggregate
-                                  Group Key: queuert_job_blocker_1.blocked_by_chain_id
-                                  ->  Nested Loop
-                                        ->  HashAggregate
-                                              Group Key: _members_3.id
-                                              ->  CTE Scan on _members _members_3
-                                        ->  Bitmap Heap Scan on queuert_job_blocker queuert_job_blocker_1
-                                              Recheck Cond: (job_id = _members_3.id)
-                                              ->  Bitmap Index Scan on queuert_job_blocker_pkey
-                                                    Index Cond: (job_id = _members_3.id)
-                            ->  Index Scan using queuert_job_pkey on queuert_job h
-                                  Index Cond: (id = queuert_job_blocker_1.blocked_by_chain_id)
-                                  Filter: (blocking AND (NOT (ANY (id = (hashed SubPlan 6).col1))) AND (chain_index = 0))
-                                  SubPlan 6
-                                    ->  CTE Scan on _members _members_1
-                      ->  Index Scan using queuert_job_blocker_chain_idx on queuert_job_blocker jb_1
-                            Index Cond: (blocked_by_chain_id = h.id)
-                            Filter: (NOT (ANY (job_id = (hashed SubPlan 8).col1)))
-                            SubPlan 8
+                One-Time Filter: (NOT (InitPlan 10).col1)
+                ->  Nested Loop
+                      ->  HashAggregate
+                            Group Key: queuert_job_blocker_1.blocked_by_chain_id
+                            ->  Nested Loop
+                                  ->  HashAggregate
+                                        Group Key: _members_3.id
+                                        ->  CTE Scan on _members _members_3
+                                  ->  Bitmap Heap Scan on queuert_job_blocker queuert_job_blocker_1
+                                        Recheck Cond: (job_id = _members_3.id)
+                                        ->  Bitmap Index Scan on queuert_job_blocker_pkey
+                                              Index Cond: (job_id = _members_3.id)
+                      ->  Index Scan using queuert_job_pkey on queuert_job h
+                            Index Cond: (id = queuert_job_blocker_1.blocked_by_chain_id)
+                            Filter: ((NOT (ANY (id = (hashed SubPlan 9).col1))) AND (chain_index = 0))
+                            SubPlan 9
                               ->  CTE Scan on _members _members_2
+                SubPlan 7
+                  ->  Index Scan using queuert_job_blocker_chain_idx on queuert_job_blocker jb_1
+                        Index Cond: (blocked_by_chain_id = h.id)
+                        Filter: (NOT (ANY (job_id = (hashed SubPlan 6).col1)))
+                        SubPlan 6
+                          ->  CTE Scan on _members _members_1
   CTE _deleted_jobs
     ->  Delete on queuert_job queuert_job_1
-          InitPlan 10
+          InitPlan 12
             ->  CTE Scan on _external_refs _external_refs_2
           ->  Result
-                One-Time Filter: (NOT (InitPlan 10).col1)
+                One-Time Filter: (NOT (InitPlan 12).col1)
                 ->  Nested Loop
                       ->  HashAggregate
                             Group Key: _members_4.id
                             ->  CTE Scan on _members _members_4
                       ->  Index Scan using queuert_job_pkey on queuert_job queuert_job_1
                             Index Cond: (id = _members_4.id)
-  InitPlan 12
+  InitPlan 14
     ->  Aggregate
           ->  Nested Loop Left Join
                 ->  CTE Scan on _deleted_jobs
@@ -838,7 +868,7 @@ Result
                                   Sort Key: _deleted_jobs_1.chain_index DESC
                                   ->  CTE Scan on _deleted_jobs _deleted_jobs_1
                                         Filter: ((chain_index > 0) AND (chain_id = _deleted_jobs.id))
-  InitPlan 13
+  InitPlan 15
     ->  Aggregate
           ->  Nested Loop
                 ->  CTE Scan on _external_refs r
@@ -957,45 +987,45 @@ Result
                                   Index Cond: (job_id = _members.id)
   CTE _cleared_heads
     ->  Update on queuert_job h
-          InitPlan 7
+          InitPlan 10
             ->  CTE Scan on _external_refs _external_refs_1
           ->  Result
-                One-Time Filter: (NOT (InitPlan 7).col1)
-                ->  Nested Loop Anti Join
-                      ->  Nested Loop
-                            ->  HashAggregate
-                                  Group Key: queuert_job_blocker_1.blocked_by_chain_id
-                                  ->  Nested Loop
-                                        ->  HashAggregate
-                                              Group Key: _members_3.id
-                                              ->  CTE Scan on _members _members_3
-                                        ->  Bitmap Heap Scan on queuert_job_blocker queuert_job_blocker_1
-                                              Recheck Cond: (job_id = _members_3.id)
-                                              ->  Bitmap Index Scan on queuert_job_blocker_pkey
-                                                    Index Cond: (job_id = _members_3.id)
-                            ->  Index Scan using queuert_job_pkey on queuert_job h
-                                  Index Cond: (id = queuert_job_blocker_1.blocked_by_chain_id)
-                                  Filter: (blocking AND (NOT (ANY (id = (hashed SubPlan 6).col1))) AND (chain_index = 0))
-                                  SubPlan 6
-                                    ->  CTE Scan on _members _members_1
-                      ->  Index Scan using queuert_job_blocker_chain_idx on queuert_job_blocker jb_1
-                            Index Cond: (blocked_by_chain_id = h.id)
-                            Filter: (NOT (ANY (job_id = (hashed SubPlan 8).col1)))
-                            SubPlan 8
+                One-Time Filter: (NOT (InitPlan 10).col1)
+                ->  Nested Loop
+                      ->  HashAggregate
+                            Group Key: queuert_job_blocker_1.blocked_by_chain_id
+                            ->  Nested Loop
+                                  ->  HashAggregate
+                                        Group Key: _members_3.id
+                                        ->  CTE Scan on _members _members_3
+                                  ->  Bitmap Heap Scan on queuert_job_blocker queuert_job_blocker_1
+                                        Recheck Cond: (job_id = _members_3.id)
+                                        ->  Bitmap Index Scan on queuert_job_blocker_pkey
+                                              Index Cond: (job_id = _members_3.id)
+                      ->  Index Scan using queuert_job_pkey on queuert_job h
+                            Index Cond: (id = queuert_job_blocker_1.blocked_by_chain_id)
+                            Filter: ((NOT (ANY (id = (hashed SubPlan 9).col1))) AND (chain_index = 0))
+                            SubPlan 9
                               ->  CTE Scan on _members _members_2
+                SubPlan 7
+                  ->  Index Scan using queuert_job_blocker_chain_idx on queuert_job_blocker jb_1
+                        Index Cond: (blocked_by_chain_id = h.id)
+                        Filter: (NOT (ANY (job_id = (hashed SubPlan 6).col1)))
+                        SubPlan 6
+                          ->  CTE Scan on _members _members_1
   CTE _deleted_jobs
     ->  Delete on queuert_job queuert_job_1
-          InitPlan 10
+          InitPlan 12
             ->  CTE Scan on _external_refs _external_refs_2
           ->  Result
-                One-Time Filter: (NOT (InitPlan 10).col1)
+                One-Time Filter: (NOT (InitPlan 12).col1)
                 ->  Nested Loop
                       ->  HashAggregate
                             Group Key: _members_4.id
                             ->  CTE Scan on _members _members_4
                       ->  Index Scan using queuert_job_pkey on queuert_job queuert_job_1
                             Index Cond: (id = _members_4.id)
-  InitPlan 12
+  InitPlan 14
     ->  Aggregate
           ->  Nested Loop Left Join
                 ->  CTE Scan on _deleted_jobs
@@ -1006,7 +1036,7 @@ Result
                                   Sort Key: _deleted_jobs_1.chain_index DESC
                                   ->  CTE Scan on _deleted_jobs _deleted_jobs_1
                                         Filter: ((chain_index > 0) AND (chain_id = _deleted_jobs.id))
-  InitPlan 13
+  InitPlan 15
     ->  Aggregate
           ->  Nested Loop
                 ->  CTE Scan on _external_refs r
@@ -2148,10 +2178,9 @@ Nested Loop
 
 ```
 Limit
-  ->  Incremental Sort
+  ->  Sort
         Sort Key: started_at, id
-        Presorted Key: started_at
-        ->  Index Scan using queuert_worker_idx on queuert_worker w
+        ->  Seq Scan on queuert_worker w
 ```
 
 ## listWorkers/typeName
@@ -2194,10 +2223,9 @@ Limit
 
 ```
 Limit
-  ->  Incremental Sort
+  ->  Sort
         Sort Key: started_at, id
-        Presorted Key: started_at
-        ->  Index Scan using queuert_worker_idx on queuert_worker w
+        ->  Seq Scan on queuert_worker w
               Filter: ((started_at > '<timestamp>'::timestamp with time zone) OR ((started_at = '<timestamp>'::timestamp with time zone) AND (id > '<uuid>'::uuid)))
 ```
 
@@ -2214,11 +2242,8 @@ Nested Loop
                     Presorted Key: j_1.attempt_at
                     ->  Index Scan using queuert_job_attempt_by_idx on queuert_job j_1
                           Index Cond: (attempt_by = '<uuid>'::uuid)
-  ->  Memoize
-        Cache Key: j.chain_id
-        Cache Mode: logical
-        ->  Index Scan using queuert_job_pkey on queuert_job h
-              Index Cond: (id = j.chain_id)
+  ->  Index Scan using queuert_job_pkey on queuert_job h
+        Index Cond: (id = j.chain_id)
 ```
 
 ## listWorkerJobs/cursor
@@ -2234,11 +2259,8 @@ Nested Loop
                     Presorted Key: j_1.attempt_at
                     ->  Index Scan using queuert_job_attempt_by_idx on queuert_job j_1
                           Index Cond: (attempt_by = '<uuid>'::uuid)
-  ->  Memoize
-        Cache Key: j.chain_id
-        Cache Mode: logical
-        ->  Index Scan using queuert_job_pkey on queuert_job h
-              Index Cond: (id = j.chain_id)
+  ->  Index Scan using queuert_job_pkey on queuert_job h
+        Index Cond: (id = j.chain_id)
 ```
 
 2. `dynamic`
@@ -2253,9 +2275,6 @@ Nested Loop
                     ->  Index Scan using queuert_job_attempt_by_idx on queuert_job j_1
                           Index Cond: (attempt_by = '<uuid>'::uuid)
                           Filter: ((attempt_at > '<timestamp>'::timestamp with time zone) OR ((attempt_at = '<timestamp>'::timestamp with time zone) AND (id > '<uuid>'::uuid)))
-  ->  Memoize
-        Cache Key: j.chain_id
-        Cache Mode: logical
-        ->  Index Scan using queuert_job_pkey on queuert_job h
-              Index Cond: (id = j.chain_id)
+  ->  Index Scan using queuert_job_pkey on queuert_job h
+        Index Cond: (id = j.chain_id)
 ```

@@ -248,6 +248,16 @@ export const createMemoryStateAdapter = (
         }),
       ),
 
+    getChainTails: async ({ txCtx, chainIds }) =>
+      read(txCtx, (state) =>
+        chainIds.map((chainId) => {
+          const chain = state.chains.get(chainId);
+          if (!chain) return undefined;
+          const { head, tail, ...info } = toChain(state, chain);
+          return { ...(tail ?? head), chain: info };
+        }),
+      ),
+
     getJobs: async ({ txCtx, jobIds }) =>
       read(txCtx, (state) =>
         jobIds.map((jobId) => {

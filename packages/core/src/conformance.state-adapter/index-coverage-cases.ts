@@ -68,6 +68,8 @@ export type IndexCoverageCaseKey =
   | "listWorkerJobs/cursor"
   | "getChains/default"
   | "getChains/lock"
+  | "getChainTails/default"
+  | "getChainTails/lock"
   | "getJobs/default"
   | "getJobs/lock"
   | "getWorkers/default"
@@ -1272,6 +1274,42 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
               yield* step(
                 stateAdapter.withTransaction((txCtx) =>
                   stateAdapter.getChains({
+                    txCtx,
+                    chainIds: [sentinels.longChain.chainId],
+                    lock: "exclusive",
+                  }),
+                ),
+              );
+            }),
+          ),
+      },
+    ],
+  },
+
+  {
+    name: "getChainTails",
+    cases: [
+      {
+        key: "getChainTails/default",
+        label: "default",
+        run: () => (stateAdapter, sentinels) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(stateAdapter.getChainTails({ chainIds: [sentinels.longChain.chainId] }));
+            }),
+          ),
+      },
+      {
+        key: "getChainTails/lock",
+        label: "+ lock",
+        run: () => (stateAdapter, sentinels) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.getChainTails({
                     txCtx,
                     chainIds: [sentinels.longChain.chainId],
                     lock: "exclusive",

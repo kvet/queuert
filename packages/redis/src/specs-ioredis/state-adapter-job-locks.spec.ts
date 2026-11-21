@@ -87,6 +87,36 @@ describe("Redis state adapter job locks", () => {
     expect(heldInside).toBe(false);
   });
 
+  it("locks a chain's tail when getChainTails is given a lock", async ({ setup }) => {
+    const { stateAdapter, createJob, lockExists } = setup;
+    const chainId = await createJob();
+    const tailId = stateAdapter.config.generateJobId();
+    await stateAdapter.withTransaction(async (txCtx) =>
+      stateAdapter.continueJobs({
+        txCtx,
+        jobs: [{ typeName: "task", id: tailId, input: null, continueFromId: chainId }],
+      }),
+    );
+
+    const heldWithout = await stateAdapter.withTransaction(async (txCtx) => {
+      await stateAdapter.getChainTails({ txCtx, chainIds: [chainId] });
+      return lockExists(tailId);
+    });
+    const heldWith = await stateAdapter.withTransaction(async (txCtx) => {
+      const [tail] = await stateAdapter.getChainTails({
+        txCtx,
+        chainIds: [chainId],
+        lock: "exclusive",
+      });
+      expect(tail).toMatchObject({ id: tailId, chain: { id: chainId } });
+      return lockExists(tailId);
+    });
+
+    expect(heldWithout).toBe(false);
+    expect(heldWith).toBe(true);
+    expect(await lockExists(tailId)).toBe(false);
+  });
+
   it("skips a locked job when claiming inside a transaction", async ({ setup }) => {
     const { stateAdapter, createJob, startWorker } = setup;
     const lockedJobId = await createJob();

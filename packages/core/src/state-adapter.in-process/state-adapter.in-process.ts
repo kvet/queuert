@@ -159,6 +159,7 @@ export const createInProcessStateAdapterWithState = (
       ? { ...methods, sync: true, close, [Symbol.dispose]: close }
       : {
           getChains: locked(methods.getChains),
+          getChainTails: locked(methods.getChainTails),
           getJobs: locked(methods.getJobs),
           getWorkers: locked(methods.getWorkers),
           createJobs: locked(methods.createJobs),

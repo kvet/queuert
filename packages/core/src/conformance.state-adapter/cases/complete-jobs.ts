@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 
 import { assertRejects } from "@queuert/helpers/assert-rejects";
+import { sleep } from "@queuert/helpers/sleep";
 import { dynamicSyncAsync, syncAsync, resource, step } from "@queuert/sync-async";
 
 import { runInModeOf } from "../../conformance/adapters.ts";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
 import type { StateAdapterConformanceContext } from "../types.ts";
+
+const LOCK_BLOCK_OBSERVATION_MS = 100;
 
 export const completeJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "completeJobs",
@@ -899,3 +902,84 @@ export const completeJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
     },
   ],
 };
+
+export const completeJobsHeldTransactionLockWaitGroup: ConformanceGroup<StateAdapterConformanceContext> =
+  {
+    name: "completeJobs",
+    cases: [
+      {
+        name: "completing a tail waits while another transaction holds its chain head lock",
+        run: async ({ createStateAdapter }) => {
+          await using stateAdapter = await createStateAdapter();
+
+          const [headChain] = await stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "complete-head-held",
+                  input: null,
+                },
+              ],
+            }),
+          );
+
+          const [continued] = await stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.continueJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "complete-head-held-step2",
+                  continueFromId: headChain.head.id,
+                  input: null,
+                },
+              ],
+            }),
+          );
+          const { continuation } = continued!;
+
+          const { promise: holderGate, resolve: releaseHolder } = Promise.withResolvers<void>();
+          const { promise: lockHeld, resolve: signalLockHeld } = Promise.withResolvers<void>();
+
+          const holderTx = stateAdapter.withTransaction(async (txCtx) => {
+            await stateAdapter.getChains({
+              txCtx,
+              chainIds: [headChain.head.chainId],
+              lock: "exclusive",
+            });
+            signalLockHeld();
+            await holderGate;
+          });
+
+          await lockHeld;
+
+          const completerTx = Promise.resolve(
+            stateAdapter.withTransaction((txCtx) =>
+              stateAdapter.completeJobs({
+                txCtx,
+                jobs: [{ jobId: continuation.id, output: { done: true } }],
+              }),
+            ),
+          );
+
+          assert.equal(
+            await Promise.race([
+              completerTx.then(() => "completed"),
+              sleep(LOCK_BLOCK_OBSERVATION_MS).then(() => "waiting"),
+            ]),
+            "waiting",
+          );
+
+          releaseHolder();
+          await holderTx;
+
+          const [completed] = await completerTx;
+          assert.equal(completed!.id, continuation.id);
+          assert.equal(completed!.status, "completed");
+          assert.equal(completed!.chain.status, "completed");
+        },
+      },
+    ],
+  };

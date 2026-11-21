@@ -148,6 +148,7 @@ const members = (): FieldItem[] => [
     ),
     extra: [
       "getChains",
+      "getChainTails",
       "getJobs",
       "getWorkers",
       "getChainTypeNames",
@@ -251,9 +252,10 @@ const Page = () => (
       your own database client opened and passed to <code>client.createChain</code> or a handler's{" "}
       <code>complete</code>, or one opened by <code>withTransaction</code>. Besides the transaction
       handle, it may carry the <code>txHooks</code> a provider registers commit and rollback
-      callbacks on; mutating calls and <code>complete</code> require every field of the context, and
-      reads take any part of it. Queuert itself opens transactions only for migrations, for the
-      worker's registration, reclaims and stop, and in test helpers, never around job processing.
+      callbacks on; mutating calls, <code>complete</code> and reads with{" "}
+      <code>lock: "exclusive"</code> require every field of the context, and other reads take any
+      part of it. Queuert itself opens transactions only for migrations, for the worker's
+      registration, reclaims and stop, and in test helpers, never around job processing.
     </p>
   </>
 );

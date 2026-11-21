@@ -5,7 +5,10 @@ import {
   addJobsBlockersConcurrentTransactionsLockWaitGroup,
 } from "./cases/add-jobs-blockers.ts";
 import { closeGroup } from "./cases/close.ts";
-import { completeJobsGroup } from "./cases/complete-jobs.ts";
+import {
+  completeJobsGroup,
+  completeJobsHeldTransactionLockWaitGroup,
+} from "./cases/complete-jobs.ts";
 import { continueJobsGroup } from "./cases/continue-jobs.ts";
 import { countCapGroup } from "./cases/count-cap.ts";
 import { countChainsByTypeNameGroup } from "./cases/count-chains-by-type-name.ts";
@@ -23,6 +26,11 @@ import {
   extendWorkerLeaseGroup,
   extendWorkerLeaseConcurrentTransactionsGroup,
 } from "./cases/extend-worker-lease.ts";
+import {
+  getChainTailsGroup,
+  getChainTailsHeldTransactionLockWaitGroup,
+  getChainTailsConcurrentTransactionsLockWaitGroup,
+} from "./cases/get-chain-tails.ts";
 import { getChainTypeNamesGroup } from "./cases/get-chain-type-names.ts";
 import {
   getChainsGroup,
@@ -98,6 +106,7 @@ export const stateAdapterBaseGroups: ConformanceGroup<StateAdapterConformanceCon
   getTransactionGroup,
   txCallbacksGroup,
   getChainsGroup,
+  getChainTailsGroup,
   getJobsGroup,
   getWorkersGroup,
   createJobsGroup,
@@ -138,7 +147,9 @@ export const stateAdapterAsyncGroups: ConformanceGroup<StateAdapterConformanceCo
 
 export const stateAdapterAsyncLockWaitGroups: ConformanceGroup<StateAdapterConformanceContext>[] = [
   getChainsHeldTransactionLockWaitGroup,
+  getChainTailsHeldTransactionLockWaitGroup,
   getJobsHeldTransactionLockWaitGroup,
+  completeJobsHeldTransactionLockWaitGroup,
   getWorkersHeldTransactionLockWaitGroup,
   startJobAttemptHeldTransactionLockWaitGroup,
 ];
@@ -163,6 +174,7 @@ export const stateAdapterConcurrentTransactionGroups: ConformanceGroup<StateAdap
 
 export const stateAdapterConcurrentTransactionLockWaitGroups: ConformanceGroup<StateAdapterConformanceContext>[] =
   [
+    getChainTailsConcurrentTransactionsLockWaitGroup,
     getJobsConcurrentTransactionsLockWaitGroup,
     addJobsBlockersConcurrentTransactionsLockWaitGroup,
     unblockJobsConcurrentTransactionsLockWaitGroup,

@@ -30,6 +30,7 @@ export const wrapStateAdapterWithLogging = <
     ...stateAdapter,
 
     getChains: wrap("getChains", stateAdapter.getChains),
+    getChainTails: wrap("getChainTails", stateAdapter.getChainTails),
     getJobs: wrap("getJobs", stateAdapter.getJobs),
     getWorkers: wrap("getWorkers", stateAdapter.getWorkers),
     createJobs: wrap("createJobs", stateAdapter.createJobs),

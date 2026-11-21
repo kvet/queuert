@@ -85,6 +85,10 @@ import { type Helpers, createHelpers, runInMode } from "./setup-helpers.ts";
 
 export const helpersSymbol: unique symbol = Symbol("queuert.helpers");
 
+type LockableReadTxContext<TStateAdapter extends StateAdapter<any, any, any, Mode>> =
+  | ({ lock?: undefined } & Partial<GetStateAdapterTxContext<TStateAdapter>>)
+  | ({ lock: "exclusive" } & GetStateAdapterTxContext<TStateAdapter>);
+
 type AnyWorkerlessOutcome = { output: unknown } | { continueWith: AnyNewJob };
 
 type ChainCompleteOptions<
@@ -192,7 +196,7 @@ type CreateChainsResult<
  *
  * Methods are split into three categories:
  * - **Mutating** — `createChain`, `createChains`, `completeChain`, `deleteChain`, `deleteChains`, `rescheduleJob`, `rescheduleJobs`. Require a transaction context; they throw `Error` if called without a transaction context, or with one the state adapter's `getTransaction` reports as outside an open transaction. With an adapter that fences writes (PostgreSQL, SQLite, Redis), all but the deletions throw {@link SchemaFencedError} once a breaking migration fenced this code version, and change nothing.
- * - **Read-only** — `getChain`, `getChains`, `getJob`, `getJobs`, `getChainTypeNames`, `getJobTypeNames`, `countChainsByTypeName`, `countJobsByTypeName`, `listChains`, `listJobs`, `listChainJobs`, `getChainTailJob`, `getChainTailJobs`, `getJobBlockers`, `listBlockedJobs`, `getWorker`, `getWorkers`, `countWorkers`, `countWorkersByTypeName`, `countRunningJobsByWorkerId`, `listWorkers`, `listWorkerJobs`. Accept an optional transaction context.
+ * - **Read-only** — `getChain`, `getChains`, `getJob`, `getJobs`, `getChainTypeNames`, `getJobTypeNames`, `countChainsByTypeName`, `countJobsByTypeName`, `listChains`, `listJobs`, `listChainJobs`, `getChainTailJob`, `getChainTailJobs`, `getJobBlockers`, `listBlockedJobs`, `getWorker`, `getWorkers`, `countWorkers`, `countWorkersByTypeName`, `countRunningJobsByWorkerId`, `listWorkers`, `listWorkerJobs`. Accept an optional transaction context; `getChain`, `getChains`, `getJob`, `getJobs`, `getChainTailJob` and `getChainTailJobs` require one with `lock: "exclusive"`.
  * - **Waiting** — `awaitChain`. Takes no transaction context: it polls outside any transaction and listens for notify adapter events.
  */
 export type Client<
@@ -395,7 +399,8 @@ export type Client<
   ) => ModeResult<TMode, NoInfer<TResult>>;
 
   /**
-   * Get a single chain by ID. Pass `typeName` for type narrowing.
+   * Get a single chain by ID. Pass `typeName` for type narrowing. Pass `lock: "exclusive"`
+   * (transaction context required) to lock the chain's head job until the transaction ends.
    *
    * @throws {@link ChainTypeMismatchError} if `typeName` is provided and does not match.
    */
@@ -406,14 +411,15 @@ export type Client<
     options: {
       typeName?: TChainTypeName;
       id: TJobId;
-    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+    } & LockableReadTxContext<TStateAdapter>,
   ) => ModeResult<TMode, ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> | undefined>;
 
   /**
    * Get multiple chains by ID. Returns a positional array aligned with the
    * input `ids` — `undefined` for any ID that does not exist. Pass `typeName`
    * to narrow the return type; all found chains must match or
-   * {@link ChainsTypeMismatchError} is thrown.
+   * {@link ChainsTypeMismatchError} is thrown. Pass `lock: "exclusive"` (transaction context required) to
+   * lock each found chain's head job until the transaction ends.
    *
    * @throws {@link ChainsTypeMismatchError} (listing every offending id) if `typeName` is provided and any found chain does not match.
    */
@@ -424,14 +430,15 @@ export type Client<
     options: {
       typeName?: TChainTypeName;
       ids: TJobId[];
-    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+    } & LockableReadTxContext<TStateAdapter>,
   ) => ModeResult<
     TMode,
     (ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> | undefined)[]
   >;
 
   /**
-   * Get a single job by ID. Pass `typeName` for type narrowing.
+   * Get a single job by ID. Pass `typeName` for type narrowing. Pass `lock: "exclusive"` (transaction
+   * context required) to lock the job and its chain's head job until the transaction ends.
    *
    * @throws {@link JobTypeMismatchError} if `typeName` is provided and does not match.
    */
@@ -441,7 +448,7 @@ export type Client<
     options: {
       typeName?: TJobTypeName;
       id: TJobId;
-    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+    } & LockableReadTxContext<TStateAdapter>,
   ) => ModeResult<
     TMode,
     ResolvedJob<TJobId, TWorkerId, TJobTypeDefinitions, TJobTypeName> | undefined
@@ -451,7 +458,8 @@ export type Client<
    * Get multiple jobs by ID. Returns a positional array aligned with the
    * input `ids` — `undefined` for any ID that does not exist. Pass `typeName`
    * to narrow the return type; all found jobs must match or
-   * {@link JobsTypeMismatchError} is thrown.
+   * {@link JobsTypeMismatchError} is thrown. Pass `lock: "exclusive"` (transaction context required) to lock
+   * each found job and its chain's head job until the transaction ends.
    *
    * @throws {@link JobsTypeMismatchError} (listing every offending id) if `typeName` is provided and any found job does not match.
    */
@@ -461,10 +469,55 @@ export type Client<
     options: {
       typeName?: TJobTypeName;
       ids: TJobId[];
-    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+    } & LockableReadTxContext<TStateAdapter>,
   ) => ModeResult<
     TMode,
     (ResolvedJob<TJobId, TWorkerId, TJobTypeDefinitions, TJobTypeName> | undefined)[]
+  >;
+
+  /**
+   * Get the tail job of a chain: its latest job in chain order, which is the head job while the
+   * chain has not continued. Pass `chainTypeName` for type narrowing. Pass `lock: "exclusive"`
+   * (transaction context required) to lock the chain's head job and its tail job until the
+   * transaction ends, so the tail cannot change before it does. A read that waits on a transaction
+   * that continues the chain returns the continuation.
+   *
+   * @throws {@link ChainTypeMismatchError} if `chainTypeName` is provided and does not match.
+   */
+  getChainTailJob: <
+    TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
+      JobTypeEntryNames<TJobTypeDefinitions>,
+  >(
+    options: {
+      chainId: TJobId;
+      chainTypeName?: TChainTypeName;
+    } & LockableReadTxContext<TStateAdapter>,
+  ) => ModeResult<
+    TMode,
+    ResolvedChainJobs<TJobId, TWorkerId, TJobTypeDefinitions, TChainTypeName> | undefined
+  >;
+
+  /**
+   * Get the tail jobs of multiple chains in one state adapter read. Returns a positional array
+   * aligned with the input `chainIds` — `undefined` for any chain that does not exist. Pass
+   * `chainTypeName` to narrow the return type; all found chains must match or
+   * {@link ChainsTypeMismatchError} is thrown. Pass `lock: "exclusive"` (transaction context required) to
+   * lock each found chain's head job and tail job until the transaction ends; a read that waits on
+   * a transaction that continues a chain returns the continuation.
+   *
+   * @throws {@link ChainsTypeMismatchError} (listing every offending id) if `chainTypeName` is provided and any found chain does not match.
+   */
+  getChainTailJobs: <
+    TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
+      JobTypeEntryNames<TJobTypeDefinitions>,
+  >(
+    options: {
+      chainIds: TJobId[];
+      chainTypeName?: TChainTypeName;
+    } & LockableReadTxContext<TStateAdapter>,
+  ) => ModeResult<
+    TMode,
+    (ResolvedChainJobs<TJobId, TWorkerId, TJobTypeDefinitions, TChainTypeName> | undefined)[]
   >;
 
   /** Get a worker by ID, `undefined` when it has no row: it stopped or its lease was reclaimed. */
@@ -615,48 +668,6 @@ export type Client<
   ) => ModeResult<
     TMode,
     Page<ResolvedChainJobs<TJobId, TWorkerId, TJobTypeDefinitions, TChainTypeName>>
-  >;
-
-  /**
-   * Get the tail job of a chain: its latest job in chain order, which is the head job while the
-   * chain has not continued. Pass `chainTypeName` for type narrowing.
-   *
-   * @throws {@link ChainTypeMismatchError} if `chainTypeName` is provided and does not match.
-   * @experimental
-   */
-  getChainTailJob: <
-    TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
-      JobTypeEntryNames<TJobTypeDefinitions>,
-  >(
-    options: {
-      chainId: TJobId;
-      chainTypeName?: TChainTypeName;
-    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
-  ) => ModeResult<
-    TMode,
-    ResolvedChainJobs<TJobId, TWorkerId, TJobTypeDefinitions, TChainTypeName> | undefined
-  >;
-
-  /**
-   * Get the tail jobs of multiple chains in one state adapter read. Returns a positional array
-   * aligned with the input `chainIds` — `undefined` for any chain that does not exist. Pass
-   * `chainTypeName` to narrow the return type; all found chains must match or
-   * {@link ChainsTypeMismatchError} is thrown.
-   *
-   * @throws {@link ChainsTypeMismatchError} (listing every offending id) if `chainTypeName` is provided and any found chain does not match.
-   * @experimental
-   */
-  getChainTailJobs: <
-    TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
-      JobTypeEntryNames<TJobTypeDefinitions>,
-  >(
-    options: {
-      chainIds: TJobId[];
-      chainTypeName?: TChainTypeName;
-    } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
-  ) => ModeResult<
-    TMode,
-    (ResolvedChainJobs<TJobId, TWorkerId, TJobTypeDefinitions, TChainTypeName> | undefined)[]
   >;
 
   /**
@@ -1363,6 +1374,7 @@ export const createClient = <
       options: {
         typeName?: TChainTypeName;
         id: TJobId;
+        lock?: "exclusive";
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
     ) =>
       runInMode(
@@ -1374,7 +1386,7 @@ export const createClient = <
               client.getChains<TChainTypeName>({
                 typeName,
                 ids: [id],
-                ...(rest as Partial<GetStateAdapterTxContext<TStateAdapter>>),
+                ...(rest as LockableReadTxContext<TStateAdapter>),
               }),
             );
             return chain;
@@ -1391,23 +1403,38 @@ export const createClient = <
       options: {
         typeName?: TChainTypeName;
         ids: TJobId[];
+        lock?: "exclusive";
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
     ) =>
       runInMode(
         helpers,
         syncAsync(function* () {
-          const { ids, typeName, ...rest } = options;
+          const { ids, typeName, lock, ...rest } = options;
 
           if (ids.length === 0) {
             return [] as (ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> | undefined)[];
           }
 
+          const lockedTxCtx =
+            lock === "exclusive"
+              ? requireTxCtx(helpers.stateAdapter, rest, "getChains")
+              : undefined;
           const stateChains = yield* step(
-            helpers.stateAdapter.getChains({
-              txCtx: normalizeTxCtx(rest),
-              chainIds: ids,
-            }),
+            lockedTxCtx !== undefined
+              ? helpers.stateAdapter.getChains({
+                  txCtx: lockedTxCtx,
+                  chainIds: ids,
+                  lock: "exclusive",
+                })
+              : helpers.stateAdapter.getChains({ txCtx: normalizeTxCtx(rest), chainIds: ids }),
           );
+          if (lockedTxCtx !== undefined) {
+            notifyAfterTransaction(helpers, lockedTxCtx, {
+              lockedPendingJobs: stateChains.flatMap((stateChain) =>
+                stateChain?.head.status === "pending" ? [stateChain.head] : [],
+              ),
+            });
+          }
           assertChainsTypeName(stateChains, { chainIds: ids, typeName });
 
           return stateChains.map((stateChain) => {
@@ -1428,6 +1455,7 @@ export const createClient = <
       options: {
         typeName?: TJobTypeName;
         id: TJobId;
+        lock?: "exclusive";
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
     ) =>
       runInMode(
@@ -1439,7 +1467,7 @@ export const createClient = <
               client.getJobs<TJobTypeName>({
                 typeName,
                 ids: [id],
-                ...(rest as Partial<GetStateAdapterTxContext<TStateAdapter>>),
+                ...(rest as LockableReadTxContext<TStateAdapter>),
               }),
             );
             return job;
@@ -1455,12 +1483,13 @@ export const createClient = <
       options: {
         typeName?: TJobTypeName;
         ids: TJobId[];
+        lock?: "exclusive";
       } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
     ) =>
       runInMode(
         helpers,
         syncAsync(function* () {
-          const { ids, typeName, ...rest } = options;
+          const { ids, typeName, lock, ...rest } = options;
 
           if (ids.length === 0) {
             return [] as (
@@ -1469,12 +1498,24 @@ export const createClient = <
             )[];
           }
 
+          const lockedTxCtx =
+            lock === "exclusive" ? requireTxCtx(helpers.stateAdapter, rest, "getJobs") : undefined;
           const stateJobs = yield* step(
-            helpers.stateAdapter.getJobs({
-              txCtx: normalizeTxCtx(rest),
-              jobIds: ids,
-            }),
+            lockedTxCtx !== undefined
+              ? helpers.stateAdapter.getJobs({
+                  txCtx: lockedTxCtx,
+                  jobIds: ids,
+                  lock: "exclusive",
+                })
+              : helpers.stateAdapter.getJobs({ txCtx: normalizeTxCtx(rest), jobIds: ids }),
           );
+          if (lockedTxCtx !== undefined) {
+            notifyAfterTransaction(helpers, lockedTxCtx, {
+              lockedPendingJobs: stateJobs.flatMap((stateJob) =>
+                stateJob?.status === "pending" ? [stateJob] : [],
+              ),
+            });
+          }
           assertJobsTypeName(stateJobs, { jobIds: ids, typeNames: ids.map(() => typeName) });
 
           return stateJobs.map((stateJob) => {
@@ -1485,6 +1526,95 @@ export const createClient = <
               TWorkerId,
               TJobTypeDefinitions,
               TJobTypeName
+            >;
+          });
+        }),
+      ),
+
+    getChainTailJob: <
+      TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
+        JobTypeEntryNames<TJobTypeDefinitions>,
+    >(
+      options: {
+        chainId: TJobId;
+        chainTypeName?: TChainTypeName;
+        lock?: "exclusive";
+      } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+    ) =>
+      runInMode(
+        helpers,
+        syncAsync(function* () {
+          const { chainId, chainTypeName, ...rest } = options;
+          try {
+            const [tailJob] = yield* step(
+              client.getChainTailJobs<TChainTypeName>({
+                chainIds: [chainId],
+                chainTypeName,
+                ...(rest as LockableReadTxContext<TStateAdapter>),
+              }),
+            );
+            return tailJob;
+          } catch (error) {
+            throw toSingleChainError(error, chainId);
+          }
+        }),
+      ),
+
+    getChainTailJobs: <
+      TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
+        JobTypeEntryNames<TJobTypeDefinitions>,
+    >(
+      options: {
+        chainIds: TJobId[];
+        chainTypeName?: TChainTypeName;
+        lock?: "exclusive";
+      } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
+    ) =>
+      runInMode(
+        helpers,
+        syncAsync(function* () {
+          const { chainIds, chainTypeName, lock, ...rest } = options;
+
+          if (chainIds.length === 0) {
+            return [] as (
+              | ResolvedChainJobs<TJobId, TWorkerId, TJobTypeDefinitions, TChainTypeName>
+              | undefined
+            )[];
+          }
+
+          const lockedTxCtx =
+            lock === "exclusive"
+              ? requireTxCtx(helpers.stateAdapter, rest, "getChainTailJobs")
+              : undefined;
+          const tailJobs = yield* step(
+            lockedTxCtx !== undefined
+              ? helpers.stateAdapter.getChainTails({
+                  txCtx: lockedTxCtx,
+                  chainIds,
+                  lock: "exclusive",
+                })
+              : helpers.stateAdapter.getChainTails({ txCtx: normalizeTxCtx(rest), chainIds }),
+          );
+          if (lockedTxCtx !== undefined) {
+            notifyAfterTransaction(helpers, lockedTxCtx, {
+              lockedPendingJobs: tailJobs.flatMap((tailJob) =>
+                tailJob?.status === "pending" ? [tailJob] : [],
+              ),
+            });
+          }
+          assertChainsTypeName(
+            tailJobs.map((tailJob) => tailJob?.chain),
+            { chainIds, typeName: chainTypeName },
+          );
+
+          return tailJobs.map((tailJob) => {
+            if (!tailJob) return undefined;
+
+            return mapStateJobToJob(tailJob, helpers.jobTypes) as ResolvedChainJobs<
+              TJobId,
+              TWorkerId,
+              TJobTypeDefinitions,
+              TChainTypeName
             >;
           });
         }),
@@ -1803,74 +1933,6 @@ export const createClient = <
             ),
             nextCursor: result.nextCursor,
           };
-        }),
-      ),
-
-    getChainTailJob: <
-      TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
-        JobTypeEntryNames<TJobTypeDefinitions>,
-    >(
-      options: {
-        chainId: TJobId;
-        chainTypeName?: TChainTypeName;
-      } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
-    ) =>
-      runInMode(
-        helpers,
-        syncAsync(function* () {
-          const { chainId, chainTypeName, ...rest } = options;
-          try {
-            const [tailJob] = yield* step(
-              client.getChainTailJobs<TChainTypeName>({
-                chainIds: [chainId],
-                chainTypeName,
-                ...(rest as Partial<GetStateAdapterTxContext<TStateAdapter>>),
-              }),
-            );
-            return tailJob;
-          } catch (error) {
-            throw toSingleChainError(error, chainId);
-          }
-        }),
-      ),
-
-    getChainTailJobs: <
-      TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
-        JobTypeEntryNames<TJobTypeDefinitions>,
-    >(
-      options: {
-        chainIds: TJobId[];
-        chainTypeName?: TChainTypeName;
-      } & Partial<GetStateAdapterTxContext<TStateAdapter>>,
-    ) =>
-      runInMode(
-        helpers,
-        syncAsync(function* () {
-          const { chainIds, chainTypeName, ...rest } = options;
-
-          if (chainIds.length === 0) {
-            return [] as (
-              | ResolvedChainJobs<TJobId, TWorkerId, TJobTypeDefinitions, TChainTypeName>
-              | undefined
-            )[];
-          }
-
-          const stateChains = yield* step(
-            helpers.stateAdapter.getChains({
-              txCtx: normalizeTxCtx(rest),
-              chainIds,
-            }),
-          );
-          assertChainsTypeName(stateChains, { chainIds, typeName: chainTypeName });
-
-          return stateChains.map((stateChain) => {
-            if (!stateChain) return undefined;
-
-            return mapStateJobToJob(
-              { ...(stateChain.tail ?? stateChain.head), chain: stateChain },
-              helpers.jobTypes,
-            ) as ResolvedChainJobs<TJobId, TWorkerId, TJobTypeDefinitions, TChainTypeName>;
-          });
         }),
       ),
 

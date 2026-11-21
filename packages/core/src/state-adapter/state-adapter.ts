@@ -227,6 +227,19 @@ export type StateAdapter<
     ),
   ) => ModeResult<TMode, (StateChain | undefined)[]>;
 
+  /**
+   * Gets each chain's tail job with its chain, by chain ID in input order: the latest job in chain
+   * order, which is the head while the chain has not continued. `lock: "exclusive"` locks each
+   * chain's head row and then its tail row, and returns each chain's current tail: a tail continued while the
+   * call waited on its lock is followed to the continuation, which is locked too.
+   */
+  getChainTails: (
+    params: { chainIds: TJobId[] } & (
+      | ({ lock?: "exclusive" } & TransactionTxContextParam<TTxContext>)
+      | ({ lock?: undefined } & AutocommitTxContextParam<TTxContext>)
+    ),
+  ) => ModeResult<TMode, (StateJob | undefined)[]>;
+
   /** Gets jobs with their chains by ID in input order; `lock` also locks each chain head. */
   getJobs: (
     params: { jobIds: TJobId[] } & (

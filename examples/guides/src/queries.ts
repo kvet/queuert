@@ -159,6 +159,24 @@ assert.deepEqual(
 assert.equal(tailJob?.typeName, "ship-order");
 assert.equal(tailJobs[1]?.id, stockChain.id);
 
+// #region locked-reads
+const lockedTail = await stateAdapter.withTransaction(async (txCtx) => {
+  const tail = await client.getChainTailJob({
+    ...txCtx,
+    chainId: secondOrderChain.id,
+    chainTypeName: "process-order",
+    lock: "exclusive",
+  });
+  if (tail?.status === "pending") {
+    await client.rescheduleJob({ ...txCtx, id: tail.id, schedule: { afterMs: 60 * 60 * 1000 } });
+  }
+  return tail;
+});
+// #endregion
+
+assert.equal(lockedTail?.typeName, "ship-order");
+assert.equal(lockedTail.status, "completed");
+
 // #region blockers
 const blockers = await client.getJobBlockers({ jobId: orderChain.id, typeName: "process-order" });
 const blockedJobs = await client.listBlockedJobs({ chainId: stockChain.id });

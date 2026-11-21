@@ -629,6 +629,8 @@ export const createMysqlStateAdapter = <
     );
   };
 
+  const headOrderedJobs = `JSON_TABLE(?, '$[*]' COLUMNS (chain_id {{job_id_type}} PATH '$.chain_id', id {{job_id_type}} PATH '$.id')) d STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.chain_id STRAIGHT_JOIN {{prefix}}job j FORCE INDEX (PRIMARY) ON j.id = d.id AND j.chain_id = h.id`;
+
   const isWritable = (
     locked: { status: string; attemptToken: string | null } | undefined,
     attemptToken: string | undefined,
@@ -795,6 +797,40 @@ WHERE j.status = 'running'
     },
   ];
 
+  const followContinuedTails = async (
+    txCtx: TTxContext | undefined,
+    tails: (StateJob | undefined)[],
+  ): Promise<(StateJob | undefined)[]> => {
+    const continuations = tails.flatMap((tail) =>
+      tail?.continuedToId != null ? [{ chain_id: tail.chainId, id: tail.continuedToId }] : [],
+    );
+    if (continuations.length === 0) return tails;
+    const rows = await execute(
+      txCtx,
+      prepared(
+        "getContinuedTailsLocked",
+        `SELECT ${selectJob("j")}, ${selectChain("h", "c_")} FROM ${headOrderedJobs} {{for_update:h:j}}`,
+        { params: [t.string()], columns: dbJobRowColumns },
+      ),
+      [
+        toJsonParam(
+          continuations.sort(
+            compareBy((continuation) => `${continuation.chain_id}\u0000${continuation.id}`),
+          ),
+        ),
+      ],
+    );
+    const continuationById = new Map(
+      rows.map((row) => [row.id as string, mapDbJobRowToStateJob(row)]),
+    );
+    return followContinuedTails(
+      txCtx,
+      tails.map((tail) =>
+        tail?.continuedToId != null ? continuationById.get(tail.continuedToId) : tail,
+      ),
+    );
+  };
+
   const close = async (): Promise<void> => {
     if (!closed.trip()) return;
     await stateProvider.close?.();
@@ -867,6 +903,43 @@ WHERE j.status = 'running'
         rows.map((row) => [row.h_id as string, mapDbChainRowToStateChain(row)]),
       );
       return chainIds.map((id) => chains.get(id));
+    },
+
+    getChainTails: async ({
+      txCtx,
+      chainIds,
+      lock,
+    }: {
+      txCtx?: TTxContext;
+      chainIds: TJobId[];
+      lock?: "exclusive";
+    }) => {
+      if (chainIds.length === 0) return [];
+      const tailSelect = `SELECT ${selectJob("j")}, ${selectChain("h", "c_")} FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.id STRAIGHT_JOIN {{prefix}}job j FORCE INDEX (PRIMARY) ON j.id = COALESCE((SELECT tail_lookup.id FROM {{prefix}}job tail_lookup WHERE tail_lookup.chain_id = h.id AND tail_lookup.chain_index > 0 ORDER BY tail_lookup.chain_index DESC LIMIT 1), h.id) WHERE h.chain_index = 0`;
+      const rows =
+        lock === "exclusive"
+          ? await execute(
+              txCtx,
+              prepared("getChainTailsLocked", `${tailSelect} {{for_update:h:j}}`, {
+                params: [t.string()],
+                columns: dbJobRowColumns,
+              }),
+              [JSON.stringify([...new Set(chainIds)].sort())],
+            )
+          : await execute(
+              txCtx,
+              prepared("getChainTails", tailSelect, {
+                params: [t.string()],
+                columns: dbJobRowColumns,
+                readOnly: true,
+              }),
+              [JSON.stringify(chainIds)],
+            );
+      const tails = new Map(
+        rows.map((row) => [row.chain_id as string, mapDbJobRowToStateJob(row)]),
+      );
+      const orderedTails = chainIds.map((id) => tails.get(id));
+      return lock === "exclusive" ? followContinuedTails(txCtx, orderedTails) : orderedTails;
     },
 
     getJobs: async ({

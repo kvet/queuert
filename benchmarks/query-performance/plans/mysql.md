@@ -7,20 +7,19 @@ Plans of every statement each query-performance case runs, at scale 100, without
 1. `getChains`
 
 ```
--> Remove duplicate h rows using temporary table (weedout)
-    -> Nested loop left join
-        -> Nested loop inner join
-            -> Filter: (id_list.id is not null)
-                -> Materialize table function
-            -> Filter: (h.chain_index = 0)
-                -> Single-row index lookup on h using PRIMARY (id = id_list.id)
-        -> Filter: (t.id = (select #2))
-            -> Single-row index lookup on t using PRIMARY (id = (select #2))
-            -> Select #2 (subquery in condition; dependent)
-                -> Limit: 1 row(s)
-                    -> Sort: tail_lookup.chain_index DESC, limit input to 1 row(s) per chunk
-                        -> Filter: (tail_lookup.chain_index > 0)
-                            -> Covering index lookup on tail_lookup using queuert_chain_index_idx (chain_id = h.id)
+-> Nested loop left join
+    -> Nested loop inner join
+        -> Filter: (d.id is not null)
+            -> Materialize table function
+        -> Filter: (h.chain_index = 0)
+            -> Single-row index lookup on h using PRIMARY (id = d.id)
+    -> Filter: (t.id = (select #2))
+        -> Single-row index lookup on t using PRIMARY (id = (select #2))
+        -> Select #2 (subquery in condition; dependent)
+            -> Limit: 1 row(s)
+                -> Sort: tail_lookup.chain_index DESC, limit input to 1 row(s) per chunk
+                    -> Filter: (tail_lookup.chain_index > 0)
+                        -> Covering index lookup on tail_lookup using queuert_chain_index_idx (chain_id = h.id)
 ```
 
 ## getChains/lock
@@ -43,6 +42,46 @@ Plans of every statement each query-performance case runs, at scale 100, without
                         -> Covering index lookup on tail_lookup using queuert_chain_index_idx (chain_id = h.id)
 ```
 
+## getChainTails/default
+
+1. `getChainTails`
+
+```
+-> Nested loop inner join
+    -> Nested loop inner join
+        -> Filter: (d.id is not null)
+            -> Materialize table function
+        -> Filter: (h.chain_index = 0)
+            -> Single-row index lookup on h using PRIMARY (id = d.id)
+    -> Filter: (j.id = coalesce((select #2),h.id))
+        -> Single-row index lookup on j using PRIMARY (id = coalesce((select #2),h.id))
+        -> Select #2 (subquery in condition; dependent)
+            -> Limit: 1 row(s)
+                -> Sort: tail_lookup.chain_index DESC, limit input to 1 row(s) per chunk
+                    -> Filter: (tail_lookup.chain_index > 0)
+                        -> Covering index lookup on tail_lookup using queuert_chain_index_idx (chain_id = h.id)
+```
+
+## getChainTails/lock
+
+1. `getChainTailsLocked`
+
+```
+-> Nested loop inner join
+    -> Nested loop inner join
+        -> Filter: (d.id is not null)
+            -> Materialize table function
+        -> Filter: (h.chain_index = 0)
+            -> Single-row index lookup on h using PRIMARY (id = d.id)
+    -> Filter: (j.id = coalesce((select #2),h.id))
+        -> Single-row index lookup on j using PRIMARY (id = coalesce((select #2),h.id))
+        -> Select #2 (subquery in condition; dependent)
+            -> Limit: 1 row(s)
+                -> Sort: tail_lookup.chain_index DESC, limit input to 1 row(s) per chunk
+                    -> Filter: (tail_lookup.chain_index > 0)
+                        -> Covering index lookup on tail_lookup using queuert_chain_index_idx (chain_id = h.id)
+```
+
 ## getJobs/default
 
 1. `getJobs`
@@ -50,12 +89,9 @@ Plans of every statement each query-performance case runs, at scale 100, without
 ```
 -> Nested loop inner join
     -> Nested loop inner join
-        -> Filter: (`<subquery2>`.id is not null)
-            -> Table scan on <subquery2>
-                -> Materialize with deduplication
-                    -> Filter: (id_list.id is not null)
-                        -> Materialize table function
-        -> Single-row index lookup on j using PRIMARY (id = `<subquery2>`.id)
+        -> Filter: (d.id is not null)
+            -> Materialize table function
+        -> Single-row index lookup on j using PRIMARY (id = d.id)
     -> Single-row index lookup on h using PRIMARY (id = j.chain_id)
 ```
 
@@ -78,12 +114,9 @@ Plans of every statement each query-performance case runs, at scale 100, without
 
 ```
 -> Nested loop inner join
-    -> Filter: (`<subquery2>`.id is not null)
-        -> Table scan on <subquery2>
-            -> Materialize with deduplication
-                -> Filter: (id_list.id is not null)
-                    -> Materialize table function
-    -> Single-row index lookup on w using PRIMARY (id = `<subquery2>`.id)
+    -> Filter: (d.id is not null)
+        -> Materialize table function
+    -> Single-row index lookup on w using PRIMARY (id = d.id)
 ```
 
 ## getWorkers/lock
@@ -110,12 +143,9 @@ Plans of every statement each query-performance case runs, at scale 100, without
 
 ```
 -> Nested loop inner join
-    -> Filter: (`<subquery2>`.id is not null)
-        -> Table scan on <subquery2>
-            -> Materialize with deduplication
-                -> Filter: (id_list.id is not null)
-                    -> Materialize table function
-    -> Single-row index lookup on h using PRIMARY (id = `<subquery2>`.id)
+    -> Filter: (d.id is not null)
+        -> Materialize table function
+    -> Single-row index lookup on h using PRIMARY (id = d.id)
 ```
 
 ## createJobs/deduplication
@@ -153,12 +183,9 @@ Plans of every statement each query-performance case runs, at scale 100, without
 
 ```
 -> Nested loop inner join
-    -> Filter: (`<subquery2>`.id is not null)
-        -> Table scan on <subquery2>
-            -> Materialize with deduplication
-                -> Filter: (id_list.id is not null)
-                    -> Materialize table function
-    -> Single-row index lookup on h using PRIMARY (id = `<subquery2>`.id)
+    -> Filter: (d.id is not null)
+        -> Materialize table function
+    -> Single-row index lookup on h using PRIMARY (id = d.id)
 ```
 
 ## continueJobs/default
@@ -239,7 +266,7 @@ Plans of every statement each query-performance case runs, at scale 100, without
     -> Nested loop inner join
         -> Filter: (d.id is not null)
             -> Materialize table function
-        -> Filter: (j.`status` = 'pending')
+        -> Filter: (j.`status` in ('pending','blocked'))
             -> Single-row index lookup on j using PRIMARY (id = d.id)
 ```
 
@@ -248,12 +275,9 @@ Plans of every statement each query-performance case runs, at scale 100, without
 ```
 -> Nested loop inner join
     -> Nested loop inner join
-        -> Filter: (`<subquery2>`.id is not null)
-            -> Table scan on <subquery2>
-                -> Materialize with deduplication
-                    -> Filter: (id_list.id is not null)
-                        -> Materialize table function
-        -> Single-row index lookup on j using PRIMARY (id = `<subquery2>`.id)
+        -> Filter: (d.id is not null)
+            -> Materialize table function
+        -> Single-row index lookup on j using PRIMARY (id = d.id)
     -> Single-row index lookup on h using PRIMARY (id = j.chain_id)
 ```
 
@@ -278,41 +302,31 @@ Plans of every statement each query-performance case runs, at scale 100, without
 
 ## unblockJobs/default
 
-1. `findDependents`
+1. `lockDependentBlockers`
 
 ```
--> Group (no aggregates)
-    -> Covering index lookup on queuert_job_blocker using queuert_job_blocker_chain_idx (blocked_by_chain_id = '<uuid>')
+-> Index lookup on jb using queuert_job_blocker_chain_idx (blocked_by_chain_id = '<uuid>')
 ```
 
-2. `lockBlockedDependents`
+2. `countDownDependents`
 
 ```
--> Nested loop inner join
-    -> Filter: (d.id is not null)
-        -> Materialize table function
-    -> Filter: (j.`status` = 'blocked')
-        -> Single-row index lookup on j using PRIMARY (id = d.id)
+-> Update j (buffered)
+    -> Nested loop inner join
+        -> Filter: (d.id is not null)
+            -> Materialize table function
+        -> Filter: (j.`status` = 'blocked')
+            -> Single-row index lookup on j using PRIMARY (id = d.id)
 ```
 
-3. `findReleasedDependents`
-
-```
--> Nested loop antijoin
-    -> Materialize table function
-    -> Filter: (not((h.chain_status <=> 'completed')))
-        -> Nested loop left join
-            -> Covering index lookup on jb using PRIMARY (job_id = d.id)
-            -> Single-row index lookup on h using PRIMARY (id = jb.blocked_by_chain_id)
-```
-
-4. `readDependents`
+3. `getJobs`
 
 ```
 -> Nested loop inner join
     -> Nested loop inner join
-        -> Index lookup on jb using queuert_job_blocker_chain_idx (blocked_by_chain_id = '<uuid>')
-        -> Single-row index lookup on j using PRIMARY (id = jb.job_id)
+        -> Filter: (d.id is not null)
+            -> Materialize table function
+        -> Single-row index lookup on j using PRIMARY (id = d.id)
     -> Single-row index lookup on h using PRIMARY (id = j.chain_id)
 ```
 
@@ -390,12 +404,9 @@ Plans of every statement each query-performance case runs, at scale 100, without
 ```
 -> Nested loop inner join
     -> Nested loop inner join
-        -> Filter: (`<subquery3>`.id is not null)
-            -> Table scan on <subquery3>
-                -> Materialize with deduplication
-                    -> Filter: (id_list.id is not null)
-                        -> Materialize table function
-        -> Single-row index lookup on j using PRIMARY (id = `<subquery3>`.id)
+        -> Filter: (d.id is not null)
+            -> Materialize table function
+        -> Single-row index lookup on j using PRIMARY (id = d.id)
     -> Single-row index lookup on h using PRIMARY (id = j.chain_id)
 -> Select #2 (subquery in projection; dependent)
     -> Limit: 1 row(s)
@@ -425,12 +436,9 @@ Plans of every statement each query-performance case runs, at scale 100, without
 ```
 -> Nested loop inner join
     -> Nested loop inner join
-        -> Filter: (`<subquery3>`.id is not null)
-            -> Table scan on <subquery3>
-                -> Materialize with deduplication
-                    -> Filter: (id_list.id is not null)
-                        -> Materialize table function
-        -> Single-row index lookup on j using PRIMARY (id = `<subquery3>`.id)
+        -> Filter: (d.id is not null)
+            -> Materialize table function
+        -> Single-row index lookup on j using PRIMARY (id = d.id)
     -> Single-row index lookup on h using PRIMARY (id = j.chain_id)
 -> Select #2 (subquery in projection; dependent)
     -> Limit: 1 row(s)
@@ -493,12 +501,9 @@ No query plans.
 ```
 -> Nested loop inner join
     -> Nested loop inner join
-        -> Filter: (`<subquery2>`.id is not null)
-            -> Table scan on <subquery2>
-                -> Materialize with deduplication
-                    -> Filter: (id_list.id is not null)
-                        -> Materialize table function
-        -> Single-row index lookup on j using PRIMARY (id = `<subquery2>`.id)
+        -> Filter: (d.id is not null)
+            -> Materialize table function
+        -> Single-row index lookup on j using PRIMARY (id = d.id)
     -> Single-row index lookup on h using PRIMARY (id = j.chain_id)
 ```
 
@@ -523,23 +528,15 @@ No query plans.
     -> Index lookup on j using queuert_chain_index_idx (chain_id = d.id)
 ```
 
-3. `getChains`
+3. `lockDeletedChainBlockers`
 
 ```
--> Nested loop left join
-    -> Remove duplicate h rows using temporary table (weedout)
+-> Table scan on <temporary>
+    -> Temporary table with deduplication
         -> Nested loop inner join
-            -> Filter: (id_list.id is not null)
+            -> Filter: (d.id is not null)
                 -> Materialize table function
-            -> Filter: (h.chain_index = 0)
-                -> Single-row index lookup on h using PRIMARY (id = id_list.id)
-    -> Filter: (t.id = (select #2))
-        -> Single-row index lookup on t using PRIMARY (id = (select #2))
-        -> Select #2 (subquery in condition; dependent)
-            -> Limit: 1 row(s)
-                -> Sort: tail_lookup.chain_index DESC, limit input to 1 row(s) per chunk
-                    -> Filter: (tail_lookup.chain_index > 0)
-                        -> Covering index lookup on tail_lookup using queuert_chain_index_idx (chain_id = h.id)
+            -> Covering index lookup on jb using PRIMARY (job_id = d.id)
 ```
 
 4. `deleteChainJobs`
@@ -575,23 +572,15 @@ No query plans.
     -> Index lookup on j using queuert_chain_index_idx (chain_id = d.id)
 ```
 
-3. `getChains`
+3. `lockDeletedChainBlockers`
 
 ```
--> Nested loop left join
-    -> Remove duplicate h rows using temporary table (weedout)
+-> Table scan on <temporary>
+    -> Temporary table with deduplication
         -> Nested loop inner join
-            -> Filter: (id_list.id is not null)
+            -> Filter: (d.id is not null)
                 -> Materialize table function
-            -> Filter: (h.chain_index = 0)
-                -> Single-row index lookup on h using PRIMARY (id = id_list.id)
-    -> Filter: (t.id = (select #2))
-        -> Single-row index lookup on t using PRIMARY (id = (select #2))
-        -> Select #2 (subquery in condition; dependent)
-            -> Limit: 1 row(s)
-                -> Sort: tail_lookup.chain_index DESC, limit input to 1 row(s) per chunk
-                    -> Filter: (tail_lookup.chain_index > 0)
-                        -> Covering index lookup on tail_lookup using queuert_chain_index_idx (chain_id = h.id)
+            -> Covering index lookup on jb using PRIMARY (job_id = d.id)
 ```
 
 4. `deleteChainJobs`
