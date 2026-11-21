@@ -18,7 +18,6 @@
 - [EPIC] how to cleanup chains with 1k+ jobs in a single transaction (SQLite WAL, PG lock footprint)? introduce truncateChainJobs?
 - [EPIC,COMPLEX] Batched processors. See `design/batched-processors.md`
 - [EPIC] Align `@queuert/otel` with OpenTelemetry messaging semantic conventions
-- [TASK] Handle drivers whose transaction resolves after a rollback — knex resolves `knex.transaction(cb)` after a bare `trx.rollback()` (`doNotRejectOnRollback` defaults to `true`, per call and again for nested savepoints), so tx hooks flush for writes that never committed. Today users must pass `{ doNotRejectOnRollback: false }` on every call (see the knex section of `docs/src/content/docs/guides/tx-hooks.mdx`). Options: a knex helper that always sets the option, or a way for the hooks to learn the transaction's real outcome.
 
 # Long term
 
