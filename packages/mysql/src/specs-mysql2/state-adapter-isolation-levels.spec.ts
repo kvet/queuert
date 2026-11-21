@@ -18,9 +18,8 @@ type Level = "READ COMMITTED" | "REPEATABLE READ" | "SERIALIZABLE";
 
 const servers = [
   { image: "mysql:8.4", dialect: "mysql", snapshotIsolation: undefined },
-  { image: "mariadb:11.4", dialect: "mariadb", snapshotIsolation: undefined },
-  { image: "mariadb:11.8", dialect: "mariadb", snapshotIsolation: true },
-  { image: "mariadb:11.8", dialect: "mariadb", snapshotIsolation: false },
+  { image: "mariadb:11.4", dialect: "mariadb", snapshotIsolation: true },
+  { image: "mariadb:11.4", dialect: "mariadb", snapshotIsolation: false },
 ] as const;
 
 const suites = await Promise.all(
