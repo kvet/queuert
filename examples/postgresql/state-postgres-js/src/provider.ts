@@ -32,12 +32,11 @@ export const createPostgresJsStateProvider = ({
   prepareStatements?: boolean;
 }): PgStateProvider<PostgresJsContext> => {
   const typed = sql.typed.bind(sql);
-  const pgArray = sql.array.bind(sql);
 
   const serializeParam = (value: unknown, type: RuntimeType | undefined): unknown => {
     if (value === undefined || value === null) return null;
-    if (type === "array") return pgArray(value as any[]);
-    if (type === "jsonArray") return pgArray((value as unknown[]).map((el) => JSON.stringify(el)));
+    if (type === "array") return value;
+    if (type === "jsonArray") return (value as unknown[]).map((el) => JSON.stringify(el));
     if (type === "json" || type === "json?") return typed(value, JSONB_OID);
     if (typeof value === "string") return typed(value, PG_OID[type!] ?? TEXT_OID);
     return value;

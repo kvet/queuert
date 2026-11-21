@@ -23,7 +23,7 @@
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "example-postgresql-state-postgres-js": "workspace:*",
-    "postgres": "3.4.9",
+    "postgres": "4.1.1",
     "queuert": "workspace:*"
   }
 }

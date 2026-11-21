@@ -1,6 +1,6 @@
 # Processing capacity
 
-Last run 2026-11-20 · commit 9939bcf9 · load average 4.25 · state-mysql-mysql2, state-mariadb-mysql2
+Last run 2026-11-21 · commit be357b91 · load average 4.56 · notify-postgres-postgres-js
 
 ## Creation (chains/s): State adapter (noop notify)
 
@@ -10,7 +10,7 @@ Last run 2026-11-20 · commit 9939bcf9 · load average 4.25 · state-mysql-mysql
 | In-process (async)       | 401724 |        681409 |
 | SQLite (better-sqlite3)  |  58918 |        154246 |
 | SQLite (node:sqlite)     |  60002 |        128835 |
-| PostgreSQL (postgres-js) |   1960 |         55978 |
+| PostgreSQL (postgres-js) |   1990 |         62222 |
 | PostgreSQL (pg)          |   2039 |         58644 |
 | MySQL (mysql2)           |    884 |         23324 |
 | MariaDB (mysql2)         |    874 |         27833 |
@@ -26,7 +26,7 @@ Last run 2026-11-20 · commit 9939bcf9 · load average 4.25 · state-mysql-mysql
 | Redis (redis)            |   8514 |        352575 |
 | Redis (ioredis)          |   8823 |        350456 |
 | PostgreSQL (pg)          |   6982 |        309081 |
-| PostgreSQL (postgres-js) |   8174 |        325871 |
+| PostgreSQL (postgres-js) |   8646 |        348152 |
 | NATS                     |   8177 |        335215 |
 | IPC                      | 455494 |        644986 |
 
@@ -38,7 +38,7 @@ Last run 2026-11-20 · commit 9939bcf9 · load average 4.25 · state-mysql-mysql
 | In-process (async)       | 226158 |  229926 |   242875 |
 | SQLite (better-sqlite3)  |  21628 |   25476 |    27135 |
 | SQLite (node:sqlite)     |  19484 |   22913 |    24477 |
-| PostgreSQL (postgres-js) |   1014 |    2950 |     5312 |
+| PostgreSQL (postgres-js) |    937 |    2899 |     5030 |
 | PostgreSQL (pg)          |   1050 |    3019 |     5512 |
 | MySQL (mysql2)           |    380 |    1056 |     2419 |
 | MariaDB (mysql2)         |    369 |     997 |     2581 |
@@ -54,6 +54,6 @@ Last run 2026-11-20 · commit 9939bcf9 · load average 4.25 · state-mysql-mysql
 | Redis (redis)            |   3004 |   10549 |    29738 |
 | Redis (ioredis)          |   3020 |   12820 |    58193 |
 | PostgreSQL (pg)          |   2703 |   18100 |    21977 |
-| PostgreSQL (postgres-js) |   2670 |   17309 |    21879 |
+| PostgreSQL (postgres-js) |   2850 |   19739 |    25347 |
 | NATS                     |   6240 |   20063 |    50633 |
 | IPC                      | 187356 |  213100 |   207217 |

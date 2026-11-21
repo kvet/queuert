@@ -48,7 +48,7 @@
     "ioredis": "6.0.0",
     "mysql2": "3.24.6",
     "pg": "8.23.1",
-    "postgres": "3.4.9",
+    "postgres": "4.1.1",
     "queuert": "workspace:*",
     "redis": "6.3.1"
   },
