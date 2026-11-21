@@ -19,12 +19,12 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@mikro-orm/core": "7.2.8",
-    "@mikro-orm/postgresql": "7.2.8",
+    "@mikro-orm/core": "7.2.10",
+    "@mikro-orm/postgresql": "7.2.10",
     "@queuert/postgres": "workspace:*",
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
-    "kysely": "0.29.8",
+    "kysely": "0.29.9",
     "queuert": "workspace:*"
   }
 }

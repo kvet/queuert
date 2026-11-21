@@ -16,7 +16,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@nats-io/transport-node": "3.4.0",
+    "@nats-io/transport-node": "3.5.0",
     "@queuert/nats": "workspace:*",
     "@queuert/postgres": "workspace:*",
     "@queuert/testcontainers": "workspace:*",

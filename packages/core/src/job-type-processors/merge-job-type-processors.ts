@@ -19,12 +19,11 @@ export type MergedProcessorDefinitions<T extends readonly Processors[]> = T exte
   infer D extends Processors,
   ...infer Rest extends readonly Processors[],
 ]
-  ?
-      | ProcessorDefinitions<A>
-      | ProcessorDefinitions<B>
-      | ProcessorDefinitions<C>
-      | ProcessorDefinitions<D>
-      | MergedProcessorDefinitions<Rest>
+  ? | ProcessorDefinitions<A>
+    | ProcessorDefinitions<B>
+    | ProcessorDefinitions<C>
+    | ProcessorDefinitions<D>
+    | MergedProcessorDefinitions<Rest>
   : T extends readonly [infer First extends Processors, ...infer Rest extends readonly Processors[]]
     ? ProcessorDefinitions<First> | MergedProcessorDefinitions<Rest>
     : never;

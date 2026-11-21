@@ -19,7 +19,7 @@
     "@queuert/redis": "workspace:*",
     "@queuert/sqlite": "workspace:*",
     "benchmark-results": "workspace:*",
-    "better-sqlite3": "13.0.3",
+    "better-sqlite3": "13.2.0",
     "example-mysql-state-mysql2": "workspace:*",
     "example-postgresql-state-pg": "workspace:*",
     "example-sqlite-state-better-sqlite3": "workspace:*",

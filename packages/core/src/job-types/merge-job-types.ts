@@ -16,19 +16,17 @@ type SliceUnion<T> = T extends readonly [
   infer D extends JobTypes<BaseJobTypeDefinitions>,
   ...infer Rest extends readonly JobTypes<BaseJobTypeDefinitions>[],
 ]
-  ?
-      | (A extends JobTypes<infer DA extends BaseJobTypeDefinitions> ? DA : never)
-      | (B extends JobTypes<infer DB extends BaseJobTypeDefinitions> ? DB : never)
-      | (C extends JobTypes<infer DC extends BaseJobTypeDefinitions> ? DC : never)
-      | (D extends JobTypes<infer DD extends BaseJobTypeDefinitions> ? DD : never)
-      | SliceUnion<Rest>
+  ? | (A extends JobTypes<infer DA extends BaseJobTypeDefinitions> ? DA : never)
+    | (B extends JobTypes<infer DB extends BaseJobTypeDefinitions> ? DB : never)
+    | (C extends JobTypes<infer DC extends BaseJobTypeDefinitions> ? DC : never)
+    | (D extends JobTypes<infer DD extends BaseJobTypeDefinitions> ? DD : never)
+    | SliceUnion<Rest>
   : T extends readonly [
         infer First extends JobTypes<BaseJobTypeDefinitions>,
         ...infer Rest extends readonly JobTypes<BaseJobTypeDefinitions>[],
       ]
-    ?
-        | (First extends JobTypes<infer D extends BaseJobTypeDefinitions> ? D : never)
-        | SliceUnion<Rest>
+    ? | (First extends JobTypes<infer D extends BaseJobTypeDefinitions> ? D : never)
+      | SliceUnion<Rest>
     : never;
 
 /**

@@ -153,7 +153,7 @@ export const content = (options: { base: string }): Plugin[] => {
         }),
         include: `${contentDirectory}/**/*.{md,mdx}`,
       }),
-    },
+    } as Plugin,
     {
       // Runs after the MDX compile above, so an edit to an embedded example reloads the page.
       name: "queuert:mdx-example-sources",

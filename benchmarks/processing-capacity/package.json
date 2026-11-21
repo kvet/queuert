@@ -26,14 +26,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@nats-io/transport-node": "3.4.0",
+    "@nats-io/transport-node": "3.5.0",
     "@queuert/mysql": "workspace:*",
     "@queuert/nats": "workspace:*",
     "@queuert/postgres": "workspace:*",
     "@queuert/redis": "workspace:*",
     "@queuert/sqlite": "workspace:*",
     "benchmark-results": "workspace:*",
-    "better-sqlite3": "13.0.3",
+    "better-sqlite3": "13.2.0",
     "example-mysql-state-mysql2": "workspace:*",
     "example-postgresql-notify-pg": "workspace:*",
     "example-postgresql-notify-postgres-js": "workspace:*",

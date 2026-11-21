@@ -22,7 +22,7 @@
     "@queuert/mysql": "workspace:*",
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
-    "kysely": "0.29.8",
+    "kysely": "0.29.9",
     "mysql2": "3.24.6",
     "queuert": "workspace:*"
   }

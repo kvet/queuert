@@ -20,7 +20,7 @@
     "test": "vitest --run"
   },
   "dependencies": {
-    "rolldown": "1.2.16"
+    "rolldown": "1.3.3"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*"

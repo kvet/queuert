@@ -46,8 +46,8 @@
     "test": "vitest --run"
   },
   "devDependencies": {
-    "@nats-io/nats-core": "3.4.0",
-    "@nats-io/transport-node": "3.4.0",
+    "@nats-io/nats-core": "3.5.0",
+    "@nats-io/transport-node": "3.5.0",
     "@queuert/helpers": "workspace:*",
     "@queuert/testcontainers": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
