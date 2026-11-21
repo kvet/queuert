@@ -22,6 +22,13 @@ import {
  */
 export type TxHooks = {
   /**
+   * Whether the transaction these hooks belong to is still open: `true` until the hooks are flushed
+   * or discarded, through savepoint and `retryBoundary` rollbacks, and `false` from then on,
+   * including in the commit and rollback callbacks the flush or discard runs. A state provider whose
+   * driver cannot tell a finished transaction from an open one reads it in `getTransaction`.
+   */
+  readonly isOpen: boolean;
+  /**
    * Run `callback` after the transaction commits.
    *
    * Commit callbacks start in registration order and run concurrently: a returned promise is
@@ -152,6 +159,10 @@ class TxHooksRegistry implements TxHooks {
   private rolledBack: Promise<unknown>[] | undefined;
   private marks: { commits: number; rollbacks: number }[] | undefined;
   private settled = false;
+
+  get isOpen(): boolean {
+    return !this.settled;
+  }
 
   onCommit(callback: Callback): void {
     if (this.settled) throw new Error(settledMessage);

@@ -312,7 +312,7 @@ const Page = () => (
     />
     <p>
       mysql2 and the mariadb connector keep no transaction flag, so their examples'{" "}
-      <code>isTransaction</code> tracks the connections its <code>withTransaction</code> opened. It
+      <code>getTransaction</code> tracks the connections its <code>withTransaction</code> opened. It
       keys on the connection rather than the context object, because Queuert passes copies of the
       context back to the provider.
     </p>

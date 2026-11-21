@@ -1,11 +1,19 @@
 ---
-"queuert": patch
+"queuert": major
+"@queuert/postgres": major
+"@queuert/sqlite": major
+"@queuert/mysql": major
+"@queuert/redis": major
 ---
 
-Workers no longer miss a pending job that another transaction held locked while they looked for work. Attaching a dependent to a blocker chain, `completeChain`, `rescheduleJob` / `rescheduleJobs` and `deleteChains` lock jobs they read, and a worker polling at that moment skipped a locked pending job and then waited for its next poll, up to `pollIntervalMs`. The client now wakes workers for those jobs when the transaction ends without having started or removed them, so they pick them up right away.
+Workers no longer miss a pending job that another transaction held locked while they looked for work. Attaching a dependent to a blocker chain, `completeChain`, `rescheduleJob` / `rescheduleJobs` and `deleteChains` lock jobs they read, and a worker polling at that moment skipped a locked pending job and then waited for its next poll, up to `pollIntervalMs`. The client now wakes workers for those jobs when the transaction ends, or right away when a savepoint or `retryBoundary` try that locked them rolls back, so they pick them up without waiting, except for the jobs the transaction itself completed, rescheduled or deleted. To tell which transaction a context belongs to, state adapters and state providers replace `isTransaction` with `getTransaction`.
 
 - Creating a chain with blockers, or continuing with blockers, wakes workers for each blocker chain whose head job was pending, on commit and on rollback.
 - `completeChain` wakes workers for the current job when it was pending, on rollback, and on commit when the handler left it pending.
 - `rescheduleJob` / `rescheduleJobs` wake workers for the pending jobs they locked when the transaction rolls back, or when it commits after the call failed.
 - `deleteChains` wakes workers for the pending jobs of the chains it deleted when the transaction rolls back, and for those of the chains it refused to delete on commit and on rollback.
-- `createStateAdapterEndToEndConformanceCases` with `concurrent: true` adds cases that a worker starts such a job as soon as the transaction holding it commits or rolls back.
+- A transaction sends its notify events once when it ends, each job type, chain and job at most once per kind, however many calls in it scheduled, completed or locked them; over a sync notify adapter too, which sent them call by call.
+- State adapters and the PostgreSQL, SQLite and MySQL state providers replace `isTransaction(txCtx)` with `getTransaction(txCtx)`, which returns the object identifying the open transaction a context belongs to, or `undefined` outside one and once it has ended, so mutating client methods reject a context whose transaction has ended.
+- Every context of one transaction, savepoints and `retryBoundary` tries included, gets the same object from `getTransaction`; a provider that carries `txHooks` in its context returns them while `txHooks.isOpen`.
+- `TxHooks` gains `isOpen`, `true` until the hooks are flushed or discarded.
+- `createStateAdapterConformanceCases` checks `getTransaction` in place of `isTransaction`, including that it returns `undefined` once the transaction has ended, and `createStateAdapterEndToEndConformanceCases` with `concurrent: true` adds cases that a worker starts a locked pending job as soon as the transaction holding it commits or rolls back.

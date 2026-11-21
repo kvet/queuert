@@ -255,7 +255,7 @@ const createValidatingProvider = (
   let validationQueue: Promise<unknown> = Promise.resolve();
   return {
     withTransaction: inner.withTransaction,
-    isTransaction: inner.isTransaction,
+    getTransaction: inner.getTransaction,
     onTransactionCommit: inner.onTransactionCommit,
     onTransactionRollback: inner.onTransactionRollback,
     classifyError: inner.classifyError,

@@ -19,7 +19,10 @@ export const createBunSqlSqliteStateProvider = ({
         using _h = await lock.acquireWrite();
         return await sql.begin(async (txSql) => fn({ txSql, txHooks }));
       }),
-    isTransaction: (txCtx) => typeof txCtx.txSql.savepoint === "function",
+    getTransaction: (txCtx) =>
+      typeof txCtx.txSql.savepoint === "function" && txCtx.txHooks.isOpen
+        ? txCtx.txHooks
+        : undefined,
     onTransactionCommit: (txCtx, callback) => {
       txCtx.txHooks.onCommit(callback);
     },

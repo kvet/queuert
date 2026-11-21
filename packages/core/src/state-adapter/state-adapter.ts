@@ -196,8 +196,15 @@ export type StateAdapter<
    */
   withTransaction: <T>(fn: (txCtx: TTxContext) => ModeResult<TMode, T>) => ModeResult<TMode, T>;
 
-  /** Whether `txCtx` is in an open transaction, answered without a query. */
-  isTransaction: (txCtx: TTxContext) => boolean;
+  /**
+   * The object that identifies the open transaction `txCtx` belongs to, or `undefined` when `txCtx`
+   * is not inside an open transaction, answered without a query. Every context inside one
+   * transaction gives the same object, its savepoints and `retryBoundary` tries included, and every
+   * other transaction a different one. It is `undefined` once the transaction has ended, in
+   * the transaction's own commit and rollback callbacks too; a savepoint or `retryBoundary` rollback
+   * leaves it open. Queuert keys its per-transaction state by it.
+   */
+  getTransaction: (txCtx: TTxContext) => object | undefined;
 
   /** Runs `callback` after `txCtx`'s transaction commits, before the call that opened it settles. */
   onTransactionCommit: (txCtx: TTxContext, callback: () => void | ModeResult<TMode, void>) => void;
@@ -486,7 +493,7 @@ export type StateAdapter<
 
 export type GetStateAdapterTxContext<TStateAdapter> = 0 extends 1 & TStateAdapter
   ? any
-  : TStateAdapter extends { isTransaction: (txCtx: infer TTxContext) => boolean }
+  : TStateAdapter extends { getTransaction: (txCtx: infer TTxContext) => object | undefined }
     ? TTxContext
     : never;
 

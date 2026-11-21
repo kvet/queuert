@@ -48,9 +48,9 @@ export const createPgPoolStateProvider = ({
           poolClient.release();
         }
       }),
-    isTransaction: (txCtx) => {
+    getTransaction: (txCtx) => {
       const status = txCtx.poolClient.getTransactionStatus();
-      return status === "T" || status === "E";
+      return status === "T" || status === "E" ? txCtx.txHooks : undefined;
     },
     onTransactionCommit: (txCtx, callback) => {
       txCtx.txHooks.onCommit(callback);

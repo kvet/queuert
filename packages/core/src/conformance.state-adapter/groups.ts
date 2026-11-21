@@ -44,12 +44,12 @@ import {
   getStartAttemptDelayMsGroup,
   getStartAttemptDelayMsConcurrentTransactionsGroup,
 } from "./cases/get-start-attempt-delay-ms.ts";
+import { getTransactionGroup } from "./cases/get-transaction.ts";
 import {
   getWorkersGroup,
   getWorkersHeldTransactionGroup,
   getWorkersHeldTransactionLockWaitGroup,
 } from "./cases/get-workers.ts";
-import { isTransactionGroup } from "./cases/is-transaction.ts";
 import {
   listBlockedJobsGroup,
   listBlockedJobsConcurrentTransactionsGroup,
@@ -95,7 +95,7 @@ import type {
 
 export const stateAdapterBaseGroups: ConformanceGroup<StateAdapterConformanceContext>[] = [
   withTransactionGroup,
-  isTransactionGroup,
+  getTransactionGroup,
   txCallbacksGroup,
   getChainsGroup,
   getJobsGroup,

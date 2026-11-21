@@ -36,7 +36,10 @@ export const createBunSqlStateProvider = ({
         await reserved`SET TRANSACTION ISOLATION LEVEL READ COMMITTED`;
         return await reserved.begin(async (txSql) => cb({ txSql, txHooks }));
       }),
-    isTransaction: (txCtx) => typeof txCtx.txSql.savepoint === "function",
+    getTransaction: (txCtx) =>
+      typeof txCtx.txSql.savepoint === "function" && txCtx.txHooks.isOpen
+        ? txCtx.txHooks
+        : undefined,
     onTransactionCommit: (txCtx, callback) => {
       txCtx.txHooks.onCommit(callback);
     },

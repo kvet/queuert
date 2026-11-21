@@ -44,10 +44,16 @@ export type SqliteStateProvider<TTxContext extends BaseTxContext, TMode extends 
   withTransaction: <T>(fn: (txCtx: TTxContext) => ModeResult<TMode, T>) => ModeResult<TMode, T>;
 
   /**
-   * Whether `txCtx` is inside an open transaction. Must be synchronous and must not query the
-   * database — derive the answer from transaction state the driver or the context already tracks.
+   * The object that identifies the open transaction `txCtx` belongs to, or `undefined` when `txCtx`
+   * is not inside an open transaction. Must be synchronous and must not query the database: derive
+   * the answer from transaction state the driver or the context already tracks. Every context inside
+   * one transaction gives the same object, its savepoints and `retryBoundary` tries included, and
+   * every other transaction a different one; a provider that carries `TxHooks` in its transaction
+   * context returns them. It is `undefined` once the transaction has ended, in the transaction's own
+   * commit and rollback callbacks too, so a driver flag that stays set on a finished transaction is
+   * not enough; a savepoint or `retryBoundary` rollback leaves it open.
    */
-  isTransaction: (txCtx: TTxContext) => boolean;
+  getTransaction: (txCtx: TTxContext) => object | undefined;
 
   /**
    * Runs `callback` after `txCtx`'s transaction commits, before the call that opened it settles.

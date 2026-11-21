@@ -752,7 +752,7 @@ export function createSqliteStateAdapter<
     withTransaction: stateProvider.withTransaction,
 
     // oxlint-disable-next-line typescript/unbound-method -- a provider's methods don't use `this`; SqliteStateProvider<…, Mode> declares them as methods only so that both provider modes are assignable to it
-    isTransaction: stateProvider.isTransaction,
+    getTransaction: stateProvider.getTransaction,
 
     onTransactionCommit: (txCtx, callback) => {
       stateProvider.onTransactionCommit(txCtx, callback);

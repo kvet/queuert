@@ -29,7 +29,8 @@ export const createDrizzlePgStateProvider = <TSchema extends Record<string, unkn
   return {
     withTransaction: async (cb) =>
       withTxHooks(async (txHooks) => db.transaction(async (tx) => cb({ tx, txHooks }))),
-    isTransaction: (txCtx) => txCtx.tx instanceof PgTransaction,
+    getTransaction: (txCtx) =>
+      txCtx.tx instanceof PgTransaction && txCtx.txHooks.isOpen ? txCtx.txHooks : undefined,
     onTransactionCommit: (txCtx, callback) => {
       txCtx.txHooks.onCommit(callback);
     },

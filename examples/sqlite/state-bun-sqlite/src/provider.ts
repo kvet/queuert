@@ -31,7 +31,7 @@ export const createBunSqliteStateProvider = ({
           return result;
         })(),
       ),
-    isTransaction: (txCtx) => txCtx.db.inTransaction,
+    getTransaction: (txCtx) => (txCtx.db.inTransaction ? requireTxHooks(txCtx) : undefined),
     onTransactionCommit: (txCtx, callback) => {
       requireTxHooks(txCtx).onCommit(callback);
     },

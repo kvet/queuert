@@ -84,7 +84,8 @@ export const createMysql2PoolProvider = ({ pool }: { pool: Pool }): Mysql2PoolPr
     onTransactionRollback: (txCtx, callback) => {
       requireTxHooks(txCtx).onRollback(callback);
     },
-    isTransaction: (txCtx) => openTransactions.has(txCtx.connection),
+    getTransaction: (txCtx) =>
+      openTransactions.has(txCtx.connection) ? requireTxHooks(txCtx) : undefined,
     classifyError: classifyMysqlError,
     executeSql: async ({ txCtx, id, sql, params }) => {
       if (txCtx) return exec(txCtx.connection, id, sql, params);

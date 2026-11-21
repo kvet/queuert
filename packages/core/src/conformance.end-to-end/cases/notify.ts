@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { assertRejects } from "@queuert/helpers/assert-rejects";
 import { sleep } from "@queuert/helpers/sleep";
 import { dynamicSyncAsync, syncAsync, resource, step, wait } from "@queuert/sync-async";
 
@@ -633,7 +634,7 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
       }),
     },
     {
-      name: "publishes a commit's completed chains and lost attempts together over an async adapter and one by one over a sync one",
+      name: "publishes a commit's completed chains and lost attempts together",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, mode }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter, mode));
         const notifyAdapter = yield* resource(
@@ -716,16 +717,95 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
           spyNotifyAdapter.calls
             .map((call) => ({ name: call.name, args: [...call.args].sort() }))
             .sort(byNameAndArgs),
-          ((notifyAdapter as { sync?: boolean }).sync === true
-            ? chainIds.flatMap((chainId) => [
-                { name: "notifyChainsCompleted", args: [chainId] },
-                { name: "notifyJobAttemptsLost", args: [chainId] },
-              ])
-            : [
-                { name: "notifyChainsCompleted", args: chainIds },
-                { name: "notifyJobAttemptsLost", args: chainIds },
-              ]
-          ).sort(byNameAndArgs),
+          [
+            { name: "notifyChainsCompleted", args: chainIds },
+            { name: "notifyJobAttemptsLost", args: chainIds },
+          ],
+        );
+      }),
+    },
+    {
+      name: "publishes the jobs a transaction's calls scheduled in one notification per job type",
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, mode }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter, mode));
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
+        const jobTypes = defineJobTypes<{
+          first: { entry: true; input: null; output: null };
+          second: { entry: true; input: null; output: null };
+        }>();
+        const spyNotifyAdapter = createSpyNotifyAdapter(notifyAdapter);
+        const client = createClient({ stateAdapter, notifyAdapter: spyNotifyAdapter, jobTypes });
+
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            runInModeOf(
+              stateAdapter,
+              syncAsync(function* () {
+                yield* step(client.createChain({ ...txCtx, typeName: "first", input: null }));
+                yield* step(client.createChain({ ...txCtx, typeName: "second", input: null }));
+                yield* step(client.createChain({ ...txCtx, typeName: "first", input: null }));
+              }),
+            ),
+          ),
+        );
+
+        assert.deepEqual(
+          spyNotifyAdapter.calls.map((call) => ({ name: call.name, args: [...call.args].sort() })),
+          [{ name: "notifyJobsScheduled", args: ["first", "second"] }],
+        );
+      }),
+    },
+    {
+      name: "wakes the pending jobs a rolled-back transaction's calls locked in one notification",
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, mode }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter, mode));
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
+        const jobTypes = defineJobTypes<{
+          first: { entry: true; input: null; output: null };
+          second: { entry: true; input: null; output: null };
+        }>();
+        const spyNotifyAdapter = createSpyNotifyAdapter(notifyAdapter);
+        const client = createClient({ stateAdapter, notifyAdapter: spyNotifyAdapter, jobTypes });
+
+        const [firstChain, secondChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.createChains({
+              ...txCtx,
+              items: [
+                { typeName: "first", input: null },
+                { typeName: "second", input: null },
+              ],
+            }),
+          ),
+        );
+        const callsBeforeRollback = spyNotifyAdapter.calls.length;
+
+        yield* step(
+          assertRejects(
+            () =>
+              stateAdapter.withTransaction((txCtx) =>
+                runInModeOf(
+                  stateAdapter,
+                  syncAsync(function* () {
+                    yield* step(client.rescheduleJob({ ...txCtx, id: firstChain.id }));
+                    yield* step(client.rescheduleJob({ ...txCtx, id: secondChain.id }));
+                    throw new Error("rolled back");
+                  }),
+                ),
+              ),
+            /rolled back/,
+          ),
+        );
+
+        assert.deepEqual(
+          spyNotifyAdapter.calls
+            .slice(callsBeforeRollback)
+            .map((call) => ({ name: call.name, args: [...call.args].sort() })),
+          [{ name: "notifyJobsScheduled", args: ["first", "second"] }],
         );
       }),
     },

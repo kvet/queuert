@@ -33,7 +33,8 @@ export const createPrismaMysqlStateProvider = <TPrisma extends PrismaLikeClient>
         }),
       ),
     // Prisma hides `$connect` on the interactive transaction client.
-    isTransaction: (txCtx) => !("$connect" in txCtx.prisma),
+    getTransaction: (txCtx) =>
+      !("$connect" in txCtx.prisma) && txCtx.txHooks.isOpen ? txCtx.txHooks : undefined,
     onTransactionCommit: (txCtx, callback) => {
       txCtx.txHooks.onCommit(callback);
     },

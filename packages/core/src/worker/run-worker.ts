@@ -5,7 +5,6 @@ import { step, syncAsync } from "@queuert/sync-async";
 
 import type { AnyAttemptMiddleware } from "../attempt-middleware/attempt-middleware.ts";
 import { runAttempt } from "../attempt/attempt-handler.ts";
-import { notifyOnCommit } from "../client/implementation.ts";
 import { type Helpers, withHelpersTransaction } from "../client/setup-helpers.ts";
 import { type BackoffConfig, calculateBackoffMs } from "../entities/backoff.ts";
 import {
@@ -17,6 +16,7 @@ import {
   type Processor,
   processorAttemptMiddlewareSymbol,
 } from "../job-type-processors/job-type-processors.ts";
+import { notifyAfterTransaction } from "../notify-adapter/tx-notifications.ts";
 import type { BaseTxContext, StateJob } from "../state-adapter/state-adapter.ts";
 import { type WorkerLeaseConfig, holdLease } from "./worker-lease.ts";
 
@@ -157,24 +157,15 @@ const announceReclaimed = (
   txCtx: BaseTxContext,
   { jobs, workerId }: { jobs: ReclaimedJob[]; workerId: string },
 ): void => {
-  const { notifyHelper } = helpers;
   for (const job of jobs) {
     helpers.stateAdapter.onTransactionCommit(txCtx, () => {
       observeReclaimed(helpers, job, workerId);
     });
   }
-  notifyOnCommit(
-    helpers,
-    txCtx,
-    notifyHelper.notifyJobAttemptsLost,
-    jobs.map(({ reclaimed }) => reclaimed.id),
-  );
-  notifyOnCommit(
-    helpers,
-    txCtx,
-    notifyHelper.notifyJobsScheduled,
-    jobs.map(({ reclaimed }) => reclaimed.typeName),
-  );
+  notifyAfterTransaction(helpers, txCtx, {
+    jobAttemptsLost: jobs.map(({ reclaimed }) => reclaimed.id),
+    jobsScheduled: jobs.map(({ reclaimed }) => reclaimed.typeName),
+  });
 };
 
 const lockWorker = syncAsync(function* (

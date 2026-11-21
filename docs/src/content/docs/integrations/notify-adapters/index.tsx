@@ -72,7 +72,8 @@ const members = (): FieldItem[] => [
     description: (
       <>
         Jobs of the given types are available for processing; wakes the workers that process them.
-        Every listener receives each notification.
+        Also sent when a transaction that held pending jobs of those types locked ends, since a
+        worker polling meanwhile skipped them. Every listener receives each notification.
       </>
     ),
     extra: ["notifyJobsScheduled", "listenJobScheduled"],

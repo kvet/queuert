@@ -230,10 +230,12 @@ export const createMemoryStateAdapter = (
 
     withTransaction,
 
-    isTransaction: (txCtx) => txCtx.transaction?.state !== undefined,
+    getTransaction: (txCtx) => (txCtx.transaction?.state !== undefined ? txCtx.txHooks : undefined),
+
     onTransactionCommit: (txCtx, callback) => {
       txCtx.txHooks.onCommit(callback);
     },
+
     onTransactionRollback: (txCtx, callback) => {
       txCtx.txHooks.onRollback(callback);
     },

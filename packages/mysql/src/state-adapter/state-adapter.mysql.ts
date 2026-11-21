@@ -805,7 +805,7 @@ WHERE j.status = 'running'
 
     withTransaction: async (fn) => retryOwnWork(async () => stateProvider.withTransaction(fn)),
 
-    isTransaction: stateProvider.isTransaction,
+    getTransaction: stateProvider.getTransaction,
 
     onTransactionCommit: (txCtx, callback) => {
       stateProvider.onTransactionCommit(txCtx, callback);

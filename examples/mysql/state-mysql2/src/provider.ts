@@ -51,7 +51,7 @@ export const createMysql2PoolStateProvider = ({
           throw error;
         }
       }),
-    isTransaction: (txCtx) => openTransactions.has(txCtx.connection),
+    getTransaction: (txCtx) => (openTransactions.has(txCtx.connection) ? txCtx.txHooks : undefined),
     onTransactionCommit: (txCtx, callback) => {
       txCtx.txHooks.onCommit(callback);
     },

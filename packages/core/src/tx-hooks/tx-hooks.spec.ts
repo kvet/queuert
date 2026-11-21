@@ -420,6 +420,30 @@ describe("after flush or discard", () => {
     "txHooks were already flushed or discarded; open new tx hooks for a new transaction",
   );
 
+  test("isOpen is true until flush or discard, through savepoint and retryBoundary rollbacks, and false in their callbacks", async () => {
+    const flushed = createTxHooks();
+    const seen: boolean[] = [];
+    flushed.txHooks.onCommit(() => {
+      seen.push(flushed.txHooks.isOpen);
+    });
+    flushed.txHooks.createSavepoint().rollback();
+    const runTry = flushed.txHooks.retryBoundary(() => {});
+    runTry();
+    runTry();
+    seen.push(flushed.txHooks.isOpen);
+    await flushed.flush();
+    seen.push(flushed.txHooks.isOpen);
+
+    const discarded = createTxHooks();
+    discarded.txHooks.onRollback(() => {
+      seen.push(discarded.txHooks.isOpen);
+    });
+    await discarded.discard();
+    seen.push(discarded.txHooks.isOpen);
+
+    expect(seen).toEqual([true, false, false, false, false]);
+  });
+
   test("registering a callback after flush throws", async () => {
     const { txHooks, flush } = createTxHooks();
     await flush();

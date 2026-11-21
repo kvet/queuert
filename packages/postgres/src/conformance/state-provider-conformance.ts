@@ -388,7 +388,8 @@ export const createPgStateProviderConformanceCases = (options: {
   createStateProvider: () => Promise<PgStateProvider<any>>;
   /**
    * Runs the callback with a context of the provider's shape that is not inside a transaction
-   * (e.g. a pool client with no `BEGIN`), so the suite can check `isTransaction` rejects it.
+   * (e.g. a pool client with no `BEGIN`), so the suite can check `getTransaction` returns
+   * `undefined` for it.
    */
   withNonTransactionContext: <T>(fn: (txCtx: any) => Promise<T>) => Promise<T>;
   /**

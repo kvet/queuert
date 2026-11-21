@@ -97,7 +97,8 @@ export function createBetterSqlite3Provider({
     onTransactionRollback: (txCtx: BetterSqlite3Context, callback: () => MaybePromise<void>) => {
       requireTxHooks(txCtx).onRollback(callback);
     },
-    isTransaction: (txCtx: BetterSqlite3Context) => txCtx.db.inTransaction,
+    getTransaction: (txCtx: BetterSqlite3Context) =>
+      txCtx.db.inTransaction ? requireTxHooks(txCtx) : undefined,
     classifyError: ({ error }: { error: unknown }) => {
       const tableName =
         error instanceof Error ? /^no such table: (\S+)/.exec(error.message)?.[1] : undefined;

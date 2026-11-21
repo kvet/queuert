@@ -1054,7 +1054,7 @@ WHERE id = ANY($1::{{worker_id_type}}[])${locked ? "\nORDER BY id\nFOR UPDATE" :
 
     withTransaction: async (fn) => retryOwnWork(async () => stateProvider.withTransaction(fn)),
 
-    isTransaction: stateProvider.isTransaction,
+    getTransaction: stateProvider.getTransaction,
 
     onTransactionCommit: (txCtx, callback) => {
       stateProvider.onTransactionCommit(txCtx, callback);

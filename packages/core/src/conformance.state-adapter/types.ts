@@ -18,7 +18,7 @@ export type StateAdapterConformanceContext = {
   /**
    * Runs the callback with a context of the adapter's shape that is not inside a transaction
    * (e.g. a pool client with no `BEGIN`, or the root ORM handle), so the suite can verify
-   * `isTransaction` rejects it.
+   * `getTransaction` returns `undefined` for it.
    */
   withNonTransactionContext<T>(fn: (txCtx: any) => MaybePromise<T>): MaybePromise<T>;
   /** Creates the notify adapter an end-to-end case shares; in-process when omitted. */

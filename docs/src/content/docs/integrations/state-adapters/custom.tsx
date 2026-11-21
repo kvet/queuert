@@ -32,7 +32,7 @@ const contextFields = (): FieldItem[] => [
     name: "withNonTransactionContext",
     chips: ["required"],
     description:
-      "Runs a callback with the root handle, not a transaction, so the suite can check isTransaction rejects it.",
+      "Runs a callback with the root handle, not a transaction, so the suite can check getTransaction returns undefined for it.",
   },
   {
     name: "createNotifyAdapter",

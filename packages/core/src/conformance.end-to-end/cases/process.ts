@@ -18,6 +18,7 @@ import { createWorkerRunner } from "../../worker/worker-runner.ts";
 import { createCaseNotifyAdapter } from "../support/create-case-notify-adapter.ts";
 import { createCaseStateAdapter } from "../support/create-case-state-adapter.ts";
 import { createLogCollector } from "../support/log-collector.ts";
+import { createSpyNotifyAdapter } from "../support/spy-notify-adapter.ts";
 import { createSpyStateAdapter } from "../support/spy-state-adapter.ts";
 import type { EndToEndNotifyContext, EndToEndSavepointContext } from "../types.ts";
 
@@ -1488,6 +1489,75 @@ export const processSavepointGroup: ConformanceGroup<EndToEndSavepointContext> =
         const completedLogs = logs.entriesOfType("job_completed");
         assert.equal(completedLogs.length, 1);
         assert.partialDeepStrictEqual(completedLogs[0].data, { output: { from: "transaction" } });
+      }),
+    },
+    {
+      name: "publishes a commit's scheduled jobs after nested savepoints that locked a pending job roll back",
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, ...context }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+        const notifyAdapter = yield* resource(
+          createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
+        );
+        const jobTypes = defineJobTypes<{
+          created: { entry: true; input: null; output: null };
+          locked: { entry: true; input: null; output: null };
+        }>();
+        const spyNotifyAdapter = createSpyNotifyAdapter(notifyAdapter);
+        const client = createClient({ stateAdapter, notifyAdapter: spyNotifyAdapter, jobTypes });
+
+        const lockedChain = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "locked", input: null }),
+          ),
+        );
+
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            runInModeOf(
+              stateAdapter,
+              syncAsync(function* () {
+                yield* step(client.createChain({ ...txCtx, typeName: "created", input: null }));
+                yield* step(
+                  assertRejects(
+                    () =>
+                      context.withSavepoint(txCtx, (outerCtx) =>
+                        runInModeOf(
+                          stateAdapter,
+                          syncAsync(function* () {
+                            yield* step(
+                              assertRejects(
+                                () =>
+                                  context.withSavepoint(outerCtx, (innerCtx) =>
+                                    runInModeOf(
+                                      stateAdapter,
+                                      syncAsync(function* () {
+                                        yield* step(
+                                          client.rescheduleJob({ ...innerCtx, id: lockedChain.id }),
+                                        );
+                                        throw new Error("inner savepoint rolled back");
+                                      }),
+                                    ),
+                                  ),
+                                /inner savepoint rolled back/,
+                              ),
+                            );
+                            throw new Error("outer savepoint rolled back");
+                          }),
+                        ),
+                      ),
+                    /outer savepoint rolled back/,
+                  ),
+                );
+              }),
+            ),
+          ),
+        );
+
+        const lastCall = spyNotifyAdapter.calls.at(-1);
+        assert.deepEqual(
+          { name: lastCall?.name, args: [...(lastCall?.args ?? [])].sort() },
+          { name: "notifyJobsScheduled", args: ["created", "locked"] },
+        );
       }),
     },
   ],

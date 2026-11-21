@@ -91,7 +91,10 @@ export const createInProcessStateAdapterWithState = (
       method: (params: TParams) => TResult,
     ): ((params: TParams) => Promise<TResult>) =>
     async (params) => {
-      if (!held || (params.txCtx !== undefined && methods.isTransaction(params.txCtx))) {
+      if (
+        !held ||
+        (params.txCtx !== undefined && methods.getTransaction(params.txCtx) !== undefined)
+      ) {
         return method(params);
       }
       await acquire();
@@ -144,7 +147,7 @@ export const createInProcessStateAdapterWithState = (
         })();
       }),
 
-    isTransaction: methods.isTransaction,
+    getTransaction: methods.getTransaction,
 
     onTransactionCommit: (txCtx, callback) => {
       requireTxHooks(txCtx).onCommit(callback);

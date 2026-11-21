@@ -17,7 +17,8 @@ export const createKyselyMysqlStateProvider = <TDatabase>({
           .setIsolationLevel("read committed")
           .execute(async (txDb) => cb({ db: txDb, txHooks })),
       ),
-    isTransaction: (txCtx) => txCtx.db.isTransaction,
+    getTransaction: (txCtx) =>
+      txCtx.db.isTransaction && txCtx.txHooks.isOpen ? txCtx.txHooks : undefined,
     onTransactionCommit: (txCtx, callback) => {
       txCtx.txHooks.onCommit(callback);
     },

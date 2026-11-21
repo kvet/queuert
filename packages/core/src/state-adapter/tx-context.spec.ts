@@ -6,7 +6,8 @@ import { normalizeTxCtx, requireTxCtx } from "./tx-context.ts";
 const transaction = Symbol("queuert.test.transaction");
 
 const stateAdapter = {
-  isTransaction: (txCtx: Record<PropertyKey, unknown>) => txCtx[transaction] === true,
+  getTransaction: (txCtx: Record<PropertyKey, unknown>) =>
+    txCtx[transaction] === true ? txCtx : undefined,
 } as unknown as StateAdapter<any, any, any, "async">;
 
 it("keeps a context whose only key is a symbol", () => {

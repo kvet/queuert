@@ -88,14 +88,14 @@ const members = (): FieldItem[] => [
     name: "Transactions",
     description: (
       <>
-        Run a callback in a transaction that commits on success and rolls back on error, tell
-        whether a context is in an open transaction without a query, and run callbacks after the
-        context's transaction commits or when it (or the savepoint the context belongs to) rolls
-        back. The client and the worker register every side effect through these callbacks; see{" "}
+        Run a callback in a transaction that commits on success and rolls back on error, tell which
+        open transaction a context belongs to without a query, and run callbacks after the context's
+        transaction commits or when it (or the savepoint the context belongs to) rolls back. The
+        client and the worker register every side effect through these callbacks; see{" "}
         <A href="/guides/tx-hooks/">Tx Hooks</A>.
       </>
     ),
-    extra: ["withTransaction", "isTransaction", "onTransactionCommit", "onTransactionRollback"],
+    extra: ["withTransaction", "getTransaction", "onTransactionCommit", "onTransactionRollback"],
   },
   {
     name: "Creating and finishing jobs",

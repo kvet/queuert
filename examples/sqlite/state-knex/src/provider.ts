@@ -18,7 +18,8 @@ export const createKnexSqliteStateProvider = ({
       withTxHooks(async (txHooks) =>
         knex.transaction(async (trx) => cb({ trx, txHooks }), { doNotRejectOnRollback: false }),
       ),
-    isTransaction: (txCtx) => txCtx.trx.isTransaction === true,
+    getTransaction: (txCtx) =>
+      txCtx.trx.isTransaction === true && txCtx.txHooks.isOpen ? txCtx.txHooks : undefined,
     onTransactionCommit: (txCtx, callback) => {
       txCtx.txHooks.onCommit(callback);
     },

@@ -33,8 +33,11 @@ Providers live in examples, as on PostgreSQL. The provider is about fifteen line
 export type MongoStateProvider<TTxContext extends BaseTxContext> = {
   /** Runs `fn` in a transaction on a new session. May run `fn` again after a transient error. */
   withTransaction: <T>(fn: (txCtx: TTxContext) => Promise<T>) => Promise<T>;
-  /** `session.inTransaction()`. */
-  isTransaction: (txCtx: TTxContext) => boolean;
+  /**
+   * The context's `txHooks` while `session.inTransaction()` and `txHooks.isOpen`; every try of one
+   * transaction shares them.
+   */
+  getTransaction: (txCtx: TTxContext) => object | undefined;
   /** The native session carried by `txCtx`. */
   getSession: (txCtx: TTxContext) => MongoSession;
   /** The native database the adapter's collections live in. */
@@ -57,10 +60,16 @@ export const createMongoClientProvider = ({
 }) => ({
   db: client.db(dbName),
   withTransaction: async (fn) =>
-    client.withSession(async (session) =>
-      session.withTransaction(async () => fn({ session }), TX_OPTIONS),
+    withTxHooks(async (txHooks) =>
+      client.withSession(async (session) =>
+        session.withTransaction(
+          txHooks.retryBoundary(async () => fn({ session, txHooks })),
+          TX_OPTIONS,
+        ),
+      ),
     ),
-  isTransaction: ({ session }) => session.inTransaction(),
+  getTransaction: ({ session, txHooks }) =>
+    session.inTransaction() && txHooks.isOpen ? txHooks : undefined,
   getSession: ({ session }) => session,
 });
 
@@ -71,7 +80,7 @@ const TX_OPTIONS = {
 };
 ```
 
-The transaction context is `{ session }`, the name the native driver and Mongoose already use in their options objects, so `complete({ session, txHooks, output })` reads like any other call.
+The transaction context is `{ session, txHooks }`: `session` is the name the native driver and Mongoose already use in their options objects, and `txHooks` identifies the transaction to `getTransaction`, since a session outlives its transactions, so `complete({ session, txHooks, output })` reads like any other call.
 
 ## Transactions and isolation
 
@@ -260,7 +269,7 @@ The deduplication documents are the write-write conflict that makes it exact, so
 
 `createMongoNotifyAdapter({ notifyProvider, collectionName = "queuert_notifications" })`, with the same three channels as the PostgreSQL adapter and `MongoNotifyProvider` the same shape as `PgNotifyProvider` (`publish(channel, messages)`, `subscribe(channel, onMessage)`, `close?`).
 
-- `publish` inserts `{ c: channel, m: message, at: new Date() }` documents with `insertMany`, outside any transaction (core publishes after commit). The collection is a regular one with a TTL index on `at` (60 s). Capped collections cannot be written in a transaction (error 263) and are unavailable on most compatible services, and a tailable cursor needs a capped collection, so change streams are the only option.
+- `publish` inserts `{ c: channel, m: message, at: new Date() }` documents with `insertMany`, outside any transaction (core publishes when the transaction ends). The collection is a regular one with a TTL index on `at` (60 s). Capped collections cannot be written in a transaction (error 263) and are unavailable on most compatible services, and a tailable cursor needs a capped collection, so change streams are the only option.
 - `subscribe` uses one change stream per provider (`$match: { operationType: "insert" }`, `fullDocument` projected to `c` and `m`) and fans out in process through `createSharedListener`, as the PostgreSQL adapter does with one `LISTEN` connection. Delivery latency in the spike: 0.2 ms p50, 0.9 ms p99. Aborted transactions emit nothing.
 - **Connection pool.** Each open change stream holds a pooled connection for up to `maxAwaitTimeMS`. In the spike 200 idle streams on a 100-connection pool made an ordinary `findOne` take 1.5–1.9 s, and 20 streams on a pool of 10 took 19.9 s. One stream per provider avoids that, and the docs recommend a dedicated `MongoClient` for the notify provider, like PostgreSQL's dedicated listen client.
 - **Resume.** Notifications are hints and polling is the source of truth, so the stream reopens from "now" after an error or an election instead of persisting resume tokens. Messages published while it reconnects are lost, as with Redis pub/sub.

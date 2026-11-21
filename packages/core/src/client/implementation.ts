@@ -1,12 +1,5 @@
 import { truncate } from "@queuert/helpers/serialize-error";
-import {
-  isPromise,
-  type MaybePromise,
-  type SyncAsync,
-  syncAsync,
-  silence,
-  step,
-} from "@queuert/sync-async";
+import { type SyncAsync, syncAsync, step } from "@queuert/sync-async";
 
 import { type Chain, mapStateChainToChain } from "../entities/chain.ts";
 import type { DeduplicationOptions } from "../entities/deduplication.ts";
@@ -18,6 +11,7 @@ import {
   JobNotFoundError,
 } from "../errors.ts";
 import type { AnyNewJob } from "../job-types/job-types.resolvers.ts";
+import { notifyAfterTransaction } from "../notify-adapter/tx-notifications.ts";
 import type {
   BlockerSpanHandle,
   JobSpanHandle,
@@ -32,24 +26,6 @@ import type {
   StateJobInfo,
 } from "../state-adapter/state-adapter.ts";
 import type { Helpers } from "./setup-helpers.ts";
-
-export const notifyOnCommit = (
-  helpers: Helpers,
-  txCtx: BaseTxContext,
-  notify: (values: string[]) => MaybePromise<void>,
-  values: string[],
-): void => {
-  if (values.length === 0) return;
-  helpers.stateAdapter.onTransactionCommit(
-    txCtx,
-    helpers.sync
-      ? () => {
-          const sent = notify(values);
-          if (isPromise(sent)) silence(sent);
-        }
-      : async () => notify(values),
-  );
-};
 
 type BlockerSpan = { blockerChain: StateChain; blockerSpan: BlockerSpanHandle | undefined };
 
@@ -139,15 +115,11 @@ const lockBlockerChains = syncAsync(function* (
           }),
         )
       : noChains;
-  const lockedPendingTypeNames = lockedChains.flatMap((chain) =>
-    chain?.head.status === "pending" ? [chain.head.typeName] : [],
-  );
-  notifyOnCommit(helpers, txCtx, helpers.notifyHelper.notifyJobsScheduled, lockedPendingTypeNames);
-  if (lockedPendingTypeNames.length > 0) {
-    helpers.stateAdapter.onTransactionRollback(txCtx, () =>
-      helpers.notifyHelper.notifyJobsScheduled(lockedPendingTypeNames),
-    );
-  }
+  notifyAfterTransaction(helpers, txCtx, {
+    lockedPendingJobs: lockedChains.flatMap((chain) =>
+      chain?.head.status === "pending" ? [chain.head] : [],
+    ),
+  });
 
   const fetched = lockedChains.values();
   return items.map((item): LockedJob => {
@@ -284,7 +256,7 @@ const reportCreatedJobs = (
     });
   }
 
-  notifyOnCommit(helpers, txCtx, helpers.notifyHelper.notifyJobsScheduled, scheduledTypeNames);
+  notifyAfterTransaction(helpers, txCtx, { jobsScheduled: scheduledTypeNames });
 };
 
 type CreateChainsOptions = { chains: PreparedJob["entry"][]; txCtx: BaseTxContext };
@@ -363,7 +335,7 @@ const reportCompletedJob = syncAsync(function* (
   helpers.stateAdapter.onTransactionCommit(txCtx, () => {
     helpers.observabilityHelper.chainCompleted(chain, { output: encodedOutput });
   });
-  notifyOnCommit(helpers, txCtx, helpers.notifyHelper.notifyChainsCompleted, [completed.chainId]);
+  notifyAfterTransaction(helpers, txCtx, { chainsCompleted: [completed.chainId] });
 
   if (!chain.blocking) return;
   const dependentJobs = yield* step(
@@ -432,12 +404,9 @@ const reportUnblockedJobs = (
       .map((dependentJob) => [dependentJob.job.id, dependentJob.job]),
   );
 
-  notifyOnCommit(
-    helpers,
-    txCtx,
-    helpers.notifyHelper.notifyJobsScheduled,
-    [...unblockedJobs.values()].map((stateJob) => stateJob.typeName),
-  );
+  notifyAfterTransaction(helpers, txCtx, {
+    jobsScheduled: [...unblockedJobs.values()].map((stateJob) => stateJob.typeName),
+  });
   for (const stateJob of unblockedJobs.values()) {
     helpers.stateAdapter.onTransactionCommit(txCtx, () => {
       helpers.observabilityHelper.jobUnblocked(stateJob, { unblockedByChain: chain });
@@ -547,12 +516,9 @@ const reportRescheduledJobs = (
   helpers: Helpers,
   { rescheduledJobs, txCtx }: { rescheduledJobs: (StateJob | undefined)[]; txCtx: BaseTxContext },
 ): void => {
-  notifyOnCommit(
-    helpers,
-    txCtx,
-    helpers.notifyHelper.notifyJobsScheduled,
-    rescheduledJobs.flatMap((job) => (job === undefined ? [] : [job.typeName])),
-  );
+  notifyAfterTransaction(helpers, txCtx, {
+    jobsScheduled: rescheduledJobs.flatMap((job) => (job === undefined ? [] : [job.typeName])),
+  });
   for (const job of rescheduledJobs) {
     if (job === undefined) continue;
     helpers.stateAdapter.onTransactionCommit(txCtx, () => {

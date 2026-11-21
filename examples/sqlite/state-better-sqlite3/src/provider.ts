@@ -31,7 +31,7 @@ export const createBetterSqlite3StateProvider = ({
   return {
     sync: true,
     withTransaction: (fn) => withTxHooks((txHooks) => db.transaction(() => fn({ db, txHooks }))()),
-    isTransaction: (txCtx) => txCtx.db.inTransaction,
+    getTransaction: (txCtx) => (txCtx.db.inTransaction ? requireTxHooks(txCtx) : undefined),
     onTransactionCommit: (txCtx, callback) => {
       requireTxHooks(txCtx).onCommit(callback);
     },

@@ -25,7 +25,8 @@ export const createPrismaSqliteStateProvider = <TPrisma extends PrismaLikeClient
         using _h = await lock.acquireWrite();
         return await prisma.$transaction(async (prisma: TPrisma) => cb({ prisma, txHooks }));
       }),
-    isTransaction: (txCtx) => !("$connect" in txCtx.prisma),
+    getTransaction: (txCtx) =>
+      !("$connect" in txCtx.prisma) && txCtx.txHooks.isOpen ? txCtx.txHooks : undefined,
     onTransactionCommit: (txCtx, callback) => {
       txCtx.txHooks.onCommit(callback);
     },

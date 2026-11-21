@@ -8,7 +8,7 @@ sidebar:
 import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/diagram";
 
-Queuert writes chains and jobs in your transaction, and the side effects of those writes (notify events that wake workers, observability events) must not leak out of a transaction that rolls back. The state provider owns this: it implements `onTransactionCommit(txCtx, callback)`, which runs `callback` after the transaction commits and before the call that opened it settles, and `onTransactionRollback(txCtx, callback)`, which runs `callback` when the transaction, or the savepoint `txCtx` belongs to, rolls back, also before the call that opened it settles. The client and the worker register every side effect through these two members, so what you pass to a mutating call or to `complete` is your transaction context and nothing else.
+Queuert writes chains and jobs in your transaction, and the side effects of those writes (notify events that wake workers, observability events) must not leak out of a transaction that rolls back. The state provider owns this: it implements `onTransactionCommit(txCtx, callback)`, which runs `callback` after the transaction commits and before the call that opened it settles, and `onTransactionRollback(txCtx, callback)`, which runs `callback` when the transaction, or the savepoint `txCtx` belongs to, rolls back, also before the call that opened it settles. The client and the worker register every side effect through these two members, and collect a transaction's notify events under the object the state adapter's [`getTransaction`](/queuert/integrations/state-adapters/) returns to send them once, so what you pass to a mutating call or to `complete` is your transaction context and nothing else.
 
 ## Two kinds of providers
 
@@ -30,15 +30,21 @@ export type PostgresJsContext = { txSql: postgres.TransactionSql; txHooks: TxHoo
 const stateProvider: PgStateProvider<PostgresJsContext> = {
   withTransaction: async (fn) =>
     withTxHooks(async (txHooks) => sql.begin(async (txSql) => fn({ txSql, txHooks }))),
+  getTransaction: (txCtx) =>
+    typeof txCtx.txSql.savepoint === "function" && txCtx.txHooks.isOpen
+      ? txCtx.txHooks
+      : undefined,
   onTransactionCommit: (txCtx, callback) => {
     txCtx.txHooks.onCommit(callback);
   },
   onTransactionRollback: (txCtx, callback) => {
     txCtx.txHooks.onRollback(callback);
   },
-  // isTransaction, executeSql, classifyError
+  // executeSql, classifyError
 };
 ```
+
+`getTransaction` returns the hooks as the transaction's identity while `txHooks.isOpen` holds, which turns `false` once the hooks are flushed or discarded: a postgres.js `TransactionSql` keeps its `savepoint` method after its transaction ends, so the handle alone cannot tell a finished transaction from an open one.
 
 `txHooks` is then part of that provider's transaction context, so a transaction you open yourself creates the hooks the same way and passes them with the rest of the context. Every snippet in these docs that opens a transaction with `sql.begin`, `db.transaction` or `knex.transaction` does this:
 

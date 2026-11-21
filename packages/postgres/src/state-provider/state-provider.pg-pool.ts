@@ -58,9 +58,9 @@ export const createPgPoolProvider = ({ pool }: { pool: Pool }): PgPoolProvider =
     onTransactionRollback: (txCtx, callback) => {
       requireTxHooks(txCtx).onRollback(callback);
     },
-    isTransaction: (txCtx) => {
+    getTransaction: (txCtx) => {
       const status = txCtx.poolClient.getTransactionStatus();
-      return status === "T" || status === "E";
+      return status === "T" || status === "E" ? requireTxHooks(txCtx) : undefined;
     },
     classifyError: ({ error }) => {
       const driverError = error as { code?: unknown; message?: unknown } | undefined;

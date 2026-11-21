@@ -731,7 +731,10 @@ export const createRedisStateAdapter = ({
 
     withTransaction: async (fn) => runTransaction(async (tx) => fn({ [transactionSymbol]: tx })),
 
-    isTransaction: (txCtx) => txCtx[transactionSymbol]?.isOpen(),
+    getTransaction: (txCtx) => {
+      const transaction = transactionOf(txCtx);
+      return transaction?.isOpen() ? (transaction.txHooks ?? transaction) : undefined;
+    },
 
     onTransactionCommit: (txCtx, callback) => {
       requireTxHooks(txCtx).onCommit(callback);

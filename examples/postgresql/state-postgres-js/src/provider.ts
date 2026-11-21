@@ -46,7 +46,10 @@ export const createPostgresJsStateProvider = ({
   return {
     withTransaction: async (cb) =>
       withTxHooks(async (txHooks) => sql.begin(async (txSql) => cb({ txSql, txHooks }) as any)),
-    isTransaction: (txCtx) => typeof txCtx.txSql.savepoint === "function",
+    getTransaction: (txCtx) =>
+      typeof txCtx.txSql.savepoint === "function" && txCtx.txHooks.isOpen
+        ? txCtx.txHooks
+        : undefined,
     onTransactionCommit: (txCtx, callback) => {
       txCtx.txHooks.onCommit(callback);
     },

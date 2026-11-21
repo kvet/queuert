@@ -254,15 +254,15 @@ const syncSqliteStateProviderGroup: ConformanceGroup<SqliteStateProviderConforma
       }),
     },
     {
-      name: "isTransaction is true inside withTransaction and false outside it",
+      name: "getTransaction returns an object inside withTransaction and undefined outside it",
       run: syncProviderCase((stateProvider, withNonTransactionContext) => {
         assert.equal(
-          stateProvider.withTransaction((txCtx) => stateProvider.isTransaction(txCtx)),
-          true,
+          typeof stateProvider.withTransaction((txCtx) => stateProvider.getTransaction(txCtx)),
+          "object",
         );
         assert.equal(
-          withNonTransactionContext((txCtx) => stateProvider.isTransaction(txCtx)),
-          false,
+          withNonTransactionContext((txCtx) => stateProvider.getTransaction(txCtx)),
+          undefined,
         );
       }),
     },
@@ -329,7 +329,7 @@ type SqliteStateProviderConformanceOptions<TMode extends Mode = "async"> = {
     : MaybePromise<SqliteStateProvider<any, TMode>>;
   /**
    * Runs the callback with a context of the provider's shape that is not inside a transaction,
-   * such as `{ db }`, so the suite can check that `isTransaction` rejects it.
+   * such as `{ db }`, so the suite can check that `getTransaction` returns `undefined` for it.
    */
   withNonTransactionContext<T>(
     this: void,
@@ -456,7 +456,7 @@ export const createSqliteStateProviderConformanceContext = ({
  * Prepares the state adapter contract cases for a provider, ready to run. The cases are every state
  * adapter contract case, run through `createSqliteStateAdapter` over the provider in its `mode`,
  * plus checks of the provider's `classifyError`. Over a provider with `sync: true` they also check
- * its own contract: results without a promise, commit, rollback, `isTransaction`, and an autocommit
+ * its own contract: results without a promise, commit, rollback, `getTransaction`, and an autocommit
  * statement that throws inside an open transaction; in `"async"` mode they add the cases that hold
  * a transaction open across an `await`. The cases migrate the schema once, before the first case,
  * through a provider from `createStateProvider`; each case then builds its own adapter over a new

@@ -32,7 +32,8 @@ export const createPrismaPgStateProvider = <TPrisma extends PrismaLikeClient>({
         prisma.$transaction(async (prisma: TPrisma) => cb({ prisma, txHooks })),
       ),
     // Prisma hides `$connect` on the interactive transaction client.
-    isTransaction: (txCtx) => !("$connect" in txCtx.prisma),
+    getTransaction: (txCtx) =>
+      !("$connect" in txCtx.prisma) && txCtx.txHooks.isOpen ? txCtx.txHooks : undefined,
     onTransactionCommit: (txCtx, callback) => {
       txCtx.txHooks.onCommit(callback);
     },

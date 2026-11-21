@@ -61,6 +61,7 @@ import {
   mergeJobTypes,
 } from "../job-types/merge-job-types.ts";
 import type { NotifyAdapter } from "../notify-adapter/notify-adapter.ts";
+import { notifyAfterTransaction } from "../notify-adapter/tx-notifications.ts";
 import type { Log } from "../observability-adapter/log.ts";
 import type { ObservabilityAdapter } from "../observability-adapter/observability-adapter.ts";
 import type {
@@ -75,7 +76,6 @@ import type {
 } from "../state-adapter/state-adapter.ts";
 import { normalizeTxCtx, requireTxCtx } from "../state-adapter/tx-context.ts";
 import {
-  notifyOnCommit,
   runCompleteChain,
   runContinueChain,
   runCreateChains,
@@ -191,7 +191,7 @@ type CreateChainsResult<
  * The public API for managing chains. Created via {@link createClient}.
  *
  * Methods are split into three categories:
- * - **Mutating** — `createChain`, `createChains`, `completeChain`, `deleteChain`, `deleteChains`, `rescheduleJob`, `rescheduleJobs`. Require a transaction context; they throw `Error` if called without a transaction context, or with one the state adapter's `isTransaction` reports as outside an open transaction. With an adapter that fences writes (PostgreSQL, SQLite, Redis), all but the deletions throw {@link SchemaFencedError} once a breaking migration fenced this code version, and change nothing.
+ * - **Mutating** — `createChain`, `createChains`, `completeChain`, `deleteChain`, `deleteChains`, `rescheduleJob`, `rescheduleJobs`. Require a transaction context; they throw `Error` if called without a transaction context, or with one the state adapter's `getTransaction` reports as outside an open transaction. With an adapter that fences writes (PostgreSQL, SQLite, Redis), all but the deletions throw {@link SchemaFencedError} once a breaking migration fenced this code version, and change nothing.
  * - **Read-only** — `getChain`, `getChains`, `getJob`, `getJobs`, `getChainTypeNames`, `getJobTypeNames`, `countChainsByTypeName`, `countJobsByTypeName`, `listChains`, `listJobs`, `listChainJobs`, `getChainTailJob`, `getChainTailJobs`, `getJobBlockers`, `listBlockedJobs`, `getWorker`, `getWorkers`, `countWorkers`, `countWorkersByTypeName`, `countRunningJobsByWorkerId`, `listWorkers`, `listWorkerJobs`. Accept an optional transaction context.
  * - **Waiting** — `awaitChain`. Takes no transaction context: it polls outside any transaction and listens for notify adapter events.
  */
@@ -896,21 +896,12 @@ export const createClient = <
             const lockedChains = yield* step(
               helpers.stateAdapter.getChains({ txCtx, chainIds: ids }),
             );
-            const lockedPendingTypeNames = lockedChains.flatMap((chain) => {
-              const currentJob = chain?.tail ?? chain?.head;
-              return currentJob?.status === "pending" ? [currentJob.typeName] : [];
+            notifyAfterTransaction(helpers, txCtx, {
+              lockedPendingJobs: lockedChains.flatMap((chain) => {
+                const currentJob = chain?.tail ?? chain?.head;
+                return currentJob?.status === "pending" ? [currentJob] : [];
+              }),
             });
-            notifyOnCommit(
-              helpers,
-              txCtx,
-              helpers.notifyHelper.notifyJobsScheduled,
-              lockedPendingTypeNames,
-            );
-            if (lockedPendingTypeNames.length > 0) {
-              helpers.stateAdapter.onTransactionRollback(txCtx, () =>
-                helpers.notifyHelper.notifyJobsScheduled(lockedPendingTypeNames),
-              );
-            }
             throw new BlockerReferenceError(
               `Cannot delete chains: ${[...new Set(blockerRefs.map((r) => r.chainId))].join(", ")} referenced as blockers`,
               { references: blockerRefs },
@@ -937,28 +928,26 @@ export const createClient = <
               });
             }
           }
-          const deletedPendingTypeNames = verdicts.flatMap((verdict) => {
+          const deletedPendingJobs = verdicts.flatMap((verdict) => {
             if (verdict === undefined || Array.isArray(verdict)) return [];
             const currentJob = verdict.tail ?? verdict.head;
-            return currentJob.status === "pending" ? [currentJob.typeName] : [];
+            return currentJob.status === "pending" ? [currentJob] : [];
           });
-          if (deletedPendingTypeNames.length > 0) {
-            helpers.stateAdapter.onTransactionRollback(txCtx, () =>
-              helpers.notifyHelper.notifyJobsScheduled(deletedPendingTypeNames),
-            );
-          }
-          notifyOnCommit(
-            helpers,
-            txCtx,
-            helpers.notifyHelper.notifyJobAttemptsLost,
-            verdicts
+          notifyAfterTransaction(helpers, txCtx, {
+            lockedPendingJobs: deletedPendingJobs,
+            settledJobIds: verdicts.flatMap((verdict) =>
+              verdict === undefined || Array.isArray(verdict)
+                ? []
+                : [verdict.head.id, ...(verdict.tail ? [verdict.tail.id] : [])],
+            ),
+            jobAttemptsLost: verdicts
               .flatMap((verdict) =>
                 verdict !== undefined && !Array.isArray(verdict)
                   ? [verdict.head, verdict.tail]
                   : [],
               )
               .flatMap((stateJob) => (stateJob?.status === "running" ? [stateJob.id] : [])),
-          );
+          });
 
           return deletedChains;
         }),
@@ -1058,29 +1047,17 @@ export const createClient = <
               lock: "exclusive",
             }),
           );
-          const lockedPendingTypeNames = existingJobs.flatMap((job) =>
-            job?.status === "pending" ? [job.typeName] : [],
-          );
-          if (lockedPendingTypeNames.length > 0) {
-            helpers.stateAdapter.onTransactionRollback(txCtx, () =>
-              helpers.notifyHelper.notifyJobsScheduled(lockedPendingTypeNames),
-            );
-          }
-          try {
-            assertReschedulable(existingJobs);
-          } catch (error) {
-            notifyOnCommit(
-              helpers,
-              txCtx,
-              helpers.notifyHelper.notifyJobsScheduled,
-              lockedPendingTypeNames,
-            );
-            throw error;
-          }
+          notifyAfterTransaction(helpers, txCtx, {
+            lockedPendingJobs: existingJobs.flatMap((job) =>
+              job?.status === "pending" ? [job] : [],
+            ),
+          });
+          assertReschedulable(existingJobs);
           const rescheduledOrMissing = yield* runRescheduleJobs.steps(helpers, {
             txCtx,
             jobs: ids.map((id: TJobId) => ({ jobId: id, schedule, reason })),
           });
+          notifyAfterTransaction(helpers, txCtx, { settledJobIds: ids });
           return rescheduledOrMissing.map((stateJob, index) => {
             if (stateJob === undefined) {
               throw new JobNotFoundError(`Job ${ids[index]} not found or already completed`, {
@@ -1162,11 +1139,9 @@ export const createClient = <
             throw new Error(`Current job of chain ${id} not found under the chain lock`);
           }
           const currentJob = lockedJob;
-          if (currentJob.status === "pending") {
-            helpers.stateAdapter.onTransactionRollback(txCtx, () =>
-              helpers.notifyHelper.notifyJobsScheduled([currentJob.typeName]),
-            );
-          }
+          notifyAfterTransaction(helpers, txCtx, {
+            lockedPendingJobs: currentJob.status === "pending" ? [currentJob] : [],
+          });
 
           const completeJob = (
             job: AnyJob,
@@ -1264,11 +1239,10 @@ export const createClient = <
                     chainCompleted: continuation === undefined,
                   });
                 });
-                if (wasRunning) {
-                  notifyOnCommit(helpers, txCtx, helpers.notifyHelper.notifyJobAttemptsLost, [
-                    job.id,
-                  ]);
-                }
+                notifyAfterTransaction(helpers, txCtx, {
+                  settledJobIds: [job.id],
+                  jobAttemptsLost: wasRunning ? [job.id] : [],
+                });
 
                 return result.continuedTo ?? result;
               }),
@@ -1290,16 +1264,6 @@ export const createClient = <
             throw new ChainNotFoundError(`Chain with id ${id} not found after complete`, {
               chainId: id as string,
             });
-          }
-          const updatedCurrentJob = updatedChain.tail ?? updatedChain.head;
-          if (
-            currentJob.status === "pending" &&
-            updatedCurrentJob.id === currentJob.id &&
-            updatedCurrentJob.status === "pending"
-          ) {
-            notifyOnCommit(helpers, txCtx, helpers.notifyHelper.notifyJobsScheduled, [
-              currentJob.typeName,
-            ]);
           }
           return mapStateChainToChain(updatedChain, helpers.jobTypes) as TResult;
         }),

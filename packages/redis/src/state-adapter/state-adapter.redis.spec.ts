@@ -67,16 +67,16 @@ it("passes a transaction context with no string keys that survives a spread", as
   const spread = await stateAdapter.withTransaction(async (txCtx) => {
     expect(Object.keys(txCtx)).toEqual([]);
     expect(JSON.stringify(txCtx)).toBe("{}");
-    expect(stateAdapter.isTransaction({ ...txCtx })).toBe(true);
+    expect(stateAdapter.getTransaction({ ...txCtx })).toBeDefined();
     return { ...txCtx };
   });
-  expect(stateAdapter.isTransaction(spread)).toBe(false);
+  expect(stateAdapter.getTransaction(spread)).toBeUndefined();
 });
 
 it("treats a context without the adapter's transaction as outside a transaction", () => {
   const stateAdapter = createRedisStateAdapter({ stateProvider });
   const forged = { transaction: { tryNumber: 1, isOpen: () => true } };
-  expect(stateAdapter.isTransaction(forged as never)).toBeFalsy();
+  expect(stateAdapter.getTransaction(forged as never)).toBeUndefined();
   expect(() => {
     stateAdapter.onTransactionCommit(forged as never, () => {});
   }).toThrow(/has no Redis transaction/);

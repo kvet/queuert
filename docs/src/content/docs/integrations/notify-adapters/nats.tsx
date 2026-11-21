@@ -70,7 +70,8 @@ const Page = () => (
           name: "{prefix}.sched",
           chips: ["job scheduled"],
           meta: "payload · job type name",
-          description: "Published when jobs become pending. Wakes idle workers.",
+          description:
+            "Published when jobs become pending, or when a transaction that held pending jobs locked ends. Wakes idle workers.",
         },
         {
           name: "{prefix}.chainc",

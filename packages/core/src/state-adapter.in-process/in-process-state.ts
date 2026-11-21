@@ -666,7 +666,7 @@ export const createInProcessState = (
   const methods: InProcessMethods = {
     config,
 
-    isTransaction: (txCtx) => openTransactionOf(txCtx) !== undefined,
+    getTransaction: (txCtx) => openTransactionOf(txCtx)?.txHooks,
 
     getChains: ({ txCtx, chainIds }) =>
       read(txCtx, () =>

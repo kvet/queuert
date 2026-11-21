@@ -15,10 +15,9 @@ export const createMikroOrmSqliteStateProvider = ({
     { txHooks: TxHooks; commit: () => Promise<void> | void; rollback: () => Promise<void> | void }
   >();
   const parents = new WeakMap<object>();
-  const takeSettler = (transaction: Transaction) => {
-    const settler = settlers.get(transaction);
+  const settle = async (transaction: Transaction, outcome: "commit" | "rollback") => {
+    await settlers.get(transaction)?.[outcome]();
     settlers.delete(transaction);
-    return settler;
   };
 
   orm.em.getEventManager().registerSubscriber({
@@ -49,11 +48,11 @@ export const createMikroOrmSqliteStateProvider = ({
     },
     afterTransactionCommit: async ({ transaction }) => {
       if (transaction === undefined) return;
-      await takeSettler(transaction)?.commit();
+      await settle(transaction, "commit");
     },
     afterTransactionRollback: async ({ transaction }) => {
       if (transaction === undefined) return;
-      await takeSettler(transaction)?.rollback();
+      await settle(transaction, "rollback");
     },
   });
 
@@ -75,11 +74,15 @@ export const createMikroOrmSqliteStateProvider = ({
           return fn({ em });
         });
       } catch (error) {
-        if (transaction !== undefined) await takeSettler(transaction)?.rollback();
+        if (transaction !== undefined) await settle(transaction, "rollback");
         throw error;
       }
     },
-    isTransaction: (txCtx) => txCtx.em.isInTransaction(),
+    getTransaction: (txCtx) => {
+      const transaction = txCtx.em.getTransactionContext();
+      const txHooks = transaction === undefined ? undefined : settlers.get(transaction)?.txHooks;
+      return txHooks?.isOpen === true ? txHooks : undefined;
+    },
     onTransactionCommit: (txCtx, callback) => {
       getTxHooks(txCtx).onCommit(callback);
     },

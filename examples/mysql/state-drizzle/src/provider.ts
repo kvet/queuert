@@ -43,7 +43,8 @@ export const createDrizzleMysqlStateProvider = <TSchema extends Record<string, u
       withTxHooks(async (txHooks) =>
         db.transaction(async (tx) => cb({ tx, txHooks }), { isolationLevel: "read committed" }),
       ),
-    isTransaction: (txCtx) => txCtx.tx instanceof MySqlTransaction,
+    getTransaction: (txCtx) =>
+      txCtx.tx instanceof MySqlTransaction && txCtx.txHooks.isOpen ? txCtx.txHooks : undefined,
     onTransactionCommit: (txCtx, callback) => {
       txCtx.txHooks.onCommit(callback);
     },

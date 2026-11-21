@@ -47,13 +47,21 @@ export const stateProviderMembers = (dialect: "postgres" | "sqlite" | "mysql"): 
     ),
   },
   {
-    name: "isTransaction",
+    name: "getTransaction",
     description: (
       <>
-        Reports whether a context is inside an open transaction, from the driver's own state and
-        without a query. Mutating client methods reject a context that fails it, so passing a pool
-        or the root ORM handle instead of the transaction throws instead of autocommitting each
-        statement.
+        Returns the object that identifies the open transaction a context belongs to, or{" "}
+        <code>undefined</code> when the context is not inside one, from the driver's own state and
+        without a query. Every context inside one transaction gives the same object, its savepoints
+        and <code>retryBoundary</code> tries included; a provider that carries <code>txHooks</code>{" "}
+        in its transaction context returns them. It returns <code>undefined</code> once the
+        transaction has ended, in the transaction's own commit and rollback callbacks too, though
+        not after a savepoint or <code>retryBoundary</code> rollback, so a driver flag that stays
+        set on a finished transaction is not enough: a provider that carries <code>txHooks</code>{" "}
+        also checks <code>txHooks.isOpen</code>. Mutating client methods reject a context it returns{" "}
+        <code>undefined</code> for, so passing a pool or the root ORM handle instead of the
+        transaction throws instead of autocommitting each statement, and the client collects a
+        transaction's notify events under the object and sends them once when the transaction ends.
       </>
     ),
   },

@@ -216,5 +216,65 @@ export const txCallbacksSavepointGroup: ConformanceGroup<SavepointConformanceCon
         assert.deepEqual(events, ["savepoint rollback"]);
       }),
     },
+    {
+      name: "getTransaction of a savepoint context returns its transaction's object",
+      run: dynamicSyncAsync(function* ({ createStateAdapter, ...context }) {
+        const withSavepoint = context.withSavepoint?.bind(context);
+        if (withSavepoint === undefined) return;
+        const stateAdapter = yield* resource(createStateAdapter());
+
+        const [transaction, savepointTransaction] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            runInModeOf(
+              stateAdapter,
+              syncAsync(function* () {
+                const savepointTransaction = yield* step(
+                  withSavepoint(txCtx, (savepointCtx) => stateAdapter.getTransaction(savepointCtx)),
+                );
+                return [stateAdapter.getTransaction(txCtx), savepointTransaction];
+              }),
+            ),
+          ),
+        );
+
+        assert.equal(savepointTransaction, transaction);
+      }),
+    },
+    {
+      name: "getTransaction in a rolled-back savepoint's rollback callbacks returns its transaction's object",
+      run: dynamicSyncAsync(function* ({ createStateAdapter, ...context }) {
+        const withSavepoint = context.withSavepoint?.bind(context);
+        if (withSavepoint === undefined) return;
+        const stateAdapter = yield* resource(createStateAdapter());
+        const inRollback: unknown[] = [];
+
+        const transaction = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            runInModeOf(
+              stateAdapter,
+              syncAsync(function* () {
+                yield* step(
+                  assertRejects(
+                    () =>
+                      withSavepoint(txCtx, (savepointCtx) => {
+                        stateAdapter.onTransactionRollback(savepointCtx, () => {
+                          inRollback.push(stateAdapter.getTransaction(savepointCtx));
+                        });
+                        throw new Error("savepoint rolled back");
+                      }),
+                    /savepoint rolled back/,
+                  ),
+                );
+                return stateAdapter.getTransaction(txCtx);
+              }),
+            ),
+          ),
+        );
+
+        assert.notEqual(transaction, undefined);
+        assert.equal(inRollback.length, 1);
+        assert.equal(inRollback[0], transaction);
+      }),
+    },
   ],
 };

@@ -46,7 +46,7 @@ export const createNodeSqliteStateProvider = ({
           throw error;
         }
       }),
-    isTransaction: (txCtx) => txCtx.db.isTransaction,
+    getTransaction: (txCtx) => (txCtx.db.isTransaction ? requireTxHooks(txCtx) : undefined),
     onTransactionCommit: (txCtx, callback) => {
       requireTxHooks(txCtx).onCommit(callback);
     },
