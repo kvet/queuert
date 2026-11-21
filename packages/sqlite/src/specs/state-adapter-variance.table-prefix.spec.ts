@@ -1,5 +1,8 @@
 import { conformanceTestSuite } from "@queuert/helpers/conformance";
-import { stateAdapterAsyncGroups } from "queuert/conformance-internal";
+import {
+  stateAdapterAsyncGroups,
+  stateAdapterAsyncLockWaitGroups,
+} from "queuert/conformance-internal";
 import { it as baseIt, describe, expect } from "vitest";
 
 import { sqliteStateAdapterConformanceGroups } from "../conformance/state-provider-conformance.ts";
@@ -34,7 +37,9 @@ for (const mode of ["async", "sync"] as const) {
       it,
       groups: [
         ...sqliteStateAdapterConformanceGroups,
-        ...(mode === "async" ? stateAdapterAsyncGroups : []),
+        ...(mode === "async"
+          ? [...stateAdapterAsyncGroups, ...stateAdapterAsyncLockWaitGroups]
+          : []),
       ],
     });
   });

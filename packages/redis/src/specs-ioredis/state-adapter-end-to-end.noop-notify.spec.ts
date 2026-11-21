@@ -12,7 +12,6 @@ import {
 } from "queuert/conformance-internal";
 import { it as baseIt, describe } from "vitest";
 
-import { withoutLockWaitCases } from "../conformance/state-provider-conformance.ts";
 import { createRedisEndToEndContext } from "./state-adapter-end-to-end.spec-helper.ts";
 
 const redis = await acquireRedis("redis:6");
@@ -38,7 +37,7 @@ describe("Redis End-to-End Conformance (ioredis), noop notify", () => {
     groups: [
       ...endToEndBaseGroups,
       ...endToEndAsyncGroups,
-      ...withoutLockWaitCases(endToEndConcurrentTransactionGroups),
+      ...endToEndConcurrentTransactionGroups,
       ...endToEndFlakyDbGroups,
       ...endToEndFlakyDbConcurrentTransactionGroups,
     ],

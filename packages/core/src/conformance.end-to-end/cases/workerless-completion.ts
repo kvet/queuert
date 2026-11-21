@@ -1059,6 +1059,13 @@ export const workerlessCompletionConcurrentTransactionsGroup: ConformanceGroup<S
           }
         },
       },
+    ],
+  };
+
+export const workerlessCompletionConcurrentTransactionsLockWaitGroup: ConformanceGroup<StateAdapterConformanceContext> =
+  {
+    name: "workerless-completion",
+    cases: [
       {
         name: "completes the continuation committed while completeChain waits on the old tail",
         run: async ({ createStateAdapter, createNotifyAdapter }) => {

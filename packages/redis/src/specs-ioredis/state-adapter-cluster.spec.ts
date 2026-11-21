@@ -12,7 +12,6 @@ import { it as baseIt, describe } from "vitest";
 import {
   createRedisStateProviderConformanceContext,
   redisStateProviderConformanceGroups,
-  withoutLockWaitCases,
 } from "../conformance/state-provider-conformance.ts";
 import { createIoredisClusterStateProvider } from "./state-provider.ioredis-cluster.ts";
 
@@ -34,16 +33,13 @@ baseIt("index");
 describe("Redis Cluster State Provider Conformance (ioredis)", () => {
   conformanceTestSuite({
     it,
-    groups: [
-      ...redisStateProviderConformanceGroups,
-      ...withoutLockWaitCases(stateAdapterConcurrentTransactionGroups),
-    ],
+    groups: [...redisStateProviderConformanceGroups, ...stateAdapterConcurrentTransactionGroups],
   });
 });
 
 describe("Redis Cluster End-to-End Conformance (ioredis)", () => {
   conformanceTestSuite({
     it,
-    groups: withoutLockWaitCases([...endToEndBaseGroups, ...endToEndAsyncGroups]),
+    groups: [...endToEndBaseGroups, ...endToEndAsyncGroups],
   });
 });

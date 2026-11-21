@@ -3,6 +3,7 @@ import { it as baseIt, describe, expect } from "vitest";
 
 import {
   stateAdapterAsyncGroups,
+  stateAdapterAsyncLockWaitGroups,
   stateAdapterBaseGroups,
   stateAdapterCountCapGroups,
 } from "../conformance.state-adapter/groups.ts";
@@ -83,7 +84,14 @@ it("stamps every job of one createJobs call with the same createdAt", async ({
 });
 
 describe("In-Process State Adapter Conformance", () => {
-  conformanceTestSuite({ it, groups: [...stateAdapterBaseGroups, ...stateAdapterAsyncGroups] });
+  conformanceTestSuite({
+    it,
+    groups: [
+      ...stateAdapterBaseGroups,
+      ...stateAdapterAsyncGroups,
+      ...stateAdapterAsyncLockWaitGroups,
+    ],
+  });
 });
 
 describe("Sync In-Process State Adapter Conformance", () => {

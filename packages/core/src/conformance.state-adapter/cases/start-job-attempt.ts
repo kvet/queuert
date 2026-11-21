@@ -957,6 +957,13 @@ export const startJobAttemptHeldTransactionGroup: ConformanceGroup<StateAdapterC
           );
         },
       },
+    ],
+  };
+
+export const startJobAttemptHeldTransactionLockWaitGroup: ConformanceGroup<StateAdapterConformanceContext> =
+  {
+    name: "startJobAttempts",
+    cases: [
       {
         name: "a claim waiting on a transaction that locks and deletes the worker claims nothing",
         run: async ({ createStateAdapter }) => {

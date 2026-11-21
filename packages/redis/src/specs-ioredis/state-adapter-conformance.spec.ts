@@ -11,7 +11,6 @@ import { it as baseIt, describe } from "vitest";
 import {
   createRedisStateProviderConformanceContext,
   redisStateProviderConformanceGroups,
-  withoutLockWaitCases,
 } from "../conformance/state-provider-conformance.ts";
 import { createIoredisStateProvider } from "./state-provider.ioredis.ts";
 
@@ -66,7 +65,7 @@ describe("Redis State Provider Conformance (ioredis)", () => {
 describe("Redis State Adapter Conformance (ioredis) - Concurrent Transactions", () => {
   conformanceTestSuite({
     it,
-    groups: withoutLockWaitCases(stateAdapterConcurrentTransactionGroups),
+    groups: stateAdapterConcurrentTransactionGroups,
   });
 });
 

@@ -2,6 +2,7 @@ import type { ConformanceGroup } from "../conformance/runner.ts";
 import {
   addJobsBlockersGroup,
   addJobsBlockersConcurrentTransactionsGroup,
+  addJobsBlockersConcurrentTransactionsLockWaitGroup,
 } from "./cases/add-jobs-blockers.ts";
 import { closeGroup } from "./cases/close.ts";
 import { completeJobsGroup } from "./cases/complete-jobs.ts";
@@ -16,6 +17,7 @@ import { createJobsGroup } from "./cases/create-jobs.ts";
 import {
   deleteChainsGroup,
   deleteChainsConcurrentTransactionsGroup,
+  deleteChainsConcurrentTransactionsLockWaitGroup,
 } from "./cases/delete-chains.ts";
 import {
   extendWorkerLeaseGroup,
@@ -24,7 +26,7 @@ import {
 import { getChainTypeNamesGroup } from "./cases/get-chain-type-names.ts";
 import {
   getChainsGroup,
-  getChainsHeldTransactionGroup,
+  getChainsHeldTransactionLockWaitGroup,
   getChainsConcurrentTransactionsGroup,
 } from "./cases/get-chains.ts";
 import {
@@ -34,14 +36,19 @@ import {
 import { getJobTypeNamesGroup } from "./cases/get-job-type-names.ts";
 import {
   getJobsGroup,
-  getJobsHeldTransactionGroup,
+  getJobsHeldTransactionLockWaitGroup,
   getJobsConcurrentTransactionsGroup,
+  getJobsConcurrentTransactionsLockWaitGroup,
 } from "./cases/get-jobs.ts";
 import {
   getStartAttemptDelayMsGroup,
   getStartAttemptDelayMsConcurrentTransactionsGroup,
 } from "./cases/get-start-attempt-delay-ms.ts";
-import { getWorkersGroup, getWorkersHeldTransactionGroup } from "./cases/get-workers.ts";
+import {
+  getWorkersGroup,
+  getWorkersHeldTransactionGroup,
+  getWorkersHeldTransactionLockWaitGroup,
+} from "./cases/get-workers.ts";
 import { isTransactionGroup } from "./cases/is-transaction.ts";
 import {
   listBlockedJobsGroup,
@@ -60,6 +67,7 @@ import { schemaFenceConcurrentTransactionsGroup, schemaFenceGroup } from "./case
 import {
   startJobAttemptGroup,
   startJobAttemptHeldTransactionGroup,
+  startJobAttemptHeldTransactionLockWaitGroup,
   startJobAttemptConcurrentTransactionsGroup,
 } from "./cases/start-job-attempt.ts";
 import { startWorkerGroup } from "./cases/start-worker.ts";
@@ -69,7 +77,11 @@ import {
   txCallbacksGroup,
   txCallbacksSavepointGroup,
 } from "./cases/tx-callbacks.ts";
-import { unblockJobsGroup, unblockJobsConcurrentTransactionsGroup } from "./cases/unblock-jobs.ts";
+import {
+  unblockJobsGroup,
+  unblockJobsConcurrentTransactionsGroup,
+  unblockJobsConcurrentTransactionsLockWaitGroup,
+} from "./cases/unblock-jobs.ts";
 import {
   withTransactionGroup,
   withTransactionHeldTransactionGroup,
@@ -120,10 +132,15 @@ export const stateAdapterBaseGroups: ConformanceGroup<StateAdapterConformanceCon
 export const stateAdapterAsyncGroups: ConformanceGroup<StateAdapterConformanceContext>[] = [
   withTransactionHeldTransactionGroup,
   txCallbacksAsyncCallbackGroup,
-  getChainsHeldTransactionGroup,
-  getJobsHeldTransactionGroup,
   getWorkersHeldTransactionGroup,
   startJobAttemptHeldTransactionGroup,
+];
+
+export const stateAdapterAsyncLockWaitGroups: ConformanceGroup<StateAdapterConformanceContext>[] = [
+  getChainsHeldTransactionLockWaitGroup,
+  getJobsHeldTransactionLockWaitGroup,
+  getWorkersHeldTransactionLockWaitGroup,
+  startJobAttemptHeldTransactionLockWaitGroup,
 ];
 
 export const stateAdapterConcurrentTransactionGroups: ConformanceGroup<StateAdapterConformanceContext>[] =
@@ -142,6 +159,14 @@ export const stateAdapterConcurrentTransactionGroups: ConformanceGroup<StateAdap
     listJobsConcurrentTransactionsGroup,
     listChainJobsConcurrentTransactionsGroup,
     listBlockedJobsConcurrentTransactionsGroup,
+  ];
+
+export const stateAdapterConcurrentTransactionLockWaitGroups: ConformanceGroup<StateAdapterConformanceContext>[] =
+  [
+    getJobsConcurrentTransactionsLockWaitGroup,
+    addJobsBlockersConcurrentTransactionsLockWaitGroup,
+    unblockJobsConcurrentTransactionsLockWaitGroup,
+    deleteChainsConcurrentTransactionsLockWaitGroup,
   ];
 
 export const stateAdapterSchemaFenceGroups: ConformanceGroup<SchemaFenceConformanceContext>[] = [

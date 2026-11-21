@@ -43,6 +43,7 @@ import { validationGroup } from "./cases/validation.ts";
 import { workerGroup } from "./cases/worker.ts";
 import {
   workerlessCompletionConcurrentTransactionsGroup,
+  workerlessCompletionConcurrentTransactionsLockWaitGroup,
   workerlessCompletionGroup,
   workerlessCompletionNotifyConcurrentTransactionsGroup,
 } from "./cases/workerless-completion.ts";
@@ -98,6 +99,9 @@ export const endToEndNotifyConcurrentTransactionGroups: ConformanceGroup<StateAd
     workerlessCompletionNotifyConcurrentTransactionsGroup,
     rescheduleJobNotifyConcurrentTransactionsGroup,
   ];
+
+export const endToEndConcurrentTransactionLockWaitGroups: ConformanceGroup<StateAdapterConformanceContext>[] =
+  [workerlessCompletionConcurrentTransactionsLockWaitGroup];
 
 export const endToEndSavepointGroups: ConformanceGroup<EndToEndSavepointContext>[] = [
   processSavepointGroup,

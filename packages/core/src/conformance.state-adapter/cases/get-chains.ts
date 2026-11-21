@@ -162,82 +162,83 @@ export const getChainsGroup: ConformanceGroup<StateAdapterConformanceContext> = 
   ],
 };
 
-export const getChainsHeldTransactionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
-  name: "getChains",
-  cases: [
-    {
-      name: "lock: exclusive blocks a concurrent locked read until the holding tx commits",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
+export const getChainsHeldTransactionLockWaitGroup: ConformanceGroup<StateAdapterConformanceContext> =
+  {
+    name: "getChains",
+    cases: [
+      {
+        name: "lock: exclusive blocks a concurrent locked read until the holding tx commits",
+        run: async ({ createStateAdapter }) => {
+          await using stateAdapter = await createStateAdapter();
 
-        const [headChain] = await stateAdapter.withTransaction((txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              { id: stateAdapter.config.generateJobId(), typeName: "chain-locked", input: null },
-            ],
-          }),
-        );
+          const [headChain] = await stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "chain-locked", input: null },
+              ],
+            }),
+          );
 
-        const [continued] = await stateAdapter.withTransaction((txCtx) =>
-          stateAdapter.continueJobs({
-            txCtx,
-            jobs: [
-              {
-                id: stateAdapter.config.generateJobId(),
-                typeName: "chain-locked-step2",
-                continueFromId: headChain.head.id,
-                input: null,
-              },
-            ],
-          }),
-        );
-        const { continuation } = continued!;
+          const [continued] = await stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.continueJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "chain-locked-step2",
+                  continueFromId: headChain.head.id,
+                  input: null,
+                },
+              ],
+            }),
+          );
+          const { continuation } = continued!;
 
-        const { promise: holderGate, resolve: releaseHolder } = Promise.withResolvers<void>();
-        const { promise: lockHeld, resolve: signalLockHeld } = Promise.withResolvers<void>();
+          const { promise: holderGate, resolve: releaseHolder } = Promise.withResolvers<void>();
+          const { promise: lockHeld, resolve: signalLockHeld } = Promise.withResolvers<void>();
 
-        const holderTx = stateAdapter.withTransaction(async (txCtx) => {
-          await stateAdapter.getChains({
-            txCtx,
-            chainIds: [headChain.head.chainId],
-            lock: "exclusive",
-          });
-          signalLockHeld();
-          await holderGate;
-        });
-
-        await lockHeld;
-
-        let waiterResolved = false;
-        const waiterTx = Promise.resolve(
-          stateAdapter.withTransaction((txCtx) =>
-            stateAdapter.getChains({
+          const holderTx = stateAdapter.withTransaction(async (txCtx) => {
+            await stateAdapter.getChains({
               txCtx,
               chainIds: [headChain.head.chainId],
               lock: "exclusive",
-            }),
-          ),
-        ).then((chain) => {
-          waiterResolved = true;
-          return chain;
-        });
+            });
+            signalLockHeld();
+            await holderGate;
+          });
 
-        await sleep(LOCK_BLOCK_OBSERVATION_MS);
-        assert.equal(waiterResolved, false);
+          await lockHeld;
 
-        releaseHolder();
-        await holderTx;
+          let waiterResolved = false;
+          const waiterTx = Promise.resolve(
+            stateAdapter.withTransaction((txCtx) =>
+              stateAdapter.getChains({
+                txCtx,
+                chainIds: [headChain.head.chainId],
+                lock: "exclusive",
+              }),
+            ),
+          ).then((chain) => {
+            waiterResolved = true;
+            return chain;
+          });
 
-        const [observed] = await waiterTx;
-        assert.notEqual(observed, undefined);
-        assert.equal(observed!.head.id, headChain.head.id);
-        assert.notEqual(observed!.tail, undefined);
-        assert.equal(observed!.tail!.id, continuation.id);
+          await sleep(LOCK_BLOCK_OBSERVATION_MS);
+          assert.equal(waiterResolved, false);
+
+          releaseHolder();
+          await holderTx;
+
+          const [observed] = await waiterTx;
+          assert.notEqual(observed, undefined);
+          assert.equal(observed!.head.id, headChain.head.id);
+          assert.notEqual(observed!.tail, undefined);
+          assert.equal(observed!.tail!.id, continuation.id);
+        },
       },
-    },
-  ],
-};
+    ],
+  };
 
 export const getChainsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterConformanceContext> =
   {

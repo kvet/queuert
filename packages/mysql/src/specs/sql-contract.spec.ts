@@ -5,8 +5,10 @@ import type { RuntimeType } from "@queuert/typed-sql";
 import { type Pool, createPool } from "mysql2/promise";
 import {
   stateAdapterAsyncGroups,
+  stateAdapterAsyncLockWaitGroups,
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
+  stateAdapterConcurrentTransactionLockWaitGroups,
 } from "queuert/conformance-internal";
 import { it as baseIt, describe, expect } from "vitest";
 
@@ -127,7 +129,9 @@ for (const { image, dialect, connectionOptions } of acquired) {
       groups: [
         ...stateAdapterBaseGroups,
         ...stateAdapterAsyncGroups,
+        ...stateAdapterAsyncLockWaitGroups,
         ...stateAdapterConcurrentTransactionGroups,
+        ...stateAdapterConcurrentTransactionLockWaitGroups,
       ],
     });
 

@@ -2,6 +2,7 @@ export {
   endToEndAsyncGroups,
   endToEndBaseGroups,
   endToEndConcurrentTransactionGroups,
+  endToEndConcurrentTransactionLockWaitGroups,
   endToEndFlakyDbConcurrentTransactionGroups,
   endToEndFlakyDbGroups,
   endToEndNotifyConcurrentTransactionGroups,
@@ -25,8 +26,10 @@ export type {
 } from "./conformance.state-adapter/types.ts";
 export {
   stateAdapterAsyncGroups,
+  stateAdapterAsyncLockWaitGroups,
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
+  stateAdapterConcurrentTransactionLockWaitGroups,
   stateAdapterCountCapGroups,
   stateAdapterSavepointGroups,
   stateAdapterSchemaFenceConcurrentTransactionGroups,

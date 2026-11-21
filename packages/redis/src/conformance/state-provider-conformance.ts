@@ -20,34 +20,6 @@ export type RedisStateProviderConformanceContext = SchemaFenceConformanceContext
   createStateAdapter: () => Promise<ReturnType<typeof createRedisStateAdapter>>;
 };
 
-export const redisStateAdapterLockWaitCaseNames: ReadonlySet<string> = new Set([
-  "getChains > lock: exclusive blocks a concurrent locked read until the holding tx commits",
-  "getJobs > lock: exclusive blocks a concurrent locked read until the holding tx commits",
-  "getWorkers > lock: exclusive blocks a concurrent locked read until the holding tx commits",
-  "startJobAttempts > a claim waiting on a transaction that locks and deletes the worker claims nothing",
-  "getJobs > lock: exclusive on a continuation also locks its chain head",
-  "addJobsBlockers > reports a blocker chain deleted while it waited on the head lock as missing",
-  "addJobsBlockers > reports a blocker chain continued while it waited on the head lock as incomplete",
-  "addJobsBlockers > reports a blocker chain completed while it waited on the head lock as complete",
-  "unblockJobs > unblocks a dependent whose blocker was added before the chain completed, without a caller pre-lock",
-  "unblockJobs > leaves a dependent pending when its blocker completed before the blocker was added, without a caller pre-lock",
-  "deleteChains > sees a blocker reference committed while it waited on the head lock",
-  "deleteChains > deletes a continuation committed while it waited on the head lock",
-  "workerless-completion > completes the continuation committed while completeChain waits on the old tail",
-]);
-
-export const withoutLockWaitCases = <TContext>(
-  groups: ConformanceGroup<TContext>[],
-): ConformanceGroup<TContext>[] =>
-  groups
-    .map((group) => ({
-      name: group.name,
-      cases: group.cases.filter(
-        (testCase) => !redisStateAdapterLockWaitCaseNames.has(`${group.name} > ${testCase.name}`),
-      ),
-    }))
-    .filter((group) => group.cases.length > 0);
-
 const evalOnce = async (
   createStateProvider: () => Promise<RedisStateProvider>,
   script: string,
@@ -232,7 +204,8 @@ export const createRedisStateProviderConformanceContext = ({
 export const redisStateProviderConformanceGroups: ConformanceGroup<RedisStateProviderConformanceContext>[] =
   [
     redisStateProviderEvalGroup,
-    ...withoutLockWaitCases([...stateAdapterBaseGroups, ...stateAdapterAsyncGroups]),
+    ...stateAdapterBaseGroups,
+    ...stateAdapterAsyncGroups,
     ...stateAdapterSchemaFenceGroups,
   ];
 

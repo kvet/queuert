@@ -239,50 +239,57 @@ export const getWorkersHeldTransactionGroup: ConformanceGroup<StateAdapterConfor
         assert.equal(worker!.expired, true);
       },
     },
-    {
-      name: "lock: exclusive blocks a concurrent locked read until the holding tx commits",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
-
-        const workerId = stateAdapter.config.generateWorkerId();
-        await stateAdapter.startWorker({
-          workerId,
-          typeNames: [],
-          concurrency: 1,
-          leaseMs: 60_000,
-        });
-
-        const holderGate = Promise.withResolvers<void>();
-        const lockHeld = Promise.withResolvers<void>();
-
-        const holderTx = stateAdapter.withTransaction(async (txCtx) => {
-          await stateAdapter.getWorkers({ txCtx, workerIds: [workerId], lock: "exclusive" });
-          lockHeld.resolve();
-          await holderGate.promise;
-        });
-
-        await lockHeld.promise;
-
-        const waiterTx = Promise.resolve(
-          stateAdapter.withTransaction((txCtx) =>
-            stateAdapter.getWorkers({ txCtx, workerIds: [workerId], lock: "exclusive" }),
-          ),
-        );
-
-        assert.equal(
-          await raceWithSleep(
-            waiterTx.then(() => "resolved"),
-            LOCK_BLOCK_OBSERVATION_MS,
-          ),
-          undefined,
-        );
-
-        holderGate.resolve();
-        await holderTx;
-
-        const [observed] = await waiterTx;
-        assert.equal(observed!.id, workerId);
-      },
-    },
   ],
 };
+
+export const getWorkersHeldTransactionLockWaitGroup: ConformanceGroup<StateAdapterConformanceContext> =
+  {
+    name: "getWorkers",
+    cases: [
+      {
+        name: "lock: exclusive blocks a concurrent locked read until the holding tx commits",
+        run: async ({ createStateAdapter }) => {
+          await using stateAdapter = await createStateAdapter();
+
+          const workerId = stateAdapter.config.generateWorkerId();
+          await stateAdapter.startWorker({
+            workerId,
+            typeNames: [],
+            concurrency: 1,
+            leaseMs: 60_000,
+          });
+
+          const holderGate = Promise.withResolvers<void>();
+          const lockHeld = Promise.withResolvers<void>();
+
+          const holderTx = stateAdapter.withTransaction(async (txCtx) => {
+            await stateAdapter.getWorkers({ txCtx, workerIds: [workerId], lock: "exclusive" });
+            lockHeld.resolve();
+            await holderGate.promise;
+          });
+
+          await lockHeld.promise;
+
+          const waiterTx = Promise.resolve(
+            stateAdapter.withTransaction((txCtx) =>
+              stateAdapter.getWorkers({ txCtx, workerIds: [workerId], lock: "exclusive" }),
+            ),
+          );
+
+          assert.equal(
+            await raceWithSleep(
+              waiterTx.then(() => "resolved"),
+              LOCK_BLOCK_OBSERVATION_MS,
+            ),
+            undefined,
+          );
+
+          holderGate.resolve();
+          await holderTx;
+
+          const [observed] = await waiterTx;
+          assert.equal(observed!.id, workerId);
+        },
+      },
+    ],
+  };

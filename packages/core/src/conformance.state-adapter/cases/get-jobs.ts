@@ -35,104 +35,33 @@ export const getJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   ],
 };
 
-export const getJobsHeldTransactionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
-  name: "getJobs",
-  cases: [
-    {
-      name: "lock: exclusive blocks a concurrent locked read until the holding tx commits",
-      run: async ({ createStateAdapter }) => {
-        await using stateAdapter = await createStateAdapter();
-
-        const [seedChain] = await stateAdapter.withTransaction((txCtx) =>
-          stateAdapter.createJobs({
-            txCtx,
-            jobs: [
-              {
-                id: stateAdapter.config.generateJobId(),
-                typeName: "lock-blocking-job",
-                input: { value: 1 },
-              },
-            ],
-          }),
-        );
-
-        const { promise: holderGate, resolve: releaseHolder } = Promise.withResolvers<void>();
-        const { promise: lockHeld, resolve: signalLockHeld } = Promise.withResolvers<void>();
-
-        const holderTx = stateAdapter.withTransaction(async (txCtx) => {
-          await stateAdapter.getJobs({ txCtx, jobIds: [seedChain.head.id], lock: "exclusive" });
-          signalLockHeld();
-          await holderGate;
-        });
-
-        await lockHeld;
-
-        let waiterResolved = false;
-        const waiterTx = Promise.resolve(
-          stateAdapter.withTransaction((txCtx) =>
-            stateAdapter.getJobs({ txCtx, jobIds: [seedChain.head.id], lock: "exclusive" }),
-          ),
-        ).then((job) => {
-          waiterResolved = true;
-          return job;
-        });
-
-        await sleep(LOCK_BLOCK_OBSERVATION_MS);
-        assert.equal(waiterResolved, false);
-
-        releaseHolder();
-        await holderTx;
-
-        const [observed] = await waiterTx;
-        assert.notEqual(observed, undefined);
-        assert.equal(observed!.id, seedChain.head.id);
-        assert.deepEqual(observed!.input, { value: 1 });
-      },
-    },
-  ],
-};
-
-export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterConformanceContext> =
+export const getJobsHeldTransactionLockWaitGroup: ConformanceGroup<StateAdapterConformanceContext> =
   {
     name: "getJobs",
     cases: [
       {
-        name: "lock: exclusive on a continuation also locks its chain head",
+        name: "lock: exclusive blocks a concurrent locked read until the holding tx commits",
         run: async ({ createStateAdapter }) => {
           await using stateAdapter = await createStateAdapter();
 
-          const [headChain] = await stateAdapter.withTransaction((txCtx) =>
+          const [seedChain] = await stateAdapter.withTransaction((txCtx) =>
             stateAdapter.createJobs({
               txCtx,
               jobs: [
                 {
                   id: stateAdapter.config.generateJobId(),
-                  typeName: "lock-head-chain",
-                  input: null,
+                  typeName: "lock-blocking-job",
+                  input: { value: 1 },
                 },
               ],
             }),
           );
-          const [continued] = await stateAdapter.withTransaction((txCtx) =>
-            stateAdapter.continueJobs({
-              txCtx,
-              jobs: [
-                {
-                  id: stateAdapter.config.generateJobId(),
-                  typeName: "lock-head-chain-step",
-                  input: null,
-                  continueFromId: headChain.head.id,
-                },
-              ],
-            }),
-          );
-          const { continuation } = continued!;
 
           const { promise: holderGate, resolve: releaseHolder } = Promise.withResolvers<void>();
           const { promise: lockHeld, resolve: signalLockHeld } = Promise.withResolvers<void>();
 
           const holderTx = stateAdapter.withTransaction(async (txCtx) => {
-            await stateAdapter.getJobs({ txCtx, jobIds: [continuation.id], lock: "exclusive" });
+            await stateAdapter.getJobs({ txCtx, jobIds: [seedChain.head.id], lock: "exclusive" });
             signalLockHeld();
             await holderGate;
           });
@@ -142,11 +71,11 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
           let waiterResolved = false;
           const waiterTx = Promise.resolve(
             stateAdapter.withTransaction((txCtx) =>
-              stateAdapter.getChains({ txCtx, chainIds: [headChain.head.id], lock: "exclusive" }),
+              stateAdapter.getJobs({ txCtx, jobIds: [seedChain.head.id], lock: "exclusive" }),
             ),
-          ).then((chains) => {
+          ).then((job) => {
             waiterResolved = true;
-            return chains;
+            return job;
           });
 
           await sleep(LOCK_BLOCK_OBSERVATION_MS);
@@ -157,9 +86,17 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
 
           const [observed] = await waiterTx;
           assert.notEqual(observed, undefined);
-          assert.equal(observed!.id, headChain.head.id);
+          assert.equal(observed!.id, seedChain.head.id);
+          assert.deepEqual(observed!.input, { value: 1 });
         },
       },
+    ],
+  };
+
+export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterConformanceContext> =
+  {
+    name: "getJobs",
+    cases: [
       {
         name: "parallel non-transactional reads all return correct results",
         run: async ({ createStateAdapter }) => {
@@ -363,6 +300,77 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
           assert.equal(observed?.completedAt, null);
           assert.equal(observed?.attemptAt, null);
           assert.equal(observed?.attempt, 0);
+        },
+      },
+    ],
+  };
+
+export const getJobsConcurrentTransactionsLockWaitGroup: ConformanceGroup<StateAdapterConformanceContext> =
+  {
+    name: "getJobs",
+    cases: [
+      {
+        name: "lock: exclusive on a continuation also locks its chain head",
+        run: async ({ createStateAdapter }) => {
+          await using stateAdapter = await createStateAdapter();
+
+          const [headChain] = await stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "lock-head-chain",
+                  input: null,
+                },
+              ],
+            }),
+          );
+          const [continued] = await stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.continueJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "lock-head-chain-step",
+                  input: null,
+                  continueFromId: headChain.head.id,
+                },
+              ],
+            }),
+          );
+          const { continuation } = continued!;
+
+          const { promise: holderGate, resolve: releaseHolder } = Promise.withResolvers<void>();
+          const { promise: lockHeld, resolve: signalLockHeld } = Promise.withResolvers<void>();
+
+          const holderTx = stateAdapter.withTransaction(async (txCtx) => {
+            await stateAdapter.getJobs({ txCtx, jobIds: [continuation.id], lock: "exclusive" });
+            signalLockHeld();
+            await holderGate;
+          });
+
+          await lockHeld;
+
+          let waiterResolved = false;
+          const waiterTx = Promise.resolve(
+            stateAdapter.withTransaction((txCtx) =>
+              stateAdapter.getChains({ txCtx, chainIds: [headChain.head.id], lock: "exclusive" }),
+            ),
+          ).then((chains) => {
+            waiterResolved = true;
+            return chains;
+          });
+
+          await sleep(LOCK_BLOCK_OBSERVATION_MS);
+          assert.equal(waiterResolved, false);
+
+          releaseHolder();
+          await holderTx;
+
+          const [observed] = await waiterTx;
+          assert.notEqual(observed, undefined);
+          assert.equal(observed!.id, headChain.head.id);
         },
       },
     ],

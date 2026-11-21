@@ -17,6 +17,7 @@ import {
   type SchemaFenceConformanceContext,
   runInModeOf,
   stateAdapterAsyncGroups,
+  stateAdapterAsyncLockWaitGroups,
   stateAdapterBaseGroups,
   stateAdapterSavepointGroups,
   stateAdapterSchemaFenceGroups,
@@ -491,7 +492,9 @@ export const createSqliteStateProviderConformanceCases = (
     [
       ...sqliteStateProviderConformanceGroups,
       ...sqliteSyncStateProviderConformanceGroups,
-      ...(options.mode === "async" ? stateAdapterAsyncGroups : []),
+      ...(options.mode === "async"
+        ? [...stateAdapterAsyncGroups, ...stateAdapterAsyncLockWaitGroups]
+        : []),
     ],
     createSqliteStateProviderConformanceContext(options),
   );

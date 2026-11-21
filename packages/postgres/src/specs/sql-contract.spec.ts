@@ -6,8 +6,10 @@ import type { RuntimeType } from "@queuert/typed-sql";
 import { Client, Pool } from "pg";
 import {
   stateAdapterAsyncGroups,
+  stateAdapterAsyncLockWaitGroups,
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
+  stateAdapterConcurrentTransactionLockWaitGroups,
   type StateAdapterConformanceContext,
 } from "queuert/conformance-internal";
 import { it as baseIt, describe, expect } from "vitest";
@@ -340,7 +342,9 @@ describe("PostgreSQL SQL contract", () => {
     groups: [
       ...stateAdapterBaseGroups,
       ...stateAdapterAsyncGroups,
+      ...stateAdapterAsyncLockWaitGroups,
       ...stateAdapterConcurrentTransactionGroups,
+      ...stateAdapterConcurrentTransactionLockWaitGroups,
     ],
   });
 });

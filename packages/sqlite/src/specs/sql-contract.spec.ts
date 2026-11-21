@@ -5,6 +5,7 @@ import type { RuntimeType } from "@queuert/typed-sql";
 import Database from "better-sqlite3";
 import {
   stateAdapterAsyncGroups,
+  stateAdapterAsyncLockWaitGroups,
   stateAdapterBaseGroups,
   type StateAdapterConformanceContext,
 } from "queuert/conformance-internal";
@@ -212,7 +213,11 @@ const syncContractIt = contractIt("sync");
 describe("SQLite SQL contract", () => {
   conformanceTestSuite({
     it: asyncContractIt,
-    groups: [...stateAdapterBaseGroups, ...stateAdapterAsyncGroups],
+    groups: [
+      ...stateAdapterBaseGroups,
+      ...stateAdapterAsyncGroups,
+      ...stateAdapterAsyncLockWaitGroups,
+    ],
   });
 });
 

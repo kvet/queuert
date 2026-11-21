@@ -7,9 +7,11 @@ import {
   type SchemaFenceConformanceContext,
   toConformanceTestCases,
   stateAdapterAsyncGroups,
+  stateAdapterAsyncLockWaitGroups,
   stateAdapterBaseGroups,
   stateAdapterSavepointGroups,
   stateAdapterConcurrentTransactionGroups,
+  stateAdapterConcurrentTransactionLockWaitGroups,
   stateAdapterSchemaFenceConcurrentTransactionGroups,
   stateAdapterSchemaFenceGroups,
 } from "queuert/conformance-internal";
@@ -259,8 +261,10 @@ export const isolationLevelGroup: ConformanceGroup<PgStateProviderConformanceCon
 export const pgStateAdapterConformanceGroups: ConformanceGroup<SchemaFenceConformanceContext>[] = [
   ...stateAdapterBaseGroups,
   ...stateAdapterAsyncGroups,
+  ...stateAdapterAsyncLockWaitGroups,
   ...stateAdapterSchemaFenceGroups,
   ...stateAdapterConcurrentTransactionGroups,
+  ...stateAdapterConcurrentTransactionLockWaitGroups,
   ...stateAdapterSchemaFenceConcurrentTransactionGroups,
 ];
 

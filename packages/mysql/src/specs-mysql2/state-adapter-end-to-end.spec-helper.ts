@@ -8,6 +8,7 @@ import {
   type EndToEndSavepointContext,
   createFlakyBatchGenerator,
   endToEndConcurrentTransactionGroups,
+  endToEndConcurrentTransactionLockWaitGroups,
   endToEndFlakyDbConcurrentTransactionGroups,
   endToEndFlakyDbGroups,
   endToEndPoisonTransactionGroups,
@@ -113,6 +114,7 @@ export const createEndToEndContext = async (
 
 export const capabilityGroups: ConformanceGroup<EndToEndContext>[] = [
   ...endToEndConcurrentTransactionGroups,
+  ...endToEndConcurrentTransactionLockWaitGroups,
   ...endToEndSavepointGroups,
   ...endToEndPoisonTransactionGroups,
   ...endToEndFlakyDbGroups,

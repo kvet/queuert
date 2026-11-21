@@ -1,7 +1,10 @@
 // oxlint-disable no-empty-pattern -- vitest fixtures must destructure their context
 import { conformanceTestSuite } from "@queuert/helpers/conformance";
 import Database from "better-sqlite3";
-import { stateAdapterAsyncGroups } from "queuert/conformance-internal";
+import {
+  stateAdapterAsyncGroups,
+  stateAdapterAsyncLockWaitGroups,
+} from "queuert/conformance-internal";
 import { it as baseIt, describe } from "vitest";
 
 import {
@@ -68,7 +71,11 @@ it("index");
 describe("SQLite State Provider Conformance", () => {
   conformanceTestSuite({
     it,
-    groups: [...sqliteStateProviderConformanceGroups, ...stateAdapterAsyncGroups],
+    groups: [
+      ...sqliteStateProviderConformanceGroups,
+      ...stateAdapterAsyncGroups,
+      ...stateAdapterAsyncLockWaitGroups,
+    ],
   });
 });
 

@@ -7,8 +7,10 @@ import {
 } from "../conformance.notify-adapter/notify-adapter-cases.ts";
 import {
   stateAdapterAsyncGroups,
+  stateAdapterAsyncLockWaitGroups,
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
+  stateAdapterConcurrentTransactionLockWaitGroups,
 } from "../conformance.state-adapter/groups.ts";
 import {
   createStateAdapterConformanceCases,
@@ -25,6 +27,7 @@ import {
   endToEndAsyncGroups,
   endToEndBaseGroups,
   endToEndConcurrentTransactionGroups,
+  endToEndConcurrentTransactionLockWaitGroups,
   endToEndNotifyConcurrentTransactionGroups,
   endToEndNotifyGroups,
 } from "./groups.ts";
@@ -90,13 +93,23 @@ describe("createStateAdapterEndToEndConformanceCases", () => {
       titlesOf(stateAdapterBaseGroups),
     );
     expect(titles(createStateAdapterConformanceCases({ ...stateContext, mode: "async" }))).toEqual(
-      titlesOf([...stateAdapterBaseGroups, ...stateAdapterAsyncGroups]),
+      titlesOf([
+        ...stateAdapterBaseGroups,
+        ...stateAdapterAsyncGroups,
+        ...stateAdapterAsyncLockWaitGroups,
+      ]),
     );
     expect(
       titles(
         createStateAdapterConformanceCases({ ...stateContext, mode: "sync", concurrent: true }),
       ),
-    ).toEqual(titlesOf([...stateAdapterBaseGroups, ...stateAdapterConcurrentTransactionGroups]));
+    ).toEqual(
+      titlesOf([
+        ...stateAdapterBaseGroups,
+        ...stateAdapterConcurrentTransactionGroups,
+        ...stateAdapterConcurrentTransactionLockWaitGroups,
+      ]),
+    );
     expect(
       titles(createStateAdapterEndToEndConformanceCases({ ...stateContext, mode: "sync" })),
     ).toEqual(titlesOf([...endToEndBaseGroups, ...endToEndNotifyGroups]));
@@ -114,6 +127,7 @@ describe("createStateAdapterEndToEndConformanceCases", () => {
         ...endToEndNotifyGroups,
         ...endToEndAsyncGroups,
         ...endToEndConcurrentTransactionGroups,
+        ...endToEndConcurrentTransactionLockWaitGroups,
         ...endToEndNotifyConcurrentTransactionGroups,
       ]),
     );
