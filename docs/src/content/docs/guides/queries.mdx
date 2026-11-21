@@ -13,7 +13,7 @@ Look up a single chain or job by ID, or a batch of them in one round trip. Batch
 
 <ExampleCode example="guides" file="src/queries.ts" region="lookups" />
 
-`getChain`, `getChains`, `getJob`, `getJobs`, `getJobBlockers`, and `listBlockedJobs` accept an optional `typeName` for type narrowing (`listChainJobs`, `getChainTailJob` and `getChainTailJobs` take `chainTypeName`) — the return type narrows to the specified type, so a completed `process-order` chain exposes its typed `output`. If the entity exists but has a different type, `ChainTypeMismatchError` or `JobTypeMismatchError` is thrown.
+`getChain`, `getChains`, `getJob`, `getJobs`, `getJobBlockers`, and `listBlockedJobs` accept an optional `typeName` for type narrowing (`listChainJobs`, `getChainTailJob` and `getChainTailJobs` take `chainTypeName`) — the return type narrows to the specified type, so a completed `process-order` chain exposes its typed `output`. If the entity exists but has a different type, `ChainTypeMismatchError` or `JobTypeMismatchError` is thrown; `getChains` and `getChainTailJobs` throw `ChainsTypeMismatchError` and `getJobs` throws `JobsTypeMismatchError` instead, listing every mismatched id.
 
 All query methods accept an optional transaction context in which every field is optional, so a read needs only the transaction handle, not the `txHooks` some providers carry in their context:
 

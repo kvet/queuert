@@ -1,9 +1,9 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 
-import { JobTypeMismatchError } from "../errors.ts";
+import { JobsTypeMismatchError } from "../errors.ts";
 import { createNoopJobTypes } from "../job-types/job-types.ts";
 import type { StateJobInfo } from "../state-adapter/state-adapter.ts";
-import { type Job, assertJobTypeName, mapStateJobToJob } from "./job.ts";
+import { type Job, assertJobsTypeName, mapStateJobToJob } from "./job.ts";
 
 const chainInfo = {
   id: "chain-1",
@@ -127,34 +127,32 @@ describe("mapStateJobToJob", () => {
   });
 });
 
-describe("assertJobTypeName", () => {
+describe("assertJobsTypeName", () => {
   it("passes without a type name, a stored job, or a mismatch", () => {
     expect(() => {
-      assertJobTypeName(
-        { ...pendingStateJob, typeName: "other" },
-        { jobId: "job-1", typeName: undefined },
-      );
-    }).not.toThrow();
-    expect(() => {
-      assertJobTypeName(undefined, { jobId: "job-1", typeName: "test" });
-    }).not.toThrow();
-    expect(() => {
-      assertJobTypeName(pendingStateJob, { jobId: "job-1", typeName: "test" });
+      assertJobsTypeName([{ ...pendingStateJob, typeName: "other" }, undefined, pendingStateJob], {
+        jobIds: ["job-1", "job-2", "job-3"],
+        typeNames: [undefined, "test", "test"],
+      });
     }).not.toThrow();
   });
 
-  it("throws JobTypeMismatchError when the stored type differs", () => {
+  it("throws JobsTypeMismatchError listing every job whose stored type differs", () => {
     expect(() => {
-      assertJobTypeName(
-        { ...pendingStateJob, typeName: "other" },
-        { jobId: "job-1", typeName: "test" },
+      assertJobsTypeName(
+        [
+          { ...pendingStateJob, id: "job-1", typeName: "other" },
+          { ...pendingStateJob, id: "job-2" },
+          { ...pendingStateJob, id: "job-3", typeName: "another" },
+        ],
+        { jobIds: ["job-1", "job-2", "job-3"], typeNames: ["test", "test", "test"] },
       );
     }).toThrow(
       expect.objectContaining({
-        constructor: JobTypeMismatchError,
-        message: 'Expected job job-1 to have type "test" but found "other"',
-        expectedTypeName: "test",
-        actualTypeName: "other",
+        constructor: JobsTypeMismatchError,
+        jobIds: ["job-1", "job-3"],
+        expectedTypeNames: ["test", "test"],
+        actualTypeNames: ["other", "another"],
       }),
     );
   });

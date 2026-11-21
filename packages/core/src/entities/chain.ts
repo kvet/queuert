@@ -1,6 +1,6 @@
-import { ChainTypeMismatchError } from "../errors.ts";
+import { ChainsTypeMismatchError } from "../errors.ts";
 import type { JobTypes } from "../job-types/job-types.ts";
-import type { StateChain } from "../state-adapter/state-adapter.ts";
+import type { StateChain, StateChainInfo } from "../state-adapter/state-adapter.ts";
 import type { AnyChain } from "./chain.types.ts";
 
 export type * from "./chain.types.ts";
@@ -27,16 +27,26 @@ export const mapStateChainToChain = (
   };
 };
 
-export const assertChainTypeName = (
-  stateChain: StateChain | undefined,
-  { chainId, typeName }: { chainId: string; typeName: string | undefined },
+export const assertChainsTypeName = (
+  stateChains: (StateChainInfo | undefined)[],
+  { chainIds, typeName }: { chainIds: string[]; typeName: string | undefined },
 ): void => {
-  if (!typeName || stateChain === undefined || stateChain.typeName === typeName) return;
-  throw new ChainTypeMismatchError(
-    `Expected chain ${chainId} to have type "${typeName}" but found "${stateChain.typeName}"`,
+  if (!typeName) return;
+  const mismatched = chainIds.flatMap((chainId, index) => {
+    const stateChain = stateChains[index];
+    return stateChain !== undefined && stateChain.typeName !== typeName
+      ? [{ chainId, actualTypeName: stateChain.typeName }]
+      : [];
+  });
+  if (mismatched.length === 0) return;
+  throw new ChainsTypeMismatchError(
+    `Expected chains to have type "${typeName}": ${mismatched
+      .map(({ chainId, actualTypeName }) => `${chainId} (found "${actualTypeName}")`)
+      .join(", ")}`,
     {
-      expectedTypeName: typeName,
-      actualTypeName: stateChain.typeName,
+      chainIds: mismatched.map(({ chainId }) => chainId),
+      expectedTypeNames: mismatched.map(() => typeName),
+      actualTypeNames: mismatched.map(({ actualTypeName }) => actualTypeName),
     },
   );
 };

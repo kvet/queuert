@@ -222,6 +222,35 @@ export class JobTypeMismatchError extends Error {
   }
 }
 
+/**
+ * Thrown when {@link Client.getJobs | getJobs} narrows by a `typeName` that any found job does not
+ * have. Batch variant of {@link JobTypeMismatchError}, listing every offending input id.
+ */
+export class JobsTypeMismatchError extends Error {
+  /** The input ids whose type differs. */
+  readonly jobIds: readonly string[];
+  /** The type name passed for each job in `jobIds`, in the same order. */
+  readonly expectedTypeNames: readonly string[];
+  /** The stored type name of each job in `jobIds`, in the same order. */
+  readonly actualTypeNames: readonly string[];
+
+  constructor(
+    message: string,
+    options: {
+      jobIds: readonly string[];
+      expectedTypeNames: readonly string[];
+      actualTypeNames: readonly string[];
+      cause?: unknown;
+    },
+  ) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "JobsTypeMismatchError";
+    this.jobIds = options.jobIds;
+    this.expectedTypeNames = options.expectedTypeNames;
+    this.actualTypeNames = options.actualTypeNames;
+  }
+}
+
 /** Thrown when a chain's actual type does not match the expected `typeName`. */
 export class ChainTypeMismatchError extends Error {
   /** The type name that was expected. */
@@ -237,6 +266,36 @@ export class ChainTypeMismatchError extends Error {
     this.name = "ChainTypeMismatchError";
     this.expectedTypeName = options.expectedTypeName;
     this.actualTypeName = options.actualTypeName;
+  }
+}
+
+/**
+ * Thrown when {@link Client.getChains | getChains} or
+ * {@link Client.getChainTailJobs | getChainTailJobs} narrows by a `typeName` that any found chain
+ * does not have. Batch variant of {@link ChainTypeMismatchError}, listing every offending input id.
+ */
+export class ChainsTypeMismatchError extends Error {
+  /** The input ids whose chain type differs. */
+  readonly chainIds: readonly string[];
+  /** The type name expected for each chain in `chainIds`, in the same order. */
+  readonly expectedTypeNames: readonly string[];
+  /** The stored type name of each chain in `chainIds`, in the same order. */
+  readonly actualTypeNames: readonly string[];
+
+  constructor(
+    message: string,
+    options: {
+      chainIds: readonly string[];
+      expectedTypeNames: readonly string[];
+      actualTypeNames: readonly string[];
+      cause?: unknown;
+    },
+  ) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "ChainsTypeMismatchError";
+    this.chainIds = options.chainIds;
+    this.expectedTypeNames = options.expectedTypeNames;
+    this.actualTypeNames = options.actualTypeNames;
   }
 }
 
@@ -357,3 +416,31 @@ export class JobTypeValidationError extends Error {
     this.details = options.details ?? {};
   }
 }
+
+export const toSingleJobError = (error: unknown, jobId: string): unknown => {
+  if (error instanceof JobsTypeMismatchError) {
+    return new JobTypeMismatchError(
+      `Expected job ${jobId} to have type "${error.expectedTypeNames[0]}" but found "${error.actualTypeNames[0]}"`,
+      {
+        expectedTypeName: error.expectedTypeNames[0],
+        actualTypeName: error.actualTypeNames[0],
+        cause: error,
+      },
+    );
+  }
+  return error;
+};
+
+export const toSingleChainError = (error: unknown, chainId: string): unknown => {
+  if (error instanceof ChainsTypeMismatchError) {
+    return new ChainTypeMismatchError(
+      `Expected chain ${chainId} to have type "${error.expectedTypeNames[0]}" but found "${error.actualTypeNames[0]}"`,
+      {
+        expectedTypeName: error.expectedTypeNames[0],
+        actualTypeName: error.actualTypeNames[0],
+        cause: error,
+      },
+    );
+  }
+  return error;
+};

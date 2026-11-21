@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { ChainTypeMismatchError } from "../errors.ts";
+import { ChainsTypeMismatchError } from "../errors.ts";
 import { createNoopJobTypes } from "../job-types/job-types.ts";
 import type { StateChain, StateChainInfo, StateJobInfo } from "../state-adapter/state-adapter.ts";
-import { assertChainTypeName, mapStateChainToChain } from "./chain.ts";
+import { assertChainsTypeName, mapStateChainToChain } from "./chain.ts";
 
 const headJob: StateJobInfo = {
   id: "chain-1",
@@ -118,34 +118,38 @@ describe("mapStateChainToChain", () => {
 
 const stateChain: StateChain = { ...chainInfo, head: headJob, tail: undefined };
 
-describe("assertChainTypeName", () => {
+describe("assertChainsTypeName", () => {
   it("passes without a type name, a stored chain, or a mismatch", () => {
     expect(() => {
-      assertChainTypeName(
-        { ...stateChain, typeName: "other" },
-        { chainId: "chain-1", typeName: undefined },
-      );
+      assertChainsTypeName([{ ...stateChain, typeName: "other" }], {
+        chainIds: ["chain-1"],
+        typeName: undefined,
+      });
     }).not.toThrow();
     expect(() => {
-      assertChainTypeName(undefined, { chainId: "chain-1", typeName: "test" });
-    }).not.toThrow();
-    expect(() => {
-      assertChainTypeName(stateChain, { chainId: "chain-1", typeName: "test" });
+      assertChainsTypeName([undefined, stateChain], {
+        chainIds: ["chain-1", "chain-2"],
+        typeName: "test",
+      });
     }).not.toThrow();
   });
 
-  it("throws ChainTypeMismatchError when the stored type differs", () => {
+  it("throws ChainsTypeMismatchError listing every chain whose stored type differs", () => {
     expect(() => {
-      assertChainTypeName(
-        { ...stateChain, typeName: "other" },
-        { chainId: "chain-1", typeName: "test" },
+      assertChainsTypeName(
+        [
+          { ...stateChain, id: "chain-1", typeName: "other" },
+          { ...stateChain, id: "chain-2" },
+          { ...stateChain, id: "chain-3", typeName: "another" },
+        ],
+        { chainIds: ["chain-1", "chain-2", "chain-3"], typeName: "test" },
       );
     }).toThrow(
       expect.objectContaining({
-        constructor: ChainTypeMismatchError,
-        message: 'Expected chain chain-1 to have type "test" but found "other"',
-        expectedTypeName: "test",
-        actualTypeName: "other",
+        constructor: ChainsTypeMismatchError,
+        chainIds: ["chain-1", "chain-3"],
+        expectedTypeNames: ["test", "test"],
+        actualTypeNames: ["other", "another"],
       }),
     );
   });

@@ -8,7 +8,12 @@ import { createClient } from "../../client/client.ts";
 import type { StateAdapterConformanceContext } from "../../conformance.state-adapter/types.ts";
 import { runInModeOf } from "../../conformance/adapters.ts";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
-import { ChainTypeMismatchError, JobTypeMismatchError } from "../../errors.ts";
+import {
+  ChainTypeMismatchError,
+  ChainsTypeMismatchError,
+  JobTypeMismatchError,
+  JobsTypeMismatchError,
+} from "../../errors.ts";
 import { createProcessors } from "../../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../../job-types/define-job-types.ts";
 import { createWorkerRunner } from "../../worker/worker-runner.ts";
@@ -347,7 +352,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
     },
 
     {
-      name: "getChains > getChains throws on typeName mismatch",
+      name: "getChains > getChains throws ChainsTypeMismatchError listing every chain whose type differs",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -359,20 +364,32 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           jobTypes,
         });
 
-        const created = yield* step(
+        const [first, matching, second] = yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.createChain({
+            client.createChains({
               ...txCtx,
-              typeName: "order",
-              input: { amount: 42 },
+              items: [
+                { typeName: "order", input: { amount: 42 } },
+                { typeName: "notification", input: { message: "hello" } },
+                { typeName: "order", input: { amount: 42 } },
+              ],
             }),
           ),
         );
 
         yield* step(
           assertRejects(
-            () => client.getChains({ typeName: "notification", ids: [created.id] }),
-            ChainTypeMismatchError,
+            () =>
+              client.getChains({
+                typeName: "notification",
+                ids: [first.id, matching.id, second.id],
+              }),
+            (error) => {
+              assert.ok(error instanceof ChainsTypeMismatchError);
+              assert.deepEqual(error.chainIds, [first.id, second.id]);
+              assert.deepEqual(error.actualTypeNames, ["order", "order"]);
+              return true;
+            },
           ),
         );
       }),
@@ -673,7 +690,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
     },
 
     {
-      name: "getJobs > getJobs throws on typeName mismatch",
+      name: "getJobs > getJobs throws JobsTypeMismatchError listing every job whose type differs",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -685,20 +702,28 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           jobTypes,
         });
 
-        const created = yield* step(
+        const [first, matching, second] = yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.createChain({
+            client.createChains({
               ...txCtx,
-              typeName: "notification",
-              input: { message: "hello" },
+              items: [
+                { typeName: "notification", input: { message: "hello" } },
+                { typeName: "order", input: { amount: 42 } },
+                { typeName: "notification", input: { message: "hello" } },
+              ],
             }),
           ),
         );
 
         yield* step(
           assertRejects(
-            () => client.getJobs({ typeName: "order", ids: [created.id] }),
-            JobTypeMismatchError,
+            () => client.getJobs({ typeName: "order", ids: [first.id, matching.id, second.id] }),
+            (error) => {
+              assert.ok(error instanceof JobsTypeMismatchError);
+              assert.deepEqual(error.jobIds, [first.id, second.id]);
+              assert.deepEqual(error.actualTypeNames, ["notification", "notification"]);
+              return true;
+            },
           ),
         );
       }),
@@ -2670,7 +2695,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
     },
 
     {
-      name: "getChainTailJobs > getChainTailJobs throws on chainTypeName mismatch",
+      name: "getChainTailJobs > getChainTailJobs throws ChainsTypeMismatchError listing every chain whose type differs",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -2682,12 +2707,15 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           jobTypes,
         });
 
-        const chain = yield* step(
+        const [first, matching, second] = yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.createChain({
+            client.createChains({
               ...txCtx,
-              typeName: "order",
-              input: { amount: 42 },
+              items: [
+                { typeName: "order", input: { amount: 42 } },
+                { typeName: "notification", input: { message: "hello" } },
+                { typeName: "order", input: { amount: 42 } },
+              ],
             }),
           ),
         );
@@ -2696,10 +2724,19 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           assertRejects(
             () =>
               client.getChainTailJobs({
-                chainIds: ["00000000-0000-0000-0000-000000000000", chain.id],
+                chainIds: [
+                  "00000000-0000-0000-0000-000000000000",
+                  first.id,
+                  matching.id,
+                  second.id,
+                ],
                 chainTypeName: "notification",
               }),
-            ChainTypeMismatchError,
+            (error) => {
+              assert.ok(error instanceof ChainsTypeMismatchError);
+              assert.deepEqual(error.chainIds, [first.id, second.id]);
+              return true;
+            },
           ),
         );
       }),

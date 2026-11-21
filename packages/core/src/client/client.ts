@@ -14,14 +14,14 @@ import type { AttemptCompleteResult, AttemptOutcome } from "../attempt/attempt-h
 import {
   type ChainFields,
   type CompletedChainFields,
-  assertChainTypeName,
+  assertChainsTypeName,
   mapStateChainToChain,
 } from "../entities/chain.ts";
 import {
   type AnyJob,
   type CompletedJob,
   type JobStatus,
-  assertJobTypeName,
+  assertJobsTypeName,
   mapStateJobToJob,
 } from "../entities/job.ts";
 import type { OrderDirection, Page } from "../entities/pagination.ts";
@@ -36,6 +36,8 @@ import {
   JobsNotFoundError,
   JobsNotReschedulableError,
   WaitChainTimeoutError,
+  toSingleChainError,
+  toSingleJobError,
 } from "../errors.ts";
 import type { BaseJobTypeDefinitions } from "../job-types/job-type.ts";
 import type {
@@ -411,9 +413,9 @@ export type Client<
    * Get multiple chains by ID. Returns a positional array aligned with the
    * input `ids` — `undefined` for any ID that does not exist. Pass `typeName`
    * to narrow the return type; all found chains must match or
-   * {@link ChainTypeMismatchError} is thrown.
+   * {@link ChainsTypeMismatchError} is thrown.
    *
-   * @throws {@link ChainTypeMismatchError} if `typeName` is provided and any found chain does not match.
+   * @throws {@link ChainsTypeMismatchError} (listing every offending id) if `typeName` is provided and any found chain does not match.
    */
   getChains: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
@@ -449,9 +451,9 @@ export type Client<
    * Get multiple jobs by ID. Returns a positional array aligned with the
    * input `ids` — `undefined` for any ID that does not exist. Pass `typeName`
    * to narrow the return type; all found jobs must match or
-   * {@link JobTypeMismatchError} is thrown.
+   * {@link JobsTypeMismatchError} is thrown.
    *
-   * @throws {@link JobTypeMismatchError} if `typeName` is provided and any found job does not match.
+   * @throws {@link JobsTypeMismatchError} (listing every offending id) if `typeName` is provided and any found job does not match.
    */
   getJobs: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
@@ -639,9 +641,9 @@ export type Client<
    * Get the tail jobs of multiple chains in one state adapter read. Returns a positional array
    * aligned with the input `chainIds` — `undefined` for any chain that does not exist. Pass
    * `chainTypeName` to narrow the return type; all found chains must match or
-   * {@link ChainTypeMismatchError} is thrown.
+   * {@link ChainsTypeMismatchError} is thrown.
    *
-   * @throws {@link ChainTypeMismatchError} if `chainTypeName` is provided and any found chain does not match.
+   * @throws {@link ChainsTypeMismatchError} (listing every offending id) if `chainTypeName` is provided and any found chain does not match.
    * @experimental
    */
   getChainTailJobs: <
@@ -1134,7 +1136,11 @@ export const createClient = <
               chainId: id,
             });
           }
-          assertChainTypeName(stateChain, { chainId: String(id), typeName });
+          try {
+            assertChainsTypeName([stateChain], { chainIds: [id], typeName });
+          } catch (error) {
+            throw toSingleChainError(error, id);
+          }
 
           let [lockedJob] = yield* step(
             helpers.stateAdapter.getJobs({
@@ -1317,7 +1323,11 @@ export const createClient = <
           throw new ChainNotFoundError(`Chain with id ${id} not found`, { chainId: id });
         }
 
-        assertChainTypeName(stateChain, { chainId: id, typeName });
+        try {
+          assertChainsTypeName([stateChain], { chainIds: [id], typeName });
+        } catch (error) {
+          throw toSingleChainError(error, id);
+        }
 
         const mapped = mapStateChainToChain(stateChain, helpers.jobTypes);
         return mapped.status === "completed"
@@ -1395,14 +1405,18 @@ export const createClient = <
         helpers,
         syncAsync(function* () {
           const { id, typeName, ...rest } = options;
-          const [chain] = yield* step(
-            client.getChains<TChainTypeName>({
-              typeName,
-              ids: [id],
-              ...(rest as Partial<GetStateAdapterTxContext<TStateAdapter>>),
-            }),
-          );
-          return chain;
+          try {
+            const [chain] = yield* step(
+              client.getChains<TChainTypeName>({
+                typeName,
+                ids: [id],
+                ...(rest as Partial<GetStateAdapterTxContext<TStateAdapter>>),
+              }),
+            );
+            return chain;
+          } catch (error) {
+            throw toSingleChainError(error, id);
+          }
         }),
       ),
 
@@ -1430,9 +1444,7 @@ export const createClient = <
               chainIds: ids,
             }),
           );
-          stateChains.forEach((stateChain, index) => {
-            assertChainTypeName(stateChain, { chainId: String(ids[index]), typeName });
-          });
+          assertChainsTypeName(stateChains, { chainIds: ids, typeName });
 
           return stateChains.map((stateChain) => {
             if (!stateChain) return undefined;
@@ -1458,14 +1470,18 @@ export const createClient = <
         helpers,
         syncAsync(function* () {
           const { id, typeName, ...rest } = options;
-          const [job] = yield* step(
-            client.getJobs<TJobTypeName>({
-              typeName,
-              ids: [id],
-              ...(rest as Partial<GetStateAdapterTxContext<TStateAdapter>>),
-            }),
-          );
-          return job;
+          try {
+            const [job] = yield* step(
+              client.getJobs<TJobTypeName>({
+                typeName,
+                ids: [id],
+                ...(rest as Partial<GetStateAdapterTxContext<TStateAdapter>>),
+              }),
+            );
+            return job;
+          } catch (error) {
+            throw toSingleJobError(error, id);
+          }
         }),
       ),
 
@@ -1495,9 +1511,7 @@ export const createClient = <
               jobIds: ids,
             }),
           );
-          stateJobs.forEach((stateJob, index) => {
-            assertJobTypeName(stateJob, { jobId: String(ids[index]), typeName });
-          });
+          assertJobsTypeName(stateJobs, { jobIds: ids, typeNames: ids.map(() => typeName) });
 
           return stateJobs.map((stateJob) => {
             if (!stateJob) return undefined;
@@ -1799,10 +1813,11 @@ export const createClient = <
                 chainIds: [chainId],
               }),
             );
-            assertChainTypeName(stateChain, {
-              chainId: String(chainId),
-              typeName: chainTypeName,
-            });
+            try {
+              assertChainsTypeName([stateChain], { chainIds: [chainId], typeName: chainTypeName });
+            } catch (error) {
+              throw toSingleChainError(error, chainId);
+            }
           }
           const result = yield* step(
             helpers.stateAdapter.listChainJobs({
@@ -1840,14 +1855,18 @@ export const createClient = <
         helpers,
         syncAsync(function* () {
           const { chainId, chainTypeName, ...rest } = options;
-          const [tailJob] = yield* step(
-            client.getChainTailJobs<TChainTypeName>({
-              chainIds: [chainId],
-              chainTypeName,
-              ...(rest as Partial<GetStateAdapterTxContext<TStateAdapter>>),
-            }),
-          );
-          return tailJob;
+          try {
+            const [tailJob] = yield* step(
+              client.getChainTailJobs<TChainTypeName>({
+                chainIds: [chainId],
+                chainTypeName,
+                ...(rest as Partial<GetStateAdapterTxContext<TStateAdapter>>),
+              }),
+            );
+            return tailJob;
+          } catch (error) {
+            throw toSingleChainError(error, chainId);
+          }
         }),
       ),
 
@@ -1878,12 +1897,7 @@ export const createClient = <
               chainIds,
             }),
           );
-          stateChains.forEach((stateChain, index) => {
-            assertChainTypeName(stateChain, {
-              chainId: String(chainIds[index]),
-              typeName: chainTypeName,
-            });
-          });
+          assertChainsTypeName(stateChains, { chainIds, typeName: chainTypeName });
 
           return stateChains.map((stateChain) => {
             if (!stateChain) return undefined;
@@ -1922,7 +1936,11 @@ export const createClient = <
                 jobIds: [jobId],
               }),
             );
-            assertJobTypeName(stateJob, { jobId: String(jobId), typeName });
+            try {
+              assertJobsTypeName([stateJob], { jobIds: [jobId], typeNames: [typeName] });
+            } catch (error) {
+              throw toSingleJobError(error, jobId);
+            }
           }
           const blockers = yield* step(
             helpers.stateAdapter.getJobBlockers({
@@ -1975,7 +1993,11 @@ export const createClient = <
                 chainIds: [chainId],
               }),
             );
-            assertChainTypeName(stateChain, { chainId: String(chainId), typeName });
+            try {
+              assertChainsTypeName([stateChain], { chainIds: [chainId], typeName });
+            } catch (error) {
+              throw toSingleChainError(error, chainId);
+            }
           }
           const stateJobPage = yield* step(
             helpers.stateAdapter.listBlockedJobs({

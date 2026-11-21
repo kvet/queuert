@@ -1,4 +1,4 @@
-import { JobTypeMismatchError } from "../errors.ts";
+import { JobsTypeMismatchError } from "../errors.ts";
 import type { JobTypes } from "../job-types/job-types.ts";
 import type { StateJob, StateJobInfo } from "../state-adapter/state-adapter.ts";
 import type { AnyJob } from "./job.types.ts";
@@ -61,16 +61,29 @@ export const mapStateJobToJob = (
   }
 };
 
-export const assertJobTypeName = (
-  stateJob: StateJob | undefined,
-  { jobId, typeName }: { jobId: string; typeName: string | undefined },
+export const assertJobsTypeName = (
+  stateJobs: (StateJobInfo | undefined)[],
+  { jobIds, typeNames }: { jobIds: string[]; typeNames: (string | undefined)[] },
 ): void => {
-  if (!typeName || stateJob === undefined || stateJob.typeName === typeName) return;
-  throw new JobTypeMismatchError(
-    `Expected job ${jobId} to have type "${typeName}" but found "${stateJob.typeName}"`,
+  const mismatched = jobIds.flatMap((jobId, index) => {
+    const stateJob = stateJobs[index];
+    const typeName = typeNames[index];
+    return typeName && stateJob !== undefined && stateJob.typeName !== typeName
+      ? [{ jobId, expectedTypeName: typeName, actualTypeName: stateJob.typeName }]
+      : [];
+  });
+  if (mismatched.length === 0) return;
+  throw new JobsTypeMismatchError(
+    `Jobs have a different type than expected: ${mismatched
+      .map(
+        ({ jobId, expectedTypeName, actualTypeName }) =>
+          `${jobId} (expected "${expectedTypeName}", found "${actualTypeName}")`,
+      )
+      .join(", ")}`,
     {
-      expectedTypeName: typeName,
-      actualTypeName: stateJob.typeName,
+      jobIds: mismatched.map(({ jobId }) => jobId),
+      expectedTypeNames: mismatched.map(({ expectedTypeName }) => expectedTypeName),
+      actualTypeNames: mismatched.map(({ actualTypeName }) => actualTypeName),
     },
   );
 };
