@@ -124,4 +124,33 @@ describe("Redis state adapter storage", () => {
 
     expect(JSON.parse((await client.hget(recordKey, "d"))!)).toEqual([running.head.id]);
   });
+
+  it("drops a deduplication record only once every chain of its key is deleted", async ({
+    setup,
+  }) => {
+    const { client, keyPrefix, stateAdapter, createChain } = setup;
+    const recordKeyOf = (key: string) =>
+      `${keyPrefix}deduplication:${JSON.stringify(["daily-digest", key])}`;
+    const createReplacedChains = async (key: string) => {
+      const completed = await createChain("daily-digest", key);
+      await stateAdapter.withTransaction(async (txCtx) =>
+        stateAdapter.completeJobs({ txCtx, jobs: [{ jobId: completed.head.id, output: null }] }),
+      );
+      return { completed, running: await createChain("daily-digest", key) };
+    };
+    const kept = await createReplacedChains("kept");
+    const dropped = await createReplacedChains("dropped");
+
+    await stateAdapter.withTransaction(async (txCtx) =>
+      stateAdapter.deleteChains({
+        txCtx,
+        chainIds: [kept.completed.id, dropped.completed.id, dropped.running.id],
+      }),
+    );
+
+    expect(JSON.parse((await client.hget(recordKeyOf("kept"), "d"))!)).toEqual([
+      kept.running.head.id,
+    ]);
+    expect(await client.hget(recordKeyOf("dropped"), "d")).toBeNull();
+  });
 });

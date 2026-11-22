@@ -273,7 +273,7 @@ export type StateAdapter<
     }[];
   }) => ModeResult<TMode, (StateChain & { deduplicated: boolean })[]>;
 
-  /** Completes each `continueFromId` and inserts its successor, recording `workerId` as `completedBy`; `undefined` on a miss, a taken id or chain position throws. */
+  /** Completes each `continueFromId` and inserts its successor, recording `workerId` as `completedBy`; `undefined` on a miss, a taken id or chain position throws, and so does a call that names the same `continueFromId` twice. */
   continueJobs: (params: {
     txCtx: TTxContext;
     jobs: {

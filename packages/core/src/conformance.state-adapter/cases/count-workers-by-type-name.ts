@@ -53,6 +53,31 @@ export const countWorkersByTypeNameGroup: ConformanceGroup<StateAdapterConforman
       }),
     },
     {
+      name: "counts a worker that lists a type twice once, for every time the type is asked",
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
+
+        yield* step(
+          stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["sync-to-crm", "sync-to-crm"],
+            concurrency: 1,
+            leaseMs: 60_000,
+          }),
+        );
+
+        assert.deepEqual(
+          yield* step(
+            stateAdapter.countWorkersByTypeName({ typeNames: ["sync-to-crm", "sync-to-crm"] }),
+          ),
+          [
+            { live: 1, expired: 0 },
+            { live: 1, expired: 0 },
+          ],
+        );
+      }),
+    },
+    {
       name: "counts a worker whose lease is no longer live as expired",
       run: dynamicSyncAsync(function* ({ createStateAdapter }) {
         const stateAdapter = yield* resource(createStateAdapter());

@@ -46,6 +46,8 @@ export type SeedSentinels = {
     blockedCount: number;
     blockersPerJob: number;
     blockedJobId: string;
+    blockedJobIds: string[];
+    manyBlockersJobId: string;
   };
   fanOut: {
     blockerChainId: string;
@@ -721,6 +723,11 @@ export const generateStateDump = ({ scale = 1 }: { scale?: number } = {}): {
         blockedCount: seedConfig.fanInTiers.reduce((sum, tier) => sum + tier.blocked * scale, 0),
         blockersPerJob: seedConfig.fanInTiers[seedConfig.fanInTiers.length - 1].blockers,
         blockedJobId: firstJobIds("seed:blocked:fanin:1", "blocked")[0],
+        blockedJobIds: firstJobIds("seed:blocked:fanin:1", "blocked", 100),
+        manyBlockersJobId: firstJobIds(
+          `seed:blocked:fanin:${seedConfig.fanInTiers[seedConfig.fanInTiers.length - 1].blockers}`,
+          "blocked",
+        )[0],
       },
       fanOut: {
         blockerChainId: fanOutBlockerChainIds[0],

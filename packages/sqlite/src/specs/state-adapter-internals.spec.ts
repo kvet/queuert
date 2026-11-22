@@ -57,17 +57,57 @@ describe("deduplication lookup", () => {
     expect(
       db.prepare("SELECT count(*) AS c FROM sqlite_master WHERE name = 'sqlite_stat1'").get(),
     ).toEqual({ c: 0 });
-    const lookup = executed.find(({ sql }) => sql.includes("chain_deduplication_key = ?"));
+    const lookup = executed.find(({ sql }) =>
+      sql.includes("chain_deduplication_key = l.deduplication_key"),
+    );
     expect(lookup).toBeDefined();
     const plan = db.prepare(`EXPLAIN QUERY PLAN ${lookup!.sql}`).all(...lookup!.params) as {
       detail: string;
     }[];
     expect(plan.map((row) => row.detail)).toEqual([
-      "SEARCH head_job USING INDEX queuert_chain_deduplication_idx (chain_deduplication_key=?)",
+      "SCAN je VIRTUAL TABLE INDEX 1:",
+      "SEARCH head_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)",
+      "CORRELATED SCALAR SUBQUERY 2",
+      "SEARCH h USING INDEX queuert_chain_deduplication_idx (chain_deduplication_key=?)",
       "SEARCH tail_job USING INDEX queuert_chain_index_idx (chain_id=? AND chain_index=?) LEFT-JOIN",
-      "CORRELATED SCALAR SUBQUERY 1",
+      "CORRELATED SCALAR SUBQUERY 3",
       "SEARCH t USING COVERING INDEX queuert_chain_index_idx (chain_id=? AND chain_index>?)",
     ]);
+  });
+});
+
+describe("completeJobs", () => {
+  it("unpacks the payload once however many jobs it completes", async ({
+    db,
+    executed,
+    adapter,
+  }) => {
+    const chains = await adapter.withTransaction(async (txCtx) =>
+      adapter.createJobs({
+        txCtx,
+        jobs: [1, 2].map(() => ({
+          id: adapter.config.generateJobId(),
+          typeName: "t",
+          input: null,
+        })),
+      }),
+    );
+    await adapter.withTransaction(async (txCtx) =>
+      adapter.completeJobs({
+        txCtx,
+        jobs: chains.map((chain) => ({ jobId: chain.head.id, output: null })),
+      }),
+    );
+
+    const completion = executed.find(({ sql }) => sql.includes("targets AS MATERIALIZED"));
+    expect(completion).toBeDefined();
+    const plan = (
+      db.prepare(`EXPLAIN QUERY PLAN ${completion!.sql}`).all(...completion!.params) as {
+        detail: string;
+      }[]
+    ).map((row) => row.detail);
+    expect(plan).toContain("MATERIALIZE targets");
+    expect(plan.filter((detail) => detail.startsWith("SCAN je VIRTUAL TABLE"))).toHaveLength(1);
   });
 });
 

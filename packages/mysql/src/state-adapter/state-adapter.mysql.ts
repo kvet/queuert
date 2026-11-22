@@ -1030,7 +1030,7 @@ FROM JSON_TABLE(?, '$[*]' COLUMNS (
   scope VARCHAR(16) PATH '$.scope'
 )) d
 JOIN {{prefix}}job h ON h.id = (
-  SELECT e.id FROM {{prefix}}job e
+  SELECT e.id FROM {{prefix}}job e FORCE INDEX ({{name_prefix}}chain_deduplication_idx)
   WHERE e.chain_deduplication_key = d.deduplication_key
     AND e.type_name = d.type_name
     AND e.chain_index = 0
@@ -1125,6 +1125,9 @@ WHERE {{fence_guard}}`,
 
     continueJobs: async ({ txCtx, jobs }) => {
       if (jobs.length === 0) return [];
+      if (new Set(jobs.map((job) => job.continueFromId)).size !== jobs.length) {
+        throw new Error("continueJobs continues the same job more than once");
+      }
       const continuations = toJsonParam(
         [...jobs].sort(compareBy((job) => job.continueFromId)).map((job) => ({
           new_id: job.id,
@@ -1182,13 +1185,12 @@ WHERE j.status <> 'completed'
 INSERT INTO {{prefix}}job (id, type_name, chain_id, chain_index, input, scheduled_at, trace_context)
 SELECT d.new_id, d.type_name, c.chain_id, c.chain_index + 1, JSON_EXTRACT(d.input, '$'), ${scheduleExpression("d")}, d.trace_context
 FROM JSON_TABLE(?, '$[*]' COLUMNS (${continuationColumns})) d
-STRAIGHT_JOIN {{prefix}}job c FORCE INDEX (PRIMARY) ON c.id = d.continue_from_id
-JOIN JSON_TABLE(?, '$[*]' COLUMNS (${continuationColumns})) completed_by_batch
-  ON completed_by_batch.continue_from_id = c.id AND completed_by_batch.new_id = c.continued_to_id
+STRAIGHT_JOIN {{prefix}}job c FORCE INDEX (PRIMARY)
+  ON c.id = d.continue_from_id AND c.continued_to_id = d.new_id
 WHERE {{fence_guard}}`,
-          { params: [t.string(), t.string()] },
+          { params: [t.string()] },
         ),
-        [continuations, continuations],
+        [continuations],
       );
       const rows = await execute(
         txCtx,
@@ -2057,10 +2059,17 @@ WHERE {{fence_guard}}`,
         prepared(
           "countWorkersByTypeName",
           `
-SELECT t.ord, COALESCE(SUM(w.lease_until > UTC_TIMESTAMP(6)), 0) AS live, COALESCE(SUM(w.lease_until <= UTC_TIMESTAMP(6)), 0) AS expired
+SELECT t.ord, COALESCE(c.live, 0) AS live, COALESCE(c.expired, 0) AS expired
 FROM JSON_TABLE(?, '$[*]' COLUMNS (ord FOR ORDINALITY, type_name {{name_type}} PATH '$')) t
-LEFT JOIN {{prefix}}worker w ON JSON_CONTAINS(w.type_names, JSON_QUOTE(t.type_name))
-GROUP BY t.ord
+LEFT JOIN (
+  SELECT
+    wt.type_name,
+    COUNT(DISTINCT CASE WHEN w.lease_until > UTC_TIMESTAMP(6) THEN w.id END) AS live,
+    COUNT(DISTINCT CASE WHEN w.lease_until <= UTC_TIMESTAMP(6) THEN w.id END) AS expired
+  FROM {{prefix}}worker w,
+    JSON_TABLE(w.type_names, '$[*]' COLUMNS (type_name {{name_type}} PATH '$')) wt
+  GROUP BY wt.type_name
+) c ON c.type_name = t.type_name
 ORDER BY t.ord`,
           {
             params: [t.string()],

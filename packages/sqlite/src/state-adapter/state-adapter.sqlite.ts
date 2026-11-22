@@ -909,13 +909,76 @@ WHERE id IN (SELECT value FROM json_each(?))
         const firstIndexByBatchKey = new Map<string, number>();
         const deferredDuplicates: { index: number; firstIndex: number }[] = [];
 
+        const deduplicationLookups: {
+          ord: number;
+          key: string;
+          type_name: string;
+          scope: string | null;
+        }[] = [];
+        for (const [ord, job] of jobs.entries()) {
+          if (!job.deduplication?.key) continue;
+          deduplicationLookups.push({
+            ord,
+            key: job.deduplication.key,
+            type_name: job.typeName,
+            scope: job.deduplication.scope ?? null,
+          });
+        }
+        const deduplicatedRows =
+          deduplicationLookups.length === 0
+            ? []
+            : yield* step(
+                execute(
+                  txCtx,
+                  prepared(
+                    "findDeduplicatedJobs",
+                    `
+WITH lookups AS (
+  SELECT
+    json_extract(je.value, '$.ord')       AS ord,
+    json_extract(je.value, '$.key')       AS deduplication_key,
+    json_extract(je.value, '$.type_name') AS type_name,
+    json_extract(je.value, '$.scope')     AS scope
+  FROM json_each(?) AS je
+)
+SELECT
+  l.ord AS lookup_ord,
+  {{job_columns:head_job}},
+  {{job_columns_prefixed:tail_job:tail_}}
+FROM lookups AS l
+JOIN {{table_prefix}}job AS head_job ON head_job.id = (
+  SELECT h.id
+  FROM {{table_prefix}}job AS h INDEXED BY {{table_prefix}}chain_deduplication_idx
+  WHERE h.chain_deduplication_key = l.deduplication_key
+    AND h.chain_index = 0
+    AND h.type_name = l.type_name
+    AND (
+      (l.scope = 'running' AND h.chain_status = 'running')
+      OR (l.scope = 'any')
+    )
+  ORDER BY h.created_at DESC
+  LIMIT 1
+)${tailJoin("head_job")}
+`,
+                    {
+                      params: [t.string()],
+                      columns: { lookup_ord: t.number(), ...dbChainRowColumns },
+                      readOnly: true,
+                    },
+                  ),
+                  [JSON.stringify(deduplicationLookups)],
+                ),
+              );
+        const existingDeduplicatedByIndex = new Map(
+          deduplicatedRows.map((row) => [row.lookup_ord, row] as const),
+        );
+
         for (let i = 0; i < jobs.length; i++) {
           const job = jobs[i];
           const { typeName, id: newId, input, schedule, chainTraceContext, traceContext } = job;
 
           if (job.deduplication?.key) {
             const deduplicationKey = job.deduplication.key;
-            const deduplicationScope = job.deduplication.scope;
 
             const batchKey = `${deduplicationKey}\0${job.typeName}`;
             const firstIndex = firstIndexByBatchKey.get(batchKey);
@@ -924,48 +987,7 @@ WHERE id IN (SELECT value FROM json_each(?))
               continue;
             }
 
-            const [existingDeduplicated] = yield* step(
-              execute(
-                txCtx,
-                prepared(
-                  "findDeduplicatedJob",
-                  `
-SELECT
-  {{job_columns:head_job}},
-  {{job_columns_prefixed:tail_job:tail_}}
-FROM {{table_prefix}}job AS head_job INDEXED BY {{table_prefix}}chain_deduplication_idx${tailJoin("head_job")}
-WHERE ? IS NOT NULL
-  AND head_job.chain_deduplication_key = ?
-  AND head_job.chain_index = 0
-  AND head_job.type_name = ?
-  AND (
-    (? = 'running' AND head_job.chain_status = 'running')
-    OR (? = 'any')
-  )
-ORDER BY head_job.created_at DESC
-LIMIT 1
-`,
-                  {
-                    params: [
-                      t["string?"](),
-                      t["string?"](),
-                      t.string(),
-                      t["string?"](),
-                      t["string?"](),
-                    ],
-                    columns: { ...dbChainRowColumns },
-                    readOnly: true,
-                  },
-                ),
-                [
-                  deduplicationKey,
-                  deduplicationKey,
-                  job.typeName,
-                  deduplicationScope,
-                  deduplicationScope,
-                ],
-              ),
-            );
+            const existingDeduplicated = existingDeduplicatedByIndex.get(i);
 
             if (existingDeduplicated) {
               results[i] = {
@@ -1218,7 +1240,7 @@ WITH input_data AS (
     json_extract(je.value, '$.worker_id') AS worker_id
   FROM json_each(?) AS je
 ),
-targets AS (
+targets AS MATERIALIZED (
   SELECT d.job_id, d.output, d.worker_id, j.chain_id
   FROM input_data d
   JOIN {{table_prefix}}job j ON j.id = d.job_id AND j.status <> 'completed'
@@ -2104,13 +2126,17 @@ FROM {{table_prefix}}worker
             prepared(
               "countWorkersByTypeName",
               `
-SELECT
-  count(CASE WHEN w.lease_until > datetime('now', 'subsec') THEN 1 END) AS live,
-  count(CASE WHEN w.lease_until <= datetime('now', 'subsec') THEN 1 END) AS expired
+WITH counts AS MATERIALIZED (
+  SELECT
+    wt.value AS type_name,
+    count(DISTINCT CASE WHEN w.lease_until > datetime('now', 'subsec') THEN w.id END) AS live,
+    count(DISTINCT CASE WHEN w.lease_until <= datetime('now', 'subsec') THEN w.id END) AS expired
+  FROM {{table_prefix}}worker w, json_each(w.type_names) AS wt
+  GROUP BY wt.value
+)
+SELECT coalesce(c.live, 0) AS live, coalesce(c.expired, 0) AS expired
 FROM json_each(?) AS t
-LEFT JOIN {{table_prefix}}worker w
-  ON EXISTS (SELECT 1 FROM json_each(w.type_names) WHERE value = t.value)
-GROUP BY t.key
+LEFT JOIN counts c ON c.type_name = t.value
 ORDER BY t.key
 `,
               {

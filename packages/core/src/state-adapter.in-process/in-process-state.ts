@@ -1169,16 +1169,19 @@ export const createInProcessState = (
     countWorkersByTypeName: ({ txCtx, typeNames }) =>
       read(txCtx, () => {
         const nowMs = clock();
-        return typeNames.map((typeName) => {
-          let live = 0;
-          let expired = 0;
-          for (const worker of workers.values()) {
-            if (!worker.typeNames.includes(typeName)) continue;
-            if (isLive(worker, nowMs)) live++;
-            else expired++;
+        const counts = new Map<string, { live: number; expired: number }>();
+        for (const worker of workers.values()) {
+          const liveWorker = isLive(worker, nowMs);
+          for (const typeName of new Set(worker.typeNames)) {
+            const count = counts.get(typeName) ?? { live: 0, expired: 0 };
+            if (liveWorker) count.live++;
+            else count.expired++;
+            counts.set(typeName, count);
           }
-          return { live, expired };
-        });
+        }
+        return typeNames.map((typeName) => ({
+          ...(counts.get(typeName) ?? { live: 0, expired: 0 }),
+        }));
       }),
 
     countRunningJobsByWorkerId: ({ txCtx, workerIds }) =>

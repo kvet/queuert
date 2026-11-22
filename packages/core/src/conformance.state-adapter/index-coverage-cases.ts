@@ -9,10 +9,14 @@ export type IndexCoverageCaseKey =
   | "getJobTypeNames/default"
   // counts
   | "countChainsByTypeName/default"
+  | "countChainsByTypeName/batch100"
   | "countJobsByTypeName/default"
+  | "countJobsByTypeName/batch100"
   | "countWorkers/default"
   | "countWorkersByTypeName/default"
+  | "countWorkersByTypeName/batch100"
   | "countRunningJobsByWorkerId/default"
+  | "countRunningJobsByWorkerId/batch100"
   // listJobs > no status
   | "listJobs/noStatus/default"
   | "listJobs/noStatus/fromTo"
@@ -66,30 +70,52 @@ export type IndexCoverageCaseKey =
   | "listWorkers/cursor"
   | "listWorkerJobs/default"
   | "listWorkerJobs/cursor"
+  // operational
   | "getChains/default"
   | "getChains/lock"
+  | "getChains/batch100"
+  | "getChains/lockBatch100"
   | "getChainTails/default"
   | "getChainTails/lock"
+  | "getChainTails/batch100"
+  | "getChainTails/lockBatch100"
   | "getJobs/default"
   | "getJobs/lock"
+  | "getJobs/batch100"
+  | "getJobs/lockBatch100"
   | "getWorkers/default"
   | "getWorkers/lock"
+  | "getWorkers/batch100"
+  | "getWorkers/lockBatch100"
   | "createJobs/default"
   | "createJobs/deduplication"
+  | "createJobs/batch100"
+  | "createJobs/deduplicationBatch100"
   | "continueJobs/default"
+  | "continueJobs/batch100"
   | "addJobsBlockers/default"
+  | "addJobsBlockers/batch100"
   | "getJobsBlockers/default"
+  | "getJobsBlockers/manyBlockers"
+  | "getJobsBlockers/batch100"
   | "unblockJobs/default"
+  | "unblockJobs/batch100"
   | "startWorker/default"
+  | "startWorker/batch100"
   | "extendWorkerLease/default"
   | "stopWorker/default"
   | "startJobAttempts/default"
-  | "startJobAttempts/limit10"
+  | "startJobAttempts/limit100"
+  | "startJobAttempts/batch100"
   | "completeJobs/default"
+  | "completeJobs/batch100"
   | "getStartAttemptDelayMs/default"
+  | "getStartAttemptDelayMs/batch100"
   | "rescheduleJobs/default"
+  | "rescheduleJobs/batch100"
   | "deleteChains/default"
-  | "deleteChains/multiJob";
+  | "deleteChains/multiJob"
+  | "deleteChains/batch100";
 
 type Act = (
   stateAdapter: StateAdapter<any, any, any, Mode>,
@@ -109,6 +135,8 @@ export type IndexCoverageGroup = {
   name: string;
   cases: IndexCoverageCase[];
 };
+
+const BATCH_SIZE = 100;
 
 export const observabilityCoverageGroups: IndexCoverageGroup[] = [
   {
@@ -162,6 +190,24 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             }),
           ),
       },
+      {
+        key: "countChainsByTypeName/batch100",
+        label: "100 type names",
+        run: () => (stateAdapter, sentinels) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.countChainsByTypeName({
+                  typeNames: [
+                    sentinels.throwaway.pendingTypeName,
+                    ...Array.from({ length: BATCH_SIZE - 1 }, (_, index) => `idx:type:${index}`),
+                  ],
+                }),
+              );
+            }),
+          ),
+      },
     ],
   },
   {
@@ -177,6 +223,24 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
               yield* step(
                 stateAdapter.countJobsByTypeName({
                   typeNames: [...sentinels.pending.typeNames, "seed:blocked:fanin:1"],
+                }),
+              );
+            }),
+          ),
+      },
+      {
+        key: "countJobsByTypeName/batch100",
+        label: "100 type names",
+        run: () => (stateAdapter, sentinels) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.countJobsByTypeName({
+                  typeNames: [
+                    sentinels.throwaway.pendingTypeName,
+                    ...Array.from({ length: BATCH_SIZE - 1 }, (_, index) => `idx:type:${index}`),
+                  ],
                 }),
               );
             }),
@@ -216,6 +280,24 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
             }),
           ),
       },
+      {
+        key: "countWorkersByTypeName/batch100",
+        label: "100 type names",
+        run: () => (stateAdapter, sentinels) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.countWorkersByTypeName({
+                  typeNames: [
+                    sentinels.throwaway.pendingTypeName,
+                    ...Array.from({ length: BATCH_SIZE - 1 }, (_, index) => `idx:type:${index}`),
+                  ],
+                }),
+              );
+            }),
+          ),
+      },
     ],
   },
   {
@@ -231,6 +313,28 @@ export const observabilityCoverageGroups: IndexCoverageGroup[] = [
               yield* step(
                 stateAdapter.countRunningJobsByWorkerId({
                   workerIds: [sentinels.workers.busyWorkerId, ...sentinels.workers.idleWorkerIds],
+                }),
+              );
+            }),
+          ),
+      },
+      {
+        key: "countRunningJobsByWorkerId/batch100",
+        label: "100 worker ids",
+        run: () => (stateAdapter, sentinels) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.countRunningJobsByWorkerId({
+                  workerIds: [
+                    sentinels.workers.busyWorkerId,
+                    ...sentinels.workers.idleWorkerIds,
+                    ...Array.from(
+                      { length: BATCH_SIZE - 1 - sentinels.workers.idleWorkerIds.length },
+                      () => stateAdapter.config.generateWorkerId(),
+                    ),
+                  ],
                 }),
               );
             }),
@@ -1283,6 +1387,40 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
             }),
           ),
       },
+      {
+        key: "getChains/batch100",
+        label: "batch of 100",
+        run: () => (stateAdapter, sentinels) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.getChains({
+                  chainIds: sentinels.fanIn.blockerChainIds.slice(0, BATCH_SIZE),
+                }),
+              );
+            }),
+          ),
+      },
+      {
+        key: "getChains/lockBatch100",
+        label: "+ lock, batch of 100",
+        run: () => (stateAdapter, sentinels) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.getChains({
+                    txCtx,
+                    chainIds: sentinels.fanIn.blockerChainIds.slice(0, BATCH_SIZE),
+                    lock: "exclusive",
+                  }),
+                ),
+              );
+            }),
+          ),
+      },
     ],
   },
 
@@ -1312,6 +1450,40 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
                   stateAdapter.getChainTails({
                     txCtx,
                     chainIds: [sentinels.longChain.chainId],
+                    lock: "exclusive",
+                  }),
+                ),
+              );
+            }),
+          ),
+      },
+      {
+        key: "getChainTails/batch100",
+        label: "batch of 100",
+        run: () => (stateAdapter, sentinels) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.getChainTails({
+                  chainIds: sentinels.fanIn.blockerChainIds.slice(0, BATCH_SIZE),
+                }),
+              );
+            }),
+          ),
+      },
+      {
+        key: "getChainTails/lockBatch100",
+        label: "+ lock, batch of 100",
+        run: () => (stateAdapter, sentinels) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.getChainTails({
+                    txCtx,
+                    chainIds: sentinels.fanIn.blockerChainIds.slice(0, BATCH_SIZE),
                     lock: "exclusive",
                   }),
                 ),
@@ -1355,6 +1527,40 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
             }),
           ),
       },
+      {
+        key: "getJobs/batch100",
+        label: "batch of 100",
+        run: () => (stateAdapter, sentinels) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.getJobs({
+                  jobIds: sentinels.fanIn.blockerChainIds.slice(0, BATCH_SIZE),
+                }),
+              );
+            }),
+          ),
+      },
+      {
+        key: "getJobs/lockBatch100",
+        label: "+ lock, batch of 100",
+        run: () => (stateAdapter, sentinels) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.getJobs({
+                    txCtx,
+                    jobIds: sentinels.fanIn.blockerChainIds.slice(0, BATCH_SIZE),
+                    lock: "exclusive",
+                  }),
+                ),
+              );
+            }),
+          ),
+      },
     ],
   },
 
@@ -1384,6 +1590,54 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
                   stateAdapter.getWorkers({
                     txCtx,
                     workerIds: sentinels.workers.idleWorkerIds,
+                    lock: "exclusive",
+                  }),
+                ),
+              );
+            }),
+          ),
+      },
+      {
+        key: "getWorkers/batch100",
+        label: "batch of 100",
+        run: () => (stateAdapter, sentinels) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.getWorkers({
+                  workerIds: [
+                    sentinels.workers.busyWorkerId,
+                    ...sentinels.workers.idleWorkerIds,
+                    ...Array.from(
+                      { length: BATCH_SIZE - 1 - sentinels.workers.idleWorkerIds.length },
+                      () => stateAdapter.config.generateWorkerId(),
+                    ),
+                  ],
+                }),
+              );
+            }),
+          ),
+      },
+      {
+        key: "getWorkers/lockBatch100",
+        label: "+ lock, batch of 100",
+        run: () => (stateAdapter, sentinels) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.getWorkers({
+                    txCtx,
+                    workerIds: [
+                      sentinels.workers.busyWorkerId,
+                      ...sentinels.workers.idleWorkerIds,
+                      ...Array.from(
+                        { length: BATCH_SIZE - 1 - sentinels.workers.idleWorkerIds.length },
+                        () => stateAdapter.config.generateWorkerId(),
+                      ),
+                    ],
                     lock: "exclusive",
                   }),
                 ),
@@ -1436,6 +1690,51 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
                         deduplication: { key: "idx-dedup-key", scope: "running" },
                       },
                     ],
+                  }),
+                ),
+              );
+            }),
+          ),
+      },
+      {
+        key: "createJobs/batch100",
+        label: "batch of 100",
+        run: () => (stateAdapter) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.createJobs({
+                    txCtx,
+                    jobs: Array.from({ length: BATCH_SIZE }, () => ({
+                      id: stateAdapter.config.generateJobId(),
+                      typeName: "idx:test",
+                      input: {},
+                    })),
+                  }),
+                ),
+              );
+            }),
+          ),
+      },
+      {
+        key: "createJobs/deduplicationBatch100",
+        label: "+ deduplication, batch of 100",
+        run: () => (stateAdapter) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.createJobs({
+                    txCtx,
+                    jobs: Array.from({ length: BATCH_SIZE }, (_, index) => ({
+                      id: stateAdapter.config.generateJobId(),
+                      typeName: "idx:dedup",
+                      input: {},
+                      deduplication: { key: `idx-dedup-key-${index}`, scope: "running" as const },
+                    })),
                   }),
                 ),
               );
@@ -1498,6 +1797,68 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
             }),
           ),
       },
+      {
+        key: "continueJobs/batch100",
+        label: "batch of 100",
+        run: (stateAdapter) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.createJobs({
+                    txCtx,
+                    jobs: Array.from({ length: BATCH_SIZE }, () => ({
+                      id: stateAdapter.config.generateJobId(),
+                      typeName: "idx:batch:continue",
+                      input: {},
+                    })),
+                  }),
+                ),
+              );
+              const worker = yield* step(
+                stateAdapter.startWorker({
+                  workerId: stateAdapter.config.generateWorkerId(),
+                  typeNames: ["idx:batch:continue"],
+                  concurrency: BATCH_SIZE,
+                  leaseMs: 60_000,
+                }),
+              );
+              const acquired = yield* step(
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.startJobAttempts({
+                    txCtx,
+                    typeNames: ["idx:batch:continue"],
+                    workerId: worker.id,
+                    workerToken: worker.token,
+                    limit: BATCH_SIZE,
+                  }),
+                ),
+              );
+              return (stateAdapter: StateAdapter<any, any, any, Mode>) =>
+                runInModeOf(
+                  stateAdapter,
+                  syncAsync(function* () {
+                    yield* step(
+                      stateAdapter.withTransaction((txCtx) =>
+                        stateAdapter.continueJobs({
+                          txCtx,
+                          jobs: acquired.map((job) => ({
+                            id: stateAdapter.config.generateJobId(),
+                            typeName: "idx:cont",
+                            input: {},
+                            continueFromId: job.id,
+                            attemptToken: job.attemptToken!,
+                            workerId: job.attemptBy!,
+                          })),
+                        }),
+                      ),
+                    );
+                  }),
+                );
+            }),
+          ),
+      },
     ],
   },
 
@@ -1547,6 +1908,45 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
             }),
           ),
       },
+      {
+        key: "addJobsBlockers/batch100",
+        label: "batch of 100",
+        run: (stateAdapter, sentinels) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              const stateChains = yield* step(
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.createJobs({
+                    txCtx,
+                    jobs: Array.from({ length: BATCH_SIZE }, () => ({
+                      id: stateAdapter.config.generateJobId(),
+                      typeName: "idx:blocker-target",
+                      input: {},
+                    })),
+                  }),
+                ),
+              );
+              return (stateAdapter: StateAdapter<any, any, any, Mode>) =>
+                runInModeOf(
+                  stateAdapter,
+                  syncAsync(function* () {
+                    yield* step(
+                      stateAdapter.withTransaction((txCtx) =>
+                        stateAdapter.addJobsBlockers({
+                          txCtx,
+                          jobBlockers: stateChains.map((stateChain) => ({
+                            jobId: stateChain.head.id,
+                            blockedByChainIds: [sentinels.longChain.chainId],
+                          })),
+                        }),
+                      ),
+                    );
+                  }),
+                );
+            }),
+          ),
+      },
     ],
   },
 
@@ -1561,6 +1961,34 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
             stateAdapter,
             syncAsync(function* () {
               yield* step(stateAdapter.getJobsBlockers({ jobIds: [sentinels.fanIn.blockedJobId] }));
+            }),
+          ),
+      },
+      {
+        key: "getJobsBlockers/manyBlockers",
+        label: "100 blockers",
+        run: () => (stateAdapter, sentinels) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.getJobsBlockers({ jobIds: [sentinels.fanIn.manyBlockersJobId] }),
+              );
+            }),
+          ),
+      },
+      {
+        key: "getJobsBlockers/batch100",
+        label: "batch of 100",
+        run: () => (stateAdapter, sentinels) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.getJobsBlockers({
+                  jobIds: sentinels.fanIn.blockedJobIds.slice(0, BATCH_SIZE),
+                }),
+              );
             }),
           ),
       },
@@ -1589,6 +2017,74 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
             );
         },
       },
+      {
+        key: "unblockJobs/batch100",
+        label: "100 dependents",
+        run: (stateAdapter) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              const blockerChainId = yield* step(
+                stateAdapter.withTransaction((txCtx) =>
+                  runInModeOf(
+                    stateAdapter,
+                    syncAsync(function* () {
+                      const [blocker] = yield* step(
+                        stateAdapter.createJobs({
+                          txCtx,
+                          jobs: [
+                            {
+                              id: stateAdapter.config.generateJobId(),
+                              typeName: "idx:unblocker",
+                              input: {},
+                            },
+                          ],
+                        }),
+                      );
+                      const dependents = yield* step(
+                        stateAdapter.createJobs({
+                          txCtx,
+                          jobs: Array.from({ length: BATCH_SIZE }, () => ({
+                            id: stateAdapter.config.generateJobId(),
+                            typeName: "idx:unblock-target",
+                            input: {},
+                          })),
+                        }),
+                      );
+                      yield* step(
+                        stateAdapter.addJobsBlockers({
+                          txCtx,
+                          jobBlockers: dependents.map((dependent) => ({
+                            jobId: dependent.head.id,
+                            blockedByChainIds: [blocker.id],
+                          })),
+                        }),
+                      );
+                      yield* step(
+                        stateAdapter.completeJobs({
+                          txCtx,
+                          jobs: [{ jobId: blocker.head.id, output: null }],
+                        }),
+                      );
+                      return blocker.id;
+                    }),
+                  ),
+                ),
+              );
+              return (stateAdapter: StateAdapter<any, any, any, Mode>) =>
+                runInModeOf(
+                  stateAdapter,
+                  syncAsync(function* () {
+                    yield* step(
+                      stateAdapter.withTransaction((txCtx) =>
+                        stateAdapter.unblockJobs({ txCtx, blockedByChainId: blockerChainId }),
+                      ),
+                    );
+                  }),
+                );
+            }),
+          ),
+      },
     ],
   },
 
@@ -1606,6 +2102,27 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
                 stateAdapter.startWorker({
                   workerId: stateAdapter.config.generateWorkerId(),
                   typeNames: [],
+                  concurrency: 1,
+                  leaseMs: 60_000,
+                }),
+              );
+            }),
+          ),
+      },
+      {
+        key: "startWorker/batch100",
+        label: "100 type names",
+        run: () => (stateAdapter, sentinels) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.startWorker({
+                  workerId: stateAdapter.config.generateWorkerId(),
+                  typeNames: [
+                    sentinels.throwaway.pendingTypeName,
+                    ...Array.from({ length: BATCH_SIZE - 1 }, (_, index) => `idx:type:${index}`),
+                  ],
                   concurrency: 1,
                   leaseMs: 60_000,
                 }),
@@ -1725,16 +2242,65 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
           ),
       },
       {
-        key: "startJobAttempts/limit10",
-        label: "limit 10",
+        key: "startJobAttempts/limit100",
+        label: "limit 100",
         run: (stateAdapter) =>
           runInModeOf(
             stateAdapter,
             syncAsync(function* () {
+              const typeNames = ["idx:batch:start"];
+              yield* step(
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.createJobs({
+                    txCtx,
+                    jobs: Array.from({ length: BATCH_SIZE }, () => ({
+                      id: stateAdapter.config.generateJobId(),
+                      typeName: "idx:batch:start",
+                      input: {},
+                    })),
+                  }),
+                ),
+              );
               const worker = yield* step(
                 stateAdapter.startWorker({
                   workerId: stateAdapter.config.generateWorkerId(),
-                  typeNames: ["seed:throwaway:pending"],
+                  typeNames,
+                  concurrency: BATCH_SIZE,
+                  leaseMs: 60_000,
+                }),
+              );
+              return (stateAdapter: StateAdapter<any, any, any, Mode>) =>
+                runInModeOf(
+                  stateAdapter,
+                  syncAsync(function* () {
+                    yield* step(
+                      stateAdapter.startJobAttempts({
+                        typeNames,
+                        workerId: worker.id,
+                        workerToken: worker.token,
+                        limit: BATCH_SIZE,
+                      }),
+                    );
+                  }),
+                );
+            }),
+          ),
+      },
+      {
+        key: "startJobAttempts/batch100",
+        label: "100 type names",
+        run: (stateAdapter, sentinels) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              const typeNames = [
+                sentinels.throwaway.pendingTypeName,
+                ...Array.from({ length: BATCH_SIZE - 1 }, (_, index) => `idx:type:${index}`),
+              ];
+              const worker = yield* step(
+                stateAdapter.startWorker({
+                  workerId: stateAdapter.config.generateWorkerId(),
+                  typeNames,
                   concurrency: 10,
                   leaseMs: 60_000,
                 }),
@@ -1745,7 +2311,7 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
                   syncAsync(function* () {
                     yield* step(
                       stateAdapter.startJobAttempts({
-                        typeNames: ["seed:throwaway:pending"],
+                        typeNames,
                         workerId: worker.id,
                         workerToken: worker.token,
                         limit: 10,
@@ -1810,6 +2376,66 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
             }),
           ),
       },
+      {
+        key: "completeJobs/batch100",
+        label: "batch of 100",
+        run: (stateAdapter) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.createJobs({
+                    txCtx,
+                    jobs: Array.from({ length: BATCH_SIZE }, () => ({
+                      id: stateAdapter.config.generateJobId(),
+                      typeName: "idx:batch:complete",
+                      input: {},
+                    })),
+                  }),
+                ),
+              );
+              const worker = yield* step(
+                stateAdapter.startWorker({
+                  workerId: stateAdapter.config.generateWorkerId(),
+                  typeNames: ["idx:batch:complete"],
+                  concurrency: BATCH_SIZE,
+                  leaseMs: 60_000,
+                }),
+              );
+              const acquired = yield* step(
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.startJobAttempts({
+                    txCtx,
+                    typeNames: ["idx:batch:complete"],
+                    workerId: worker.id,
+                    workerToken: worker.token,
+                    limit: BATCH_SIZE,
+                  }),
+                ),
+              );
+              return (stateAdapter: StateAdapter<any, any, any, Mode>) =>
+                runInModeOf(
+                  stateAdapter,
+                  syncAsync(function* () {
+                    yield* step(
+                      stateAdapter.withTransaction((txCtx) =>
+                        stateAdapter.completeJobs({
+                          txCtx,
+                          jobs: acquired.map((job) => ({
+                            jobId: job.id,
+                            output: { ok: true },
+                            attemptToken: job.attemptToken!,
+                            workerId: job.attemptBy!,
+                          })),
+                        }),
+                      ),
+                    );
+                  }),
+                );
+            }),
+          ),
+      },
     ],
   },
 
@@ -1834,6 +2460,27 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
             }),
           ),
       },
+      {
+        key: "getStartAttemptDelayMs/batch100",
+        label: "100 type names",
+        run: () => (stateAdapter, sentinels) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.getStartAttemptDelayMs({
+                    txCtx,
+                    typeNames: [
+                      sentinels.throwaway.pendingTypeName,
+                      ...Array.from({ length: BATCH_SIZE - 1 }, (_, index) => `idx:type:${index}`),
+                    ],
+                  }),
+                ),
+              );
+            }),
+          ),
+      },
     ],
   },
 
@@ -1852,6 +2499,65 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
                   jobs: [{ jobId: sentinels.pending.jobId, schedule: { afterMs: 1000 } }],
                 }),
               );
+            }),
+          ),
+      },
+      {
+        key: "rescheduleJobs/batch100",
+        label: "batch of 100",
+        run: (stateAdapter) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.createJobs({
+                    txCtx,
+                    jobs: Array.from({ length: BATCH_SIZE }, () => ({
+                      id: stateAdapter.config.generateJobId(),
+                      typeName: "idx:batch:reschedule",
+                      input: {},
+                    })),
+                  }),
+                ),
+              );
+              const worker = yield* step(
+                stateAdapter.startWorker({
+                  workerId: stateAdapter.config.generateWorkerId(),
+                  typeNames: ["idx:batch:reschedule"],
+                  concurrency: BATCH_SIZE,
+                  leaseMs: 60_000,
+                }),
+              );
+              const acquired = yield* step(
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.startJobAttempts({
+                    txCtx,
+                    typeNames: ["idx:batch:reschedule"],
+                    workerId: worker.id,
+                    workerToken: worker.token,
+                    limit: BATCH_SIZE,
+                  }),
+                ),
+              );
+              return (stateAdapter: StateAdapter<any, any, any, Mode>) =>
+                runInModeOf(
+                  stateAdapter,
+                  syncAsync(function* () {
+                    yield* step(
+                      stateAdapter.withTransaction((txCtx) =>
+                        stateAdapter.rescheduleJobs({
+                          txCtx,
+                          jobs: acquired.map((job) => ({
+                            jobId: job.id,
+                            schedule: { afterMs: 1000 },
+                            attemptToken: job.attemptToken!,
+                          })),
+                        }),
+                      ),
+                    );
+                  }),
+                );
             }),
           ),
       },
@@ -1929,6 +2635,40 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
                     yield* step(
                       stateAdapter.withTransaction((txCtx) =>
                         stateAdapter.deleteChains({ txCtx, chainIds: [chainId] }),
+                      ),
+                    );
+                  }),
+                );
+            }),
+          ),
+      },
+      {
+        key: "deleteChains/batch100",
+        label: "batch of 100",
+        run: (stateAdapter) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              const chains = yield* step(
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.createJobs({
+                    txCtx,
+                    jobs: Array.from({ length: BATCH_SIZE }, () => ({
+                      id: stateAdapter.config.generateJobId(),
+                      typeName: "idx:batch:delete",
+                      input: {},
+                    })),
+                  }),
+                ),
+              );
+              const chainIds = chains.map((chain) => chain.id);
+              return (stateAdapter: StateAdapter<any, any, any, Mode>) =>
+                runInModeOf(
+                  stateAdapter,
+                  syncAsync(function* () {
+                    yield* step(
+                      stateAdapter.withTransaction((txCtx) =>
+                        stateAdapter.deleteChains({ txCtx, chainIds }),
                       ),
                     );
                   }),

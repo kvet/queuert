@@ -34,6 +34,38 @@ CORRELATED SCALAR SUBQUERY 1
 SEARCH t USING COVERING INDEX queuert_chain_index_idx (chain_id=? AND chain_index>?)
 ```
 
+## getChains/batch100
+
+1. `getChains`
+
+```
+SEARCH head_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+LIST SUBQUERY 2
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH tail_job USING INDEX queuert_chain_index_idx (chain_id=? AND chain_index=?) LEFT-JOIN
+CORRELATED SCALAR SUBQUERY 1
+SEARCH t USING COVERING INDEX queuert_chain_index_idx (chain_id=? AND chain_index>?)
+```
+
+## getChains/lockBatch100
+
+1. `takeWriteLock`
+
+```
+SCAN queuert_write_lock
+```
+
+2. `getChains`
+
+```
+SEARCH head_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+LIST SUBQUERY 2
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH tail_job USING INDEX queuert_chain_index_idx (chain_id=? AND chain_index=?) LEFT-JOIN
+CORRELATED SCALAR SUBQUERY 1
+SEARCH t USING COVERING INDEX queuert_chain_index_idx (chain_id=? AND chain_index>?)
+```
+
 ## getChainTails/default
 
 1. `getChains`
@@ -48,6 +80,38 @@ SEARCH t USING COVERING INDEX queuert_chain_index_idx (chain_id=? AND chain_inde
 ```
 
 ## getChainTails/lock
+
+1. `takeWriteLock`
+
+```
+SCAN queuert_write_lock
+```
+
+2. `getChains`
+
+```
+SEARCH head_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+LIST SUBQUERY 2
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH tail_job USING INDEX queuert_chain_index_idx (chain_id=? AND chain_index=?) LEFT-JOIN
+CORRELATED SCALAR SUBQUERY 1
+SEARCH t USING COVERING INDEX queuert_chain_index_idx (chain_id=? AND chain_index>?)
+```
+
+## getChainTails/batch100
+
+1. `getChains`
+
+```
+SEARCH head_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+LIST SUBQUERY 2
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH tail_job USING INDEX queuert_chain_index_idx (chain_id=? AND chain_index=?) LEFT-JOIN
+CORRELATED SCALAR SUBQUERY 1
+SEARCH t USING COVERING INDEX queuert_chain_index_idx (chain_id=? AND chain_index>?)
+```
+
+## getChainTails/lockBatch100
 
 1. `takeWriteLock`
 
@@ -94,6 +158,34 @@ SCAN json_each VIRTUAL TABLE INDEX 1:
 SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
 ```
 
+## getJobs/batch100
+
+1. `getJobs`
+
+```
+SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+LIST SUBQUERY 1
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+```
+
+## getJobs/lockBatch100
+
+1. `takeWriteLock`
+
+```
+SCAN queuert_write_lock
+```
+
+2. `getJobs`
+
+```
+SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+LIST SUBQUERY 1
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+```
+
 ## getWorkers/default
 
 1. `getWorkers`
@@ -106,6 +198,34 @@ CREATE BLOOM FILTER
 ```
 
 ## getWorkers/lock
+
+1. `takeWriteLock`
+
+```
+SCAN queuert_write_lock
+```
+
+2. `getWorkers`
+
+```
+SCAN queuert_worker
+LIST SUBQUERY 1
+SCAN json_each VIRTUAL TABLE INDEX 1:
+CREATE BLOOM FILTER
+```
+
+## getWorkers/batch100
+
+1. `getWorkers`
+
+```
+SCAN queuert_worker
+LIST SUBQUERY 1
+SCAN json_each VIRTUAL TABLE INDEX 1:
+CREATE BLOOM FILTER
+```
+
+## getWorkers/lockBatch100
 
 1. `takeWriteLock`
 
@@ -135,12 +255,49 @@ USE TEMP B-TREE FOR ORDER BY
 
 ## createJobs/deduplication
 
-1. `findDeduplicatedJob`
+1. `findDeduplicatedJobs`
 
 ```
-SEARCH head_job USING INDEX queuert_chain_deduplication_idx (chain_deduplication_key=?)
+SCAN je VIRTUAL TABLE INDEX 1:
+SEARCH head_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 2
+SEARCH h USING INDEX queuert_chain_deduplication_idx (chain_deduplication_key=?)
 SEARCH tail_job USING INDEX queuert_chain_index_idx (chain_id=? AND chain_index=?) LEFT-JOIN
-CORRELATED SCALAR SUBQUERY 1
+CORRELATED SCALAR SUBQUERY 3
+SEARCH t USING COVERING INDEX queuert_chain_index_idx (chain_id=? AND chain_index>?)
+```
+
+2. `insertChains`
+
+```
+SCAN je VIRTUAL TABLE INDEX 1:
+SCALAR SUBQUERY 2
+SCAN queuert_schema_fence_v2
+USE TEMP B-TREE FOR ORDER BY
+```
+
+## createJobs/batch100
+
+1. `insertChains`
+
+```
+SCAN je VIRTUAL TABLE INDEX 1:
+SCALAR SUBQUERY 2
+SCAN queuert_schema_fence_v2
+USE TEMP B-TREE FOR ORDER BY
+```
+
+## createJobs/deduplicationBatch100
+
+1. `findDeduplicatedJobs`
+
+```
+SCAN je VIRTUAL TABLE INDEX 1:
+SEARCH head_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 2
+SEARCH h USING INDEX queuert_chain_deduplication_idx (chain_deduplication_key=?)
+SEARCH tail_job USING INDEX queuert_chain_index_idx (chain_id=? AND chain_index=?) LEFT-JOIN
+CORRELATED SCALAR SUBQUERY 3
 SEARCH t USING COVERING INDEX queuert_chain_index_idx (chain_id=? AND chain_index>?)
 ```
 
@@ -154,6 +311,44 @@ USE TEMP B-TREE FOR ORDER BY
 ```
 
 ## continueJobs/default
+
+1. `insertContinuations`
+
+```
+SCAN je VIRTUAL TABLE INDEX 1:
+SCALAR SUBQUERY 2
+SCAN queuert_schema_fence_v2
+SEARCH p USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+USE TEMP B-TREE FOR ORDER BY
+```
+
+2. `completeContinuedJobs`
+
+```
+SCAN je VIRTUAL TABLE INDEX 1:
+SCALAR SUBQUERY 3
+SCAN queuert_schema_fence_v2
+SEARCH queuert_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+LIST SUBQUERY 2
+SCAN je VIRTUAL TABLE INDEX 1:
+CREATE BLOOM FILTER
+CORRELATED SCALAR SUBQUERY 4
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 5
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 6
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 7
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 8
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 9
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 10
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+```
+
+## continueJobs/batch100
 
 1. `insertContinuations`
 
@@ -246,17 +441,104 @@ CORRELATED SCALAR SUBQUERY 12
 SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
 ```
 
+## addJobsBlockers/batch100
+
+1. `insertJobBlockers`
+
+```
+SCAN je VIRTUAL TABLE INDEX 1:
+SCALAR SUBQUERY 2
+SCAN queuert_schema_fence_v2
+SEARCH h EXISTS USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+```
+
+2. `getBlockerChains`
+
+```
+SCAN je VIRTUAL TABLE INDEX 1:
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?) LEFT-JOIN
+USE TEMP B-TREE FOR ORDER BY
+```
+
+3. `blockJobsAndFlagBlockerHeads`
+
+```
+MULTI-INDEX OR
+INDEX 1
+LIST SUBQUERY 3
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH queuert_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+INDEX 2
+LIST SUBQUERY 4
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH queuert_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+SCALAR SUBQUERY 5
+SCAN queuert_schema_fence_v2
+LIST SUBQUERY 1
+SCAN json_each VIRTUAL TABLE INDEX 1:
+CREATE BLOOM FILTER
+LIST SUBQUERY 2
+SCAN json_each VIRTUAL TABLE INDEX 1:
+CREATE BLOOM FILTER
+CORRELATED SCALAR SUBQUERY 6
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 7
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 8
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 9
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 10
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 11
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 12
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+```
+
 ## getJobsBlockers/default
 
-1. `getJobBlockers`
+1. `getJobsBlockers`
 
 ```
 SEARCH b USING COVERING INDEX sqlite_autoindex_queuert_job_blocker_1 (job_id=?)
+LIST SUBQUERY 2
+SCAN json_each VIRTUAL TABLE INDEX 1:
 SEARCH head_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
 SEARCH tail_job USING INDEX queuert_chain_index_idx (chain_id=? AND chain_index=?) LEFT-JOIN
 CORRELATED SCALAR SUBQUERY 1
 SEARCH t USING COVERING INDEX queuert_chain_index_idx (chain_id=? AND chain_index>?)
-USE TEMP B-TREE FOR ORDER BY
+USE TEMP B-TREE FOR LAST TERM OF ORDER BY
+```
+
+## getJobsBlockers/manyBlockers
+
+1. `getJobsBlockers`
+
+```
+SEARCH b USING COVERING INDEX sqlite_autoindex_queuert_job_blocker_1 (job_id=?)
+LIST SUBQUERY 2
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH head_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+SEARCH tail_job USING INDEX queuert_chain_index_idx (chain_id=? AND chain_index=?) LEFT-JOIN
+CORRELATED SCALAR SUBQUERY 1
+SEARCH t USING COVERING INDEX queuert_chain_index_idx (chain_id=? AND chain_index>?)
+USE TEMP B-TREE FOR LAST TERM OF ORDER BY
+```
+
+## getJobsBlockers/batch100
+
+1. `getJobsBlockers`
+
+```
+SEARCH b USING COVERING INDEX sqlite_autoindex_queuert_job_blocker_1 (job_id=?)
+LIST SUBQUERY 2
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH head_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+SEARCH tail_job USING INDEX queuert_chain_index_idx (chain_id=? AND chain_index=?) LEFT-JOIN
+CORRELATED SCALAR SUBQUERY 1
+SEARCH t USING COVERING INDEX queuert_chain_index_idx (chain_id=? AND chain_index>?)
+USE TEMP B-TREE FOR LAST TERM OF ORDER BY
 ```
 
 ## unblockJobs/default
@@ -291,7 +573,49 @@ SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
 USE TEMP B-TREE FOR ORDER BY
 ```
 
+## unblockJobs/batch100
+
+1. `hasChainDependents`
+
+```
+SCAN CONSTANT ROW
+SCALAR SUBQUERY 1
+SEARCH jb USING COVERING INDEX queuert_job_blocker_chain_idx (blocked_by_chain_id=?)
+```
+
+2. `scheduleBlockedJobs`
+
+```
+SEARCH queuert_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+LIST SUBQUERY 1
+SEARCH jb USING INDEX queuert_job_blocker_chain_idx (blocked_by_chain_id=?)
+SCALAR SUBQUERY 3
+SCAN queuert_schema_fence_v2
+CORRELATED SCALAR SUBQUERY 2
+SEARCH jb USING COVERING INDEX sqlite_autoindex_queuert_job_blocker_1 (job_id=?)
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?) LEFT-JOIN
+```
+
+3. `getChainJobBlockersWithJobs`
+
+```
+SEARCH jb USING INDEX queuert_job_blocker_chain_idx (blocked_by_chain_id=?)
+SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+USE TEMP B-TREE FOR ORDER BY
+```
+
 ## startWorker/default
+
+1. `startWorker`
+
+```
+SCAN CONSTANT ROW
+SCALAR SUBQUERY 1
+SCAN queuert_schema_fence_v2
+```
+
+## startWorker/batch100
 
 1. `startWorker`
 
@@ -354,7 +678,40 @@ CORRELATED SCALAR SUBQUERY 12
 SEARCH jb USING COVERING INDEX sqlite_autoindex_queuert_job_blocker_1 (job_id=?)
 ```
 
-## startJobAttempts/limit10
+## startJobAttempts/limit100
+
+1. `startJobAttempts`
+
+```
+SEARCH queuert_job USING COVERING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+LIST SUBQUERY 3
+SEARCH queuert_job USING INDEX queuert_job_pending_idx (type_name=? AND scheduled_at<?)
+LIST SUBQUERY 2
+SCAN json_each VIRTUAL TABLE INDEX 1:
+USE TEMP B-TREE FOR ORDER BY
+SCALAR SUBQUERY 1
+SEARCH queuert_worker USING INDEX sqlite_autoindex_queuert_worker_1 (id=?)
+SCALAR SUBQUERY 4
+SCAN queuert_schema_fence_v2
+CORRELATED SCALAR SUBQUERY 5
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 6
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 7
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 8
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 9
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 10
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 11
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 12
+SEARCH jb USING COVERING INDEX sqlite_autoindex_queuert_job_blocker_1 (job_id=?)
+```
+
+## startJobAttempts/batch100
 
 1. `startJobAttempts`
 
@@ -395,63 +752,132 @@ SEARCH jb USING COVERING INDEX sqlite_autoindex_queuert_job_blocker_1 (job_id=?)
 MATERIALIZE ids
 MERGE (UNION)
 LEFT
+MATERIALIZE targets
 SCAN je VIRTUAL TABLE INDEX 1:
+SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+SCAN targets
 SCALAR SUBQUERY 10
 SCAN queuert_schema_fence_v2
-SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
 USE TEMP B-TREE FOR ORDER BY
 RIGHT
-SCAN je VIRTUAL TABLE INDEX 1:
+SCAN targets
 SCALAR SUBQUERY 10
 SCAN queuert_schema_fence_v2
-SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
 USE TEMP B-TREE FOR ORDER BY
 SCAN ids
 SCALAR SUBQUERY 10
 SCAN queuert_schema_fence_v2
 SEARCH queuert_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
 CORRELATED SCALAR SUBQUERY 5
-SCAN je VIRTUAL TABLE INDEX 1:
-SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
 CORRELATED SCALAR SUBQUERY 5
-SCAN je VIRTUAL TABLE INDEX 1:
-SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
 CORRELATED SCALAR SUBQUERY 5
-SCAN je VIRTUAL TABLE INDEX 1:
-SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
 CORRELATED SCALAR SUBQUERY 5
-SCAN je VIRTUAL TABLE INDEX 1:
-SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
 CORRELATED SCALAR SUBQUERY 5
-SCAN je VIRTUAL TABLE INDEX 1:
-SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
 CORRELATED SCALAR SUBQUERY 5
-SCAN je VIRTUAL TABLE INDEX 1:
-SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
 CORRELATED SCALAR SUBQUERY 5
-SCAN je VIRTUAL TABLE INDEX 1:
-SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
 CORRELATED SCALAR SUBQUERY 5
-SCAN je VIRTUAL TABLE INDEX 1:
-SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
 CORRELATED SCALAR SUBQUERY 5
-SCAN je VIRTUAL TABLE INDEX 1:
-SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
 CORRELATED SCALAR SUBQUERY 4
-SCAN je VIRTUAL TABLE INDEX 1:
-SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
 CORRELATED SCALAR SUBQUERY 5
-SCAN je VIRTUAL TABLE INDEX 1:
-SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
 CORRELATED SCALAR SUBQUERY 3
-SCAN je VIRTUAL TABLE INDEX 1:
-SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
 CORRELATED SCALAR SUBQUERY 6
-SCAN je VIRTUAL TABLE INDEX 1:
-SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+BLOOM FILTER ON tg (chain_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (chain_id=?)
 CORRELATED SCALAR SUBQUERY 6
+BLOOM FILTER ON tg (chain_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (chain_id=?)
+```
+
+## completeJobs/batch100
+
+1. `completeJobs`
+
+```
+MATERIALIZE ids
+MERGE (UNION)
+LEFT
+MATERIALIZE targets
 SCAN je VIRTUAL TABLE INDEX 1:
 SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+SCAN targets
+SCALAR SUBQUERY 10
+SCAN queuert_schema_fence_v2
+USE TEMP B-TREE FOR ORDER BY
+RIGHT
+SCAN targets
+SCALAR SUBQUERY 10
+SCAN queuert_schema_fence_v2
+USE TEMP B-TREE FOR ORDER BY
+SCAN ids
+SCALAR SUBQUERY 10
+SCAN queuert_schema_fence_v2
+SEARCH queuert_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 5
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
+CORRELATED SCALAR SUBQUERY 5
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
+CORRELATED SCALAR SUBQUERY 5
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
+CORRELATED SCALAR SUBQUERY 5
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
+CORRELATED SCALAR SUBQUERY 5
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
+CORRELATED SCALAR SUBQUERY 5
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
+CORRELATED SCALAR SUBQUERY 5
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
+CORRELATED SCALAR SUBQUERY 5
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
+CORRELATED SCALAR SUBQUERY 5
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
+CORRELATED SCALAR SUBQUERY 4
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
+CORRELATED SCALAR SUBQUERY 5
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
+CORRELATED SCALAR SUBQUERY 3
+BLOOM FILTER ON tg (job_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (job_id=?)
+CORRELATED SCALAR SUBQUERY 6
+BLOOM FILTER ON tg (chain_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (chain_id=?)
+CORRELATED SCALAR SUBQUERY 6
+BLOOM FILTER ON tg (chain_id=?)
+SEARCH tg USING AUTOMATIC COVERING INDEX (chain_id=?)
 ```
 
 ## getStartAttemptDelayMs/default
@@ -465,7 +891,43 @@ SCAN json_each VIRTUAL TABLE INDEX 1:
 USE TEMP B-TREE FOR ORDER BY
 ```
 
+## getStartAttemptDelayMs/batch100
+
+1. `getStartAttemptDelayMs`
+
+```
+SEARCH job USING COVERING INDEX queuert_job_pending_idx (type_name=?)
+LIST SUBQUERY 1
+SCAN json_each VIRTUAL TABLE INDEX 1:
+USE TEMP B-TREE FOR ORDER BY
+```
+
 ## rescheduleJobs/default
+
+1. `rescheduleJobs`
+
+```
+SCAN je VIRTUAL TABLE INDEX 1:
+SCALAR SUBQUERY 2
+SCAN queuert_schema_fence_v2
+SEARCH queuert_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 3
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 4
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 5
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 6
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 7
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 8
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 9
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+```
+
+## rescheduleJobs/batch100
 
 1. `rescheduleJobs`
 
@@ -672,6 +1134,97 @@ SCALAR SUBQUERY 3
 SCAN queuert_schema_fence_v2
 ```
 
+## deleteChains/batch100
+
+1. `getChainsByChainIds`
+
+```
+SEARCH head_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+LIST SUBQUERY 2
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH tail_job USING INDEX queuert_chain_index_idx (chain_id=? AND chain_index=?) LEFT-JOIN
+CORRELATED SCALAR SUBQUERY 1
+SEARCH t USING COVERING INDEX queuert_chain_index_idx (chain_id=? AND chain_index>?)
+```
+
+2. `clearUnreferencedBlockerHeads`
+
+```
+SEARCH queuert_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+LIST SUBQUERY 5
+SEARCH queuert_job_blocker USING COVERING INDEX sqlite_autoindex_queuert_job_blocker_1 (job_id=?)
+LIST SUBQUERY 4
+MULTI-INDEX OR
+INDEX 1
+LIST SUBQUERY 1
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH queuert_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+INDEX 2
+LIST SUBQUERY 2
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH queuert_job USING INDEX queuert_chain_index_idx (chain_id=? AND chain_index>?)
+LIST SUBQUERY 6
+MULTI-INDEX OR
+INDEX 1
+LIST SUBQUERY 1
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH queuert_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+INDEX 2
+LIST SUBQUERY 2
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH queuert_job USING INDEX queuert_chain_index_idx (chain_id=? AND chain_index>?)
+CREATE BLOOM FILTER
+SCALAR SUBQUERY 9
+SCAN queuert_schema_fence_v2
+CORRELATED SCALAR SUBQUERY 8
+SEARCH jb USING INDEX queuert_job_blocker_chain_idx (blocked_by_chain_id=?)
+LIST SUBQUERY 7
+MULTI-INDEX OR
+INDEX 1
+LIST SUBQUERY 1
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH queuert_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+INDEX 2
+LIST SUBQUERY 2
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH queuert_job USING INDEX queuert_chain_index_idx (chain_id=? AND chain_index>?)
+CREATE BLOOM FILTER
+```
+
+3. `deleteBlockersByChainIds`
+
+```
+SEARCH queuert_job_blocker USING COVERING INDEX sqlite_autoindex_queuert_job_blocker_1 (job_id=?)
+LIST SUBQUERY 3
+MULTI-INDEX OR
+INDEX 1
+LIST SUBQUERY 1
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH queuert_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+INDEX 2
+LIST SUBQUERY 2
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH queuert_job USING INDEX queuert_chain_index_idx (chain_id=? AND chain_index>?)
+SCALAR SUBQUERY 4
+SCAN queuert_schema_fence_v2
+```
+
+4. `deleteChains`
+
+```
+MULTI-INDEX OR
+INDEX 1
+LIST SUBQUERY 1
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH queuert_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+INDEX 2
+LIST SUBQUERY 2
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH queuert_job USING INDEX queuert_chain_index_idx (chain_id=? AND chain_index>?)
+SCALAR SUBQUERY 3
+SCAN queuert_schema_fence_v2
+```
+
 ## getChainTypeNames/default
 
 1. `getChainTypeNames`
@@ -718,7 +1271,47 @@ SEARCH queuert_job USING COVERING INDEX queuert_chain_completed_idx (type_name=?
 SCAN (subquery-3)
 ```
 
+## countChainsByTypeName/batch100
+
+1. `countChainsByTypeName`
+
+```
+SCAN je VIRTUAL TABLE INDEX 1:
+CORRELATED SCALAR SUBQUERY 2
+CO-ROUTINE (subquery-1)
+SEARCH queuert_job USING COVERING INDEX queuert_chain_running_idx (type_name=?)
+SCAN (subquery-1)
+CORRELATED SCALAR SUBQUERY 4
+CO-ROUTINE (subquery-3)
+SEARCH queuert_job USING COVERING INDEX queuert_chain_completed_idx (type_name=?)
+SCAN (subquery-3)
+```
+
 ## countJobsByTypeName/default
+
+1. `countJobsByTypeName`
+
+```
+SCAN je VIRTUAL TABLE INDEX 1:
+CORRELATED SCALAR SUBQUERY 2
+CO-ROUTINE (subquery-1)
+SEARCH queuert_job USING COVERING INDEX queuert_job_blocked_idx (type_name=?)
+SCAN (subquery-1)
+CORRELATED SCALAR SUBQUERY 4
+CO-ROUTINE (subquery-3)
+SEARCH queuert_job USING COVERING INDEX queuert_job_pending_idx (type_name=?)
+SCAN (subquery-3)
+CORRELATED SCALAR SUBQUERY 6
+CO-ROUTINE (subquery-5)
+SEARCH queuert_job USING COVERING INDEX queuert_job_running_idx (type_name=?)
+SCAN (subquery-5)
+CORRELATED SCALAR SUBQUERY 8
+CO-ROUTINE (subquery-7)
+SEARCH queuert_job USING COVERING INDEX queuert_job_completed_idx (type_name=?)
+SCAN (subquery-7)
+```
+
+## countJobsByTypeName/batch100
 
 1. `countJobsByTypeName`
 
@@ -755,14 +1348,46 @@ SCAN queuert_worker
 1. `countWorkersByTypeName`
 
 ```
-SCAN t VIRTUAL TABLE INDEX 1:
-SCAN w LEFT-JOIN
-CORRELATED SCALAR SUBQUERY 1
-SCAN json_each VIRTUAL TABLE INDEX 1:
+MATERIALIZE counts
+SCAN w
+SCAN wt VIRTUAL TABLE INDEX 1:
 USE TEMP B-TREE FOR GROUP BY
+USE TEMP B-TREE FOR count(DISTINCT)
+USE TEMP B-TREE FOR count(DISTINCT)
+SCAN t VIRTUAL TABLE INDEX 1:
+BLOOM FILTER ON c (type_name=?)
+SEARCH c USING AUTOMATIC COVERING INDEX (type_name=?) LEFT-JOIN
+USE TEMP B-TREE FOR ORDER BY
+```
+
+## countWorkersByTypeName/batch100
+
+1. `countWorkersByTypeName`
+
+```
+MATERIALIZE counts
+SCAN w
+SCAN wt VIRTUAL TABLE INDEX 1:
+USE TEMP B-TREE FOR GROUP BY
+USE TEMP B-TREE FOR count(DISTINCT)
+USE TEMP B-TREE FOR count(DISTINCT)
+SCAN t VIRTUAL TABLE INDEX 1:
+BLOOM FILTER ON c (type_name=?)
+SEARCH c USING AUTOMATIC COVERING INDEX (type_name=?) LEFT-JOIN
+USE TEMP B-TREE FOR ORDER BY
 ```
 
 ## countRunningJobsByWorkerId/default
+
+1. `countRunningJobsByWorkerId`
+
+```
+SCAN w VIRTUAL TABLE INDEX 1:
+SEARCH j USING INDEX queuert_job_attempt_by_idx (attempt_by=?) LEFT-JOIN
+USE TEMP B-TREE FOR GROUP BY
+```
+
+## countRunningJobsByWorkerId/batch100
 
 1. `countRunningJobsByWorkerId`
 

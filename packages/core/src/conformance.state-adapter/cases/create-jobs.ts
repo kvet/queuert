@@ -918,6 +918,50 @@ export const createJobsGroup: ConformanceGroup<StateAdapterConformanceContext> =
       }),
     },
     {
+      name: "deduplicates every batch entry sharing a key to the existing chain",
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
+
+        const [existingChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "dedup-repeated",
+                  input: null,
+                  deduplication: { key: "repeated-key", scope: "running" },
+                },
+              ],
+            }),
+          ),
+        );
+
+        const results = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [1, 2].map(() => ({
+                id: stateAdapter.config.generateJobId(),
+                typeName: "dedup-repeated",
+                input: null,
+                deduplication: { key: "repeated-key", scope: "running" as const },
+              })),
+            }),
+          ),
+        );
+
+        assert.deepEqual(
+          results.map(({ deduplicated, head }) => ({ deduplicated, headId: head.id })),
+          [
+            { deduplicated: true, headId: existingChain.head.id },
+            { deduplicated: true, headId: existingChain.head.id },
+          ],
+        );
+      }),
+    },
+    {
       name: "deduplicates a batch entry against an earlier entry of the same batch",
       run: dynamicSyncAsync(function* ({ createStateAdapter }) {
         const stateAdapter = yield* resource(createStateAdapter());

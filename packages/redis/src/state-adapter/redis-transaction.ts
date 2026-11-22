@@ -269,12 +269,14 @@ export type RedisStoreTransaction = RedisTransaction & {
   incr: (key: string, field: string, delta: number) => void;
   zscan: (key: string, options: ZscanOptions) => AsyncGenerator<ZsetMember>;
   zlastMany: (keys: string[]) => Promise<(ZsetMember | undefined)[]>;
+  zmembersMany: (keys: string[]) => Promise<ZsetMember[][]>;
   zcard: (key: string) => Promise<number>;
   zcardMany: (keys: string[]) => Promise<number[]>;
   zcountMany: (requests: { key: string; min: number; max: number }[]) => Promise<number[]>;
   scardMany: (keys: string[]) => Promise<number[]>;
   counterValues: (key: string, fields: string[]) => Promise<number[]>;
   smembers: (key: string, options?: { validate?: boolean }) => Promise<string[]>;
+  smembersMany: (keys: string[], options?: { validate?: boolean }) => Promise<string[][]>;
   scard: (key: string) => Promise<number>;
   counterEntries: (key: string) => Promise<Map<string, number>>;
   snapshot: () => () => void;
@@ -362,24 +364,39 @@ export const createRedisTransaction = (
     validatedSets.set(key, (reply as string[]).map(String));
   };
 
-  const smembers = async (key: string, options?: { validate?: boolean }): Promise<string[]> => {
-    let remote = options?.validate === true ? validatedSets.get(key) : undefined;
-    if (remote === undefined) {
-      const validateSet = options?.validate === true;
-      const [reply, version] = await read([
-        ["SMEMBERS", key],
-        ...(validateSet ? [["HGET", store.setVersionsKey, key]] : []),
-      ]);
-      if (validateSet) recordValidatedSet(key, reply, version);
-      remote = (reply as string[]).map(String);
+  const smembersMany = async (
+    keys: string[],
+    options?: { validate?: boolean },
+  ): Promise<string[][]> => {
+    const validateSet = options?.validate === true;
+    const unread = [...new Set(keys)].filter((key) => !validateSet || !validatedSets.has(key));
+    const remoteByKey = new Map<string, string[]>();
+    if (unread.length > 0) {
+      const replies = await read(
+        unread.flatMap((key) => [
+          ["SMEMBERS", key],
+          ...(validateSet ? [["HGET", store.setVersionsKey, key]] : []),
+        ]),
+      );
+      const stride = validateSet ? 2 : 1;
+      for (const [index, key] of unread.entries()) {
+        const reply = replies[index * stride];
+        if (validateSet) recordValidatedSet(key, reply, replies[index * stride + 1]);
+        remoteByKey.set(key, (reply as string[]).map(String));
+      }
     }
-    const members = new Set(remote);
-    for (const [member, present] of sets.get(key) ?? []) {
-      if (present) members.add(member);
-      else members.delete(member);
-    }
-    return [...members];
+    return keys.map((key) => {
+      const members = new Set(remoteByKey.get(key) ?? validatedSets.get(key));
+      for (const [member, present] of sets.get(key) ?? []) {
+        if (present) members.add(member);
+        else members.delete(member);
+      }
+      return [...members];
+    });
   };
+
+  const smembers = async (key: string, options?: { validate?: boolean }): Promise<string[]> =>
+    (await smembersMany([key], options))[0];
 
   async function* zscan(key: string, options: ZscanOptions): AsyncGenerator<ZsetMember> {
     const { direction, after, batchSize } = options;
@@ -671,6 +688,16 @@ export const createRedisTransaction = (
       );
     },
 
+    zmembersMany: async (keys) => {
+      if (keys.length === 0) return [];
+      const replies = await read(
+        keys.map((key) => ["ZRANGEBYSCORE", key, "-inf", "+inf", "WITHSCORES"]),
+      );
+      return keys.map((key, index) =>
+        mergeOverlay(key, parseZsetReply(replies[index]), -Infinity, Infinity),
+      );
+    },
+
     zcard: async (key) => {
       const overlay = [...(zsets.get(key) ?? [])];
       const [count, ...scores] = await read([
@@ -755,6 +782,8 @@ export const createRedisTransaction = (
     },
 
     smembers,
+
+    smembersMany,
 
     scard: async (key) => {
       const overlay = [...(sets.get(key) ?? [])];

@@ -92,9 +92,11 @@ const Page = () => (
     <KeyValueList title="Test setup" items={setup} />
     <h2 id="operational-queries">Operational queries</h2>
     <p>
-      The per-job path every worker and client call takes. The <code>limit10</code> variants acquire
-      or reclaim ten jobs in one statement, as the worker does when it fills or frees several idle
-      slots at once.
+      The path every worker and client call takes. The <code>batch100</code> variants pass 100 items
+      to one call: 100 jobs, chains, workers or type names, the shape of a bulk enqueue or a batched
+      handler's outcomes. <code>startJobAttempts/limit100</code> claims 100 jobs at once, as a
+      worker filling many idle slots does, and <code>getJobsBlockers/manyBlockers</code> reads one
+      job with 100 blockers.
     </p>
     <QueryChart title="Operational queries" groups={operationalGroups} />
     <h2 id="listing-queries">Listing queries</h2>

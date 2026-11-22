@@ -481,17 +481,6 @@ export const createRedisStateAdapter = ({
   const loadPresentJobs = async (tx: RedisStoreTransaction, ids: string[]): Promise<DbJob[]> =>
     (await loadJobs(tx, ids)).filter((job): job is DbJob => job !== undefined);
 
-  const chainMemberIds = async (tx: RedisStoreTransaction, chainId: string): Promise<string[]> => {
-    const ids: string[] = [];
-    for await (const { member } of tx.zscan(keys.chainJobs(chainId), {
-      direction: "asc",
-      batchSize: 500,
-    })) {
-      ids.push(member);
-    }
-    return ids;
-  };
-
   const chainViews = async (
     tx: RedisStoreTransaction,
     heads: DbJob[],
@@ -1072,11 +1061,21 @@ export const createRedisStateAdapter = ({
         );
 
         const externalBlockers = new Map<string, StateBlockedJob[]>();
-        for (const chainId of uniqueChainIds) {
-          if (!heads.get(chainId)?.blocking) continue;
-          const dependentIds = await tx.smembers(keys.blockedBy(chainId), { validate: true });
-          for (const dependent of await loadPresentJobs(tx, dependentIds)) {
-            if (uniqueChainIds.has(dependent.chainId)) continue;
+        const blockingChainIds = [...uniqueChainIds].filter(
+          (chainId) => heads.get(chainId)?.blocking,
+        );
+        const blockingDependentIds = await tx.smembersMany(blockingChainIds.map(keys.blockedBy), {
+          validate: true,
+        });
+        const blockingDependents = new Map(
+          (await loadPresentJobs(tx, [...new Set(blockingDependentIds.flat())])).map(
+            (job) => [job.id, job] as const,
+          ),
+        );
+        for (const [chainIndex, chainId] of blockingChainIds.entries()) {
+          for (const dependentId of blockingDependentIds[chainIndex]) {
+            const dependent = blockingDependents.get(dependentId);
+            if (dependent === undefined || uniqueChainIds.has(dependent.chainId)) continue;
             const entries = dependent.blockers
               .filter((blocker) => blocker.blockedByChainId === chainId)
               .toSorted((a, b) => a.index - b.index);
@@ -1103,31 +1102,42 @@ export const createRedisStateAdapter = ({
         );
 
         const referencedChainIds = new Set<string>();
-        for (const [chainId, head] of heads) {
-          if (!head) continue;
-          for (const job of await loadPresentJobs(tx, await chainMemberIds(tx, chainId))) {
-            for (const blocker of job.blockers) {
-              if (!uniqueChainIds.has(blocker.blockedByChainId)) {
-                referencedChainIds.add(blocker.blockedByChainId);
-              }
+        const members = await tx.zmembersMany(presentHeads.map((head) => keys.chainJobs(head.id)));
+        for (const job of await loadPresentJobs(
+          tx,
+          members.flat().map(({ member }) => member),
+        )) {
+          for (const blocker of job.blockers) {
+            if (!uniqueChainIds.has(blocker.blockedByChainId)) {
+              referencedChainIds.add(blocker.blockedByChainId);
             }
-            writeJob(tx, job, undefined);
           }
-          if (head.deduplicationKey) {
-            const deduplicationRecordKey = keys.deduplication(head.typeName, head.deduplicationKey);
-            const [stored] = await tx.getRecords([deduplicationRecordKey]);
-            const remaining = ((stored as string[] | undefined) ?? []).filter(
-              (id) => id !== chainId,
-            );
-            tx.putRecord(deduplicationRecordKey, remaining.length > 0 ? remaining : undefined);
-          }
+          writeJob(tx, job, undefined);
         }
 
-        const unreferencedIds: string[] = [];
-        for (const chainId of referencedChainIds) {
-          const dependentIds = await tx.smembers(keys.blockedBy(chainId), { validate: true });
-          if (dependentIds.length === 0) unreferencedIds.push(chainId);
+        const deletedIdsByDeduplicationKey = Map.groupBy(
+          presentHeads.filter((head) => head.deduplicationKey),
+          (head) => keys.deduplication(head.typeName, head.deduplicationKey!),
+        );
+        const deduplicationRecordKeys = [...deletedIdsByDeduplicationKey.keys()];
+        const storedDeduplications = await tx.getRecords(deduplicationRecordKeys);
+        for (const [index, deduplicationRecordKey] of deduplicationRecordKeys.entries()) {
+          const deletedIds = new Set(
+            deletedIdsByDeduplicationKey.get(deduplicationRecordKey)!.map((head) => head.id),
+          );
+          const remaining = ((storedDeduplications[index] as string[] | undefined) ?? []).filter(
+            (id) => !deletedIds.has(id),
+          );
+          tx.putRecord(deduplicationRecordKey, remaining.length > 0 ? remaining : undefined);
         }
+
+        const referencedIds = [...referencedChainIds];
+        const referencedDependentIds = await tx.smembersMany(referencedIds.map(keys.blockedBy), {
+          validate: true,
+        });
+        const unreferencedIds = referencedIds.filter(
+          (_, index) => referencedDependentIds[index].length === 0,
+        );
         for (const head of await loadPresentJobs(tx, unreferencedIds)) {
           if (head.id === head.chainId && head.blocking) {
             writeJob(tx, head, { ...head, blocking: false });
