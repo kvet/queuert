@@ -42,7 +42,7 @@
     "prepublishOnly": "pnpm build",
     "build": "pnpm build:frontend && tsdown",
     "build:frontend": "vite build",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p src/frontend",
+    "typecheck": "tsrs --noEmit && tsrs --noEmit -p src/frontend",
     "test": "vitest --run"
   },
   "devDependencies": {

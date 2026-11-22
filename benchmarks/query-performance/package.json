@@ -11,7 +11,7 @@
     "start:mariadb": "node src/mysql.ts --mariadb",
     "start:redis": "node src/redis.ts",
     "start:in-process": "node src/in-process.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsrs --noEmit"
   },
   "dependencies": {
     "@queuert/mysql": "workspace:*",

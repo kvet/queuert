@@ -17,7 +17,7 @@
     "dashboard": "pnpm --filter '@queuert/dashboard' build && node src/dashboard.ts",
     "dashboard:mounted": "pnpm --filter '@queuert/dashboard' build && node src/dashboard-mounted.ts",
     "start": "node src/populator.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsrs --noEmit"
   },
   "devDependencies": {
     "@queuert/dashboard": "workspace:*",

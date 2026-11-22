@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/index.ts",
     "tui": "otel-tui",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsrs --noEmit"
   },
   "dependencies": {
     "@opentelemetry/api": "1.10.0",

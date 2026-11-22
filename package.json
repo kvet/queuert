@@ -34,8 +34,8 @@
     "lint-staged": "17.6.1",
     "oxfmt": "0.79.0",
     "oxlint": "1.94.0",
-    "oxlint-tsgolint": "7.0.2007",
     "tsdown": "0.23.7",
+    "tsrs": "7.1.0-beta.tsrs3",
     "typescript": "7.0.2",
     "vitest": "5.1.1"
   },

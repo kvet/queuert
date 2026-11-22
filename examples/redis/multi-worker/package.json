@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsrs --noEmit"
   },
   "devDependencies": {
     "@queuert/redis": "workspace:*",

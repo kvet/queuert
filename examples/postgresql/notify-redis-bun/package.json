@@ -16,7 +16,7 @@
   "scripts": {
     "start": "bun run --bun src/index.ts",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsrs --noEmit"
   },
   "devDependencies": {
     "@queuert/postgres": "workspace:*",

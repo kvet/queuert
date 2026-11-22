@@ -23,7 +23,7 @@
     "start:notify-in-process": "node src/index.ts --notify-in-process",
     "start:notify-in-process-async": "node src/index.ts --notify-in-process-async",
     "start:notify-ipc": "node src/index.ts --notify-ipc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsrs --noEmit"
   },
   "dependencies": {
     "@nats-io/transport-node": "3.5.0",

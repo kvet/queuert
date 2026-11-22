@@ -13,7 +13,7 @@
   "scripts": {
     "start": "node src/index.ts",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsrs --noEmit"
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",

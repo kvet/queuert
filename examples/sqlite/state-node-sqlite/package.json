@@ -16,7 +16,7 @@
   "scripts": {
     "start": "node src/index.ts",
     "test": "node --test src/provider.spec.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsrs --noEmit"
   },
   "devDependencies": {
     "@queuert/sqlite": "workspace:*",

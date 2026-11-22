@@ -41,12 +41,10 @@ describe("createChain", () => {
 
   it("rejects non-entry type name at compile time", () => {
     expectTypeOf(async (client: InProcessClient<typeof jobTypes>) =>
-      client.createChain({
-        ...txCtx,
+      client.createChain(
         // @ts-expect-error non-existent type
-        typeName: "nonexistent",
-        input: { value: 0 },
-      }),
+        { ...txCtx, typeName: "nonexistent", input: { value: 0 } },
+      ),
     ).toBeFunction();
   });
 

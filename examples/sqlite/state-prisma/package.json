@@ -17,7 +17,7 @@
     "start": "node src/index.ts",
     "test": "vitest --run",
     "postinstall": "prisma generate",
-    "typecheck": "prisma generate < /dev/null && tsc --noEmit"
+    "typecheck": "prisma generate < /dev/null && tsrs --noEmit"
   },
   "devDependencies": {
     "@prisma/adapter-better-sqlite3": "7.10.1",

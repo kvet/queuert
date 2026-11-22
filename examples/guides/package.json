@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "for guide in src/*.ts; do node \"$guide\" || exit 1; done",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsrs --noEmit"
   },
   "dependencies": {
     "queuert": "workspace:*"

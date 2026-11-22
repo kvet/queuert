@@ -19,7 +19,7 @@
     "start:otel": "node src/index.ts --otel",
     "start:dashboard": "node src/index.ts --dashboard",
     "start:validation": "node src/index.ts --validation",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsrs --noEmit"
   },
   "dependencies": {
     "@nats-io/transport-node": "3.5.0",
