@@ -1,11 +1,10 @@
 import { CHAIN_STATUSES } from "@queuert/ui/lib";
 import { useSearchParams } from "@solidjs/router";
+import { useInfiniteQuery, useQuery } from "@tanstack/solid-query";
 import { Match, Switch, createMemo } from "solid-js";
 
-import { PAGE_SIZE, serverFns } from "../api.ts";
 import { ChainRow } from "../rows/ChainRow.tsx";
-import { createLoader } from "../state/createLoader.ts";
-import { createPagedList } from "../state/createPagedList.ts";
+import { chainCountsQuery, chainListQuery, chainTypeNamesQuery } from "../state/queries.ts";
 import { EmptyState, buttonClass } from "../ui/kit.tsx";
 import { Select } from "../ui/Select.tsx";
 import { FilterBar, SortControls, StatusFilter } from "./filters.tsx";
@@ -45,35 +44,27 @@ const ChainListForType = (props: { typeName: string }) => {
     return options.find((option) => option.value === orderBy())?.value ?? options[0].value;
   });
 
-  const typeNames = createLoader(
-    () => true,
-    async (_, signal) => serverFns.getChainTypeNames({ signal }),
-  );
-  const counts = createLoader(
-    () => props.typeName,
-    async (typeName, signal) =>
-      (await serverFns.countChainsByTypeName({ data: { typeNames: [typeName] }, signal }))[0],
-  );
-  const statusCounts = () => {
-    const typeCounts = counts.data();
-    return typeCounts ? toStatusCounts(CHAIN_STATUSES, typeCounts) : undefined;
-  };
+  const typeNames = useQuery(() => chainTypeNamesQuery());
+  const counts = useQuery(() => chainCountsQuery(props.typeName));
+  const statusCounts = () =>
+    counts.isSuccess ? toStatusCounts(CHAIN_STATUSES, counts.data) : undefined;
 
-  const list = createPagedList(
-    () => ({
+  const list = useInfiniteQuery(() =>
+    chainListQuery({
       typeName: props.typeName,
       status: status() || undefined,
       blocking: blocking(),
       orderBy: effectiveOrderBy(),
       orderDirection: orderDirection(),
     }),
-    async (params, cursor, signal) =>
-      serverFns.listChains({ data: { ...params, cursor, limit: PAGE_SIZE }, signal }),
   );
 
   return (
     <div>
-      <ListHeader typeName={props.typeName} typeNames={typeNames.data()} />
+      <ListHeader
+        typeName={props.typeName}
+        typeNames={typeNames.isSuccess ? typeNames.data : undefined}
+      />
       <FilterBar>
         <StatusFilter
           path="/chains"
@@ -105,10 +96,10 @@ const ChainListForType = (props: { typeName: string }) => {
 
       <PagedListBody
         thing="chains"
-        list={list}
+        query={list}
         empty={
           <Switch>
-            <Match when={status() && blocking() !== undefined}>
+            <Match when={blocking() !== undefined}>
               <EmptyState title={`No chains of ${props.typeName} match these filters`}>
                 <button
                   type="button"
@@ -135,19 +126,6 @@ const ChainListForType = (props: { typeName: string }) => {
                   }}
                 >
                   Show all statuses
-                </button>
-              </EmptyState>
-            </Match>
-            <Match when={blocking() !== undefined}>
-              <EmptyState title={`No chains of ${props.typeName} match these filters`}>
-                <button
-                  type="button"
-                  class={buttonClass.secondary}
-                  onClick={() => {
-                    setSearchParams({ blocking: undefined });
-                  }}
-                >
-                  Clear filters
                 </button>
               </EmptyState>
             </Match>

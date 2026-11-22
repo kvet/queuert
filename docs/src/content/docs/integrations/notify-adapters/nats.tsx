@@ -1,10 +1,9 @@
-import { A } from "@solidjs/router";
-
 import { ExampleCode } from "../../../../components/ExampleCode.tsx";
 import { ExampleRows } from "../../../../components/ExampleList.tsx";
 import { FieldList } from "../../../../components/FieldList.tsx";
 import { ExperimentalAside } from "../../../../components/integrations/ExperimentalAside.tsx";
 import { Code } from "../../../../components/mdx/Code.tsx";
+import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
   title: "NATS Notify Adapter",
@@ -16,7 +15,7 @@ const Page = () => (
     <p>
       <code>createNatsNotifyAdapter</code> uses NATS core pub/sub for job notifications. Like Redis,
       NATS is used exclusively as a notification adapter — it does not store job state; that stays
-      in your <A href="/integrations/state-adapters/">state adapter</A>.
+      in your <a href={siteHref("/integrations/state-adapters/")}>state adapter</a>.
     </p>
     <ExperimentalAside package="@queuert/nats" />
 
@@ -29,7 +28,7 @@ const Page = () => (
     <p>
       The connection and the notify adapter are held with <code>await using</code>, so when the
       scope ends the notify adapter closes before the connection, in the{" "}
-      <A href="/integrations/notify-adapters/#how-adapters-behave">shutdown order</A>.
+      <a href={siteHref("/integrations/notify-adapters/#how-adapters-behave")}>shutdown order</a>.
     </p>
 
     <h2 id="configuration">Configuration</h2>
@@ -56,7 +55,10 @@ const Page = () => (
       The example's <code>src/adapter.spec.ts</code> runs the cases from{" "}
       <code>createNotifyAdapterConformanceCases</code>
       and is a working template. To run it under another test runner, see{" "}
-      <A href="/integrations/notify-adapters/custom/#conformance">Custom Notify Adapter</A>.
+      <a href={siteHref("/integrations/notify-adapters/custom/#conformance")}>
+        Custom Notify Adapter
+      </a>
+      .
     </p>
     <ExampleCode example="postgresql/notify-nats" file="src/adapter.spec.ts" region="conformance" />
 

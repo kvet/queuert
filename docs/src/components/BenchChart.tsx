@@ -1,7 +1,8 @@
 import { Box } from "@queuert/ui/components";
-import { For, type JSX, Show, onMount } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, onSettled } from "solid-js";
 
-import { type Backend, shownInStack, stack } from "../stack.ts";
+import { type Backend, createPickedStack, shownInStack } from "../stack.ts";
 import { revealOnView } from "./reveal.ts";
 
 type BenchRow = {
@@ -49,6 +50,7 @@ export const BenchChart = (props: {
   decimals?: number;
   scalePerGroup?: boolean;
 }) => {
+  const picked = createPickedStack();
   /**
    * Bars scale to the rows and series the reader's stack shows, so a narrowed chart stays
    * readable; with `scalePerGroup`, each group (measured under its own conditions) has its own.
@@ -57,10 +59,10 @@ export const BenchChart = (props: {
     Math.max(
       ...(props.scalePerGroup ? [scaled] : props.groups).flatMap((group) =>
         group.rows
-          .filter((row) => shownInStack(row.backend, stack()))
+          .filter((row) => shownInStack(row.backend, picked()))
           .flatMap((row) =>
             row.values.filter((_, index) =>
-              shownInStack(seriesBackend(props.series[index]), stack()),
+              shownInStack(seriesBackend(props.series[index]), picked()),
             ),
           ),
       ),
@@ -72,15 +74,13 @@ export const BenchChart = (props: {
       maximumFractionDigits: props.decimals ?? 0,
     })}`;
   let list: HTMLUListElement | undefined = undefined;
-  onMount(() => {
-    revealOnView(list);
-  });
+  onSettled(() => revealOnView(list));
   const seriesWidth = () =>
     `${Math.max(...props.series.map((series) => seriesLabel(series).length), 1) + 1}ch`;
   const groupShown = (group: BenchGroup) =>
-    group.rows.some((row) => shownInStack(row.backend, stack()));
+    group.rows.some((row) => shownInStack(row.backend, picked()));
   const seriesShown = () =>
-    props.series.some((series) => shownInStack(seriesBackend(series), stack()));
+    props.series.some((series) => shownInStack(seriesBackend(series), picked()));
 
   return (
     <Box

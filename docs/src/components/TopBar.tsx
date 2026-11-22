@@ -8,11 +8,12 @@ import {
   TopBarFrame,
   TopBarNavLink,
 } from "@queuert/ui/components";
-import { A, useLocation } from "@solidjs/router";
+import { useLocation } from "@solidjs/router";
+import { Portal } from "@solidjs/web";
 import corePackage from "queuert/package.json";
-import { For, Show, createEffect, createSignal, on } from "solid-js";
-import { Portal } from "solid-js/web";
+import { For, Show, createEffect, createSignal } from "solid-js";
 
+import { siteHref } from "../docs/href.ts";
 import { sectionForPath, topBarSections } from "../docs/sections.ts";
 import { theme } from "../theme.ts";
 import { GitHubIcon } from "./icons.tsx";
@@ -24,17 +25,14 @@ export const TopBar = () => {
   const [menuOpen, setMenuOpen] = createSignal(false);
   const activeSection = () =>
     sectionForPath(location.pathname.slice(import.meta.env.BASE_URL.length - 1));
-  const [drawerSection, setDrawerSection] = createSignal(activeSection()?.id ?? "docs");
+  const [drawerSection, setDrawerSection] = createSignal(() => activeSection()?.id ?? "docs");
 
   createEffect(
-    on(
-      () => location.pathname,
-      () => {
-        setMenuOpen(false);
-        setDrawerSection(activeSection()?.id ?? "docs");
-      },
-      { defer: true },
-    ),
+    () => location.pathname,
+    () => {
+      setMenuOpen(false);
+    },
+    { defer: true },
   );
 
   return (
@@ -49,7 +47,7 @@ export const TopBar = () => {
                     <button
                       type="button"
                       role="tab"
-                      aria-selected={drawerSection() === section.id}
+                      aria-selected={drawerSection() === section.id ? "true" : "false"}
                       class="rounded-xs px-2.5 py-1 text-sm text-fg-muted aria-selected:bg-surface-2 aria-selected:font-medium aria-selected:text-fg"
                       onClick={() => setDrawerSection(section.id)}
                     >
@@ -68,28 +66,31 @@ export const TopBar = () => {
         type="button"
         class={`${iconButton} -ml-1 lg:hidden`}
         aria-label="Menu"
-        aria-expanded={menuOpen()}
+        aria-expanded={menuOpen() ? "true" : "false"}
         onClick={() => setMenuOpen((open) => !open)}
       >
         <Show when={menuOpen()} fallback={<MenuIcon />}>
           <CloseIcon />
         </Show>
       </button>
-      <A href="/" class="flex items-center gap-2 pr-1 font-mono font-semibold" end>
+      <a href={siteHref("/")} class="flex items-center gap-2 pr-1 font-mono font-semibold">
         <LogoIcon size={20} class="text-brand" />
         <span>Queuert</span>
-      </A>
-      <A
-        href="/changelog/"
+      </a>
+      <a
+        href={siteHref("/changelog/")}
         class="font-mono inline-block rounded-xs border border-border px-1.5 py-px text-[11px] text-fg-muted hover:border-border-strong hover:text-fg"
         title="Latest release notes"
       >
         v{corePackage.version}
-      </A>
+      </a>
       <nav class="ml-4 hidden items-center gap-0.5 lg:flex" aria-label="Sections">
         <For each={topBarSections}>
           {(section) => (
-            <TopBarNavLink href={section.href} active={activeSection()?.id === section.id} link={A}>
+            <TopBarNavLink
+              href={siteHref(section.href)}
+              active={activeSection()?.id === section.id}
+            >
               {section.label}
             </TopBarNavLink>
           )}

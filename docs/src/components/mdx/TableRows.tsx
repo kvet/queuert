@@ -1,5 +1,6 @@
 import { Box } from "@queuert/ui/components";
-import { type JSX, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Show } from "solid-js";
 
 export const TableRows = (props: { columns: string; children: JSX.Element }) => (
   <Box class="my-6" bodyClass="" data-table-rows={props.columns}>

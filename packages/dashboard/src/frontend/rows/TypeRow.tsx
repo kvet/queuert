@@ -1,8 +1,8 @@
 import { Chip, RowLink, WarningIcon } from "@queuert/ui/components";
 import type { AnyStatus } from "@queuert/ui/lib";
-import { A } from "@solidjs/router";
 import { For, Match, Show, Switch } from "solid-js";
 
+import { appHref } from "../base.ts";
 import { type CappedCount, formatCount } from "../domain/counts.ts";
 import type { TypeWorkers } from "../domain/workers.ts";
 
@@ -10,8 +10,7 @@ const WorkersChip = (props: { typeName: string; workers: TypeWorkers }) => (
   <Switch>
     <Match when={props.workers.stranded}>
       <Chip
-        href={`/workers?typeName=${encodeURIComponent(props.typeName)}`}
-        link={A}
+        href={appHref(`/workers?typeName=${encodeURIComponent(props.typeName)}`)}
         tone="danger"
         class="shrink-0"
       >
@@ -21,8 +20,7 @@ const WorkersChip = (props: { typeName: string; workers: TypeWorkers }) => (
     </Match>
     <Match when={props.workers.live > 0}>
       <Chip
-        href={`/workers?typeName=${encodeURIComponent(props.typeName)}`}
-        link={A}
+        href={appHref(`/workers?typeName=${encodeURIComponent(props.typeName)}`)}
         class="shrink-0 tabular-nums hover:text-fg"
       >
         <span class="font-medium text-fg">{props.workers.live}</span>
@@ -34,8 +32,7 @@ const WorkersChip = (props: { typeName: string; workers: TypeWorkers }) => (
     </Match>
     <Match when={props.workers.expired > 0}>
       <Chip
-        href={`/workers?typeName=${encodeURIComponent(props.typeName)}`}
-        link={A}
+        href={appHref(`/workers?typeName=${encodeURIComponent(props.typeName)}`)}
         class="shrink-0 tabular-nums hover:text-fg"
       >
         <span class="font-medium text-fg">{props.workers.expired}</span>
@@ -52,7 +49,7 @@ export const TypeRow = (props: {
   workers?: TypeWorkers;
 }) => (
   <li class="relative px-4 py-3 hover:bg-surface-2/50">
-    <RowLink href={props.href()} label={`Open ${props.typeName}`} link={A} />
+    <RowLink href={appHref(props.href())} label={`Open ${props.typeName}`} />
     <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
       <div class="flex min-w-0 flex-1 basis-48 items-center gap-2">
         <span class="font-mono min-w-0 truncate font-medium" title={props.typeName}>
@@ -67,8 +64,7 @@ export const TypeRow = (props: {
           {(statusCount) => (
             <Show when={statusCount.count.count > 0}>
               <Chip
-                href={props.href(statusCount.status)}
-                link={A}
+                href={appHref(props.href(statusCount.status))}
                 status={statusCount.status}
                 class="tabular-nums hover:text-fg"
               >

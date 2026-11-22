@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { flattenStaticOutput } from "./static-output.ts";
+import { finishStaticOutput } from "./static-output.ts";
 
 const directories: string[] = [];
 
@@ -25,17 +25,16 @@ const listFiles = async (root: string) =>
     .map((entry) => join(entry.parentPath, entry.name).slice(root.length + 1))
     .sort();
 
-describe("flattenStaticOutput", () => {
-  it("moves the pages mounted under the base to the root and turns the 404 page into 404.html", async () => {
+describe("finishStaticOutput", () => {
+  it("turns the 404 page into 404.html and marks the site as non-Jekyll", async () => {
     const root = await mkdtemp(join(tmpdir(), "queuert-docs-"));
     directories.push(root);
-    await write(root, "queuert/index.html", "home");
-    await write(root, "queuert/guides/scheduling/index.html", "scheduling");
-    await write(root, "queuert/404/index.html", "not found");
-    await write(root, "queuert/assets/app.js", "fresh");
-    await write(root, "assets/app.js", "stale");
+    await write(root, "index.html", "home");
+    await write(root, "guides/scheduling/index.html", "scheduling");
+    await write(root, "404/index.html", "not found");
+    await write(root, "assets/app.js", "app");
 
-    await flattenStaticOutput(root, "/queuert/");
+    await finishStaticOutput(root);
 
     expect(await listFiles(root)).toEqual([
       ".nojekyll",
@@ -45,6 +44,5 @@ describe("flattenStaticOutput", () => {
       "index.html",
     ]);
     expect(await readFile(join(root, "404.html"), "utf8")).toBe("not found");
-    expect(await readFile(join(root, "assets/app.js"), "utf8")).toBe("fresh");
   });
 });

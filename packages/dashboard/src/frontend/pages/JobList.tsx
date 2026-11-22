@@ -1,11 +1,10 @@
 import { JOB_STATUSES } from "@queuert/ui/lib";
 import { useSearchParams } from "@solidjs/router";
+import { useInfiniteQuery, useQuery } from "@tanstack/solid-query";
 import { Show, createMemo } from "solid-js";
 
-import { PAGE_SIZE, serverFns } from "../api.ts";
 import { JobRow, type JobSortKey } from "../rows/JobRow.tsx";
-import { createLoader } from "../state/createLoader.ts";
-import { createPagedList } from "../state/createPagedList.ts";
+import { jobCountsQuery, jobListQuery, jobTypeNamesQuery } from "../state/queries.ts";
 import { EmptyState, buttonClass } from "../ui/kit.tsx";
 import { FilterBar, SortControls, StatusFilter } from "./filters.tsx";
 import { ListHeader, PagedListBody, TypeGate } from "./listParts.tsx";
@@ -44,34 +43,26 @@ const JobListForType = (props: { typeName: string }) => {
     return options.find((option) => option.value === orderBy())?.value ?? options[0].value;
   });
 
-  const typeNames = createLoader(
-    () => true,
-    async (_, signal) => serverFns.getJobTypeNames({ signal }),
-  );
-  const counts = createLoader(
-    () => props.typeName,
-    async (typeName, signal) =>
-      (await serverFns.countJobsByTypeName({ data: { typeNames: [typeName] }, signal }))[0],
-  );
-  const statusCounts = () => {
-    const typeCounts = counts.data();
-    return typeCounts ? toStatusCounts(JOB_STATUSES, typeCounts) : undefined;
-  };
+  const typeNames = useQuery(() => jobTypeNamesQuery());
+  const counts = useQuery(() => jobCountsQuery(props.typeName));
+  const statusCounts = () =>
+    counts.isSuccess ? toStatusCounts(JOB_STATUSES, counts.data) : undefined;
 
-  const list = createPagedList(
-    () => ({
+  const list = useInfiniteQuery(() =>
+    jobListQuery({
       typeName: props.typeName,
       status: status() || undefined,
       orderBy: effectiveOrderBy(),
       orderDirection: orderDirection(),
     }),
-    async (params, cursor, signal) =>
-      serverFns.listJobs({ data: { ...params, cursor, limit: PAGE_SIZE }, signal }),
   );
 
   return (
     <div>
-      <ListHeader typeName={props.typeName} typeNames={typeNames.data()} />
+      <ListHeader
+        typeName={props.typeName}
+        typeNames={typeNames.isSuccess ? typeNames.data : undefined}
+      />
       <FilterBar>
         <StatusFilter
           path="/jobs"
@@ -88,7 +79,7 @@ const JobListForType = (props: { typeName: string }) => {
 
       <PagedListBody
         thing="jobs"
-        list={list}
+        query={list}
         empty={
           <Show
             when={status()}

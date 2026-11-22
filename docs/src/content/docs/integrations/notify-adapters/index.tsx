@@ -1,8 +1,7 @@
-import { A } from "@solidjs/router";
-
 import { FieldList, type FieldItem } from "../../../../components/FieldList.tsx";
 import { type OptionCard, OptionCards } from "../../../../components/integrations/OptionCards.tsx";
 import { Aside } from "../../../../components/mdx/Aside.tsx";
+import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
   title: "Notify Adapters",
@@ -144,9 +143,9 @@ const Page = () => (
     <FieldList
       title="NotifyAdapter"
       actions={
-        <A href="/api/core/type-aliases/notifyadapter/" class="unstyled text-accent-fg">
+        <a href={siteHref("/api/core/type-aliases/notifyadapter/")} class="unstyled text-accent-fg">
           API reference →
-        </A>
+        </a>
       }
       proseNames
       items={members()}
@@ -197,7 +196,7 @@ const Page = () => (
     </ul>
     <p>
       For multi-worker coordination via notifications, see{" "}
-      <A href="/guides/horizontal-scaling/">Horizontal Scaling</A>.
+      <a href={siteHref("/guides/horizontal-scaling/")}>Horizontal Scaling</a>.
     </p>
   </>
 );

@@ -1,5 +1,3 @@
-import { A } from "@solidjs/router";
-
 import { FieldList } from "../../../../components/FieldList.tsx";
 import {
   StateAdapterConfigNote,
@@ -7,6 +5,7 @@ import {
 } from "../../../../components/integrations/state-adapters/stateAdapterConfig.tsx";
 import { Aside } from "../../../../components/mdx/Aside.tsx";
 import { Code } from "../../../../components/mdx/Code.tsx";
+import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
   title: "In-Process State Adapter",
@@ -28,12 +27,12 @@ const Page = () => (
       <p>
         Nothing is persisted, and state is visible only inside the process that created the adapter,
         so workers in other processes can't share it. When jobs must survive a restart, use{" "}
-        <A href="/integrations/state-adapters/postgres/">PostgreSQL</A> or{" "}
-        <A href="/integrations/state-adapters/sqlite/">SQLite</A>; to run workers across processes,
-        use a shared database such as PostgreSQL,{" "}
-        <A href="/integrations/state-adapters/mysql/">MySQL / MariaDB</A> or{" "}
-        <A href="/integrations/state-adapters/redis/">Redis</A>, or, on one host, SQLite with the{" "}
-        <A href="/integrations/notify-adapters/ipc/">IPC notify adapter</A>.
+        <a href={siteHref("/integrations/state-adapters/postgres/")}>PostgreSQL</a> or{" "}
+        <a href={siteHref("/integrations/state-adapters/sqlite/")}>SQLite</a>; to run workers across
+        processes, use a shared database such as PostgreSQL,{" "}
+        <a href={siteHref("/integrations/state-adapters/mysql/")}>MySQL / MariaDB</a> or{" "}
+        <a href={siteHref("/integrations/state-adapters/redis/")}>Redis</a>, or, on one host, SQLite
+        with the <a href={siteHref("/integrations/notify-adapters/ipc/")}>IPC notify adapter</a>.
       </p>
     </Aside>
 
@@ -74,9 +73,10 @@ const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
     <h2>How it works</h2>
     <p>
       Serializable transactions (the same isolation model as{" "}
-      <A href="/integrations/state-adapters/sqlite/">SQLite</A>; in the <code>"async"</code> mode
-      through an internal lock), with per-type ordered sets and per-chain maps so acquisition and
-      chain lookups work against type- and chain-scoped collections rather than scanning all jobs.
+      <a href={siteHref("/integrations/state-adapters/sqlite/")}>SQLite</a>; in the{" "}
+      <code>"async"</code> mode through an internal lock), with per-type ordered sets and per-chain
+      maps so acquisition and chain lookups work against type- and chain-scoped collections rather
+      than scanning all jobs.
     </p>
   </>
 );

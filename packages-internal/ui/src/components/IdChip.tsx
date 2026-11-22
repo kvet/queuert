@@ -1,24 +1,23 @@
-import { type JSX, Show } from "solid-js";
-import { Dynamic } from "solid-js/web";
+import type { JSX } from "@solidjs/web";
+import { Show } from "solid-js";
 
 import { shortId } from "../lib/ids.ts";
-import type { LinkComponent } from "./Row.tsx";
+
+const chipClass =
+  "min-w-0 truncate rounded-xs bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-fg-muted";
 
 export const IdChip = (props: {
   id: string;
   href?: string;
-  link?: LinkComponent;
   prefix?: string;
   full?: boolean;
   copy?: JSX.Element;
 }) => {
   const text = () =>
     `${props.prefix ? `${props.prefix} ` : ""}${props.full ? props.id : shortId(props.id)}`;
-  const chipClass =
-    "min-w-0 truncate rounded-xs bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-fg-muted";
 
   return (
-    <span class={`inline-flex items-center gap-0.5 ${props.full ? "min-w-0" : "shrink-0"}`}>
+    <span class={["inline-flex items-center gap-0.5", props.full ? "min-w-0" : "shrink-0"]}>
       <Show
         when={props.href}
         fallback={
@@ -28,14 +27,13 @@ export const IdChip = (props: {
         }
       >
         {(href) => (
-          <Dynamic
-            component={props.link ?? "a"}
+          <a
             href={href()}
-            class={`${chipClass} relative z-10 hover:text-accent-fg hover:underline`}
+            class={[chipClass, "relative z-10 hover:text-accent-fg hover:underline"]}
             title={props.id}
           >
             {text()}
-          </Dynamic>
+          </a>
         )}
       </Show>
       {props.copy}

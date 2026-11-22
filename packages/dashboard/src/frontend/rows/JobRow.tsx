@@ -1,9 +1,9 @@
 import { WarningIcon, Row, StatusPill } from "@queuert/ui/components";
 import { shortId } from "@queuert/ui/lib";
-import { A } from "@solidjs/router";
 import { Show } from "solid-js";
 
 import type { UnknownJob } from "../../shared/types.ts";
+import { appHref } from "../base.ts";
 import { IdChip } from "../ui/IdChip.tsx";
 import { Time } from "../ui/Time.tsx";
 import { DataLine } from "./ChainRow.tsx";
@@ -33,7 +33,7 @@ export const JobRow = (props: {
   const failing = () => props.job.lastAttemptError ?? undefined;
 
   return (
-    <Row href={`/jobs/${props.job.id}`} label={`Open job ${props.job.id}`} link={A}>
+    <Row href={appHref(`/jobs/${props.job.id}`)} label={`Open job ${props.job.id}`}>
       <div class="flex min-w-0 items-center gap-2">
         <StatusPill status={props.job.status} />
         <Show when={props.showType}>
@@ -42,22 +42,22 @@ export const JobRow = (props: {
           </span>
         </Show>
         <IdChip id={props.job.id} />
-        <A
-          href={`/chains/${props.job.chainId}`}
+        <a
+          href={appHref(`/chains/${props.job.chainId}`)}
           class="relative z-10 min-w-0 truncate text-xs text-accent-fg hover:underline"
           title={`${props.job.chainTypeName} · ${props.job.chainId}`}
         >
           #{props.job.chainIndex + 1} of {props.job.chainTypeName} · {shortId(props.job.chainId)}
-        </A>
+        </a>
         <Show when={runningWorkerId()}>
           {(workerId) => (
-            <A
-              href={`/workers/${encodeURIComponent(workerId())}`}
+            <a
+              href={appHref(`/workers/${encodeURIComponent(workerId())}`)}
               class="relative z-10 min-w-0 truncate text-xs text-accent-fg hover:underline"
               title={`Worker ${workerId()}`}
             >
               worker {shortId(workerId())}
-            </A>
+            </a>
           )}
         </Show>
         <Show when={failing()}>

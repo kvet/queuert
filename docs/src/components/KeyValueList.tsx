@@ -1,7 +1,8 @@
 import { Box, RowLink } from "@queuert/ui/components";
-import { For, type JSX, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show } from "solid-js";
 
-import { siteLink } from "./siteLink.ts";
+import { siteHref } from "../docs/href.ts";
 
 export type KeyValueItem = {
   label: JSX.Element;
@@ -29,7 +30,12 @@ const lastTileSpan = (count: number) => {
 
 const ItemLink = (props: { item: KeyValueItem }) => (
   <Show when={props.item.href}>
-    {(href) => <RowLink href={href()} label={`Go to ${href()}`} link={siteLink(href())} />}
+    {(href) => (
+      <RowLink
+        href={href().startsWith("/") ? siteHref(href()) : href()}
+        label={`Go to ${href()}`}
+      />
+    )}
   </Show>
 );
 

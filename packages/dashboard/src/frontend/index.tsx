@@ -1,10 +1,11 @@
-import { Navigate, Route, Router, useSearchParams } from "@solidjs/router";
 /* @refresh reload */
-import { type Component, Show } from "solid-js";
-import { render } from "solid-js/web";
+import { createRouter, useNavigate, useSearchParams } from "@solidjs/router";
+import { render } from "@solidjs/web";
+import { QueryClientProvider } from "@tanstack/solid-query";
+import { type Component, Show, createEffect } from "solid-js";
 
 import { App } from "./App.tsx";
-import { basePath } from "./base.ts";
+import { appHref, basePath } from "./base.ts";
 import { ChainDetail } from "./pages/ChainDetail.tsx";
 import { ChainList } from "./pages/ChainList.tsx";
 import { Find } from "./pages/Find.tsx";
@@ -14,36 +15,48 @@ import { Overview } from "./pages/Overview.tsx";
 import { ChainTypes, JobTypes } from "./pages/Types.tsx";
 import { WorkerDetail } from "./pages/WorkerDetail.tsx";
 import { WorkerList } from "./pages/WorkerList.tsx";
+import { queryClient } from "./state/queries.ts";
 import { theme } from "./state/theme.ts";
 
 import "./styles/index.css";
 
 const redirectIds = (List: Component) => () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const ids = () => searchParams.ids as string | undefined;
+  createEffect(ids, (value) => {
+    if (value) navigate(appHref(`/find?ids=${encodeURIComponent(value)}`), { replace: true });
+  });
   return (
-    <Show when={ids()} fallback={<List />}>
-      {(value) => <Navigate href={`/find?ids=${encodeURIComponent(value())}`} />}
+    <Show when={!ids()}>
+      <List />
     </Show>
   );
 };
+
+const Router = createRouter({
+  base: basePath,
+  routes: [
+    { path: "/", component: Overview },
+    { path: "/chains/types", component: ChainTypes },
+    { path: "/chains", component: redirectIds(ChainList) },
+    { path: "/chains/:id", component: ChainDetail },
+    { path: "/jobs/types", component: JobTypes },
+    { path: "/jobs", component: redirectIds(JobList) },
+    { path: "/jobs/:id", component: JobDetail },
+    { path: "/workers", component: WorkerList },
+    { path: "/workers/:id", component: WorkerDetail },
+    { path: "/find", component: Find },
+  ],
+});
 
 theme.init();
 
 render(
   () => (
-    <Router base={basePath} root={App}>
-      <Route path="/" component={Overview} />
-      <Route path="/chains/types" component={ChainTypes} />
-      <Route path="/chains" component={redirectIds(ChainList)} />
-      <Route path="/chains/:id" component={ChainDetail} />
-      <Route path="/jobs/types" component={JobTypes} />
-      <Route path="/jobs" component={redirectIds(JobList)} />
-      <Route path="/jobs/:id" component={JobDetail} />
-      <Route path="/workers" component={WorkerList} />
-      <Route path="/workers/:id" component={WorkerDetail} />
-      <Route path="/find" component={Find} />
-    </Router>
+    <QueryClientProvider client={queryClient}>
+      <Router>{(props) => <App>{props.children}</App>}</Router>
+    </QueryClientProvider>
   ),
   document.getElementById("root")!,
 );

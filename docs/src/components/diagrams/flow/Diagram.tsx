@@ -1,15 +1,7 @@
 import { StatusPill } from "@queuert/ui/components";
 import type { AnyStatus } from "@queuert/ui/lib";
-import {
-  type JSX,
-  For,
-  Show,
-  children,
-  createContext,
-  onCleanup,
-  onMount,
-  useContext,
-} from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, children, createContext, onSettled, useContext } from "solid-js";
 
 import "./diagram.css";
 
@@ -24,7 +16,7 @@ export const Diagram = (props: {
   let body!: HTMLDivElement;
   let naturalWidth = 0;
 
-  onMount(() => {
+  onSettled(() => {
     if ((props.stack ?? "auto") !== "auto") return;
     const update = () => {
       const row = body.firstElementChild;
@@ -35,9 +27,9 @@ export const Diagram = (props: {
     const observer = new ResizeObserver(update);
     update();
     observer.observe(body);
-    onCleanup(() => {
+    return () => {
       observer.disconnect();
-    });
+    };
   });
 
   return (
@@ -178,12 +170,12 @@ export const Rows = (props: {
 const TimelineLanes = createContext<string[]>([]);
 
 export const Timeline = (props: { lanes: string[]; children: JSX.Element }) => (
-  <TimelineLanes.Provider value={props.lanes}>
+  <TimelineLanes value={props.lanes}>
     <div class="q-d-timeline" style={{ "--tl-lanes": props.lanes.length }}>
       <For each={props.lanes}>{(lane) => <span class="q-d-timeline__lane">{lane}</span>}</For>
       {props.children}
     </div>
-  </TimelineLanes.Provider>
+  </TimelineLanes>
 );
 
 export const Step = (props: {

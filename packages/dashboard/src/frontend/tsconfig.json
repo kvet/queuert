@@ -3,7 +3,7 @@
   "compilerOptions": {
     "composite": false,
     "jsx": "preserve",
-    "jsxImportSource": "solid-js"
+    "jsxImportSource": "@solidjs/web"
   },
   "include": ["**/*.ts", "**/*.tsx", "../shared/**/*.ts"],
   "exclude": ["node_modules", "dist"]

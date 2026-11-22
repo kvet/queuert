@@ -1,10 +1,9 @@
-import { A } from "@solidjs/router";
-
 import { ExampleCode } from "../../../../components/ExampleCode.tsx";
 import { ExampleRows } from "../../../../components/ExampleList.tsx";
 import { FieldList } from "../../../../components/FieldList.tsx";
 import { ExperimentalAside } from "../../../../components/integrations/ExperimentalAside.tsx";
 import { Code } from "../../../../components/mdx/Code.tsx";
+import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
   title: "IPC Notify Adapter",
@@ -18,7 +17,7 @@ const Page = () => (
       <code>createIpcNotifyAdapter</code> delivers job notifications between processes on one host,
       such as a web process and its worker processes sharing one SQLite database file. There is no
       broker to run: the processes find each other through registry files in a shared directory. Job
-      state stays in your <A href="/integrations/state-adapters/">state adapter</A>.
+      state stays in your <a href={siteHref("/integrations/state-adapters/")}>state adapter</a>.
     </p>
     <ExperimentalAside package="@queuert/ipc" />
 
@@ -30,16 +29,16 @@ const Page = () => (
     <p>
       The adapter is a <code>NotifyAdapter</code> in the <code>"sync"</code> mode: every method
       returns directly. Pass it to <code>createClient</code> over the{" "}
-      <A href="/integrations/state-adapters/sqlite/#synchronous-providers">
+      <a href={siteHref("/integrations/state-adapters/sqlite/#synchronous-providers")}>
         synchronous SQLite adapter
-      </A>{" "}
+      </a>{" "}
       the processes share. Give every process the same directory:
     </p>
     <ExampleCode example="ipc/notify" file="src/index.ts" region="setup" />
     <p>
       The adapter is held with <code>using</code>, so it closes when the scope ends, before the
       state adapter created above it, in the{" "}
-      <A href="/integrations/notify-adapters/#how-adapters-behave">shutdown order</A>.
+      <a href={siteHref("/integrations/notify-adapters/#how-adapters-behave")}>shutdown order</a>.
     </p>
 
     <h2 id="configuration">Configuration</h2>

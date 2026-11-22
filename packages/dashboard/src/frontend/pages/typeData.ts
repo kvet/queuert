@@ -1,5 +1,4 @@
-import { CHAIN_STATUSES, JOB_STATUSES } from "@queuert/ui/lib";
-import type { ChainStatus, JobStatus } from "queuert";
+import { type AnyStatus, CHAIN_STATUSES, JOB_STATUSES } from "@queuert/ui/lib";
 
 import { serverFns } from "../api.ts";
 import type { CappedCount } from "../domain/counts.ts";
@@ -30,7 +29,7 @@ export const toStatusCounts = <TStatus extends string>(
 ): { status: TStatus; count: CappedCount }[] =>
   statuses.map((status) => ({ status, count: entry[status] }));
 
-export const loadChainTypes = async (signal: AbortSignal): Promise<TypeEntry<ChainStatus>[]> => {
+export const loadChainTypes = async (signal: AbortSignal): Promise<TypeEntry<AnyStatus>[]> => {
   const names = await serverFns.getChainTypeNames({ signal });
   const counts = await chunked(names, async (chunk) =>
     serverFns.countChainsByTypeName({ data: { typeNames: chunk }, signal }),
@@ -41,7 +40,7 @@ export const loadChainTypes = async (signal: AbortSignal): Promise<TypeEntry<Cha
   }));
 };
 
-export const loadJobTypes = async (signal: AbortSignal): Promise<TypeEntry<JobStatus>[]> => {
+export const loadJobTypes = async (signal: AbortSignal): Promise<TypeEntry<AnyStatus>[]> => {
   const names = await serverFns.getJobTypeNames({ signal });
   const counts = await chunked(names, async (chunk) =>
     serverFns.countJobsByTypeName({ data: { typeNames: chunk }, signal }),

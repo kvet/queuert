@@ -1,8 +1,10 @@
 import { CloseIcon, WarningIcon } from "@queuert/ui/components";
-import { A } from "@solidjs/router";
-import { For, type JSX, Show, createEffect } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Errored, Loading, Repeat, Show, createEffect } from "solid-js";
 
-import { errorMessage } from "../api.ts";
+import { errorMessage, isNotFound } from "../api.ts";
+import { appHref } from "../base.ts";
+import { queryClient } from "../state/queries.ts";
 
 export const buttonClass = {
   primary:
@@ -77,9 +79,9 @@ export const NotFoundState = (props: {
       <Show when={props.children}>
         <p class="w-full">{props.children}</p>
       </Show>
-      <A href={props.href} class={linkClass}>
+      <a href={appHref(props.href)} class={linkClass}>
         Go to the {props.kind.toLowerCase()} list
-      </A>
+      </a>
     </EmptyState>
   );
 };
@@ -90,7 +92,7 @@ export const Fact = (props: {
   wide?: boolean;
   children: JSX.Element;
 }) => (
-  <div class={`min-w-0 ${props.wide ? "col-span-2" : ""}`}>
+  <div class={["min-w-0", { "col-span-2": props.wide === true }]}>
     <dt class="text-xs text-fg-muted" title={props.hint}>
       {props.label}
       <Show when={props.hint}>
@@ -106,17 +108,23 @@ export const Fact = (props: {
 export const SkeletonRows = (props: { count?: number; class?: string }) => {
   return (
     <div class="divide-y divide-border" aria-busy="true" aria-label="Loading">
-      <For each={Array.from({ length: props.count ?? 6 })}>
+      <Repeat count={props.count ?? 6}>
         {() => (
-          <div class={`flex flex-col gap-2 px-4 py-3 ${props.class ?? ""}`}>
+          <div class={["flex flex-col gap-2 px-4 py-3", props.class]}>
             <div class="h-4 w-2/3 animate-pulse rounded-xs bg-surface-2" />
             <div class="h-3 w-1/2 animate-pulse rounded-xs bg-surface-2" />
           </div>
         )}
-      </For>
+      </Repeat>
     </div>
   );
 };
+
+export const SkeletonCard = (props: { count?: number }) => (
+  <div class="rounded-xs border border-border">
+    <SkeletonRows count={props.count} />
+  </div>
+);
 
 export const LiveRegion = (props: { text: string }) => {
   return (
@@ -137,17 +145,23 @@ export const Dialog = (props: {
   let dialog!: HTMLDialogElement;
   let pressedBackdrop = false;
 
-  createEffect(() => {
-    if (props.open && !dialog.open) dialog.showModal();
-    else if (!props.open && dialog.open) dialog.close();
-  });
+  createEffect(
+    () => props.open,
+    (open) => {
+      if (open && !dialog.open) dialog.showModal();
+      else if (!open && dialog.open) dialog.close();
+    },
+  );
 
   return (
     <dialog
       ref={(element) => {
         dialog = element;
       }}
-      class={`m-auto w-[min(560px,calc(100vw-32px))] rounded-xs border border-border bg-surface p-0 text-fg shadow-2xl ${props.class ?? ""}`}
+      class={[
+        "m-auto w-[min(560px,calc(100vw-32px))] rounded-xs border border-border bg-surface p-0 text-fg shadow-2xl",
+        props.class,
+      ]}
       aria-label={props.title}
       onClose={() => {
         props.onClose();
@@ -180,3 +194,36 @@ export const Dialog = (props: {
     </dialog>
   );
 };
+
+export const QueryBoundary = (props: {
+  thing: string;
+  fallback: JSX.Element;
+  notFound?: JSX.Element;
+  children: JSX.Element;
+}) => (
+  <Errored
+    fallback={(error, reset) => (
+      <Show
+        when={props.notFound !== undefined && isNotFound(error())}
+        fallback={
+          <ErrorState
+            thing={props.thing}
+            error={error()}
+            onRetry={() => {
+              void queryClient
+                .refetchQueries({
+                  type: "active",
+                  predicate: (query) => query.state.status === "error",
+                })
+                .then(reset);
+            }}
+          />
+        }
+      >
+        {props.notFound}
+      </Show>
+    )}
+  >
+    <Loading fallback={props.fallback}>{props.children}</Loading>
+  </Errored>
+);

@@ -50,14 +50,17 @@
     "@queuert/sync-async": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@queuert/ui": "workspace:*",
-    "@solidjs/router": "1.0.1",
+    "@solidjs/router": "2.0.0",
+    "@solidjs/vite-plugin": "3.0.1",
+    "@solidjs/web": "2.0.3",
     "@tailwindcss/vite": "4.3.5",
+    "@tanstack/solid-query": "6.0.0-rc.6",
+    "@tanstack/virtual-core": "3.19.11",
     "queuert": "workspace:*",
-    "solid-js": "1.9.18",
+    "solid-js": "2.0.3",
     "tailwindcss": "4.3.5",
     "valibot": "1.5.0",
-    "vite": "8.3.8",
-    "vite-plugin-solid": "2.11.16"
+    "vite": "8.3.8"
   },
   "peerDependencies": {
     "queuert": "workspace:*"

@@ -46,7 +46,7 @@ const memoryMeasurements = [
   },
 ] satisfies FieldItem[];
 
-const cpuCategories = [
+const cpuCategories = (): FieldItem[] => [
   {
     name: "Queuert core",
     description: (
@@ -67,7 +67,7 @@ const cpuCategories = [
     name: "Runtime",
     description: "Node.js internals, V8 builtins and garbage collection.",
   },
-] satisfies FieldItem[];
+];
 
 const setup = [
   ...benchmarkMachine,
@@ -80,118 +80,121 @@ const setup = [
   },
 ] satisfies KeyValueItem[];
 
-const Page = () => (
-  <>
-    <p>
-      Each benchmark builds the adapters, processes a batch of jobs and calls <code>close()</code>.
-      The memory phase measures the heap the lifecycle holds; the profile phase samples CPU time and
-      allocations while the jobs are created and processed.
-    </p>
-    <StackFilter
-      backends={["postgres", "sqlite", "mysql", "mariadb", "redis", "nats", "ipc", "in-process"]}
-    />
-    <KeyValueList title="Test setup" items={setup} />
-    <h2 id="memory">Memory</h2>
-    <p>
-      A discarded warmup run first compiles the code paths and loads lazy modules; every number is
-      then measured against a baseline taken after the warmup, from heap snapshots rather than{" "}
-      <code>process.memoryUsage().heapUsed</code>, which counts V8 fragmentation and free pages as
-      retention.
-    </p>
-    <FieldList title="Measurements" items={memoryMeasurements} proseNames />
-    <For each={memoryMeasurements}>
-      {(column, index) => (
-        <BenchChart
-          title={column.name}
-          unit="KB"
-          approximate
-          series={[column.name]}
-          groups={seriesOf(memoryGroups, index())}
-        />
-      )}
-    </For>
-    <h2 id="reading-the-results">Reading the results</h2>
-    <p>
-      Live JS retained is a one-time amount: about 5-20 KB for every package. Running three
-      lifecycles instead of one leaves the same amount. JIT code retained grows with the code paths
-      a package exercises, so packages that run more queries keep more. Neither grows per job or per
-      lifecycle.
-    </p>
-    <p>
-      Driver and connection cost (a node-redis client, a postgres.js or mysql2 pool, a NATS
-      connection) lives outside Queuert's lifecycle. The benchmark prints it per run but leaves it
-      out of these numbers.
-    </p>
-    <h2 id="cpu-and-allocations">CPU and allocations</h2>
-    <p>
-      The CPU profiler samples every 100 µs and the heap profiler samples allocations, including
-      objects already collected, only while the work step runs. Each sample is attributed to the
-      file of the function it lands in. Time spent waiting on a database or broker is left out.
-    </p>
-    <FieldList title="Categories" items={cpuCategories} proseNames />
-    <For each={cpuCategories}>
-      {(category, index) => (
-        <BenchChart
-          title={`CPU per job, ${category.name}`}
-          unit="µs"
-          approximate
-          series={[category.name]}
-          groups={seriesOf(cpuGroups, index())}
-        />
-      )}
-    </For>
-    <BenchChart
-      title="Allocated per job"
-      unit="KB"
-      approximate
-      decimals={1}
-      series={["Allocated"]}
-      groups={allocationGroups}
-    />
-    <h2 id="job-type-registries">Job type registries</h2>
-    <p>
-      The registry measurements run the same lifecycle on the in-process state and notify adapters
-      with each job type registry, creating and processing chains whose input is an order with a
-      nested customer and three line items. <code>defineJobTypes</code> is the baseline: it passes
-      values through without running anything.
-    </p>
-    <p>
-      The CPU chart shows the time spent inside the schema library. On top of it, every{" "}
-      <code>createJobTypes</code> registry adds about 1 µs of Queuert core CPU per job to call the
-      encoders and decoders and check that every encoded value is JSON-serializable. The Zod and
-      TypeBox adapters compile their schemas once with <code>z.compile</code> and{" "}
-      <code>TypeCompiler.Compile</code>, and ArkType compiles its types itself. The codec adapters
-      process the same JSON input, so they show the cost of the codec path, not of a transform.
-    </p>
-    <BenchChart
-      title="Schema library CPU per job"
-      unit="µs"
-      approximate
-      decimals={1}
-      series={["Schema library"]}
-      groups={validationCpuGroups}
-    />
-    <BenchChart
-      title="Allocated per job by registry"
-      unit="KB"
-      approximate
-      decimals={1}
-      series={["Allocated"]}
-      groups={validationAllocationGroups}
-    />
-    <h2 id="reproduce">Reproduce</h2>
-    <p>
-      From <a href={benchmarkSourceUrl("runtime-performance")}>benchmarks/runtime-performance</a>,
-      with Docker running. Its README covers the method, the per-step output and the profile files
-      for Chrome DevTools or speedscope.
-    </p>
-    <Code lang="bash">{`
+const Page = () => {
+  const categories = cpuCategories();
+  return (
+    <>
+      <p>
+        Each benchmark builds the adapters, processes a batch of jobs and calls <code>close()</code>
+        . The memory phase measures the heap the lifecycle holds; the profile phase samples CPU time
+        and allocations while the jobs are created and processed.
+      </p>
+      <StackFilter
+        backends={["postgres", "sqlite", "mysql", "mariadb", "redis", "nats", "ipc", "in-process"]}
+      />
+      <KeyValueList title="Test setup" items={setup} />
+      <h2 id="memory">Memory</h2>
+      <p>
+        A discarded warmup run first compiles the code paths and loads lazy modules; every number is
+        then measured against a baseline taken after the warmup, from heap snapshots rather than{" "}
+        <code>process.memoryUsage().heapUsed</code>, which counts V8 fragmentation and free pages as
+        retention.
+      </p>
+      <FieldList title="Measurements" items={memoryMeasurements} proseNames />
+      <For each={memoryMeasurements}>
+        {(column, index) => (
+          <BenchChart
+            title={column.name}
+            unit="KB"
+            approximate
+            series={[column.name]}
+            groups={seriesOf(memoryGroups, index())}
+          />
+        )}
+      </For>
+      <h2 id="reading-the-results">Reading the results</h2>
+      <p>
+        Live JS retained is a one-time amount: about 5-20 KB for every package. Running three
+        lifecycles instead of one leaves the same amount. JIT code retained grows with the code
+        paths a package exercises, so packages that run more queries keep more. Neither grows per
+        job or per lifecycle.
+      </p>
+      <p>
+        Driver and connection cost (a node-redis client, a postgres.js or mysql2 pool, a NATS
+        connection) lives outside Queuert's lifecycle. The benchmark prints it per run but leaves it
+        out of these numbers.
+      </p>
+      <h2 id="cpu-and-allocations">CPU and allocations</h2>
+      <p>
+        The CPU profiler samples every 100 µs and the heap profiler samples allocations, including
+        objects already collected, only while the work step runs. Each sample is attributed to the
+        file of the function it lands in. Time spent waiting on a database or broker is left out.
+      </p>
+      <FieldList title="Categories" items={categories} proseNames />
+      <For each={categories}>
+        {(category, index) => (
+          <BenchChart
+            title={`CPU per job, ${category.name}`}
+            unit="µs"
+            approximate
+            series={[category.name]}
+            groups={seriesOf(cpuGroups, index())}
+          />
+        )}
+      </For>
+      <BenchChart
+        title="Allocated per job"
+        unit="KB"
+        approximate
+        decimals={1}
+        series={["Allocated"]}
+        groups={allocationGroups}
+      />
+      <h2 id="job-type-registries">Job type registries</h2>
+      <p>
+        The registry measurements run the same lifecycle on the in-process state and notify adapters
+        with each job type registry, creating and processing chains whose input is an order with a
+        nested customer and three line items. <code>defineJobTypes</code> is the baseline: it passes
+        values through without running anything.
+      </p>
+      <p>
+        The CPU chart shows the time spent inside the schema library. On top of it, every{" "}
+        <code>createJobTypes</code> registry adds about 1 µs of Queuert core CPU per job to call the
+        encoders and decoders and check that every encoded value is JSON-serializable. The Zod and
+        TypeBox adapters compile their schemas once with <code>z.compile</code> and{" "}
+        <code>TypeCompiler.Compile</code>, and ArkType compiles its types itself. The codec adapters
+        process the same JSON input, so they show the cost of the codec path, not of a transform.
+      </p>
+      <BenchChart
+        title="Schema library CPU per job"
+        unit="µs"
+        approximate
+        decimals={1}
+        series={["Schema library"]}
+        groups={validationCpuGroups}
+      />
+      <BenchChart
+        title="Allocated per job by registry"
+        unit="KB"
+        approximate
+        decimals={1}
+        series={["Allocated"]}
+        groups={validationAllocationGroups}
+      />
+      <h2 id="reproduce">Reproduce</h2>
+      <p>
+        From <a href={benchmarkSourceUrl("runtime-performance")}>benchmarks/runtime-performance</a>,
+        with Docker running. Its README covers the method, the per-step output and the profile files
+        for Chrome DevTools or speedscope.
+      </p>
+      <Code lang="bash">{`
       pnpm --filter benchmark-runtime-performance start
       pnpm --filter benchmark-runtime-performance start:state-postgres
       pnpm --filter benchmark-runtime-performance start:state-sqlite --profile
       pnpm --filter benchmark-runtime-performance start:validation --profile
     `}</Code>
-  </>
-);
+    </>
+  );
+};
 
 export default Page;

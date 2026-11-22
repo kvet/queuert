@@ -1,19 +1,19 @@
-import type { JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
 
 export type InstallOption = {
   /** The option's label, also its value in the synced `state` / `notify` tab store. */
   label: string;
   /** Packages added to the install command; already-listed packages are not repeated. */
   packages: string[];
-  note: JSX.Element;
+  note: () => JSX.Element;
   /** What is experimental (the package, or the part of it), when the option is experimental. */
-  experimental?: JSX.Element;
+  experimental?: () => JSX.Element;
 };
 
 const redisNotify: InstallOption = {
   label: "Redis",
   packages: ["@queuert/redis"],
-  note: (
+  note: () => (
     <>
       Uses Redis pub/sub. Requires Redis 6+. See{" "}
       <a href="/queuert/integrations/notify-adapters/redis/">Redis Notify Adapter</a>.
@@ -24,8 +24,8 @@ const redisNotify: InstallOption = {
 const natsNotify: InstallOption = {
   label: "NATS",
   packages: ["@queuert/nats", "@nats-io/nats-core", "@nats-io/transport-node"],
-  experimental: <code>@queuert/nats</code>,
-  note: (
+  experimental: () => <code>@queuert/nats</code>,
+  note: () => (
     <>
       Uses NATS pub/sub. Requires NATS 2.2+. See{" "}
       <a href="/queuert/integrations/notify-adapters/nats/">NATS Notify Adapter</a>.
@@ -36,7 +36,7 @@ const natsNotify: InstallOption = {
 const noNotify: InstallOption = {
   label: "None",
   packages: [],
-  note: (
+  note: () => (
     <>
       No extra packages or infrastructure required. The client wakes its own worker runners in
       memory, and workers in other processes poll the database on a configurable interval. See{" "}
@@ -49,7 +49,7 @@ export const stateInstallOptions: (InstallOption & { notify: InstallOption[] })[
   {
     label: "PostgreSQL",
     packages: ["@queuert/postgres"],
-    note: (
+    note: () => (
       <>
         Supports horizontal scaling and all Queuert features. Requires PostgreSQL 14+. See{" "}
         <a href="/queuert/integrations/state-adapters/postgres/">PostgreSQL State Adapter</a>.
@@ -59,7 +59,7 @@ export const stateInstallOptions: (InstallOption & { notify: InstallOption[] })[
       {
         label: "PostgreSQL LISTEN/NOTIFY",
         packages: ["@queuert/postgres"],
-        note: (
+        note: () => (
           <>
             Uses PostgreSQL's built-in <code>LISTEN</code>/<code>NOTIFY</code>. No additional
             infrastructure beyond your existing PostgreSQL database — already included in{" "}
@@ -76,7 +76,7 @@ export const stateInstallOptions: (InstallOption & { notify: InstallOption[] })[
   {
     label: "SQLite",
     packages: ["@queuert/sqlite"],
-    note: (
+    note: () => (
       <>
         Suitable for local development, CLI tools, and embedded applications. Requires SQLite 3.42+.
         See <a href="/queuert/integrations/state-adapters/sqlite/">SQLite State Adapter</a>.
@@ -86,8 +86,8 @@ export const stateInstallOptions: (InstallOption & { notify: InstallOption[] })[
       {
         label: "IPC",
         packages: ["@queuert/ipc"],
-        experimental: <code>@queuert/ipc</code>,
-        note: (
+        experimental: () => <code>@queuert/ipc</code>,
+        note: () => (
           <>
             For processes on one host, such as workers sharing a SQLite database file through a{" "}
             <a href="/queuert/integrations/state-adapters/sqlite/#synchronous-providers">
@@ -101,7 +101,7 @@ export const stateInstallOptions: (InstallOption & { notify: InstallOption[] })[
       {
         label: "None",
         packages: [],
-        note: (
+        note: () => (
           <>
             No extra packages required. The client wakes its own worker runners in memory, so one
             process needs nothing more; workers in other processes poll the database on a
@@ -115,8 +115,8 @@ export const stateInstallOptions: (InstallOption & { notify: InstallOption[] })[
   {
     label: "MySQL / MariaDB",
     packages: ["@queuert/mysql"],
-    experimental: <code>@queuert/mysql</code>,
-    note: (
+    experimental: () => <code>@queuert/mysql</code>,
+    note: () => (
       <>
         For applications whose data lives in MySQL or MariaDB. Requires MySQL 8.4+ or MariaDB 11.4+
         (InnoDB). See{" "}
@@ -128,12 +128,12 @@ export const stateInstallOptions: (InstallOption & { notify: InstallOption[] })[
   {
     label: "Redis",
     packages: ["@queuert/redis"],
-    experimental: (
+    experimental: () => (
       <>
         The Redis state adapter in <code>@queuert/redis</code>
       </>
     ),
-    note: (
+    note: () => (
       <>
         Queuert's state on Redis or Redis Cluster, kept apart from your application database.
         Requires Redis 6+. See{" "}

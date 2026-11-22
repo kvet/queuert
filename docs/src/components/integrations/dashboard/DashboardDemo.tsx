@@ -1,6 +1,6 @@
 import { LoadingLogo } from "@queuert/ui/components";
 import { dashboardStorageKey, parseThemePreference } from "@queuert/ui/lib";
-import { Show, createEffect, createRoot, createSignal, onMount } from "solid-js";
+import { Show, createEffect, createRoot, createSignal, onSettled } from "solid-js";
 
 import { theme } from "../../../theme.ts";
 import type { DashboardDemoView } from "./demo/seed.ts";
@@ -24,9 +24,9 @@ const untilActivated = async (registration: ServiceWorkerRegistration): Promise<
 const syncTheme = (scopePath: string) => {
   const key = dashboardStorageKey(scopePath.replace(/\/$/, ""), "theme");
   createRoot(() => {
-    createEffect(() => {
+    createEffect(theme.preference, (preference) => {
       try {
-        localStorage.setItem(key, theme.preference());
+        localStorage.setItem(key, preference);
       } catch {}
     });
   });
@@ -54,7 +54,7 @@ export const DashboardDemo = (props: { view: DashboardDemoView; title: string })
   const [failure, setFailure] = createSignal<string>();
   const [frameLoaded, setFrameLoaded] = createSignal(false);
 
-  onMount(() => {
+  onSettled(() => {
     if (!("serviceWorker" in navigator)) {
       setFailure("The dashboard demo needs service workers, which this browser has turned off.");
       return;

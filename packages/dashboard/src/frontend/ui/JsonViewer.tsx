@@ -1,5 +1,5 @@
 import { Box, ChevronRightIcon } from "@queuert/ui/components";
-import { For, Match, Show, Switch, createSignal, onCleanup, onMount } from "solid-js";
+import { For, Match, Show, Switch, createSignal, onSettled } from "solid-js";
 
 import { CopyButton } from "./IdChip.tsx";
 
@@ -31,7 +31,9 @@ const JsonNode = (props: { name?: string; value: unknown; depth: number; last: b
     const value = container();
     return value ? entriesOf(value).length : 0;
   };
-  const [open, setOpen] = createSignal(props.depth < COLLAPSE_DEPTH && size() <= COLLAPSE_SIZE);
+  const [open, setOpen] = createSignal(
+    () => props.depth < COLLAPSE_DEPTH && size() <= COLLAPSE_SIZE,
+  );
   const brackets = () => (Array.isArray(props.value) ? ["[", "]"] : ["{", "}"]);
   const summary = () => {
     const noun = Array.isArray(props.value) ? "item" : "key";
@@ -64,7 +66,7 @@ const JsonNode = (props: { name?: string; value: unknown; depth: number; last: b
               <button
                 type="button"
                 class="mt-0.5 mr-0.5 inline-flex size-3.5 shrink-0 items-center justify-center rounded-xs text-fg-subtle hover:text-fg"
-                aria-expanded={open()}
+                aria-expanded={open() ? "true" : "false"}
                 aria-label={open() ? "Collapse" : "Expand"}
                 onClick={() => setOpen((isOpen) => !isOpen)}
               >
@@ -115,15 +117,15 @@ export const JsonViewer = (props: { data: unknown; title: string; label: string 
   const [overflowing, setOverflowing] = createSignal(false);
   let scroller!: HTMLDivElement;
 
-  onMount(() => {
+  onSettled(() => {
     const observer = new ResizeObserver(() => {
       setOverflowing(scroller.scrollHeight > scroller.clientHeight + 1);
     });
     observer.observe(scroller);
     if (scroller.firstElementChild) observer.observe(scroller.firstElementChild);
-    onCleanup(() => {
+    return () => {
       observer.disconnect();
-    });
+    };
   });
 
   return (
@@ -137,8 +139,11 @@ export const JsonViewer = (props: { data: unknown; title: string; label: string 
               {(option) => (
                 <button
                   type="button"
-                  class={`rounded-xs px-1.5 ${mode() === option ? "bg-fg text-bg" : "text-fg-muted hover:text-fg"}`}
-                  aria-pressed={mode() === option}
+                  class={[
+                    "rounded-xs px-1.5",
+                    mode() === option ? "bg-fg text-bg" : "text-fg-muted hover:text-fg",
+                  ]}
+                  aria-pressed={mode() === option ? "true" : "false"}
                   onClick={() => setMode(option)}
                 >
                   {option}
@@ -154,7 +159,10 @@ export const JsonViewer = (props: { data: unknown; title: string; label: string 
         ref={(element) => {
           scroller = element;
         }}
-        class={`overflow-auto px-4 py-2 font-mono text-xs leading-5 ${expanded() ? "" : "max-h-[480px]"}`}
+        class={[
+          "overflow-auto px-4 py-2 font-mono text-xs leading-5",
+          { "max-h-[480px]": !expanded() },
+        ]}
       >
         <div>
           <Show

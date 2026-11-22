@@ -1,7 +1,6 @@
-import { A } from "@solidjs/router";
-
 import { FieldList, type FieldItem } from "../../../../components/FieldList.tsx";
 import { type OptionCard, OptionCards } from "../../../../components/integrations/OptionCards.tsx";
+import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
   title: "State Adapters",
@@ -92,7 +91,7 @@ const members = (): FieldItem[] => [
         open transaction a context belongs to without a query, and run callbacks after the context's
         transaction commits or when it (or the savepoint the context belongs to) rolls back. The
         client and the worker register every side effect through these callbacks; see{" "}
-        <A href="/guides/tx-hooks/">Tx Hooks</A>.
+        <a href={siteHref("/guides/tx-hooks/")}>Tx Hooks</a>.
       </>
     ),
     extra: ["withTransaction", "getTransaction", "onTransactionCommit", "onTransactionRollback"],
@@ -203,9 +202,9 @@ const Page = () => (
     <FieldList
       title="StateAdapter"
       actions={
-        <A href="/api/core/type-aliases/stateadapter/" class="unstyled text-accent-fg">
+        <a href={siteHref("/api/core/type-aliases/stateadapter/")} class="unstyled text-accent-fg">
           API reference →
-        </A>
+        </a>
       }
       proseNames
       items={members()}
@@ -219,9 +218,9 @@ const Page = () => (
       <code>[Symbol.dispose]</code> in place of <code>[Symbol.asyncDispose]</code>, so the adapter
       is held with <code>using</code>. <code>createClient</code> and <code>createWorkerRunner</code>{" "}
       follow the adapter's mode, so a client over it returns plain values; SQLite ships one, see{" "}
-      <A href="/integrations/state-adapters/sqlite/#synchronous-providers">
+      <a href={siteHref("/integrations/state-adapters/sqlite/#synchronous-providers")}>
         SQLite synchronous providers
-      </A>
+      </a>
       .
     </p>
 

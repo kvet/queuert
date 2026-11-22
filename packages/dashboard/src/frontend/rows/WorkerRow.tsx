@@ -1,16 +1,15 @@
 import { Row, WarningIcon } from "@queuert/ui/components";
-import { A } from "@solidjs/router";
 import { Show } from "solid-js";
 
 import type { WorkerWithRunningJobs } from "../../shared/types.ts";
+import { appHref } from "../base.ts";
 import { IdChip } from "../ui/IdChip.tsx";
 import { Time } from "../ui/Time.tsx";
 
 export const WorkerRow = (props: { worker: WorkerWithRunningJobs }) => (
   <Row
-    href={`/workers/${encodeURIComponent(props.worker.id)}`}
+    href={appHref(`/workers/${encodeURIComponent(props.worker.id)}`)}
     label={`Open worker ${props.worker.id}`}
-    link={A}
   >
     <div class="flex min-w-0 items-center gap-2">
       <IdChip id={props.worker.id} />

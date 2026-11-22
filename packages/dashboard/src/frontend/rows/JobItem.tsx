@@ -1,13 +1,16 @@
 import { ErrorMark, ChevronRightIcon, StatusPill } from "@queuert/ui/components";
 import { type AnyStatus, statusClasses } from "@queuert/ui/lib";
-import { A } from "@solidjs/router";
-import { type JSX, Show, createSignal } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { useMutation } from "@tanstack/solid-query";
+import { Show, createSignal } from "solid-js";
 
 import type { UnknownChain, UnknownJob } from "../../shared/types.ts";
-import { errorMessage, serverFns } from "../api.ts";
+import { errorMessage } from "../api.ts";
+import { appHref } from "../base.ts";
 import { jobPhase } from "../domain/jobPhase.ts";
 import { formatRelative } from "../domain/time.ts";
 import { now } from "../state/clock.ts";
+import { rescheduleJobMutation } from "../state/mutations.ts";
 import { IdChip } from "../ui/IdChip.tsx";
 import { JsonViewer } from "../ui/JsonViewer.tsx";
 import { buttonClass } from "../ui/kit.tsx";
@@ -23,9 +26,11 @@ const SequenceItem = (props: {
   <li class="flex gap-3">
     <div class="flex flex-col items-center">
       <span
-        class={`inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-xs px-1.5 text-xs font-semibold tabular-nums ring-4 ring-bg ${statusClasses[props.status].pill} ${
-          props.status === "running" ? "animate-pulse-ring" : ""
-        }`}
+        class={[
+          "inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-xs px-1.5 text-xs font-semibold tabular-nums ring-4 ring-bg",
+          statusClasses[props.status].pill,
+          { "animate-pulse-ring": props.status === "running" },
+        ]}
       >
         {props.label}
       </span>
@@ -37,43 +42,28 @@ const SequenceItem = (props: {
   </li>
 );
 
-export const RescheduleButton = (props: {
-  job: UnknownJob;
-  label: string;
-  onRescheduled: (job: UnknownJob) => void;
-  class?: string;
-}) => {
-  const [busy, setBusy] = createSignal(false);
-  const [error, setError] = createSignal<string | null>(null);
+export const RescheduleButton = (props: { job: UnknownJob; label: string; class?: string }) => {
+  const reschedule = useMutation(() => rescheduleJobMutation());
 
   return (
     <Show when={props.job.status === "pending" && props.job.scheduledAt.getTime() > now()}>
-      <span class={`inline-flex flex-col items-end gap-1 ${props.class ?? ""}`}>
+      <span class={["inline-flex flex-col items-end gap-1", props.class]}>
         <button
           type="button"
           class={buttonClass.secondary}
-          disabled={busy()}
+          disabled={reschedule.isPending}
           onClick={() => {
-            setBusy(true);
-            setError(null);
-            serverFns.rescheduleJob({ data: { id: props.job.id } }).then(
-              (job) => {
-                setBusy(false);
-                props.onRescheduled(job);
-              },
-              (err: unknown) => {
-                setBusy(false);
-                setError(errorMessage(err));
-              },
-            );
+            void reschedule.mutate(props.job.id);
           }}
         >
-          {busy() ? "Running…" : props.label}
+          {reschedule.isPending ? "Running…" : props.label}
         </button>
-        <Show when={error()}>
-          <span class="text-xs text-error-fg" role="alert">
-            {error()}
-          </span>
+        <Show when={reschedule.error}>
+          {(error) => (
+            <span class="text-xs text-error-fg" role="alert">
+              {errorMessage(error())}
+            </span>
+          )}
         </Show>
       </span>
     </Show>
@@ -89,9 +79,10 @@ export const ErrorText = (props: { text: string; lines: 3 | 12 }) => {
   return (
     <div>
       <pre
-        class={`font-mono text-xs leading-5 break-words whitespace-pre-wrap text-error-fg ${
-          full() ? "" : clamp()
-        }`}
+        class={[
+          "font-mono text-xs leading-5 break-words whitespace-pre-wrap text-error-fg",
+          full() ? undefined : clamp(),
+        ]}
       >
         {props.text}
       </pre>
@@ -114,7 +105,6 @@ export const JobItem = (props: {
   last: boolean;
   expanded: boolean;
   onToggle: () => void;
-  onRescheduled: (job: UnknownJob) => void;
 }) => {
   const phase = () => jobPhase(props.job, now());
   const lastFailure = () => props.job.lastAttemptError ?? undefined;
@@ -135,13 +125,13 @@ export const JobItem = (props: {
     >
       <div class="flex min-h-6 items-center gap-2">
         <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 sm:flex-nowrap">
-          <A
-            href={`/jobs/${props.job.id}`}
+          <a
+            href={appHref(`/jobs/${props.job.id}`)}
             class="font-mono min-w-0 truncate font-medium hover:underline"
             title={props.job.typeName}
           >
             {props.job.typeName}
-          </A>
+          </a>
           <StatusPill status={props.job.status} />
           <IdChip id={props.job.id} />
         </div>
@@ -151,14 +141,14 @@ export const JobItem = (props: {
         <button
           type="button"
           class={buttonClass.toggle}
-          aria-expanded={props.expanded}
+          aria-expanded={props.expanded ? "true" : "false"}
           onClick={() => {
             props.onToggle();
           }}
         >
           <ChevronRightIcon
             size={12}
-            class={`transition-transform ${props.expanded ? "rotate-90" : ""}`}
+            class={props.expanded ? "transition-transform rotate-90" : "transition-transform"}
           />
           details
         </button>
@@ -181,7 +171,7 @@ export const JobItem = (props: {
             <span>next attempt {formatRelative(props.job.scheduledAt, now())}</span>
           </Show>
           <span class="flex-1" />
-          <RescheduleButton job={props.job} label="Run now" onRescheduled={props.onRescheduled} />
+          <RescheduleButton job={props.job} label="Run now" />
         </div>
       </Show>
       <Show when={phase().phase === "running" && props.job.consecutiveFailures > 0}>
@@ -225,9 +215,9 @@ export const JobItem = (props: {
             {(nextId) => (
               <p class="mt-2 text-xs text-fg-muted">
                 Continued to{" "}
-                <A href={`/jobs/${nextId()}`} class="text-accent-fg hover:underline">
+                <a href={appHref(`/jobs/${nextId()}`)} class="text-accent-fg hover:underline">
                   → job #{props.job.chainIndex + 2}
-                </A>
+                </a>
               </p>
             )}
           </Show>

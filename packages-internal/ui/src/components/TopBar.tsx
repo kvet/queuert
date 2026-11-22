@@ -1,7 +1,5 @@
-import { type JSX, Show } from "solid-js";
-import { Dynamic } from "solid-js/web";
-
-import type { LinkComponent } from "./Row.tsx";
+import type { JSX } from "@solidjs/web";
+import { Show } from "solid-js";
 
 export const iconButtonClass =
   "inline-flex size-8 items-center justify-center rounded-xs text-fg-muted hover:bg-surface-2 hover:text-fg";
@@ -15,22 +13,18 @@ export const TopBarFrame = (props: { below?: JSX.Element; children: JSX.Element 
   </header>
 );
 
-export const TopBarNavLink = (props: {
-  href: string;
-  active: boolean;
-  link?: LinkComponent;
-  children: JSX.Element;
-}) => (
-  <Dynamic
-    component={props.link ?? "a"}
+export const TopBarNavLink = (props: { href: string; active: boolean; children: JSX.Element }) => (
+  <a
     href={props.href}
-    class="relative rounded-xs px-2.5 py-1.5 text-sm text-fg-muted hover:text-fg data-active:text-fg"
-    data-active={props.active ? "" : undefined}
+    class={[
+      "relative rounded-xs px-2.5 py-1.5 text-sm hover:text-fg",
+      props.active ? "text-fg" : "text-fg-muted",
+    ]}
     aria-current={props.active ? "page" : undefined}
   >
     {props.children}
     <Show when={props.active}>
       <span class="absolute inset-x-2.5 -bottom-2.75 h-px bg-brand" aria-hidden="true" />
     </Show>
-  </Dynamic>
+  </a>
 );

@@ -1,26 +1,21 @@
 import { Box, MoreIcon, StatusDot, StatusPill } from "@queuert/ui/components";
 import { shortId } from "@queuert/ui/lib";
-import { A, useNavigate, useParams } from "@solidjs/router";
-import {
-  For,
-  Match,
-  Show,
-  Switch,
-  createEffect,
-  createMemo,
-  createSignal,
-  on,
-  onCleanup,
-} from "solid-js";
+import { useNavigate, useParams } from "@solidjs/router";
+import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/solid-query";
+import { For, Show, createEffect, createMemo, createSignal, onSettled } from "solid-js";
 
 import type { UnknownChain, UnknownJob } from "../../shared/types.ts";
-import { PAGE_SIZE, errorMessage, isAbort, isNotFound, serverFns } from "../api.ts";
+import { errorMessage } from "../api.ts";
+import { appHref } from "../base.ts";
+import { formatCount } from "../domain/counts.ts";
 import { elapsedMs, formatDuration } from "../domain/duration.ts";
 import { type JobEntry, foldJobs } from "../domain/foldJobs.ts";
+import { loadedAnnouncement, loadedItems, shouldLoadNextPage } from "../domain/pages.ts";
 import { BlockedJobRow } from "../rows/BlockedJobRow.tsx";
 import { FoldItem, JobItem } from "../rows/JobItem.tsx";
 import { PageHeader } from "../shell/PageHeader.tsx";
-import { createAutoLoadMore } from "../state/createAutoLoadMore.ts";
+import { deleteChainMutation } from "../state/mutations.ts";
+import { blockedJobsQuery, chainDetailQuery, chainJobsQuery } from "../state/queries.ts";
 import { IdChip } from "../ui/IdChip.tsx";
 import { JsonViewer } from "../ui/JsonViewer.tsx";
 import {
@@ -28,11 +23,14 @@ import {
   ErrorState,
   LiveRegion,
   NotFoundState,
-  SkeletonRows,
+  QueryBoundary,
+  SkeletonCard,
   buttonClass,
 } from "../ui/kit.tsx";
 import { Time } from "../ui/Time.tsx";
-import { LoadMoreFooter } from "./listParts.tsx";
+import { LoadMoreFooter, VirtualList } from "./listParts.tsx";
+
+const AUTO_LOAD_MARGIN = "300px";
 
 const chainListHref = (typeName: string): string =>
   `/chains?typeName=${encodeURIComponent(typeName)}`;
@@ -51,17 +49,19 @@ const ActionsMenu = (props: { onDelete: () => void }) => {
   const [open, setOpen] = createSignal(false);
   let root!: HTMLDivElement;
 
-  const onPointer = (event: PointerEvent) => {
-    if (!root.contains(event.target as Node)) setOpen(false);
-  };
-  const onKey = (event: KeyboardEvent) => {
-    if (event.key === "Escape") setOpen(false);
-  };
-  document.addEventListener("pointerdown", onPointer);
-  document.addEventListener("keydown", onKey);
-  onCleanup(() => {
-    document.removeEventListener("pointerdown", onPointer);
-    document.removeEventListener("keydown", onKey);
+  onSettled(() => {
+    const onPointer = (event: PointerEvent) => {
+      if (!root.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
   });
 
   return (
@@ -73,9 +73,9 @@ const ActionsMenu = (props: { onDelete: () => void }) => {
     >
       <button
         type="button"
-        class={`${buttonClass.secondary} px-2`}
+        class={[buttonClass.secondary, "px-2"]}
         aria-label="More actions"
-        aria-expanded={open()}
+        aria-expanded={open() ? "true" : "false"}
         onClick={() => setOpen((value) => !value)}
       >
         <MoreIcon />
@@ -99,8 +99,8 @@ const ActionsMenu = (props: { onDelete: () => void }) => {
 };
 
 const CurrentJobChip = (props: { job: UnknownJob }) => (
-  <A
-    href={`/jobs/${props.job.id}`}
+  <a
+    href={appHref(`/jobs/${props.job.id}`)}
     class="inline-flex shrink-0 items-center gap-1.5 rounded-xs border border-border px-2 py-0.5 text-xs font-normal tracking-normal text-fg-muted hover:border-border-strong hover:text-fg"
     title={`${props.job.typeName} · ${props.job.id}`}
   >
@@ -108,7 +108,7 @@ const CurrentJobChip = (props: { job: UnknownJob }) => (
     <span class="font-medium text-fg tabular-nums">#{props.job.chainIndex + 1}</span>
     <StatusDot status={props.job.status} />
     {props.job.status}
-  </A>
+  </a>
 );
 
 const DeleteChainDialog = (props: {
@@ -118,53 +118,38 @@ const DeleteChainDialog = (props: {
   jobsLabel: string;
   blockedJobs: UnknownJob[];
   blockedJobsLabel: string;
-  onBlocked: () => void;
 }) => {
   const navigate = useNavigate();
   const [confirmText, setConfirmText] = createSignal("");
-  const [deleting, setDeleting] = createSignal(false);
-  const [error, setError] = createSignal<string | null>(null);
+  const remove = useMutation(() => deleteChainMutation());
+  const deleting = () => remove.isPending;
+  const error = () =>
+    remove.data === "blocked"
+      ? "Cannot delete: other jobs depend on this chain as a blocker"
+      : remove.error
+        ? errorMessage(remove.error)
+        : null;
 
   const blocked = () => props.blockedJobs.length > 0;
   const matches = () => confirmText() === props.chain.id;
 
   createEffect(
-    on(
-      () => props.open,
-      (open) => {
-        if (open) {
-          setConfirmText("");
-          setError(null);
-        }
-      },
-    ),
+    () => props.open,
+    (open) => {
+      if (open) {
+        setConfirmText("");
+        remove.reset();
+      }
+    },
   );
 
   const submit = async () => {
     if (!matches() || blocked() || deleting()) return;
-    setDeleting(true);
-    setError(null);
-    const leave = () => {
+    const { id, typeName } = props.chain;
+    const outcome = await remove.mutate(id).catch(() => undefined);
+    if (outcome === "deleted") {
       props.onClose();
-      navigate(chainListHref(props.chain.typeName));
-    };
-    try {
-      const { deleted } = await serverFns.deleteChain({ data: { id: props.chain.id } });
-      const result = await deleted;
-      if (result.outcome === "blocked") {
-        setError("Cannot delete: other jobs depend on this chain as a blocker");
-        props.onBlocked();
-        return;
-      }
-      leave();
-    } catch (err) {
-      if (isNotFound(err)) {
-        leave();
-        return;
-      }
-      setError(errorMessage(err));
-    } finally {
-      setDeleting(false);
+      navigate(appHref(chainListHref(typeName)));
     }
   };
 
@@ -210,15 +195,15 @@ const DeleteChainDialog = (props: {
             <strong class="font-semibold">Can't delete yet.</strong> At least{" "}
             {props.blockedJobsLabel} job(s) still reference this chain as a blocker, even completed
             ones:{" "}
-            <A
-              href={`/jobs/${blockedJob().id}`}
+            <a
+              href={appHref(`/jobs/${blockedJob().id}`)}
               class="underline"
               onClick={() => {
                 props.onClose();
               }}
             >
               job {blockedJob().typeName} {shortId(blockedJob().id)}
-            </A>
+            </a>
             . Delete that job's chain first.
           </div>
         )}
@@ -252,162 +237,69 @@ const DeleteChainDialog = (props: {
   );
 };
 
-export const ChainDetail = () => {
-  const params = useParams<{ id: string }>();
+const ChainDetailSkeleton = () => (
+  <>
+    <div class="mb-6 flex flex-col gap-3" aria-busy="true">
+      <div class="h-4 w-48 animate-pulse rounded-xs bg-surface-2" />
+      <div class="h-7 w-72 animate-pulse rounded-xs bg-surface-2" />
+      <div class="h-4 w-96 max-w-full animate-pulse rounded-xs bg-surface-2" />
+    </div>
+    <SkeletonCard count={4} />
+  </>
+);
 
-  const [chain, setChain] = createSignal<UnknownChain>();
-  const [currentJob, setCurrentJob] = createSignal<UnknownJob | null>(null);
-  const [jobs, setJobs] = createSignal<UnknownJob[]>([]);
-  const [nextCursor, setNextCursor] = createSignal<string | null>(null);
-  const [jobBlockers, setJobBlockers] = createSignal<Record<string, UnknownChain[]>>({});
-  const [loading, setLoading] = createSignal(true);
-  const [error, setError] = createSignal<unknown>();
-  const [announcement, setAnnouncement] = createSignal("");
-
-  const [blockedJobs, setBlockedJobs] = createSignal<UnknownJob[]>([]);
-  const [blockedJobsCursor, setBlockedJobsCursor] = createSignal<string | null>(null);
-  const [blockedJobsError, setBlockedJobsError] = createSignal<unknown>();
-  const [blockedJobsLoadingMore, setBlockedJobsLoadingMore] = createSignal(false);
+const ChainDetailBody = (props: { id: string }) => {
+  const detail = useQuery(() => chainDetailQuery(props.id));
+  const jobs = useInfiniteQuery(() => chainJobsQuery(props.id));
+  const blocked = useInfiniteQuery(() => blockedJobsQuery({ chainId: props.id }));
 
   const [expanded, setExpanded] = createSignal<ReadonlySet<string>>(new Set());
   const [openFolds, setOpenFolds] = createSignal<ReadonlySet<string>>(new Set());
   const [deleteOpen, setDeleteOpen] = createSignal(false);
+  const [nearEnd, setNearEnd] = createSignal(false);
+  let sentinel!: HTMLDivElement;
 
-  let loadController: AbortController | null = null;
-  let jobsMoreController: AbortController | null = null;
-  let blockedJobsController: AbortController | null = null;
-
-  const abortAll = () => {
-    for (const controller of [loadController, jobsMoreController, blockedJobsController]) {
-      controller?.abort();
-    }
-  };
-  onCleanup(abortAll);
-
+  const chain = () => detail.data.chain;
   const completedChain = () => {
     const current = chain();
-    return current?.status === "completed" ? current : undefined;
+    return current.status === "completed" ? current : undefined;
   };
 
-  const loadBlockedJobs = async (id: string) => {
-    blockedJobsController?.abort();
-    const own = new AbortController();
-    blockedJobsController = own;
-    setBlockedJobsError(undefined);
-    try {
-      const page = await serverFns.listBlockedJobs({
-        data: { chainId: id, limit: PAGE_SIZE },
-        signal: own.signal,
-      });
-      if (own.signal.aborted) return;
-      setBlockedJobs(page.items);
-      setBlockedJobsCursor(page.nextCursor);
-    } catch (err) {
-      if (own.signal.aborted || isAbort(err)) return;
-      setBlockedJobsError(err);
-    }
-  };
+  const jobItems = createMemo(() => loadedItems(jobs.data.pages));
+  const jobBlockers = createMemo(() => {
+    const all: Record<string, UnknownChain[]> = {};
+    for (const page of jobs.data.pages) Object.assign(all, page.jobBlockers);
+    return all;
+  });
 
-  const load = async (id: string) => {
-    abortAll();
-    const own = new AbortController();
-    loadController = own;
-    setChain(undefined);
-    setCurrentJob(null);
-    setJobs([]);
-    setNextCursor(null);
-    setJobBlockers({});
-    setBlockedJobs([]);
-    setBlockedJobsCursor(null);
-    setError(undefined);
-    setLoading(true);
-    setExpanded(new Set<string>());
-    setOpenFolds(new Set<string>());
-    setDeleteOpen(false);
-    void loadBlockedJobs(id);
-    try {
-      const detail = await serverFns.getChainDetail({
-        data: { id, limit: PAGE_SIZE },
-        signal: own.signal,
-      });
-      if (own.signal.aborted) return;
-      setChain(detail.chain);
-      setCurrentJob(detail.currentJob);
-      setJobs(detail.jobs);
-      setNextCursor(detail.nextCursor);
-      setJobBlockers(detail.jobBlockers);
-    } catch (err) {
-      if (own.signal.aborted || isAbort(err)) return;
-      setError(err);
-    } finally {
-      if (loadController === own) setLoading(false);
-    }
-  };
-
-  createEffect(
-    on(
-      () => params.id,
-      (id) => void load(id),
-    ),
+  const blockedJobs = createMemo(() =>
+    blocked.isPending || blocked.isLoadingError ? [] : loadedItems(blocked.data.pages),
   );
 
-  const loadMoreJobs = async () => {
-    const cursor = nextCursor();
-    if (!cursor) return;
-    const own = new AbortController();
-    jobsMoreController = own;
-    const page = await serverFns
-      .listChainJobs({
-        data: { chainId: params.id, cursor, limit: PAGE_SIZE },
-        signal: own.signal,
-      })
-      .catch((err: unknown) => {
-        if (own.signal.aborted) return undefined;
-        throw err;
-      });
-    if (!page || own.signal.aborted) return;
-    setJobs((prev) => [...prev, ...page.jobs]);
-    setNextCursor(page.nextCursor);
-    setJobBlockers((prev) => ({ ...prev, ...page.jobBlockers }));
-    setAnnouncement(`Loaded ${page.jobs.length} more jobs`);
-  };
-  const autoLoadMoreJobs = createAutoLoadMore(loadMoreJobs);
+  onSettled(() => {
+    const observer = new IntersectionObserver(
+      (observed) => {
+        setNearEnd(observed.some((entry) => entry.isIntersecting));
+      },
+      { rootMargin: AUTO_LOAD_MARGIN },
+    );
+    observer.observe(sentinel);
+    return () => {
+      observer.disconnect();
+    };
+  });
 
-  const loadMoreBlockedJobs = async () => {
-    const cursor = blockedJobsCursor();
-    if (!cursor || blockedJobsLoadingMore()) return;
-    setBlockedJobsLoadingMore(true);
-    const own = new AbortController();
-    blockedJobsController = own;
-    try {
-      const page = await serverFns.listBlockedJobs({
-        data: { chainId: params.id, cursor, limit: PAGE_SIZE },
-        signal: own.signal,
-      });
-      if (own.signal.aborted) return;
-      setBlockedJobs((prev) => [
-        ...prev,
-        ...page.items.filter((job) => !prev.some((existing) => existing.id === job.id)),
-      ]);
-      setBlockedJobsCursor(page.nextCursor);
-      setBlockedJobsError(undefined);
-    } catch (err) {
-      if (own.signal.aborted || isAbort(err)) return;
-      setBlockedJobsError(err);
-    } finally {
-      setBlockedJobsLoadingMore(false);
-    }
-  };
-
-  const replaceJob = (updated: UnknownJob) => {
-    if (currentJob()?.id === updated.id) setCurrentJob(updated);
-    setJobs((prev) => prev.map((job) => (job.id === updated.id ? updated : job)));
-  };
+  createEffect(
+    () => nearEnd() && shouldLoadNextPage(jobs),
+    (shouldLoad) => {
+      if (shouldLoad) void jobs.fetchNextPage();
+    },
+  );
 
   let previousEntries = new Map<string, JobEntry>();
   const entries = createMemo(() => {
     const next = new Map<string, JobEntry>();
-    const result = foldJobs(jobs(), jobBlockers())
+    const result = foldJobs(jobItems(), jobBlockers())
       .flatMap((entry): JobEntry[] => {
         if (entry.kind === "fold" && openFolds().has(entry.jobs[0].id)) {
           return entry.jobs.map((job) => ({ kind: "job", job }));
@@ -434,183 +326,163 @@ export const ChainDetail = () => {
     });
   };
 
-  const jobsLabel = () => `${jobs().length}${nextCursor() ? "+" : ""}`;
-  const blockedJobsLabel = () => `${blockedJobs().length}${blockedJobsCursor() ? "+" : ""}`;
+  const jobsLabel = () => formatCount({ count: jobItems().length, hasMore: jobs.hasNextPage });
+  const blockedJobsLabel = () =>
+    formatCount({ count: blockedJobs().length, hasMore: blocked.hasNextPage });
 
   return (
-    <div>
-      <Switch>
-        <Match when={error()}>
-          <PageHeader
-            fallback="/chains/types"
-            crumbs={[{ label: "Chains", href: "/chains/types" }, { label: shortId(params.id) }]}
-          />
-          <Show
-            when={isNotFound(error())}
-            fallback={
-              <ErrorState thing="this chain" error={error()} onRetry={() => void load(params.id)} />
-            }
-          >
-            <NotFoundState kind="Chain" href="/chains/types" />
-          </Show>
-        </Match>
-        <Match when={loading() || !chain()}>
-          <div class="mb-6 flex flex-col gap-3" aria-busy="true">
-            <div class="h-4 w-48 animate-pulse rounded-xs bg-surface-2" />
-            <div class="h-7 w-72 animate-pulse rounded-xs bg-surface-2" />
-            <div class="h-4 w-96 max-w-full animate-pulse rounded-xs bg-surface-2" />
+    <>
+      <PageHeader
+        fallback={chainListHref(chain().typeName)}
+        crumbs={[
+          { label: "Chains", href: "/chains/types" },
+          { label: chain().typeName, href: chainListHref(chain().typeName) },
+          { label: shortId(chain().id), title: chain().id },
+        ]}
+      />
+      <div class="mb-6 flex flex-wrap items-start gap-4">
+        <div class="min-w-0 flex-1">
+          <h1 class="flex flex-wrap items-center gap-3 text-base font-semibold">
+            <span class="min-w-0 truncate" title={chain().typeName}>
+              {chain().typeName}
+            </span>
+            <StatusPill status={chain().status} />
+            <Show when={detail.data.currentJob}>{(job) => <CurrentJobChip job={job()} />}</Show>
+          </h1>
+          <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-fg-muted">
+            <IdChip id={chain().id} full />
+            <span>
+              Created <Time date={chain().createdAt} />
+            </span>
+            <Show when={completedChain()}>
+              {(completed) => (
+                <span>
+                  Completed <Time date={completed().completedAt} /> · elapsed{" "}
+                  {formatDuration(elapsedMs(completed().createdAt, completed().completedAt))}
+                </span>
+              )}
+            </Show>
+            <span>
+              Jobs <strong class="font-semibold text-fg tabular-nums">{jobsLabel()}</strong>
+            </span>
+            <Show when={blockedJobs().length > 0}>
+              <span>
+                Blocked jobs{" "}
+                <strong class="font-semibold text-fg tabular-nums">{blockedJobsLabel()}</strong>
+              </span>
+            </Show>
           </div>
-          <div class="rounded-xs border border-border">
-            <SkeletonRows count={4} />
-          </div>
-        </Match>
-        <Match when={chain()}>
-          {(current) => (
-            <>
-              <PageHeader
-                fallback={chainListHref(current().typeName)}
-                crumbs={[
-                  { label: "Chains", href: "/chains/types" },
-                  { label: current().typeName, href: chainListHref(current().typeName) },
-                  { label: shortId(current().id), title: current().id },
-                ]}
-              />
-              <div class="mb-6 flex flex-wrap items-start gap-4">
-                <div class="min-w-0 flex-1">
-                  <h1 class="flex flex-wrap items-center gap-3 text-base font-semibold">
-                    <span class="min-w-0 truncate" title={current().typeName}>
-                      {current().typeName}
-                    </span>
-                    <StatusPill status={current().status} />
-                    <Show when={currentJob()}>{(job) => <CurrentJobChip job={job()} />}</Show>
-                  </h1>
-                  <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-fg-muted">
-                    <IdChip id={current().id} full />
-                    <span>
-                      Created <Time date={current().createdAt} />
-                    </span>
-                    <Show when={completedChain()}>
-                      {(completed) => (
-                        <span>
-                          Completed <Time date={completed().completedAt} /> · elapsed{" "}
-                          {formatDuration(
-                            elapsedMs(completed().createdAt, completed().completedAt),
-                          )}
-                        </span>
-                      )}
-                    </Show>
-                    <span>
-                      Jobs <strong class="font-semibold text-fg tabular-nums">{jobsLabel()}</strong>
-                    </span>
-                    <Show when={blockedJobs().length > 0}>
-                      <span>
-                        Blocked jobs{" "}
-                        <strong class="font-semibold text-fg tabular-nums">
-                          {blockedJobsLabel()}
-                        </strong>
-                      </span>
-                    </Show>
-                  </div>
-                </div>
-                <ActionsMenu onDelete={() => setDeleteOpen(true)} />
-              </div>
+        </div>
+        <ActionsMenu onDelete={() => setDeleteOpen(true)} />
+      </div>
 
-              <div class="flex flex-col gap-6">
-                <JsonViewer data={current().input} title="Input" label="chain input" />
-                <Show
-                  when={completedChain()}
-                  fallback={
-                    <Box title="Output">
-                      <p class="text-sm text-fg-subtle">no output yet</p>
-                    </Box>
-                  }
-                >
-                  {(completed) => (
-                    <JsonViewer data={completed().output} title="Output" label="chain output" />
-                  )}
-                </Show>
-                <Show when={blockedJobs().length > 0 || blockedJobsError()}>
-                  <Box title="Blocked jobs" bodyClass="">
-                    <Show when={blockedJobsError()}>
-                      <div class="p-3">
-                        <ErrorState
-                          thing="blocked jobs"
-                          error={blockedJobsError()}
-                          onRetry={() => void loadBlockedJobs(params.id)}
-                        />
-                      </div>
-                    </Show>
-                    <ul class="divide-y divide-border">
-                      <For each={blockedJobs()}>{(job) => <BlockedJobRow job={job} />}</For>
-                    </ul>
-                    <Show when={blockedJobsCursor() && !blockedJobsError()}>
-                      <div class="border-t border-border px-4 py-3">
-                        <button
-                          type="button"
-                          class={buttonClass.secondary}
-                          disabled={blockedJobsLoadingMore()}
-                          onClick={() => void loadMoreBlockedJobs()}
-                        >
-                          {blockedJobsLoadingMore() ? "Loading…" : "Load more"}
-                        </button>
-                      </div>
-                    </Show>
-                  </Box>
-                </Show>
-                <div class="min-w-0">
-                  <Box title="Jobs" bodyClass="px-4 pt-4">
-                    <ol>
-                      <For each={entries()}>
-                        {(entry, index) => {
-                          const last = () => index() === entries().length - 1 && !nextCursor();
-                          return entry.kind === "job" ? (
-                            <JobItem
-                              job={entry.job}
-                              blockers={jobBlockers()[entry.job.id]}
-                              last={last()}
-                              expanded={expanded().has(entry.job.id)}
-                              onToggle={() => {
-                                toggleExpanded(entry.job.id);
-                              }}
-                              onRescheduled={replaceJob}
-                            />
-                          ) : (
-                            <FoldItem
-                              jobs={entry.jobs}
-                              typeName={entry.typeName}
-                              last={last()}
-                              onExpand={() =>
-                                setOpenFolds((prev) => new Set(prev).add(entry.jobs[0].id))
-                              }
-                            />
-                          );
-                        }}
-                      </For>
-                    </ol>
-                    <LoadMoreFooter
-                      hasMore={nextCursor() !== null}
-                      shownCount={jobs().length}
-                      autoLoadMore={autoLoadMoreJobs}
-                      class="-mx-4"
-                    />
-                    <LiveRegion text={announcement()} />
-                  </Box>
-                </div>
-              </div>
-
-              <DeleteChainDialog
-                open={deleteOpen()}
-                onClose={() => setDeleteOpen(false)}
-                chain={current()}
-                jobsLabel={jobsLabel()}
-                blockedJobs={blockedJobs()}
-                blockedJobsLabel={blockedJobsLabel()}
-                onBlocked={() => void loadBlockedJobs(params.id)}
-              />
-            </>
+      <div class="flex flex-col gap-6">
+        <JsonViewer data={chain().input} title="Input" label="chain input" />
+        <Show
+          when={completedChain()}
+          fallback={
+            <Box title="Output">
+              <p class="text-sm text-fg-subtle">no output yet</p>
+            </Box>
+          }
+        >
+          {(completed) => (
+            <JsonViewer data={completed().output} title="Output" label="chain output" />
           )}
-        </Match>
-      </Switch>
+        </Show>
+        <Show when={blockedJobs().length > 0 || blocked.isError}>
+          <Box title="Blocked jobs" bodyClass="">
+            <Show when={blocked.isError && !blocked.isFetchNextPageError}>
+              <div class="p-3">
+                <ErrorState
+                  thing="blocked jobs"
+                  error={blocked.error}
+                  onRetry={() => void blocked.refetch()}
+                />
+              </div>
+            </Show>
+            <Show when={blockedJobs().length > 0}>
+              <VirtualList query={blocked}>{(job) => <BlockedJobRow job={job} />}</VirtualList>
+            </Show>
+          </Box>
+        </Show>
+        <div class="min-w-0">
+          <Box title="Jobs" bodyClass="px-4 pt-4">
+            <ol>
+              <For each={entries()}>
+                {(entry, index) => {
+                  const last = () => index() === entries().length - 1 && !jobs.hasNextPage;
+                  return entry.kind === "job" ? (
+                    <JobItem
+                      job={entry.job}
+                      blockers={jobBlockers()[entry.job.id]}
+                      last={last()}
+                      expanded={expanded().has(entry.job.id)}
+                      onToggle={() => {
+                        toggleExpanded(entry.job.id);
+                      }}
+                    />
+                  ) : (
+                    <FoldItem
+                      jobs={entry.jobs}
+                      typeName={entry.typeName}
+                      last={last()}
+                      onExpand={() => setOpenFolds((prev) => new Set(prev).add(entry.jobs[0].id))}
+                    />
+                  );
+                }}
+              </For>
+            </ol>
+            <div
+              ref={(element) => {
+                sentinel = element;
+              }}
+              aria-hidden="true"
+            />
+            <LoadMoreFooter query={jobs} shownCount={jobItems().length} class="-mx-4" />
+            <LiveRegion text={loadedAnnouncement(jobs.data.pages, "jobs")} />
+          </Box>
+        </div>
+      </div>
+
+      <DeleteChainDialog
+        open={deleteOpen()}
+        onClose={() => setDeleteOpen(false)}
+        chain={chain()}
+        jobsLabel={jobsLabel()}
+        blockedJobs={blockedJobs()}
+        blockedJobsLabel={blockedJobsLabel()}
+      />
+    </>
+  );
+};
+
+const ChainDetailForId = (props: { id: string }) => {
+  const detail = useQuery(() => chainDetailQuery(props.id));
+  return (
+    <div>
+      <Show when={detail.isLoadingError}>
+        <PageHeader
+          fallback="/chains/types"
+          crumbs={[{ label: "Chains", href: "/chains/types" }, { label: shortId(props.id) }]}
+        />
+      </Show>
+      <QueryBoundary
+        thing="this chain"
+        fallback={<ChainDetailSkeleton />}
+        notFound={<NotFoundState kind="Chain" href="/chains/types" />}
+      >
+        <ChainDetailBody id={props.id} />
+      </QueryBoundary>
     </div>
+  );
+};
+
+export const ChainDetail = () => {
+  const params = useParams<{ id: string }>();
+  return (
+    <Show when={params.id} keyed>
+      {(id) => <ChainDetailForId id={id} />}
+    </Show>
   );
 };

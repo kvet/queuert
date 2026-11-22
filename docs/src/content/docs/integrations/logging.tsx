@@ -1,9 +1,8 @@
-import { A } from "@solidjs/router";
-
 import { ExampleCode } from "../../../components/ExampleCode.tsx";
 import { ExampleRows } from "../../../components/ExampleList.tsx";
 import { type FieldItem, FieldList } from "../../../components/FieldList.tsx";
 import { TabItem, Tabs } from "../../../components/mdx/Tabs.tsx";
+import { siteHref } from "../../../docs/href.ts";
 
 export const meta = {
   title: "Logging",
@@ -95,8 +94,8 @@ const Page = () => (
 
     <h2>Setup</h2>
     <p>
-      Pass a <code>log</code> function (<A href="/api/core/type-aliases/log/">Log</A>) to{" "}
-      <code>createClient</code> to receive log entries. <code>createConsoleLog()</code> is the
+      Pass a <code>log</code> function (<a href={siteHref("/api/core/type-aliases/log/")}>Log</a>)
+      to <code>createClient</code> to receive log entries. <code>createConsoleLog()</code> is the
       built-in logger:
     </p>
     <Tabs syncKey="logger">

@@ -1,13 +1,15 @@
 import { StatusPill } from "@queuert/ui/components";
 import { useNavigate } from "@solidjs/router";
+import { useQuery } from "@tanstack/solid-query";
 import { For, Match, Show, Switch, createMemo, createSignal } from "solid-js";
 
 import { MAX_IDS } from "../../shared/limits.ts";
 import type { UnknownChain, UnknownJob, WorkerWithRunningJobs } from "../../shared/types.ts";
 import { errorMessage, serverFns } from "../api.ts";
+import { appHref } from "../base.ts";
 import { parseIdList } from "../domain/ids.ts";
 import { matchTypeNames } from "../domain/typeMatch.ts";
-import { createLoader } from "../state/createLoader.ts";
+import { chainTypeNamesQuery, jobTypeNamesQuery } from "../state/queries.ts";
 import { Dialog, buttonClass } from "../ui/kit.tsx";
 
 const [findOpen, setFindOpen] = createSignal(false);
@@ -57,25 +59,17 @@ export const FindDialog = () => {
 
   const parsed = () => parseIdList(text());
 
-  const typeNames = createLoader(
-    () => findOpen(),
-    async (_, signal) => {
-      const [chains, jobs] = await Promise.all([
-        serverFns.getChainTypeNames({ signal }),
-        serverFns.getJobTypeNames({ signal }),
-      ]);
-      return { chains, jobs };
-    },
-  );
+  const chainTypeNames = useQuery(() => ({ ...chainTypeNamesQuery(), enabled: findOpen() }));
+  const jobTypeNames = useQuery(() => ({ ...jobTypeNamesQuery(), enabled: findOpen() }));
   const suggestions = createMemo((): TypeSuggestion[] => {
-    const names = typeNames.data();
-    if (!names || choices().length > 0 || /[,\n]/.test(text())) return [];
+    if (!chainTypeNames.isSuccess || !jobTypeNames.isSuccess) return [];
+    if (choices().length > 0 || /[,\n]/.test(text())) return [];
     return [
-      ...matchTypeNames(names.chains, text(), TYPE_SUGGESTIONS).map((typeName) => ({
+      ...matchTypeNames(chainTypeNames.data, text(), TYPE_SUGGESTIONS).map((typeName) => ({
         kind: "chain" as const,
         typeName,
       })),
-      ...matchTypeNames(names.jobs, text(), TYPE_SUGGESTIONS).map((typeName) => ({
+      ...matchTypeNames(jobTypeNames.data, text(), TYPE_SUGGESTIONS).map((typeName) => ({
         kind: "job" as const,
         typeName,
       })),
@@ -94,13 +88,15 @@ export const FindDialog = () => {
 
   const go = (choice: Choice) => {
     close();
-    navigate(choiceHref(choice));
+    navigate(appHref(choiceHref(choice)));
   };
 
   const goToType = (suggestion: TypeSuggestion) => {
     close();
     navigate(
-      `${suggestion.kind === "chain" ? "/chains" : "/jobs"}?typeName=${encodeURIComponent(suggestion.typeName)}`,
+      appHref(
+        `${suggestion.kind === "chain" ? "/chains" : "/jobs"}?typeName=${encodeURIComponent(suggestion.typeName)}`,
+      ),
     );
   };
 
@@ -113,7 +109,7 @@ export const FindDialog = () => {
     }
     if (ids.length > 1) {
       close();
-      navigate(`/find?ids=${encodeURIComponent(ids.join(","))}`);
+      navigate(appHref(`/find?ids=${encodeURIComponent(ids.join(","))}`));
       return;
     }
     controller?.abort();
@@ -222,7 +218,7 @@ export const FindDialog = () => {
         <Show when={message()}>
           {(message) => (
             <p
-              class={`mt-3 text-sm ${message().error ? "text-error-fg" : "text-fg-muted"}`}
+              class={["mt-3 text-sm", message().error ? "text-error-fg" : "text-fg-muted"]}
               role="status"
             >
               {message().text}
@@ -295,9 +291,10 @@ export const FindDialog = () => {
                 <li>
                   <button
                     type="button"
-                    class={`flex w-full items-center gap-2 rounded-xs border px-3 py-2 text-left text-sm hover:bg-surface-2 ${
-                      active() === index() ? "border-accent" : "border-border"
-                    }`}
+                    class={[
+                      "flex w-full items-center gap-2 rounded-xs border px-3 py-2 text-left text-sm hover:bg-surface-2",
+                      active() === index() ? "border-accent" : "border-border",
+                    ]}
                     onFocus={() => setActive(index())}
                     onClick={() => {
                       go(choice);

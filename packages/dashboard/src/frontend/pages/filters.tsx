@@ -1,9 +1,10 @@
 import { ArrowDownIcon, ArrowUpIcon, StatusDot } from "@queuert/ui/components";
 import type { AnyStatus } from "@queuert/ui/lib";
 import { useLocation, useSearchParams } from "@solidjs/router";
-import { For, type JSX, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show } from "solid-js";
 
-import { basePath } from "../base.ts";
+import { appHref } from "../base.ts";
 import { type CappedCount, formatCount, formatSum, sumCounts } from "../domain/counts.ts";
 import { buttonClass } from "../ui/kit.tsx";
 import { Select } from "../ui/Select.tsx";
@@ -43,7 +44,7 @@ export const StatusFilter = (props: {
     if (status) params.set("status", status);
     else params.delete("status");
     params.delete("orderBy");
-    return `${basePath}${props.path}?${params}`;
+    return appHref(`${props.path}?${params}`);
   };
   const countOf = (status: AnyStatus) =>
     props.counts?.find((statusCount) => statusCount.status === status)?.count;
@@ -106,7 +107,7 @@ export const SortControls = (props: {
       />
       <button
         type="button"
-        class={`${buttonClass.secondary} h-8 px-2`}
+        class={[buttonClass.secondary, "h-8 px-2"]}
         title={ascending() ? "Ascending" : "Descending"}
         aria-label={`Sort direction: ${ascending() ? "ascending" : "descending"}`}
         onClick={() => {

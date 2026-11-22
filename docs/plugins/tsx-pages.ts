@@ -326,7 +326,7 @@ export const transformPage = async (
         }
         output.appendLeft(
           element.closingElement.start,
-          `<a class="heading-anchor" href=${jsxString(`#${id}`)} aria-hidden="true" tabIndex={-1}>#</a>`,
+          `<a class="heading-anchor" href=${jsxString(`#${id}`)} aria-hidden="true" tabindex={-1}>#</a>`,
         );
         if (depth <= 3) headings.push({ depth, text, id });
         return;

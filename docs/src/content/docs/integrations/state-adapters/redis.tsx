@@ -1,5 +1,3 @@
-import { A } from "@solidjs/router";
-
 import { ExampleCode } from "../../../../components/ExampleCode.tsx";
 import { ExampleRows } from "../../../../components/ExampleList.tsx";
 import { FieldList, type FieldItem } from "../../../../components/FieldList.tsx";
@@ -15,6 +13,7 @@ import {
 } from "../../../../components/integrations/state-adapters/stateAdapterConfig.tsx";
 import { Code } from "../../../../components/mdx/Code.tsx";
 import { TabItem, Tabs } from "../../../../components/mdx/Tabs.tsx";
+import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
   title: "Redis State Adapter",
@@ -210,9 +209,9 @@ const Page = () => (
       committed fact in your application database. Run a PostgreSQL or SQLite Queuert as a
       transactional outbox: create its chain in the same transaction as your application write, and
       let its handler start the chain in the Redis Queuert. Give that chain a{" "}
-      <A href="/guides/deduplication/">deduplication</A> key derived from the outbox job, so a
-      handler that runs again after a failure returns the chain it already started instead of
-      creating a second one.
+      <a href={siteHref("/guides/deduplication/")}>deduplication</a> key derived from the outbox
+      job, so a handler that runs again after a failure returns the chain it already started instead
+      of creating a second one.
     </p>
 
     <h2>Locks</h2>
@@ -261,7 +260,7 @@ const Page = () => (
     <p>
       Every key starts with <code>keyPrefix</code>, left out below. Records hold the state, and
       every other key is an index the adapter derives from them, so the layout reads like the{" "}
-      <A href="/integrations/state-adapters/postgres/#schema">PostgreSQL schema</A>: a{" "}
+      <a href={siteHref("/integrations/state-adapters/postgres/#schema")}>PostgreSQL schema</a>: a{" "}
       <code>job</code> record per job, a <code>worker</code> record per worker, and an index per
       PostgreSQL index, named after it where one matches. The adapter's job lock, commit and claim
       markers expire on their own.
@@ -303,9 +302,9 @@ const Page = () => (
       </li>
       <li>
         <strong>Memory.</strong> Every job stays in memory until its chain is deleted, which a{" "}
-        <A href="/guides/cleanup/">cleanup</A> job does on a schedule. A job takes about 1.5 KB with
-        its index entries, plus its input, output and blockers, so set <code>maxmemory</code> for
-        the number of jobs you keep, not for the queue length.
+        <a href={siteHref("/guides/cleanup/")}>cleanup</a> job does on a schedule. A job takes about
+        1.5 KB with its index entries, plus its input, output and blockers, so set{" "}
+        <code>maxmemory</code> for the number of jobs you keep, not for the queue length.
       </li>
     </ul>
 
@@ -347,7 +346,8 @@ const Page = () => (
       </TabItem>
     </Tabs>
     <p>
-      The full API is in the <A href="/api/redis-conformance/readme/">conformance reference</A>.
+      The full API is in the{" "}
+      <a href={siteHref("/api/redis-conformance/readme/")}>conformance reference</a>.
     </p>
 
     <h2>Examples</h2>
@@ -356,7 +356,8 @@ const Page = () => (
       names={["redis/state-redis", "redis/state-ioredis", "redis/multi-worker"]}
     />
     <p>
-      The API reference for every export is in <A href="/api/redis/readme/">@queuert/redis</A>.
+      The API reference for every export is in{" "}
+      <a href={siteHref("/api/redis/readme/")}>@queuert/redis</a>.
     </p>
   </>
 );

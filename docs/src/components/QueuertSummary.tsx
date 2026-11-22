@@ -1,5 +1,6 @@
 import { Box } from "@queuert/ui/components";
-import { A } from "@solidjs/router";
+
+import { siteHref } from "../docs/href.ts";
 
 export const QueuertSummary = () => (
   <Box title="Queuert in short" class="my-6" bodyClass="px-4 pt-3 pb-4 text-sm leading-6">
@@ -9,7 +10,7 @@ export const QueuertSummary = () => (
       <code>continueWith</code> creates the next; chains start and complete inside your database
       transactions, so the work that follows a write commits or rolls back with it. A one-job chain
       is a queue; a multi-step chain with blockers is closer to a workflow.{" "}
-      <A href="/getting-started/introduction/">Introduction →</A>
+      <a href={siteHref("/getting-started/introduction/")}>Introduction →</a>
     </p>
   </Box>
 );

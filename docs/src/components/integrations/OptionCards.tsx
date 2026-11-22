@@ -1,6 +1,8 @@
 import { Box, Chip, type ChipTone } from "@queuert/ui/components";
-import { A } from "@solidjs/router";
-import { For, type JSX, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show } from "solid-js";
+
+import { siteHref } from "../../docs/href.ts";
 
 export type OptionCard = {
   name: string;
@@ -46,9 +48,9 @@ export const OptionCards = (props: { items: OptionCard[] }) => (
             </For>
           </ul>
           <div class="border-t border-border px-4 py-2 text-[13px]">
-            <A href={option.action.href} class="unstyled text-accent-fg hover:underline">
+            <a href={siteHref(option.action.href)} class="unstyled text-accent-fg hover:underline">
               {option.action.label} →
-            </A>
+            </a>
           </div>
         </Box>
       )}

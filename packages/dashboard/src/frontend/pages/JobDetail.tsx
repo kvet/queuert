@@ -1,10 +1,10 @@
 import { Box, Pips, StatusPill } from "@queuert/ui/components";
 import { shortId } from "@queuert/ui/lib";
-import { A, useParams } from "@solidjs/router";
+import { useParams } from "@solidjs/router";
+import { useQuery } from "@tanstack/solid-query";
 import { For, Match, Show, Switch } from "solid-js";
 
-import type { UnknownJob } from "../../shared/types.ts";
-import { isNotFound, serverFns } from "../api.ts";
+import { appHref } from "../base.ts";
 import { elapsedMs, formatDuration } from "../domain/duration.ts";
 import { jobPhase } from "../domain/jobPhase.ts";
 import { formatRelative } from "../domain/time.ts";
@@ -14,41 +14,28 @@ import { blockerProgress } from "../rows/BlockerChips.tsx";
 import { ErrorText, RescheduleButton } from "../rows/JobItem.tsx";
 import { PageHeader } from "../shell/PageHeader.tsx";
 import { now } from "../state/clock.ts";
-import { createLoader } from "../state/createLoader.ts";
+import { jobDetailQuery, optionalWorkerQuery } from "../state/queries.ts";
 import { CopyButton, IdChip } from "../ui/IdChip.tsx";
 import { JsonViewer } from "../ui/JsonViewer.tsx";
-import { ErrorState, Fact, NotFoundState, SkeletonRows, linkClass } from "../ui/kit.tsx";
+import { Fact, NotFoundState, QueryBoundary, SkeletonCard, linkClass } from "../ui/kit.tsx";
 import { Time } from "../ui/Time.tsx";
 
 export const JobDetail = () => {
   const params = useParams<{ id: string }>();
-  const detail = createLoader(
-    () => params.id,
-    async (id, signal) => serverFns.getJobDetail({ data: { id }, signal }),
-  );
-  const attemptWorker = createLoader(
-    () => {
-      const job = detail.data()?.job;
-      return job?.status === "running" ? job.attemptBy : undefined;
-    },
-    async (workerId, signal) =>
-      serverFns.getWorker({ data: { id: workerId }, signal }).catch((error: unknown) => {
-        if (isNotFound(error)) return null;
-        throw error;
-      }),
-  );
-  const lease = () => {
-    const worker = attemptWorker.data();
-    return worker === undefined ? undefined : jobLease(worker);
+  const detail = useQuery(() => jobDetailQuery(params.id));
+  const attemptWorkerId = () => {
+    if (!detail.isSuccess) return undefined;
+    const job = detail.data.job;
+    return job.status === "running" ? job.attemptBy : undefined;
   };
+  const attemptWorker = useQuery(() => {
+    const workerId = attemptWorkerId();
+    return { ...optionalWorkerQuery(workerId ?? ""), enabled: workerId !== undefined };
+  });
+  const lease = () => (attemptWorker.isSuccess ? jobLease(attemptWorker.data) : undefined);
   const leaseUntil = () => {
     const current = lease();
     return current?.state === "live" ? current.leaseUntil : undefined;
-  };
-
-  const replaceJob = (job: UnknownJob) => {
-    const current = detail.data();
-    if (current) detail.mutate({ ...current, job });
   };
 
   const fallbackCrumbs = () => [
@@ -56,284 +43,266 @@ export const JobDetail = () => {
     { label: shortId(params.id) },
   ];
 
+  const data = () => detail.data;
+  const job = () => data().job;
+  const phase = () => jobPhase(job(), now());
+  const lastFailure = () => job().lastAttemptError ?? undefined;
+  const requestedReason = () => job().lastRescheduleReason ?? undefined;
+  const running = () => {
+    const value = job();
+    return value.status === "running" ? value : undefined;
+  };
+  const completed = () => {
+    const value = job();
+    return value.status === "completed" ? value : undefined;
+  };
+  const listHref = () => `/jobs?typeName=${encodeURIComponent(job().typeName)}`;
+  const chainLink = () => (
+    <a href={appHref(`/chains/${job().chainId}`)} class={linkClass}>
+      {job().chainTypeName} · <span class="font-mono">{shortId(job().chainId)}</span>
+    </a>
+  );
+
   return (
     <div>
-      <Switch>
-        <Match when={detail.error() && isNotFound(detail.error())}>
-          <PageHeader fallback="/jobs/types" crumbs={fallbackCrumbs()} />
-          <NotFoundState kind="Job" href="/jobs/types" />
-        </Match>
-        <Match when={detail.error()}>
-          <PageHeader fallback="/jobs/types" crumbs={fallbackCrumbs()} />
-          <ErrorState thing="this job" error={detail.error()} onRetry={detail.retry} />
-        </Match>
-        <Match when={detail.loading() || !detail.data()}>
-          <div class="mb-6 flex flex-col gap-3" aria-busy="true">
-            <div class="h-4 w-48 animate-pulse rounded-xs bg-surface-2" />
-            <div class="h-7 w-72 animate-pulse rounded-xs bg-surface-2" />
-          </div>
-          <div class="rounded-xs border border-border">
-            <SkeletonRows count={4} />
-          </div>
-        </Match>
-        <Match when={detail.data()}>
-          {(data) => {
-            const job = () => data().job;
-            const phase = () => jobPhase(job(), now());
-            const lastFailure = () => job().lastAttemptError ?? undefined;
-            const requestedReason = () => job().lastRescheduleReason ?? undefined;
-            const running = () => {
-              const value = job();
-              return value.status === "running" ? value : undefined;
-            };
-            const completed = () => {
-              const value = job();
-              return value.status === "completed" ? value : undefined;
-            };
-            const listHref = () => `/jobs?typeName=${encodeURIComponent(job().typeName)}`;
-            const chainLink = () => (
-              <A href={`/chains/${job().chainId}`} class={linkClass}>
-                {job().chainTypeName} · <span class="font-mono">{shortId(job().chainId)}</span>
-              </A>
-            );
-
-            return (
-              <>
-                <PageHeader
-                  fallback={listHref()}
-                  crumbs={[
-                    { label: "Jobs", href: "/jobs/types" },
-                    { label: job().typeName, href: listHref() },
-                    { label: shortId(job().id), title: job().id },
-                  ]}
-                />
-                <div class="mb-6 flex flex-wrap items-start gap-4">
-                  <div class="min-w-0 flex-1">
-                    <h1 class="flex flex-wrap items-center gap-3 text-base font-semibold">
-                      <span class="min-w-0 truncate" title={job().typeName}>
-                        {job().typeName}
+      <Show when={detail.isError}>
+        <PageHeader fallback="/jobs/types" crumbs={fallbackCrumbs()} />
+      </Show>
+      <QueryBoundary
+        thing="this job"
+        fallback={
+          <>
+            <div class="mb-6 flex flex-col gap-3" aria-busy="true">
+              <div class="h-4 w-48 animate-pulse rounded-xs bg-surface-2" />
+              <div class="h-7 w-72 animate-pulse rounded-xs bg-surface-2" />
+            </div>
+            <SkeletonCard count={4} />
+          </>
+        }
+        notFound={<NotFoundState kind="Job" href="/jobs/types" />}
+      >
+        <PageHeader
+          fallback={listHref()}
+          crumbs={[
+            { label: "Jobs", href: "/jobs/types" },
+            { label: job().typeName, href: listHref() },
+            { label: shortId(job().id), title: job().id },
+          ]}
+        />
+        <div class="mb-6 flex flex-wrap items-start gap-4">
+          <div class="min-w-0 flex-1">
+            <h1 class="flex flex-wrap items-center gap-3 text-base font-semibold">
+              <span class="min-w-0 truncate" title={job().typeName}>
+                {job().typeName}
+              </span>
+              <StatusPill status={job().status} />
+              <Show when={phase().phase === "rescheduledAfterError"}>
+                <span class="rounded-xs border border-error-border bg-error-bg px-2 py-0.5 text-xs font-medium text-error-fg">
+                  Rescheduled after error
+                </span>
+              </Show>
+              <Show when={phase().phase === "scheduled"}>
+                <span class="rounded-xs border border-border px-2 py-0.5 text-xs font-medium text-fg-muted">
+                  Scheduled
+                </span>
+              </Show>
+            </h1>
+            <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-fg-muted">
+              <IdChip id={job().id} full />
+              <span>
+                Job <strong class="font-semibold text-fg">#{job().chainIndex + 1}</strong> of chain{" "}
+                {chainLink()}
+              </span>
+            </div>
+            <dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
+              <Fact label="Attempts">
+                <Show
+                  when={!(job().attempt === 0 && completed())}
+                  fallback={<span>0 · completed without a worker</span>}
+                >
+                  <span class="inline-flex items-center gap-2">
+                    {job().attempt} <Pips count={job().attempt} />
+                    <Show when={job().consecutiveFailures > 0}>
+                      <span class="text-xs text-fg-muted">
+                        · {job().consecutiveFailures} failed in a row
                       </span>
-                      <StatusPill status={job().status} />
-                      <Show when={phase().phase === "rescheduledAfterError"}>
-                        <span class="rounded-xs border border-error-border bg-error-bg px-2 py-0.5 text-xs font-medium text-error-fg">
-                          Rescheduled after error
-                        </span>
-                      </Show>
-                      <Show when={phase().phase === "scheduled"}>
-                        <span class="rounded-xs border border-border px-2 py-0.5 text-xs font-medium text-fg-muted">
-                          Scheduled
-                        </span>
-                      </Show>
-                    </h1>
-                    <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-fg-muted">
-                      <IdChip id={job().id} full />
-                      <span>
-                        Job <strong class="font-semibold text-fg">#{job().chainIndex + 1}</strong>{" "}
-                        of chain {chainLink()}
-                      </span>
-                    </div>
-                    <dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
-                      <Fact label="Attempts">
-                        <Show
-                          when={!(job().attempt === 0 && completed())}
-                          fallback={<span>0 · completed without a worker</span>}
-                        >
-                          <span class="inline-flex items-center gap-2">
-                            {job().attempt} <Pips count={job().attempt} />
-                            <Show when={job().consecutiveFailures > 0}>
-                              <span class="text-xs text-fg-muted">
-                                · {job().consecutiveFailures} failed in a row
-                              </span>
-                            </Show>
-                          </span>
-                        </Show>
-                      </Fact>
-                      <Fact label="Created">
-                        <Time date={job().createdAt} />
-                      </Fact>
-                      <Fact label="Scheduled">
-                        <Time date={job().scheduledAt} />
-                      </Fact>
-                      <Show when={job().lastAttemptAt}>
-                        {(at) => (
-                          <Fact
-                            label="Last reschedule"
-                            hint="When a running attempt was last rescheduled, after an error or by its handler."
-                          >
-                            <Time date={at()} />
-                          </Fact>
-                        )}
-                      </Show>
-                      <Show when={requestedReason()}>
-                        {(reason) => (
-                          <Fact
-                            label="Reschedule reason"
-                            hint="The reason a handler or client gave when it last rescheduled the job."
-                            wide
-                          >
-                            <span class="break-words">{reason()}</span>
-                          </Fact>
-                        )}
-                      </Show>
-                      <Show when={running()}>
-                        {(current) => (
-                          <>
-                            <Fact label="Worker" wide>
-                              <A
-                                href={`/workers/${encodeURIComponent(current().attemptBy)}`}
-                                class={`${linkClass} font-mono text-xs break-all`}
-                              >
-                                {current().attemptBy}
-                              </A>
-                            </Fact>
-                            <Fact label="Started">
-                              <Time date={current().attemptAt} />
-                            </Fact>
-                            <Fact
-                              label="Deadline"
-                              hint="A running job is held while its worker keeps its lease."
-                            >
-                              <Switch fallback={<span class="text-fg-muted">—</span>}>
-                                <Match when={leaseUntil()}>
-                                  {(until) => <Time date={until()} />}
-                                </Match>
-                                <Match when={lease()?.state === "expired"}>
-                                  <span class="font-medium text-status-pending-fg">
-                                    passed · may be reclaimed
-                                  </span>
-                                </Match>
-                                <Match when={lease()?.state === "gone"}>
-                                  <span class="font-medium text-status-pending-fg">
-                                    worker no longer registered
-                                  </span>
-                                </Match>
-                              </Switch>
-                            </Fact>
-                          </>
-                        )}
-                      </Show>
-                      <Show when={completed()}>
-                        {(done) => (
-                          <>
-                            <Fact label="Completed">
-                              <Time date={done().completedAt} />
-                            </Fact>
-                            <Fact
-                              label="Elapsed"
-                              hint="Includes time spent blocked, queued and between attempts."
-                            >
-                              {formatDuration(elapsedMs(done().createdAt, done().completedAt))}
-                            </Fact>
-                            <Show when={done().completedBy}>
-                              {(by) => (
-                                <Fact label="Completed by" wide>
-                                  <code class="font-mono text-xs break-all">{by()}</code>
-                                </Fact>
-                              )}
-                            </Show>
-                          </>
-                        )}
-                      </Show>
-                    </dl>
-                  </div>
-                  <RescheduleButton job={job()} label="Run now" onRescheduled={replaceJob} />
-                </div>
-
-                <div class="flex min-w-0 flex-col gap-6">
-                  <Show when={lastFailure()}>
-                    {(error) => (
-                      <Box
-                        title={
-                          <>
-                            Last error
-                            <Show when={job().lastAttemptAt}>
-                              {(at) => (
-                                <span class="font-normal normal-case">
-                                  {" "}
-                                  · <Time date={at()} />
-                                </span>
-                              )}
-                            </Show>
-                          </>
-                        }
-                        tone="danger"
-                        actions={<CopyButton text={error()} label="Copy error" />}
+                    </Show>
+                  </span>
+                </Show>
+              </Fact>
+              <Fact label="Created">
+                <Time date={job().createdAt} />
+              </Fact>
+              <Fact label="Scheduled">
+                <Time date={job().scheduledAt} />
+              </Fact>
+              <Show when={job().lastAttemptAt}>
+                {(at) => (
+                  <Fact
+                    label="Last reschedule"
+                    hint="When a running attempt was last rescheduled, after an error or by its handler."
+                  >
+                    <Time date={at()} />
+                  </Fact>
+                )}
+              </Show>
+              <Show when={requestedReason()}>
+                {(reason) => (
+                  <Fact
+                    label="Reschedule reason"
+                    hint="The reason a handler or client gave when it last rescheduled the job."
+                    wide
+                  >
+                    <span class="break-words">{reason()}</span>
+                  </Fact>
+                )}
+              </Show>
+              <Show when={running()}>
+                {(current) => (
+                  <>
+                    <Fact label="Worker" wide>
+                      <a
+                        href={appHref(`/workers/${encodeURIComponent(current().attemptBy)}`)}
+                        class={[linkClass, "font-mono text-xs break-all"]}
                       >
-                        <ErrorText text={error()} lines={12} />
-                        <Show
-                          when={
-                            phase().phase === "rescheduledAfterError" &&
-                            job().scheduledAt.getTime() > now()
-                          }
-                        >
-                          <p class="mt-2 text-xs text-fg-muted">
-                            next attempt {formatRelative(job().scheduledAt, now())}
-                          </p>
-                        </Show>
-                      </Box>
+                        {current().attemptBy}
+                      </a>
+                    </Fact>
+                    <Fact label="Started">
+                      <Time date={current().attemptAt} />
+                    </Fact>
+                    <Fact
+                      label="Deadline"
+                      hint="A running job is held while its worker keeps its lease."
+                    >
+                      <Switch fallback={<span class="text-fg-muted">—</span>}>
+                        <Match when={leaseUntil()}>{(until) => <Time date={until()} />}</Match>
+                        <Match when={lease()?.state === "expired"}>
+                          <span class="font-medium text-status-pending-fg">
+                            passed · may be reclaimed
+                          </span>
+                        </Match>
+                        <Match when={lease()?.state === "gone"}>
+                          <span class="font-medium text-status-pending-fg">
+                            worker no longer registered
+                          </span>
+                        </Match>
+                      </Switch>
+                    </Fact>
+                  </>
+                )}
+              </Show>
+              <Show when={completed()}>
+                {(done) => (
+                  <>
+                    <Fact label="Completed">
+                      <Time date={done().completedAt} />
+                    </Fact>
+                    <Fact
+                      label="Elapsed"
+                      hint="Includes time spent blocked, queued and between attempts."
+                    >
+                      {formatDuration(elapsedMs(done().createdAt, done().completedAt))}
+                    </Fact>
+                    <Show when={done().completedBy}>
+                      {(by) => (
+                        <Fact label="Completed by" wide>
+                          <code class="font-mono text-xs break-all">{by()}</code>
+                        </Fact>
+                      )}
+                    </Show>
+                  </>
+                )}
+              </Show>
+            </dl>
+          </div>
+          <RescheduleButton job={job()} label="Run now" />
+        </div>
+
+        <div class="flex min-w-0 flex-col gap-6">
+          <Show when={lastFailure()}>
+            {(error) => (
+              <Box
+                title={
+                  <>
+                    Last error
+                    <Show when={job().lastAttemptAt}>
+                      {(at) => (
+                        <span class="font-normal normal-case">
+                          {" "}
+                          · <Time date={at()} />
+                        </span>
+                      )}
+                    </Show>
+                  </>
+                }
+                tone="danger"
+                actions={<CopyButton text={error()} label="Copy error" />}
+              >
+                <ErrorText text={error()} lines={12} />
+                <Show
+                  when={
+                    phase().phase === "rescheduledAfterError" && job().scheduledAt.getTime() > now()
+                  }
+                >
+                  <p class="mt-2 text-xs text-fg-muted">
+                    next attempt {formatRelative(job().scheduledAt, now())}
+                  </p>
+                </Show>
+              </Box>
+            )}
+          </Show>
+
+          <JsonViewer data={job().input} title="Input" label="input" />
+
+          <Switch
+            fallback={
+              <Box title="Output">
+                <p class="text-sm text-fg-subtle">no output yet</p>
+              </Box>
+            }
+          >
+            <Match when={completed()?.continuedToId}>
+              {(nextId) => (
+                <Box title="Continued to">
+                  <Show
+                    when={data().continuation}
+                    fallback={<IdChip id={nextId()} href={appHref(`/jobs/${nextId()}`)} />}
+                  >
+                    {(next) => (
+                      <div class="flex flex-wrap items-center gap-2 text-sm">
+                        <a href={appHref(`/jobs/${next().id}`)} class="font-medium hover:underline">
+                          {next().typeName}
+                        </a>
+                        <StatusPill status={next().status} />
+                        <IdChip id={next().id} href={appHref(`/jobs/${next().id}`)} />
+                        <span class="text-fg-muted">job #{job().chainIndex + 2}</span>
+                      </div>
                     )}
                   </Show>
+                </Box>
+              )}
+            </Match>
+            <Match when={completed()}>
+              {(final) => <JsonViewer data={final().output} title="Output" label="output" />}
+            </Match>
+          </Switch>
 
-                  <JsonViewer data={job().input} title="Input" label="input" />
-
-                  <Switch
-                    fallback={
-                      <Box title="Output">
-                        <p class="text-sm text-fg-subtle">no output yet</p>
-                      </Box>
-                    }
-                  >
-                    <Match when={completed()?.continuedToId}>
-                      {(nextId) => (
-                        <Box title="Continued to">
-                          <Show
-                            when={data().continuation}
-                            fallback={<IdChip id={nextId()} href={`/jobs/${nextId()}`} />}
-                          >
-                            {(next) => (
-                              <div class="flex flex-wrap items-center gap-2 text-sm">
-                                <A href={`/jobs/${next().id}`} class="font-medium hover:underline">
-                                  {next().typeName}
-                                </A>
-                                <StatusPill status={next().status} />
-                                <IdChip id={next().id} href={`/jobs/${next().id}`} />
-                                <span class="text-fg-muted">job #{job().chainIndex + 2}</span>
-                              </div>
-                            )}
-                          </Show>
-                        </Box>
-                      )}
-                    </Match>
-                    <Match when={completed()}>
-                      {(final) => (
-                        <JsonViewer data={final().output} title="Output" label="output" />
-                      )}
-                    </Match>
-                  </Switch>
-
-                  <Show when={data().blockers.length > 0}>
-                    <Box
-                      title="Blockers"
-                      actions={
-                        <span class="text-fg-muted tabular-nums">
-                          {blockerProgress(data().blockers)}
-                        </span>
-                      }
-                      bodyClass=""
-                    >
-                      <ul class="divide-y divide-border">
-                        <For each={data().blockers}>
-                          {(blocker) => <BlockerChainRow chain={blocker} />}
-                        </For>
-                      </ul>
-                    </Box>
-                  </Show>
-                </div>
-              </>
-            );
-          }}
-        </Match>
-      </Switch>
+          <Show when={data().blockers.length > 0}>
+            <Box
+              title="Blockers"
+              actions={
+                <span class="text-fg-muted tabular-nums">{blockerProgress(data().blockers)}</span>
+              }
+              bodyClass=""
+            >
+              <ul class="divide-y divide-border">
+                <For each={data().blockers}>{(blocker) => <BlockerChainRow chain={blocker} />}</For>
+              </ul>
+            </Box>
+          </Show>
+        </div>
+      </QueryBoundary>
     </div>
   );
 };

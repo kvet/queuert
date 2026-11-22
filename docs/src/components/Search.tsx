@@ -1,28 +1,15 @@
 import { SearchIcon } from "@queuert/ui/components";
 import { useNavigate } from "@solidjs/router";
 import type MiniSearch from "minisearch";
-import {
-  For,
-  Show,
-  createEffect,
-  createMemo,
-  createResource,
-  createSignal,
-  on,
-  onCleanup,
-  onMount,
-} from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, onSettled } from "solid-js";
 
 import type { SearchEntry } from "../../plugins/search-index.ts";
+import { siteHref } from "../docs/href.ts";
 import { createSearchIndex, fetchSearchEntries } from "./searchEntries.ts";
 
 const [open, setOpen] = createSignal(false);
-const [requested, setRequested] = createSignal(false);
-
-export const openSearch = (): void => {
-  setRequested(true);
-  setOpen(true);
-};
+const [index, setIndex] = createSignal<MiniSearch<SearchEntry> | "errored">();
+let indexLoad: Promise<void> | undefined;
 
 const loadIndex = async (): Promise<MiniSearch<SearchEntry>> => {
   const [{ default: MiniSearchClass }, entries] = await Promise.all([
@@ -30,6 +17,25 @@ const loadIndex = async (): Promise<MiniSearch<SearchEntry>> => {
     fetchSearchEntries(`${import.meta.env.BASE_URL}search.json`),
   ]);
   return createSearchIndex(MiniSearchClass, entries);
+};
+
+const requestIndex = () => {
+  if (indexLoad) return;
+  setIndex(undefined);
+  indexLoad = loadIndex().then(
+    (search) => {
+      setIndex(search);
+    },
+    () => {
+      indexLoad = undefined;
+      setIndex("errored");
+    },
+  );
+};
+
+export const openSearch = (): void => {
+  requestIndex();
+  setOpen(true);
 };
 
 const escapeHtml = (value: string) =>
@@ -63,8 +69,10 @@ export const SearchDialog = () => {
   const navigate = useNavigate();
   const [query, setQuery] = createSignal("");
   const [selected, setSelected] = createSignal(0);
-  const [index, { refetch }] = createResource(requested, loadIndex);
-  const readyIndex = () => (index.state === "ready" ? index() : undefined);
+  const readyIndex = () => {
+    const current = index();
+    return current === "errored" ? undefined : current;
+  };
   let dialog!: HTMLDialogElement;
   let input!: HTMLInputElement;
   let list!: HTMLUListElement;
@@ -98,11 +106,11 @@ export const SearchDialog = () => {
   const go = (hit: Hit | undefined) => {
     if (!hit) return;
     setOpen(false);
-    navigate(hit.href);
+    navigate(siteHref(hit.href));
   };
 
-  createEffect(() => {
-    if (open()) {
+  createEffect(open, (isOpen) => {
+    if (isOpen) {
       if (!dialog.open) dialog.showModal();
       input.focus();
       input.select();
@@ -111,22 +119,15 @@ export const SearchDialog = () => {
     }
   });
 
-  createEffect(
-    on(open, (isOpen) => {
-      if (isOpen && index.state === "errored") void refetch();
-    }),
-  );
-
-  createEffect(() => {
-    query();
+  createEffect(query, () => {
     setSelected(0);
   });
 
-  createEffect(() => {
-    list?.querySelector(`[data-position="${selected()}"]`)?.scrollIntoView({ block: "nearest" });
+  createEffect(selected, (position) => {
+    list?.querySelector(`[data-position="${position}"]`)?.scrollIntoView({ block: "nearest" });
   });
 
-  onMount(() => {
+  onSettled(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       const typing = target?.closest("input, textarea, [contenteditable]") !== null;
@@ -139,9 +140,9 @@ export const SearchDialog = () => {
       }
     };
     window.addEventListener("keydown", onKey);
-    onCleanup(() => {
+    return () => {
       window.removeEventListener("keydown", onKey);
-    });
+    };
   });
 
   return (
@@ -186,7 +187,7 @@ export const SearchDialog = () => {
       </div>
       <div class="max-h-[min(60vh,520px)] overflow-y-auto">
         <Show
-          when={index.state !== "errored"}
+          when={index() !== "errored"}
           fallback={
             <p class="px-4 py-8 text-center text-xs text-fg-subtle" role="status">
               Search unavailable: the search index couldn't be loaded. Close and reopen search to
@@ -203,7 +204,7 @@ export const SearchDialog = () => {
             }
           >
             <Show
-              when={!index.loading}
+              when={readyIndex()}
               fallback={<p class="px-4 py-8 text-center text-xs text-fg-subtle">Loading index…</p>}
             >
               <Show
@@ -235,7 +236,7 @@ export const SearchDialog = () => {
                                 id={`search-hit-${hit.position}`}
                                 role="option"
                                 data-position={hit.position}
-                                aria-selected={selected() === hit.position}
+                                aria-selected={selected() === hit.position ? "true" : "false"}
                                 class="cursor-pointer rounded-xs px-2 py-2 aria-selected:bg-surface-2"
                                 onMouseMove={() => setSelected(hit.position)}
                                 onClick={() => {

@@ -1,8 +1,8 @@
 import { ChevronRightIcon } from "@queuert/ui/components";
-import { A, type RouteDefinition, useParams } from "@solidjs/router";
-import { HttpStatusCode } from "@solidjs/start";
-import { type Component, For, Show, Suspense, lazy } from "solid-js";
-import { Dynamic } from "solid-js/web";
+import { useParams } from "@solidjs/router";
+import { defineFileRoute } from "@solidjs/router/fs";
+import { httpStatus } from "@solidjs/web";
+import { For, Loading, Show, createMemo, lazy } from "solid-js";
 
 import { ApiPackageIndex } from "../components/api/ApiPackageIndex.tsx";
 import { ArticleLayout, DocsShell } from "../components/DocsShell.tsx";
@@ -13,7 +13,9 @@ import { NotFound } from "../components/NotFound.tsx";
 import { PageMeta } from "../components/PageMeta.tsx";
 import { Toc } from "../components/Toc.tsx";
 import { formatDate } from "../docs/dates.ts";
+import { siteHref } from "../docs/href.ts";
 import {
+  type DocHeading,
   type DocModule,
   type DocPage,
   apiEntryOf,
@@ -26,16 +28,16 @@ import {
 } from "../docs/pages.ts";
 import { sectionForPath } from "../docs/sections.ts";
 
-export const route = {
+export const route = defineFileRoute("/*slug", {
   preload: ({ params }) => {
     const page = findPage(params.slug ?? "");
     if (page) void loadPage(page);
   },
-} satisfies RouteDefinition;
+});
 
 const PagerLink = (props: { page: DocPage; direction: "previous" | "next" }) => (
-  <A
-    href={pageHref(props.page)}
+  <a
+    href={siteHref(pageHref(props.page))}
     class={`group flex flex-1 flex-col gap-1 rounded-xs border border-border px-4 py-3 hover:border-border-strong hover:bg-surface ${
       props.direction === "next" ? "items-end text-right" : ""
     }`}
@@ -49,7 +51,7 @@ const PagerLink = (props: { page: DocPage; direction: "previous" | "next" }) => 
         <ArrowRightIcon size={14} />
       </Show>
     </span>
-  </A>
+  </a>
 );
 
 const UsedIn = (props: { page: DocPage }) => (
@@ -66,12 +68,12 @@ const UsedIn = (props: { page: DocPage }) => (
         >
           {(guide) => (
             <li>
-              <A
-                href={pageHref(guide)}
+              <a
+                href={siteHref(pageHref(guide))}
                 class="inline-flex items-center gap-1 rounded-xs border border-border px-2 py-1 text-xs text-fg-muted hover:border-border-strong hover:text-fg"
               >
                 {guide.title}
-              </A>
+              </a>
             </li>
           )}
         </For>
@@ -80,11 +82,22 @@ const UsedIn = (props: { page: DocPage }) => (
   </Show>
 );
 
-const Article = (props: { page: DocPage; module: DocModule }) => {
+const contents = new Map<string, DocModule["default"]>();
+
+const contentFor = (page: DocPage): DocModule["default"] => {
+  let content = contents.get(page.file);
+  if (!content) {
+    content = lazy(async () => loadPage(page));
+    contents.set(page.file, content);
+  }
+  return content;
+};
+
+const Article = (props: { page: DocPage }) => {
   const pager = () => neighbors(props.page);
   const pkg = () => apiEntryOf(props.page);
   const isPackageIndex = () => props.page.slug.endsWith("/readme") && pkg() !== undefined;
-  const Content = props.module.default;
+  const Content = contentFor(props.page);
 
   return (
     <article>
@@ -123,7 +136,7 @@ const Article = (props: { page: DocPage; module: DocModule }) => {
       </Show>
       <Show when={props.page.date}>
         {(date) => (
-          <time class="mt-3 block text-xs text-fg-subtle" dateTime={date()}>
+          <time class="mt-3 block text-xs text-fg-subtle" datetime={date()}>
             {formatDate(date())}
           </time>
         )}
@@ -133,11 +146,10 @@ const Article = (props: { page: DocPage; module: DocModule }) => {
           when={isPackageIndex()}
           fallback={
             <div
-              class="prose"
-              classList={{
-                "api-reference": props.page.api !== null,
-                essay: props.page.date !== null,
-              }}
+              class={[
+                "prose",
+                { "api-reference": props.page.api !== null, essay: props.page.date !== null },
+              ]}
             >
               <Content components={mdxComponents} />
             </div>
@@ -159,36 +171,34 @@ const Article = (props: { page: DocPage; module: DocModule }) => {
   );
 };
 
-const articles = new Map<string, Component>();
-
-const articleFor = (page: DocPage): Component => {
-  let article = articles.get(page.file);
-  if (!article) {
-    article = lazy(async () => {
-      const module = await loadPage(page);
-      const pkg = apiEntryOf(page);
-      const headings =
-        pkg && page.slug.endsWith("/readme")
-          ? pkg.kinds.map((kind) => ({
-              depth: 2,
-              text: kindLabels[kind.kind] ?? kind.kind,
-              id: kind.kind.toLowerCase(),
-            }))
-          : module.headings;
-      return {
-        default: () => (
-          <ArticleLayout
-            wide={page.layout === "wide"}
-            aside={page.layout === "wide" ? undefined : <Toc headings={headings} />}
-          >
-            <Article page={page} module={module} />
-          </ArticleLayout>
-        ),
-      };
-    });
-    articles.set(page.file, article);
+const headingsOf = async (page: DocPage): Promise<DocHeading[]> => {
+  const pkg = apiEntryOf(page);
+  if (pkg && page.slug.endsWith("/readme")) {
+    return pkg.kinds.map((kind) => ({
+      depth: 2,
+      text: kindLabels[kind.kind] ?? kind.kind,
+      id: kind.kind.toLowerCase(),
+    }));
   }
-  return article;
+  return (await loadPage(page)).headings;
+};
+
+const ArticlePage = (props: { page: DocPage }) => {
+  const headings = createMemo(async () => headingsOf(props.page));
+
+  return (
+    <ArticleLayout
+      wide={props.page.layout === "wide"}
+      aside={props.page.layout === "wide" ? undefined : <Toc headings={headings()} />}
+    >
+      <Article page={props.page} />
+    </ArticleLayout>
+  );
+};
+
+const MissingPage = () => {
+  httpStatus(404);
+  return <NotFound />;
 };
 
 const DocsRoute = () => {
@@ -196,20 +206,14 @@ const DocsRoute = () => {
   const page = () => findPage(params.slug ?? "");
 
   return (
-    <Show
-      when={page()}
-      fallback={
-        <>
-          <HttpStatusCode code={404} />
-          <NotFound />
-        </>
-      }
-    >
+    <Show when={page()} fallback={<MissingPage />}>
       {(page) => (
         <DocsShell section={sectionForPath(pageHref(page()))?.id ?? "docs"}>
-          <Suspense>
-            <Dynamic component={articleFor(page())} />
-          </Suspense>
+          <Loading>
+            <Show when={page()} keyed>
+              {(current) => <ArticlePage page={current} />}
+            </Show>
+          </Loading>
         </DocsShell>
       )}
     </Show>

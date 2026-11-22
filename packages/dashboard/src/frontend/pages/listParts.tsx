@@ -1,9 +1,12 @@
 import { useSearchParams } from "@solidjs/router";
-import { For, type JSX, Match, Show, Switch } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import type { InfiniteData, UseInfiniteQueryResult } from "@tanstack/solid-query";
+import type { Page } from "queuert";
+import { For, Show, createEffect, createMemo } from "solid-js";
 
-import type { createAutoLoadMore } from "../state/createAutoLoadMore.ts";
-import type { createPagedList } from "../state/createPagedList.ts";
-import { ErrorState, LiveRegion, SkeletonRows, buttonClass } from "../ui/kit.tsx";
+import { loadedAnnouncement, loadedItems, shouldLoadNextPage } from "../domain/pages.ts";
+import { createWindowVirtualizer } from "../state/createWindowVirtualizer.ts";
+import { LiveRegion, QueryBoundary, SkeletonCard, buttonClass } from "../ui/kit.tsx";
 import { Select } from "../ui/Select.tsx";
 import { type TypeKind, TypePicker } from "./Types.tsx";
 
@@ -62,31 +65,34 @@ const ListCard = (props: { children: JSX.Element }) => (
   <div class="overflow-hidden rounded-xs border border-border">{props.children}</div>
 );
 
+export type PagedQuery<TItem> = UseInfiniteQueryResult<InfiniteData<Page<TItem>>>;
+
 export const LoadMoreFooter = (props: {
-  hasMore: boolean;
+  query: PagedQuery<unknown>;
   shownCount: number;
-  autoLoadMore: ReturnType<typeof createAutoLoadMore>;
   class?: string;
 }) => {
   const loadMoreLabel = () => {
-    if (props.autoLoadMore.loading()) return "Loading…";
-    if (props.autoLoadMore.failed()) return "Retry";
+    if (props.query.isFetchingNextPage) return "Loading…";
+    if (props.query.isFetchNextPageError) return "Retry";
     return "Load more";
   };
 
   return (
-    <Show when={props.hasMore}>
+    <Show when={props.query.hasNextPage}>
       <div
-        class={`flex items-center justify-between gap-3 border-t border-border px-4 py-3 text-sm text-fg-muted ${props.class ?? ""}`}
+        class={[
+          "flex items-center justify-between gap-3 border-t border-border px-4 py-3 text-sm text-fg-muted",
+          props.class,
+        ]}
       >
         <span>Showing {props.shownCount.toLocaleString()} · more load as you scroll</span>
         <button
           type="button"
           class={buttonClass.secondary}
-          ref={props.autoLoadMore.ref}
-          disabled={props.autoLoadMore.loading()}
+          disabled={props.query.isFetchingNextPage}
           onClick={() => {
-            props.autoLoadMore.trigger();
+            void props.query.fetchNextPage();
           }}
         >
           {loadMoreLabel()}
@@ -96,38 +102,60 @@ export const LoadMoreFooter = (props: {
   );
 };
 
-export const PagedListBody = <TItem extends { id: string }>(props: {
-  thing: "chains" | "jobs" | "workers";
-  list: ReturnType<typeof createPagedList<unknown, TItem>>;
-  empty: JSX.Element;
+const AUTO_LOAD_DISTANCE = 10;
+
+export const VirtualList = <TItem extends { id: string }>(props: {
+  query: PagedQuery<TItem>;
+  class?: string;
   children: (item: TItem) => JSX.Element;
 }) => {
+  const items = createMemo(() => loadedItems(props.query.data.pages));
+  const virtual = createWindowVirtualizer({ count: () => items().length, estimateSize: 56 });
+
+  createEffect(
+    () =>
+      (virtual.items().at(-1)?.index ?? -1) >= items().length - AUTO_LOAD_DISTANCE &&
+      shouldLoadNextPage(props.query),
+    (shouldLoad) => {
+      if (shouldLoad) void props.query.fetchNextPage();
+    },
+  );
+
   return (
     <>
-      <Switch>
-        <Match when={props.list.error()}>
-          <ErrorState thing={props.thing} error={props.list.error()} onRetry={props.list.retry} />
-        </Match>
-        <Match when={props.list.loading()}>
-          <ListCard>
-            <SkeletonRows />
-          </ListCard>
-        </Match>
-        <Match when={props.list.items().length === 0}>{props.empty}</Match>
-        <Match when={true}>
-          <ListCard>
-            <ul class="divide-y divide-border">
-              <For each={props.list.items()}>{(item) => props.children(item)}</For>
-            </ul>
-            <LoadMoreFooter
-              hasMore={props.list.cursor() !== null}
-              shownCount={props.list.items().length}
-              autoLoadMore={props.list.autoLoadMore}
-            />
-            <LiveRegion text={props.list.announcement()} />
-          </ListCard>
-        </Match>
-      </Switch>
+      <ul
+        ref={virtual.listRef}
+        class={["divide-y divide-border", props.class]}
+        style={{
+          "padding-top": `${virtual.paddingTop()}px`,
+          "padding-bottom": `${virtual.paddingBottom()}px`,
+        }}
+      >
+        <For each={virtual.items()} keyed={(item) => item.key}>
+          {(item) => (
+            <Show when={items()[item().index]} keyed>
+              {(row) => props.children(row)}
+            </Show>
+          )}
+        </For>
+      </ul>
+      <LoadMoreFooter query={props.query} shownCount={items().length} />
+      <LiveRegion text={loadedAnnouncement(props.query.data.pages)} />
     </>
   );
 };
+
+export const PagedListBody = <TItem extends { id: string }>(props: {
+  thing: "chains" | "jobs" | "workers";
+  query: PagedQuery<TItem>;
+  empty: JSX.Element;
+  children: (item: TItem) => JSX.Element;
+}) => (
+  <QueryBoundary thing={props.thing} fallback={<SkeletonCard />}>
+    <Show when={props.query.data.pages[0].items.length > 0} fallback={props.empty}>
+      <ListCard>
+        <VirtualList query={props.query}>{props.children}</VirtualList>
+      </ListCard>
+    </Show>
+  </QueryBoundary>
+);

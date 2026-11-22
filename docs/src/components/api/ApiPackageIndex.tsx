@@ -1,6 +1,6 @@
-import { A } from "@solidjs/router";
 import { For, Show } from "solid-js";
 
+import { siteHref } from "../../docs/href.ts";
 import { type ApiEntry, kindLabels, pageHref } from "../../docs/pages.ts";
 import { CopyButton } from "../CopyButton.tsx";
 import { Badge } from "../mdx/Badge.tsx";
@@ -28,8 +28,8 @@ export const ApiPackageIndex = (props: { pkg: ApiEntry }) => (
             <For each={kind.pages}>
               {(page) => (
                 <li>
-                  <A
-                    href={pageHref(page)}
+                  <a
+                    href={siteHref(pageHref(page))}
                     class="group flex flex-col gap-0.5 px-4 py-2.5 hover:bg-surface sm:flex-row sm:items-baseline sm:gap-4"
                   >
                     <span class="flex shrink-0 items-center gap-2 font-medium text-fg group-hover:text-accent-fg sm:w-64">
@@ -41,7 +41,7 @@ export const ApiPackageIndex = (props: { pkg: ApiEntry }) => (
                     <span class="line-clamp-2 text-[13px] leading-5 text-fg-muted">
                       {page.description ?? ""}
                     </span>
-                  </A>
+                  </a>
                 </li>
               )}
             </For>

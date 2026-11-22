@@ -5,8 +5,8 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "jsx": "preserve",
-    "jsxImportSource": "solid-js",
-    "types": ["node", "@solidjs/start/env"],
+    "jsxImportSource": "@solidjs/web",
+    "types": ["node", "vite/client", "filesystem-routing/types"],
     "resolveJsonModule": true
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "plugins/**/*.ts", "vite.config.ts"],

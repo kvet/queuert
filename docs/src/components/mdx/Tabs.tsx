@@ -1,5 +1,7 @@
-import { For, type JSX, children, createSignal, createUniqueId } from "solid-js";
-import { createStore } from "solid-js/store";
+import type { JSX } from "@solidjs/web";
+import { For, children, createSignal, createStore, createUniqueId, snapshot } from "solid-js";
+
+import { createHydrated } from "../hydrated.ts";
 
 type TabItemProps = { label: string; badge?: string; children: JSX.Element };
 
@@ -9,9 +11,14 @@ const syncedTabsStorageKey = "queuert-docs:tabs";
 
 /** Selects `label` in every `Tabs` with this `syncKey` and remembers it in this browser. */
 export const selectSyncedTab = (syncKey: string, label: string) => {
-  setSyncedTabs(syncKey, label);
+  setSyncedTabs((tabs) => {
+    tabs[syncKey] = label;
+  });
   try {
-    localStorage.setItem(syncedTabsStorageKey, JSON.stringify(syncedTabs));
+    localStorage.setItem(
+      syncedTabsStorageKey,
+      JSON.stringify({ ...snapshot(syncedTabs), [syncKey]: label }),
+    );
   } catch {}
 };
 
@@ -20,14 +27,18 @@ export const restoreSyncedTabs = () => {
   try {
     const stored: unknown = JSON.parse(localStorage.getItem(syncedTabsStorageKey) ?? "{}");
     if (typeof stored !== "object" || stored === null) return;
-    for (const [syncKey, label] of Object.entries(stored)) {
-      if (typeof label === "string") setSyncedTabs(syncKey, label);
-    }
+    setSyncedTabs((tabs) => {
+      for (const [syncKey, label] of Object.entries(stored)) {
+        if (typeof label === "string") tabs[syncKey] = label;
+      }
+    });
   } catch {}
 };
 
-/** The label the reader picked for `syncKey`, or `undefined` before they pick one. */
-export const syncedTab = (syncKey: string): string | undefined => syncedTabs[syncKey];
+export const createSyncedTabs = (): ((syncKey: string) => string | undefined) => {
+  const hydrated = createHydrated();
+  return (syncKey) => (hydrated() ? syncedTabs[syncKey] : undefined);
+};
 
 const isTabItem = (item: unknown): item is TabItemProps =>
   typeof item === "object" && item !== null && "label" in item;
@@ -42,10 +53,11 @@ export const Tabs = (props: { syncKey?: string; children: JSX.Element }) => {
   // Panels fade in only after the reader switches tabs, never on the first render.
   const [switched, setSwitched] = createSignal(false);
   const id = createUniqueId();
+  const syncedTab = createSyncedTabs();
 
   const selected = () => {
     const labels = items().map((item) => item.label);
-    const synced = props.syncKey === undefined ? undefined : syncedTabs[props.syncKey];
+    const synced = props.syncKey === undefined ? undefined : syncedTab(props.syncKey);
     if (synced !== undefined && labels.includes(synced)) return synced;
     return local() ?? labels[0];
   };
@@ -66,7 +78,7 @@ export const Tabs = (props: { syncKey?: string; children: JSX.Element }) => {
               role="tab"
               id={`${id}-tab-${index()}`}
               aria-controls={`${id}-panel-${index()}`}
-              aria-selected={selected() === item.label}
+              aria-selected={selected() === item.label ? "true" : "false"}
               class="rounded-xs px-2 py-0.5 text-xs text-fg-muted hover:bg-surface-2 hover:text-fg aria-selected:bg-fg aria-selected:text-bg"
               onClick={() => {
                 select(item.label);

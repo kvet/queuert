@@ -1,5 +1,3 @@
-import { A } from "@solidjs/router";
-
 import { ExampleCode } from "../../../../components/ExampleCode.tsx";
 import { ExampleRows } from "../../../../components/ExampleList.tsx";
 import { FieldList, type FieldItem } from "../../../../components/FieldList.tsx";
@@ -20,6 +18,7 @@ import {
 import { stateProviderMembers } from "../../../../components/integrations/state-adapters/stateProvider.tsx";
 import { Code } from "../../../../components/mdx/Code.tsx";
 import { TabItem, Tabs } from "../../../../components/mdx/Tabs.tsx";
+import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
   title: "MySQL / MariaDB State Adapter",
@@ -150,7 +149,7 @@ const Page = () => (
       the same transactions as your application's data. One adapter covers both servers; its{" "}
       <code>dialect</code> option selects the server. Workers claim jobs with{" "}
       <code>FOR UPDATE SKIP LOCKED</code>, so several workers can share one database; see{" "}
-      <A href="/guides/horizontal-scaling/">Horizontal Scaling</A>.
+      <a href={siteHref("/guides/horizontal-scaling/")}>Horizontal Scaling</a>.
     </p>
     <ExperimentalAside package="@queuert/mysql" />
 
@@ -189,9 +188,9 @@ const Page = () => (
     <p>
       Requires MySQL 8.4 or later or MariaDB 11.4 or later, with InnoDB tables. MySQL and MariaDB
       have no <code>LISTEN</code>/<code>NOTIFY</code>, so the package has no notify adapter: pair it
-      with the <A href="/integrations/notify-adapters/redis/">Redis</A> or{" "}
-      <A href="/integrations/notify-adapters/nats/">NATS</A> notify adapter, or run without one and
-      let workers poll.
+      with the <a href={siteHref("/integrations/notify-adapters/redis/")}>Redis</a> or{" "}
+      <a href={siteHref("/integrations/notify-adapters/nats/")}>NATS</a> notify adapter, or run
+      without one and let workers poll.
     </p>
 
     <h2>Setup</h2>
@@ -330,8 +329,8 @@ const Page = () => (
       defaults (see <a href="#isolation-level">Isolation level</a>), create the cases once per
       level, over providers whose connections default to it. An optional <code>withSavepoint</code>{" "}
       adds the savepoint cases, as on{" "}
-      <A href="/integrations/state-adapters/postgres/">PostgreSQL</A>. Your test file owns the
-      database in its own hooks and registers one test per case:
+      <a href={siteHref("/integrations/state-adapters/postgres/")}>PostgreSQL</a>. Your test file
+      owns the database in its own hooks and registers one test per case:
     </p>
     <Tabs syncKey="mysql-driver">
       <TabItem label="mysql2">
@@ -400,7 +399,8 @@ const Page = () => (
       </TabItem>
     </Tabs>
     <p>
-      The full API is in the <A href="/api/mysql-conformance/readme/">conformance reference</A>.
+      The full API is in the{" "}
+      <a href={siteHref("/api/mysql-conformance/readme/")}>conformance reference</a>.
     </p>
 
     <h2>Isolation level</h2>
@@ -433,9 +433,9 @@ const Page = () => (
         The transactions you pass raise them to you. SERIALIZABLE turns plain reads into share
         locks, so expect more lock waits and deadlocks. Retry them with fresh <code>txHooks</code>{" "}
         for each try, or inside{" "}
-        <A href="/guides/tx-hooks/#drivers-that-rerun-the-callback">
+        <a href={siteHref("/guides/tx-hooks/#drivers-that-rerun-the-callback")}>
           <code>txHooks.retryBoundary</code>
-        </A>
+        </a>
         .
       </li>
       <li>
@@ -485,7 +485,7 @@ const Page = () => (
     </p>
     <p>
       The migrator behind <code>migrateToLatest()</code> is exported for your own tables too; see{" "}
-      <A href="/guides/application-migrations/">Application Migrations</A>.
+      <a href={siteHref("/guides/application-migrations/")}>Application Migrations</a>.
     </p>
     <SchemaTables tables={mysqlTables} />
 
@@ -508,7 +508,8 @@ const Page = () => (
       ]}
     />
     <p>
-      The API reference for every export is in <A href="/api/mysql/readme/">@queuert/mysql</A>.
+      The API reference for every export is in{" "}
+      <a href={siteHref("/api/mysql/readme/")}>@queuert/mysql</a>.
     </p>
   </>
 );

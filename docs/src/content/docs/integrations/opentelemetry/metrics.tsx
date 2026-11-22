@@ -1,9 +1,8 @@
-import { A } from "@solidjs/router";
-
 import { type FieldItem, FieldList } from "../../../../components/FieldList.tsx";
 import { TraceWaterfall } from "../../../../components/integrations/observability/TraceWaterfall.tsx";
 import { Code } from "../../../../components/mdx/Code.tsx";
 import { onboardingDurations } from "../../../../data/traces.ts";
+import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
   title: "OpenTelemetry Metrics",
@@ -17,7 +16,7 @@ const seconds = { label: "unit s", mono: true } as const;
 
 const jobAttributes = ["queuert.job.type", "queuert.chain.type"];
 
-const attributes: FieldItem[] = [
+const attributes = (): FieldItem[] => [
   {
     name: "queuert.job.type",
     chips: ["string"],
@@ -227,9 +226,9 @@ const Page = () => (
   <>
     <p>
       Queuert emits OpenTelemetry metrics through the{" "}
-      <A href="/integrations/opentelemetry/">
+      <a href={siteHref("/integrations/opentelemetry/")}>
         <code>@queuert/otel</code>
-      </A>{" "}
+      </a>{" "}
       adapter. All metrics follow the naming pattern:
     </p>
     <Code lang="text">{`queuert.{component}.{operation}[.{suboperation}]`}</Code>
@@ -277,7 +276,7 @@ const Page = () => (
     <FieldList title="Gauges" items={upDownCounters} idPrefix="metric" />
 
     <h2>Metric attributes</h2>
-    <FieldList title="Metric attributes" items={attributes} idPrefix="attribute" />
+    <FieldList title="Metric attributes" items={attributes()} idPrefix="attribute" />
   </>
 );
 

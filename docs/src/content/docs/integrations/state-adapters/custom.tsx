@@ -1,7 +1,6 @@
-import { A } from "@solidjs/router";
-
 import { ExampleCode } from "../../../../components/ExampleCode.tsx";
 import { FieldList, type FieldItem } from "../../../../components/FieldList.tsx";
+import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
   title: "Custom State Adapter",
@@ -48,22 +47,24 @@ const Page = () => (
       For an entirely different database engine, implement the <code>StateAdapter</code> interface
       yourself. The conformance suite validates that your implementation behaves correctly. To use
       another client with PostgreSQL, SQLite or MySQL / MariaDB, write a provider instead: see{" "}
-      <A href="/integrations/state-adapters/postgres/#state-provider">PostgreSQL</A>,{" "}
-      <A href="/integrations/state-adapters/sqlite/#state-provider">SQLite</A> or{" "}
-      <A href="/integrations/state-adapters/mysql/#state-provider">MySQL / MariaDB</A>, each of
-      which has its own conformance cases for providers.
+      <a href={siteHref("/integrations/state-adapters/postgres/#state-provider")}>PostgreSQL</a>,{" "}
+      <a href={siteHref("/integrations/state-adapters/sqlite/#state-provider")}>SQLite</a> or{" "}
+      <a href={siteHref("/integrations/state-adapters/mysql/#state-provider")}>MySQL / MariaDB</a>,
+      each of which has its own conformance cases for providers.
     </p>
 
     <h2>Write a state adapter</h2>
     <p>
       Implement the <code>StateAdapter</code> type exported from <code>queuert</code>. Its members
       are grouped in{" "}
-      <A href="/integrations/state-adapters/#the-stateadapter-interface">
+      <a href={siteHref("/integrations/state-adapters/#the-stateadapter-interface")}>
         The StateAdapter interface
-      </A>
+      </a>
       , and the rules every implementation follows are in{" "}
-      <A href="/integrations/state-adapters/#how-adapters-behave">How adapters behave</A>. The TSDoc
-      on each member states its contract.
+      <a href={siteHref("/integrations/state-adapters/#how-adapters-behave")}>
+        How adapters behave
+      </a>
+      . The TSDoc on each member states its contract.
     </p>
     <p>
       Your adapter owns the transaction's side effects: <code>onTransactionCommit</code> runs a
@@ -73,7 +74,7 @@ const Page = () => (
       register every notify and observability event through them. Implement them from your database
       client's transaction events if it has them, or carry <code>TxHooks</code> in your transaction
       context, create them in <code>withTransaction</code> with <code>withTxHooks</code>, and
-      register the callbacks on them; see <A href="/guides/tx-hooks/">Tx Hooks</A>.
+      register the callbacks on them; see <a href={siteHref("/guides/tx-hooks/")}>Tx Hooks</a>.
     </p>
     <p>
       <a href="https://github.com/kvet/queuert/tree/main/examples/custom/state-memory">
@@ -133,9 +134,9 @@ const Page = () => (
       An adapter over a real database sets it up in <code>beforeAll</code> and releases it in{" "}
       <code>afterAll</code>, or <code>before</code> and <code>after</code> under{" "}
       <code>node:test</code>; the{" "}
-      <A href="/integrations/state-adapters/sqlite/#testing-your-provider">SQLite</A> page shows all
-      three runners. The full API is in the{" "}
-      <A href="/api/conformance/readme/">conformance reference</A>.
+      <a href={siteHref("/integrations/state-adapters/sqlite/#testing-your-provider")}>SQLite</a>{" "}
+      page shows all three runners. The full API is in the{" "}
+      <a href={siteHref("/api/conformance/readme/")}>conformance reference</a>.
     </p>
     <p>
       For a <code>"sync"</code> <code>StateAdapter</code>, pass <code>mode: "sync"</code>, a{" "}

@@ -1,5 +1,6 @@
 import { Box } from "@queuert/ui/components";
-import { type JSX, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Show } from "solid-js";
 
 export const ApiFields = (props: { title?: string; children: JSX.Element }) => (
   <Box title={props.title} class="api-box my-5" bodyClass="">

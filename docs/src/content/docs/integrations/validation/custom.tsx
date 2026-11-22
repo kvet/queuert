@@ -1,6 +1,5 @@
-import { A } from "@solidjs/router";
-
 import { ExampleCode } from "../../../../components/ExampleCode.tsx";
+import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
   title: "Custom Validation Adapter",
@@ -13,7 +12,8 @@ const Page = () => (
     <p>
       Validation adapters are thin wrappers around schema libraries that produce a{" "}
       <code>JobTypes</code> registry. You can write one for any schema library, following the same
-      pattern as the <A href="/integrations/validation/">Zod, Valibot, TypeBox and ArkType</A>{" "}
+      pattern as the{" "}
+      <a href={siteHref("/integrations/validation/")}>Zod, Valibot, TypeBox and ArkType</a>{" "}
       adapters, and validate it with the conformance suite.
     </p>
 
@@ -51,7 +51,8 @@ const Page = () => (
       <a href="https://github.com/kvet/queuert/blob/main/packages/core/src/conformance.validation-adapter/types.ts">
         <code>ValidationAdapterConformanceContext</code>
       </a>{" "}
-      type. The full API is in the <A href="/api/conformance/readme/">conformance reference</A>.
+      type. The full API is in the{" "}
+      <a href={siteHref("/api/conformance/readme/")}>conformance reference</a>.
     </p>
   </>
 );

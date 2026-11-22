@@ -1,5 +1,5 @@
-import solid from "vite-plugin-solid";
+import solidPlugin from "@solidjs/vite-plugin";
 import { defineConfig } from "vitest/config";
 
-// Specs run in Node, so JSX compiles for the server: no jsdom and no `browser` condition.
-export default defineConfig({ plugins: [solid({ ssr: true })] });
+// Specs render JSX to HTML strings, so they run in the server posture: Node, no jsdom.
+export default defineConfig({ plugins: [solidPlugin()], test: { environment: "node" } });

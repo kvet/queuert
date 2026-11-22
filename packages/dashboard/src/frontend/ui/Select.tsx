@@ -19,12 +19,18 @@ export const Select = <TValue extends string>(props: {
   class?: string;
 }) => (
   <span
-    class={`select-wrap relative inline-flex min-w-0 items-center ${props.height === "fill" ? "h-full" : ""}`}
+    class={[
+      "select-wrap relative inline-flex min-w-0 items-center",
+      { "h-full": props.height === "fill" },
+    ]}
   >
     <select
-      class={`select max-w-full min-w-0 cursor-pointer truncate rounded-xs pr-7 text-sm ${
-        variantClass[props.variant ?? "field"]
-      } ${heightClass[props.height ?? "sm"]} ${props.class ?? ""}`}
+      class={[
+        "select max-w-full min-w-0 cursor-pointer truncate rounded-xs pr-7 text-sm",
+        variantClass[props.variant ?? "field"],
+        heightClass[props.height ?? "sm"],
+        props.class,
+      ]}
       aria-label={props.label}
       onChange={(event) => {
         props.onChange(event.currentTarget.value as TValue);

@@ -1,8 +1,8 @@
 import { Row, SubLine, StatusPill } from "@queuert/ui/components";
-import { A } from "@solidjs/router";
 import { Show } from "solid-js";
 
 import type { UnknownChain } from "../../shared/types.ts";
+import { appHref } from "../base.ts";
 import { jsonPreview } from "../domain/json.ts";
 import { IdChip } from "../ui/IdChip.tsx";
 import { Time } from "../ui/Time.tsx";
@@ -36,7 +36,7 @@ export const ChainRow = (props: {
       : props.chain.createdAt;
 
   return (
-    <Row href={`/chains/${props.chain.id}`} label={`Open chain ${props.chain.id}`} link={A}>
+    <Row href={appHref(`/chains/${props.chain.id}`)} label={`Open chain ${props.chain.id}`}>
       <div class="flex min-w-0 items-center gap-2">
         <StatusPill status={props.chain.status} />
         <Show when={props.showType}>

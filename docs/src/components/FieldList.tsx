@@ -1,5 +1,6 @@
 import { Box, Chip, type ChipTone, Row, SubLine } from "@queuert/ui/components";
-import { For, type JSX, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show } from "solid-js";
 
 type FieldChip = string | { label: JSX.Element; tone?: ChipTone; mono?: boolean };
 
@@ -40,7 +41,11 @@ const FieldRow = (props: { item: FieldItem; idPrefix?: string; proseNames?: bool
   const id = () =>
     props.item.id ??
     (props.idPrefix === undefined ? undefined : `${props.idPrefix}-${props.item.name}`);
-  const extra = () => props.item.extra;
+  const extraLabels = () => (Array.isArray(props.item.extra) ? props.item.extra : undefined);
+  const extraCode = () => {
+    const extra = props.item.extra;
+    return extra === undefined || Array.isArray(extra) ? undefined : extra.code;
+  };
   return (
     <Row id={id()} class="scroll-mt-20">
       <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 leading-6">
@@ -65,26 +70,26 @@ const FieldRow = (props: { item: FieldItem; idPrefix?: string; proseNames?: bool
       <SubLine tone="muted" class="leading-5 [&_code]:text-xs">
         {props.item.description}
       </SubLine>
-      <Show when={extra()}>
-        {(value) => {
-          const current = value();
-          return Array.isArray(current) ? (
-            <SubLine class="flex flex-wrap gap-1.5 pt-0.5">
-              <For each={current}>
-                {(label) => (
-                  <>
-                    {" "}
-                    <Chip mono>{label}</Chip>
-                  </>
-                )}
-              </For>
-            </SubLine>
-          ) : (
-            <SubLine class="pt-0.5">
-              <code class="wrap-break-word text-xs">{current.code}</code>
-            </SubLine>
-          );
-        }}
+      <Show when={extraLabels()}>
+        {(labels) => (
+          <SubLine class="flex flex-wrap gap-1.5 pt-0.5">
+            <For each={labels()}>
+              {(label) => (
+                <>
+                  {" "}
+                  <Chip mono>{label}</Chip>
+                </>
+              )}
+            </For>
+          </SubLine>
+        )}
+      </Show>
+      <Show when={extraCode()}>
+        {(code) => (
+          <SubLine class="pt-0.5">
+            <code class="wrap-break-word text-xs">{code()}</code>
+          </SubLine>
+        )}
       </Show>
     </Row>
   );

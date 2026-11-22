@@ -1,10 +1,9 @@
-import { A } from "@solidjs/router";
-
 import { ExampleCode } from "../../../../components/ExampleCode.tsx";
 import { ExampleRows } from "../../../../components/ExampleList.tsx";
 import { type FieldItem, FieldList } from "../../../../components/FieldList.tsx";
 import { Aside } from "../../../../components/mdx/Aside.tsx";
 import { TabItem, Tabs } from "../../../../components/mdx/Tabs.tsx";
+import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
   title: "Validation",
@@ -67,7 +66,7 @@ const Page = () => (
     </ol>
     <p>
       When to use runtime validation instead of the type-only <code>defineJobTypes</code> is covered
-      in the <A href="/guides/runtime-validation/">Runtime Validation</A> guide.
+      in the <a href={siteHref("/guides/runtime-validation/")}>Runtime Validation</a> guide.
     </p>
 
     <h2 id="runtime-form-vs-stored-form">Runtime form vs stored form</h2>
@@ -124,7 +123,10 @@ const Page = () => (
     <h2>The adapter</h2>
     <p>
       Complete adapter implementations for each library. What each one costs per job is on the{" "}
-      <A href="/benchmarks/runtime-performance/#job-type-registries">Runtime Performance</A> page.
+      <a href={siteHref("/benchmarks/runtime-performance/#job-type-registries")}>
+        Runtime Performance
+      </a>{" "}
+      page.
     </p>
     <Tabs syncKey="validation-library">
       <TabItem label="Zod">
@@ -148,7 +150,8 @@ const Page = () => (
 
     <p>
       A rejected value throws <code>JobTypeValidationError</code>; its codes and how it surfaces are
-      in <A href="/guides/runtime-validation/#how-errors-surface">Runtime Validation</A>.
+      in <a href={siteHref("/guides/runtime-validation/#how-errors-surface")}>Runtime Validation</a>
+      .
     </p>
 
     <h3>Codec calls</h3>
@@ -174,7 +177,10 @@ const Page = () => (
     <p>
       Each example checks its adapter with the cases from{" "}
       <code>createValidationAdapterConformanceCases</code>; see{" "}
-      <A href="/integrations/validation/custom/#conformance">Custom validation adapter</A>.
+      <a href={siteHref("/integrations/validation/custom/#conformance")}>
+        Custom validation adapter
+      </a>
+      .
     </p>
     <Tabs syncKey="validation-library">
       <TabItem label="Zod">

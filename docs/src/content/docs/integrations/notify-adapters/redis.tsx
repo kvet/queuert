@@ -1,10 +1,9 @@
-import { A } from "@solidjs/router";
-
 import { ExampleCode } from "../../../../components/ExampleCode.tsx";
 import { ExampleRows } from "../../../../components/ExampleList.tsx";
 import { FieldList } from "../../../../components/FieldList.tsx";
 import { Code } from "../../../../components/mdx/Code.tsx";
 import { TabItem, Tabs } from "../../../../components/mdx/Tabs.tsx";
+import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
   title: "Redis Notify Adapter",
@@ -17,9 +16,10 @@ const Page = () => (
     <p>
       <code>createRedisNotifyAdapter</code> uses Redis pub/sub for broadcasting job notifications to
       workers, publishing each batch from one Lua script. The notify adapter stores no job state;
-      job storage is handled by a separate <A href="/integrations/state-adapters/">state adapter</A>
-      , which can also be the experimental{" "}
-      <A href="/integrations/state-adapters/redis/">Redis state adapter</A>.
+      job storage is handled by a separate{" "}
+      <a href={siteHref("/integrations/state-adapters/")}>state adapter</a>, which can also be the
+      experimental <a href={siteHref("/integrations/state-adapters/redis/")}>Redis state adapter</a>
+      .
     </p>
 
     <h2 id="install">Install</h2>
@@ -63,7 +63,7 @@ const Page = () => (
       not disposable itself is adopted by a <code>drivers</code> <code>AsyncDisposableStack</code>.
       Disposal runs in reverse order, so when the scope ends the notify adapter closes before your
       clients, in the{" "}
-      <A href="/integrations/notify-adapters/#how-adapters-behave">shutdown order</A>.
+      <a href={siteHref("/integrations/notify-adapters/#how-adapters-behave")}>shutdown order</a>.
     </p>
 
     <h2 id="configuration">Configuration</h2>
@@ -164,7 +164,8 @@ const Page = () => (
       </TabItem>
     </Tabs>
     <p>
-      The full API is in the <A href="/api/redis-conformance/readme/">conformance reference</A>.
+      The full API is in the{" "}
+      <a href={siteHref("/api/redis-conformance/readme/")}>conformance reference</a>.
     </p>
 
     <h2 id="channels">Channels</h2>

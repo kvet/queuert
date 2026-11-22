@@ -1,7 +1,9 @@
 import { ArrowLeftIcon, ChevronRightIcon } from "@queuert/ui/components";
-import { A, useNavigate } from "@solidjs/router";
-import { For, type JSX, Show } from "solid-js";
+import { useNavigate } from "@solidjs/router";
+import type { JSX } from "@solidjs/web";
+import { For, Show } from "solid-js";
 
+import { appHref } from "../base.ts";
 import { canGoBack, previousLocation } from "../state/navigation.ts";
 
 const isPlainClick = (event: MouseEvent) =>
@@ -20,8 +22,8 @@ const sameList = (href: string, location: string): boolean => {
 const BackLink = (props: { fallback: string }) => {
   const navigate = useNavigate();
   return (
-    <A
-      href={props.fallback}
+    <a
+      href={appHref(props.fallback)}
       class="inline-flex items-center gap-1 rounded-xs px-1.5 py-0.5 text-sm text-fg-muted hover:bg-surface-2 hover:text-fg"
       onClick={(event) => {
         if (!isPlainClick(event) || !canGoBack()) return;
@@ -31,15 +33,15 @@ const BackLink = (props: { fallback: string }) => {
     >
       <ArrowLeftIcon size={14} />
       Back
-    </A>
+    </a>
   );
 };
 
 const Crumb = (props: { href: string; children: JSX.Element }) => {
   const navigate = useNavigate();
   return (
-    <A
-      href={props.href}
+    <a
+      href={appHref(props.href)}
       class="truncate text-fg-muted hover:text-fg hover:underline"
       onClick={(event) => {
         const previous = previousLocation();
@@ -49,7 +51,7 @@ const Crumb = (props: { href: string; children: JSX.Element }) => {
       }}
     >
       {props.children}
-    </A>
+    </a>
   );
 };
 

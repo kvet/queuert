@@ -1,10 +1,9 @@
-import { A } from "@solidjs/router";
-
 import { ExampleCode } from "../../../../components/ExampleCode.tsx";
 import { ExampleRows } from "../../../../components/ExampleList.tsx";
 import { FieldList } from "../../../../components/FieldList.tsx";
 import { Code } from "../../../../components/mdx/Code.tsx";
 import { TabItem, Tabs } from "../../../../components/mdx/Tabs.tsx";
+import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
   title: "PostgreSQL Notify Adapter",
@@ -54,7 +53,7 @@ const Page = () => (
       not disposable itself is adopted by a <code>drivers</code> <code>AsyncDisposableStack</code>.
       Disposal runs in reverse order, so when the scope ends the notify adapter closes before your
       clients, in the{" "}
-      <A href="/integrations/notify-adapters/#how-adapters-behave">shutdown order</A>.
+      <a href={siteHref("/integrations/notify-adapters/#how-adapters-behave")}>shutdown order</a>.
     </p>
 
     <h2 id="configuration">Configuration</h2>
@@ -140,7 +139,8 @@ const Page = () => (
       </TabItem>
     </Tabs>
     <p>
-      The full API is in the <A href="/api/postgres-conformance/readme/">conformance reference</A>.
+      The full API is in the{" "}
+      <a href={siteHref("/api/postgres-conformance/readme/")}>conformance reference</a>.
     </p>
 
     <h2 id="channels">Channels</h2>

@@ -1,10 +1,11 @@
 import { useSearchParams } from "@solidjs/router";
+import { useInfiniteQuery, useQuery } from "@tanstack/solid-query";
 import { Show } from "solid-js";
 
-import { PAGE_SIZE, serverFns } from "../api.ts";
+import { formatCount } from "../domain/counts.ts";
+import { loadedItems } from "../domain/pages.ts";
 import { WorkerRow } from "../rows/WorkerRow.tsx";
-import { createLoader } from "../state/createLoader.ts";
-import { createPagedList } from "../state/createPagedList.ts";
+import { jobTypeNamesQuery, workerListQuery } from "../state/queries.ts";
 import { EmptyState, buttonClass } from "../ui/kit.tsx";
 import { Select } from "../ui/Select.tsx";
 import { FilterBar } from "./filters.tsx";
@@ -14,24 +15,19 @@ export const WorkerList = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const typeName = () => (searchParams.typeName ?? "") as string;
 
-  const typeNames = createLoader(
-    () => true,
-    async (_, signal) => serverFns.getJobTypeNames({ signal }),
-  );
-  const workers = createPagedList(
-    () => ({ typeName: typeName() || undefined }),
-    async (params, cursor, signal) =>
-      serverFns.listWorkers({ data: { ...params, cursor, limit: PAGE_SIZE }, signal }),
-  );
+  const typeNames = useQuery(() => jobTypeNamesQuery());
+  const workers = useInfiniteQuery(() => workerListQuery({ typeName: typeName() || undefined }));
+  const workerCount = () =>
+    workers.isSuccess
+      ? formatCount({ count: loadedItems(workers.data.pages).length, hasMore: workers.hasNextPage })
+      : "";
 
   return (
     <div>
       <div class="mb-5">
         <h1 class="text-base font-semibold">
           Workers{" "}
-          <span class="text-sm font-normal text-fg-muted tabular-nums">
-            {workers.loading() ? "" : `${workers.items().length}${workers.cursor() ? "+" : ""}`}
-          </span>
+          <span class="text-sm font-normal text-fg-muted tabular-nums">{workerCount()}</span>
         </h1>
       </div>
       <FilterBar>
@@ -40,7 +36,10 @@ export const WorkerList = () => {
           value={typeName()}
           options={[
             { value: "", label: "All job types" },
-            ...(typeNames.data() ?? []).map((name) => ({ value: name, label: name })),
+            ...(typeNames.isSuccess ? typeNames.data : []).map((name) => ({
+              value: name,
+              label: name,
+            })),
           ]}
           onChange={(value) => {
             setSearchParams({ typeName: value || undefined });
@@ -50,7 +49,7 @@ export const WorkerList = () => {
 
       <PagedListBody
         thing="workers"
-        list={workers}
+        query={workers}
         empty={
           <Show when={typeName()} fallback={<EmptyState title="No workers" />}>
             <EmptyState title={`No workers process ${typeName()}`}>

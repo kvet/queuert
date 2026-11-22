@@ -1,5 +1,4 @@
-import { A } from "@solidjs/router";
-
+import { siteHref } from "../../../docs/href.ts";
 import type { FieldItem } from "../../FieldList.tsx";
 
 /** The ID and limit options every state adapter factory takes, listed on each backend's page. */
@@ -11,7 +10,7 @@ export const stateAdapterConfigItems = (): FieldItem[] => [
       <>
         The most blocker chains a single job may declare. Declaring more throws{" "}
         <code>JobBlockerLimitExceededError</code>; see{" "}
-        <A href="/guides/job-blockers/#blocker-limit">Job Blockers</A>.
+        <a href={siteHref("/guides/job-blockers/#blocker-limit")}>Job Blockers</a>.
       </>
     ),
   },

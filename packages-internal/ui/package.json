@@ -2,7 +2,7 @@
   "name": "@queuert/ui",
   "version": "0.0.1",
   "private": true,
-  "description": "Design tokens, base styles, icons and dashboard-style primitives shared by the dashboard and the docs site",
+  "description": "Design tokens, base styles, icons and dashboard-style primitives on Solid 2, shared by the dashboard and the docs site",
   "license": "MIT",
   "author": "kvet",
   "repository": {
@@ -24,10 +24,12 @@
   },
   "devDependencies": {
     "@queuert/tsconfig": "workspace:*",
+    "@solidjs/web": "2.0.3",
     "queuert": "workspace:*",
-    "solid-js": "1.9.18"
+    "solid-js": "2.0.3"
   },
   "peerDependencies": {
-    "solid-js": "1.9.18"
+    "@solidjs/web": "2.0.3",
+    "solid-js": "2.0.3"
   }
 }

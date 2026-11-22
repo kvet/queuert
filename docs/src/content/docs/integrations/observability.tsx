@@ -1,7 +1,6 @@
-import { A } from "@solidjs/router";
-
 import { FieldList, type FieldItem } from "../../../components/FieldList.tsx";
 import { type OptionCard, OptionCards } from "../../../components/integrations/OptionCards.tsx";
+import { siteHref } from "../../../docs/href.ts";
 
 export const meta = {
   title: "Observability",
@@ -117,9 +116,12 @@ const Page = () => (
     <FieldList
       title="ObservabilityAdapter"
       actions={
-        <A href="/api/core/type-aliases/observabilityadapter/" class="unstyled text-accent-fg">
+        <a
+          href={siteHref("/api/core/type-aliases/observabilityadapter/")}
+          class="unstyled text-accent-fg"
+        >
           API reference →
-        </A>
+        </a>
       }
       proseNames
       items={members()}
@@ -136,9 +138,9 @@ const Page = () => (
       <li>
         <strong>Held until commit.</strong> Events emitted inside a database transaction are flushed
         after it commits and discarded if it rolls back, through the state provider's{" "}
-        <A href="/guides/tx-hooks/">
+        <a href={siteHref("/guides/tx-hooks/")}>
           <code>onTransactionCommit</code> and <code>onTransactionRollback</code>
-        </A>
+        </a>
         , which guard notify events too.
       </li>
     </ul>

@@ -1,6 +1,6 @@
 import { Meta, Title } from "@solidjs/meta";
-import { A } from "@solidjs/router";
 
+import { siteHref } from "../docs/href.ts";
 import { openSearch } from "./Search.tsx";
 
 export const NotFound = () => (
@@ -15,9 +15,9 @@ export const NotFound = () => (
         search the docs
       </button>
       , or go to the{" "}
-      <A href="/" class="text-accent-fg hover:underline" end>
+      <a href={siteHref("/")} class="text-accent-fg hover:underline">
         home page
-      </A>
+      </a>
       .
     </p>
   </main>

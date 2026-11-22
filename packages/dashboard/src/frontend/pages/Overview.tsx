@@ -1,14 +1,14 @@
 import { Box, StatusDot } from "@queuert/ui/components";
 import { type AnyStatus, CHAIN_STATUSES, JOB_STATUSES, statusClasses } from "@queuert/ui/lib";
-import { A } from "@solidjs/router";
-import { For, Match, Show, Switch, createMemo } from "solid-js";
+import { useQuery } from "@tanstack/solid-query";
+import { For, Show, createMemo } from "solid-js";
 
-import { serverFns } from "../api.ts";
+import { appHref } from "../base.ts";
 import { type CappedCount, formatSum, sumCounts } from "../domain/counts.ts";
 import { TypeRow } from "../rows/TypeRow.tsx";
-import { createLoader } from "../state/createLoader.ts";
-import { EmptyState, ErrorState, SkeletonRows, WarningBox, linkClass } from "../ui/kit.tsx";
-import { type TypeEntry, countOf, loadChainTypes, loadJobTypes, typeListHref } from "./typeData.ts";
+import { chainTypesQuery, jobTypesQuery, workerCountsQuery } from "../state/queries.ts";
+import { EmptyState, QueryBoundary, SkeletonCard, WarningBox, linkClass } from "../ui/kit.tsx";
+import { type TypeEntry, countOf, typeListHref } from "./typeData.ts";
 import { type TypeKind, chainKind, jobKind } from "./Types.tsx";
 
 const TOP = 5;
@@ -34,19 +34,19 @@ const StatusBreakdown = (props: {
 
   return (
     <div class="grid grid-cols-1 gap-x-6 gap-y-2 px-4 py-3 sm:grid-cols-[8rem_minmax(0,1fr)] sm:items-center">
-      <A href={props.href} class="flex items-baseline gap-2 hover:underline">
+      <a href={appHref(props.href)} class="flex items-baseline gap-2 hover:underline">
         <span class="text-xs font-semibold font-mono tracking-wider text-fg-muted uppercase">
           {props.label}
         </span>
         <span class="font-semibold tabular-nums">{formatSum(total())}</span>
-      </A>
+      </a>
       <div class="flex min-w-0 flex-col gap-2">
         <div class="flex h-2 gap-px overflow-hidden bg-surface-2" aria-hidden="true">
           <For each={totals()}>
             {(statusTotal) => (
               <Show when={statusTotal.count.count > 0}>
                 <span
-                  class={`min-w-0.5 ${statusClasses[statusTotal.status].dot}`}
+                  class={["min-w-0.5", statusClasses[statusTotal.status].dot]}
                   style={{ "flex-grow": statusTotal.count.count, "flex-basis": "0" }}
                 />
               </Show>
@@ -94,9 +94,9 @@ const TopTypes = (props: {
       bodyClass=""
       actions={
         <Show when={props.entries.length > 0}>
-          <A href={`${props.kind.base}/types`} class={linkClass}>
+          <a href={appHref(`${props.kind.base}/types`)} class={linkClass}>
             All {props.entries.length} →
-          </A>
+          </a>
         </Show>
       }
     >
@@ -127,14 +127,14 @@ const TopTypes = (props: {
 
 const WorkerBreakdown = (props: { counts: { live: number; expired: number } }) => (
   <div class="grid grid-cols-1 gap-x-6 gap-y-2 px-4 py-3 sm:grid-cols-[8rem_minmax(0,1fr)] sm:items-center">
-    <A href="/workers" class="flex items-baseline gap-2 hover:underline">
+    <a href={appHref("/workers")} class="flex items-baseline gap-2 hover:underline">
       <span class="text-xs font-semibold font-mono tracking-wider text-fg-muted uppercase">
         Workers
       </span>
       <span class="font-semibold tabular-nums">
         {(props.counts.live + props.counts.expired).toLocaleString()}
       </span>
-    </A>
+    </a>
     <ul class="flex flex-wrap gap-x-5 gap-y-1 text-xs text-fg-muted">
       <li class="inline-flex items-center gap-1.5">
         live
@@ -156,9 +156,9 @@ const Warnings = (props: { leaseLostCount: number; strandedTypeCount: number }) 
       <Show when={props.leaseLostCount > 0}>
         <WarningBox
           action={
-            <A href="/workers" class="font-medium underline">
+            <a href={appHref("/workers")} class="font-medium underline">
               View workers
-            </A>
+            </a>
           }
         >
           {props.leaseLostCount === 1
@@ -169,9 +169,9 @@ const Warnings = (props: { leaseLostCount: number; strandedTypeCount: number }) 
       <Show when={props.strandedTypeCount > 0}>
         <WarningBox
           action={
-            <A href="/jobs/types?status=pending" class="font-medium underline">
+            <a href={appHref("/jobs/types?status=pending")} class="font-medium underline">
               View job types
-            </A>
+            </a>
           }
         >
           {props.strandedTypeCount}{" "}
@@ -184,82 +184,62 @@ const Warnings = (props: { leaseLostCount: number; strandedTypeCount: number }) 
 );
 
 export const Overview = () => {
-  const data = createLoader(
-    () => true,
-    async (_, signal) => {
-      const [chains, jobs, workerCounts] = await Promise.all([
-        loadChainTypes(signal),
-        loadJobTypes(signal),
-        serverFns.countWorkers({ signal }),
-      ]);
-      return { chains, jobs, workerCounts };
-    },
-  );
+  const chains = useQuery(() => chainTypesQuery());
+  const jobs = useQuery(() => jobTypesQuery());
+  const workerCounts = useQuery(() => workerCountsQuery());
 
   return (
     <div>
-      <Switch>
-        <Match when={data.error()}>
-          <ErrorState thing="the dashboard" error={data.error()} onRetry={data.retry} />
-        </Match>
-        <Match when={data.loading() || !data.data()}>
-          <div class="rounded-xs border border-border">
-            <SkeletonRows />
-          </div>
-        </Match>
-        <Match
+      <QueryBoundary thing="the dashboard" fallback={<SkeletonCard />}>
+        <Show
           when={
-            data.data()?.chains.length === 0 &&
-            data.data()?.jobs.length === 0 &&
-            data.data()?.workerCounts.live === 0 &&
-            data.data()?.workerCounts.expired === 0
+            chains.data.length > 0 ||
+            jobs.data.length > 0 ||
+            workerCounts.data.live > 0 ||
+            workerCounts.data.expired > 0
+          }
+          fallback={
+            <EmptyState title="Nothing here yet. Chains appear once your app creates them.">
+              <a
+                href="https://kvet.github.io/queuert/"
+                target="_blank"
+                rel="noopener"
+                class={linkClass}
+              >
+                Read the docs
+              </a>
+            </EmptyState>
           }
         >
-          <EmptyState title="Nothing here yet. Chains appear once your app creates them.">
-            <a
-              href="https://kvet.github.io/queuert/"
-              target="_blank"
-              rel="noopener"
-              class={linkClass}
-            >
-              Read the docs
-            </a>
-          </EmptyState>
-        </Match>
-        <Match when={data.data()}>
-          {(loaded) => (
-            <>
-              <Warnings
-                leaseLostCount={loaded().workerCounts.expired}
-                strandedTypeCount={loaded().jobs.filter((entry) => entry.workers?.stranded).length}
-              />
-              <Box title="Status" class="mb-6" bodyClass="divide-y divide-border">
-                <StatusBreakdown
-                  label="Chains"
-                  href="/chains/types"
-                  statuses={CHAIN_STATUSES}
-                  entries={loaded().chains}
-                />
-                <StatusBreakdown
-                  label="Jobs"
-                  href="/jobs/types"
-                  statuses={JOB_STATUSES}
-                  entries={loaded().jobs}
-                />
-                <WorkerBreakdown counts={loaded().workerCounts} />
-              </Box>
-              <div class="grid gap-6 lg:grid-cols-2">
-                <TopTypes kind={chainKind} statuses={["running"]} entries={loaded().chains} />
-                <TopTypes
-                  kind={jobKind}
-                  statuses={["blocked", "pending", "running"]}
-                  entries={loaded().jobs}
-                />
-              </div>
-            </>
-          )}
-        </Match>
-      </Switch>
+          <Warnings
+            leaseLostCount={workerCounts.data.expired}
+            strandedTypeCount={jobs.data.filter((entry) => entry.workers?.stranded).length}
+          />
+          <Box title="Status" class="mb-6" bodyClass="divide-y divide-border">
+            <StatusBreakdown
+              label="Chains"
+              href="/chains/types"
+              statuses={CHAIN_STATUSES}
+              entries={chains.data}
+            />
+            <StatusBreakdown
+              label="Jobs"
+              href="/jobs/types"
+              statuses={JOB_STATUSES}
+              entries={jobs.data}
+            />
+            <WorkerBreakdown counts={workerCounts.data} />
+          </Box>
+          <div class="grid gap-6 lg:grid-cols-2">
+            <TopTypes kind={chainKind} statuses={["running"]} entries={chains.data} />
+            <TopTypes
+              kind={jobKind}
+              statuses={["blocked", "pending", "running"]}
+              entries={jobs.data}
+            />
+          </div>
+        </Show>
+      </QueryBoundary>
     </div>
   );
 };

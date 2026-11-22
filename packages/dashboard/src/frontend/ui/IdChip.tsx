@@ -1,6 +1,5 @@
 import { CheckIcon, CopyIcon, IdChip as BaseIdChip } from "@queuert/ui/components";
-import { A } from "@solidjs/router";
-import { Show, createSignal, onCleanup } from "solid-js";
+import { Show, createSignal, onSettled } from "solid-js";
 
 const copyText = async (text: string): Promise<boolean> => {
   try {
@@ -14,14 +13,17 @@ const copyText = async (text: string): Promise<boolean> => {
 export const CopyButton = (props: { text: string; label: string; class?: string }) => {
   const [copied, setCopied] = createSignal(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
-  onCleanup(() => {
+  onSettled(() => () => {
     clearTimeout(timer);
   });
 
   return (
     <button
       type="button"
-      class={`relative z-10 inline-flex size-6 shrink-0 items-center justify-center rounded-xs text-fg-subtle hover:bg-surface-2 hover:text-fg ${props.class ?? ""}`}
+      class={[
+        "relative z-10 inline-flex size-6 shrink-0 items-center justify-center rounded-xs text-fg-subtle hover:bg-surface-2 hover:text-fg",
+        props.class,
+      ]}
       title={copied() ? "Copied" : props.label}
       aria-label={props.label}
       onClick={(event) => {
@@ -46,7 +48,6 @@ export const IdChip = (props: { id: string; href?: string; prefix?: string; full
   <BaseIdChip
     id={props.id}
     href={props.href}
-    link={A}
     prefix={props.prefix}
     full={props.full}
     copy={<CopyButton text={props.id} label="Copy full ID" />}

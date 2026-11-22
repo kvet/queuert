@@ -1,6 +1,6 @@
 import { Box, type IconProps } from "@queuert/ui/components";
-import { A } from "@solidjs/router";
-import { For, type JSX, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show } from "solid-js";
 
 import { CopyButton } from "../components/CopyButton.tsx";
 import {
@@ -30,6 +30,7 @@ import { LiveChain } from "../components/landing/LiveChain.tsx";
 import { LinkCard } from "../components/mdx/Cards.tsx";
 import { PageMeta } from "../components/PageMeta.tsx";
 import { compareNeighbors } from "../data/comparison.ts";
+import { siteHref } from "../docs/href.ts";
 import { siteDescription } from "../docs/site.ts";
 
 const github = "https://github.com/kvet/queuert";
@@ -197,13 +198,13 @@ const Home = () => (
             persist. No separate server.
           </p>
           <div class="mt-8 flex flex-wrap items-center gap-3">
-            <A
-              href="/getting-started/introduction/"
+            <a
+              href={siteHref("/getting-started/introduction/")}
               class="inline-flex h-10 items-center gap-2 rounded-xs bg-fg px-4 font-medium text-bg hover:opacity-90"
             >
               Get started
               <ArrowRightIcon size={14} />
-            </A>
+            </a>
             <a
               href={github}
               target="_blank"
@@ -258,13 +259,13 @@ const Home = () => (
           <Node sub="worker process">worker</Node>
         </Flow>
       </Diagram>
-      <A
-        href="/integrations/"
+      <a
+        href={siteHref("/integrations/")}
         class="mt-4 inline-flex items-center gap-1.5 text-[13px] text-fg-muted hover:text-fg"
       >
         How the adapters fit together
         <ArrowRightIcon size={12} />
-      </A>
+      </a>
     </Section>
 
     <Section
@@ -307,13 +308,13 @@ const Home = () => (
             <Box
               title={group.title}
               actions={
-                <A
-                  href={group.href}
+                <a
+                  href={siteHref(group.href)}
                   class="inline-flex items-center gap-1 text-fg-subtle hover:text-fg"
                 >
                   docs
                   <ArrowRightIcon size={12} />
-                </A>
+                </a>
               }
               bodyClass="flex flex-wrap gap-1.5 px-4 pt-3 pb-4"
             >
@@ -324,12 +325,12 @@ const Home = () => (
                       {item}
                     </span>
                   ) : (
-                    <A
-                      href={item.href}
+                    <a
+                      href={siteHref(item.href)}
                       class="font-mono rounded-xs bg-surface-2 px-2 py-0.5 text-xs text-fg-muted hover:text-fg"
                     >
                       {item.label}
-                    </A>
+                    </a>
                   )
                 }
               </For>

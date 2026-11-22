@@ -1,5 +1,5 @@
 import { Box, StatusPill } from "@queuert/ui/components";
-import { For, createSignal, onCleanup, onMount } from "solid-js";
+import { For, createSignal, onSettled } from "solid-js";
 
 import {
   chainJobs,
@@ -17,7 +17,7 @@ const createLoop = () => {
   const [step, setStep] = createSignal(lastChainPhase);
   let element: HTMLElement | undefined;
 
-  onMount(() => {
+  onSettled(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       return;
     }
@@ -45,11 +45,11 @@ const createLoop = () => {
       observer.observe(element);
     }
     document.addEventListener("visibilitychange", schedule);
-    onCleanup(() => {
+    return () => {
       observer.disconnect();
       document.removeEventListener("visibilitychange", schedule);
       clearTimeout(timer);
-    });
+    };
   });
 
   return {

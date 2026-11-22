@@ -1,24 +1,19 @@
 import { type AnyStatus, CHAIN_STATUSES, JOB_STATUSES } from "@queuert/ui/lib";
 import { useSearchParams } from "@solidjs/router";
+import { useQuery } from "@tanstack/solid-query";
 import { For, Match, Switch, createMemo } from "solid-js";
 
 import { TypeRow } from "../rows/TypeRow.tsx";
-import { createLoader } from "../state/createLoader.ts";
-import { EmptyState, ErrorState, SkeletonRows, buttonClass } from "../ui/kit.tsx";
+import { chainTypesQuery, jobTypesQuery } from "../state/queries.ts";
+import { EmptyState, QueryBoundary, SkeletonCard, buttonClass } from "../ui/kit.tsx";
 import { FilterBar, StatusFilter } from "./filters.tsx";
-import {
-  type TypeEntry,
-  loadChainTypes,
-  loadJobTypes,
-  narrowToStatuses,
-  typeListHref,
-} from "./typeData.ts";
+import { type TypeEntry, narrowToStatuses, typeListHref } from "./typeData.ts";
 
 export type TypeKind = {
   noun: "chain" | "job";
   title: string;
   base: "/chains" | "/jobs";
-  load: (signal: AbortSignal) => Promise<TypeEntry<AnyStatus>[]>;
+  query: typeof chainTypesQuery;
   statuses: AnyStatus[];
 };
 
@@ -26,7 +21,7 @@ export const chainKind: TypeKind = {
   noun: "chain",
   title: "Chain types",
   base: "/chains",
-  load: loadChainTypes,
+  query: chainTypesQuery,
   statuses: CHAIN_STATUSES,
 };
 
@@ -34,49 +29,38 @@ export const jobKind: TypeKind = {
   noun: "job",
   title: "Job types",
   base: "/jobs",
-  load: loadJobTypes,
+  query: jobTypesQuery,
   statuses: JOB_STATUSES,
 };
 
 const TypeList = (props: {
   kind: TypeKind;
-  entries: TypeEntry<AnyStatus>[] | undefined;
-  loading: boolean;
-  error: unknown;
-  onRetry: () => void;
+  entries: TypeEntry<AnyStatus>[];
   status?: AnyStatus;
   onShowAll?: () => void;
 }) => {
   return (
-    <Switch>
-      <Match when={props.error}>
-        <ErrorState
-          thing={`${props.kind.noun} types`}
-          error={props.error}
-          onRetry={props.onRetry}
-        />
-      </Match>
-      <Match when={props.loading || !props.entries}>
-        <div class="rounded-xs border border-border">
-          <SkeletonRows />
-        </div>
-      </Match>
-      <Match when={props.entries?.length === 0 && props.status}>
-        {(status) => (
-          <EmptyState title={`No ${status()} ${props.kind.noun}s`}>
-            <button type="button" class={buttonClass.secondary} onClick={() => props.onShowAll?.()}>
-              Show all
-            </button>
-          </EmptyState>
-        )}
-      </Match>
-      <Match when={props.entries?.length === 0}>
-        <EmptyState title={`No ${props.kind.noun} types found`} />
-      </Match>
-      <Match when={props.entries}>
-        {(entries) => (
+    <QueryBoundary thing={`${props.kind.noun} types`} fallback={<SkeletonCard />}>
+      <Switch>
+        <Match when={props.entries.length === 0 && props.status}>
+          {(status) => (
+            <EmptyState title={`No ${status()} ${props.kind.noun}s`}>
+              <button
+                type="button"
+                class={buttonClass.secondary}
+                onClick={() => props.onShowAll?.()}
+              >
+                Show all
+              </button>
+            </EmptyState>
+          )}
+        </Match>
+        <Match when={props.entries.length === 0}>
+          <EmptyState title={`No ${props.kind.noun} types found`} />
+        </Match>
+        <Match when={true}>
           <ul class="divide-y divide-border overflow-hidden rounded-xs border border-border">
-            <For each={entries()}>
+            <For each={props.entries}>
               {(entry) => (
                 <TypeRow
                   typeName={entry.typeName}
@@ -87,46 +71,26 @@ const TypeList = (props: {
               )}
             </For>
           </ul>
-        )}
-      </Match>
-    </Switch>
+        </Match>
+      </Switch>
+    </QueryBoundary>
   );
 };
 
 export const TypePicker = (props: { kind: TypeKind }) => {
-  const types = createLoader(
-    () => true,
-    async (_, signal) => props.kind.load(signal),
-  );
-  return (
-    <TypeList
-      kind={props.kind}
-      entries={types.data()}
-      loading={types.loading()}
-      error={types.error()}
-      onRetry={types.retry}
-    />
-  );
+  const types = useQuery(() => props.kind.query());
+  return <TypeList kind={props.kind} entries={types.data} />;
 };
 
 const TypesPage = (props: { kind: TypeKind }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const status = () => props.kind.statuses.find((option) => option === searchParams.status);
 
-  const types = createLoader(
-    () => true,
-    async (_, signal) => props.kind.load(signal),
-  );
-
-  const narrowed = createMemo(() => {
-    const all = types.data();
-    const selected = status();
-    return all && selected ? narrowToStatuses(all, [selected]) : all;
-  });
+  const types = useQuery(() => props.kind.query());
 
   const typeCounts = createMemo(() => {
-    const all = types.data();
-    if (!all) return undefined;
+    if (!types.isSuccess) return undefined;
+    const all = types.data;
     return {
       all: { count: all.length, hasMore: false },
       byStatus: props.kind.statuses.map((option) => ({
@@ -136,11 +100,12 @@ const TypesPage = (props: { kind: TypeKind }) => {
     };
   });
 
-  const visible = createMemo(() =>
-    narrowed()
-      ?.slice()
-      .sort((a, b) => a.typeName.localeCompare(b.typeName)),
-  );
+  const visible = createMemo(() => {
+    const selected = status();
+    return (selected ? narrowToStatuses(types.data, [selected]) : types.data.slice()).sort((a, b) =>
+      a.typeName.localeCompare(b.typeName),
+    );
+  });
 
   return (
     <div>
@@ -148,7 +113,7 @@ const TypesPage = (props: { kind: TypeKind }) => {
         <h1 class="text-base font-semibold">
           {props.kind.title}{" "}
           <span class="text-sm font-normal text-fg-muted tabular-nums">
-            {narrowed()?.length ?? ""}
+            {types.isSuccess ? visible().length : ""}
           </span>
         </h1>
       </div>
@@ -164,9 +129,6 @@ const TypesPage = (props: { kind: TypeKind }) => {
       <TypeList
         kind={props.kind}
         entries={visible()}
-        loading={types.loading()}
-        error={types.error()}
-        onRetry={types.retry}
         status={status()}
         onShowAll={() => {
           setSearchParams({ status: undefined });

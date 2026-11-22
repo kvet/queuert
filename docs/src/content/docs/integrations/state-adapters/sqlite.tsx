@@ -1,5 +1,3 @@
-import { A } from "@solidjs/router";
-
 import { ExampleCode } from "../../../../components/ExampleCode.tsx";
 import { ExampleRows } from "../../../../components/ExampleList.tsx";
 import { FieldList, type FieldItem } from "../../../../components/FieldList.tsx";
@@ -19,6 +17,7 @@ import {
 import { stateProviderMembers } from "../../../../components/integrations/state-adapters/stateProvider.tsx";
 import { Code } from "../../../../components/mdx/Code.tsx";
 import { TabItem, Tabs } from "../../../../components/mdx/Tabs.tsx";
+import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
   title: "SQLite State Adapter",
@@ -246,9 +245,9 @@ const Page = () => (
       <code>db.transaction(() =&gt; …)()</code>, and an error rolls it back. The provider's{" "}
       <code>onTransactionCommit</code> and <code>onTransactionRollback</code> are synchronous too; a
       provider without transaction events of its own carries{" "}
-      <A href="/guides/tx-hooks/#synchronous-transactions">
+      <a href={siteHref("/guides/tx-hooks/#synchronous-transactions")}>
         <code>TxHooks</code>
-      </A>{" "}
+      </a>{" "}
       in its context. <code>awaitChain</code>, <code>awaitChains</code>, the attempt handler and the
       worker runner stay async. When you pass no notify adapter, the client uses an in-process one.
     </p>
@@ -358,7 +357,8 @@ const Page = () => (
       </TabItem>
     </Tabs>
     <p>
-      The full API is in the <A href="/api/sqlite-conformance/readme/">conformance reference</A>.
+      The full API is in the{" "}
+      <a href={siteHref("/api/sqlite-conformance/readme/")}>conformance reference</a>.
     </p>
 
     <h2>Your transactions</h2>
@@ -496,7 +496,7 @@ const Page = () => (
     </p>
     <p>
       The migrator behind <code>migrateToLatest()</code> is exported for your own tables too; see{" "}
-      <A href="/guides/application-migrations/">Application Migrations</A>.
+      <a href={siteHref("/guides/application-migrations/")}>Application Migrations</a>.
     </p>
     <SchemaTables tables={sqliteTables} />
 
@@ -520,7 +520,8 @@ const Page = () => (
       ]}
     />
     <p>
-      The API reference for every export is in <A href="/api/sqlite/readme/">@queuert/sqlite</A>.
+      The API reference for every export is in{" "}
+      <a href={siteHref("/api/sqlite/readme/")}>@queuert/sqlite</a>.
     </p>
   </>
 );

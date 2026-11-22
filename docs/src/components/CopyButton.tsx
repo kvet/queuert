@@ -1,10 +1,10 @@
 import { CheckIcon, CopyIcon } from "@queuert/ui/components";
-import { Show, createSignal, onCleanup } from "solid-js";
+import { Show, createSignal, onSettled } from "solid-js";
 
 export const CopyButton = (props: { text: string; label?: string; class?: string }) => {
   const [copied, setCopied] = createSignal(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
-  onCleanup(() => {
+  onSettled(() => () => {
     clearTimeout(timer);
   });
 

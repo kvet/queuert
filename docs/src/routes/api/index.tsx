@@ -1,9 +1,9 @@
-import { A } from "@solidjs/router";
 import { For, Show } from "solid-js";
 
 import { ArticleLayout, DocsShell } from "../../components/DocsShell.tsx";
 import { ArrowRightIcon, PackageIcon } from "../../components/icons.tsx";
 import { PageMeta } from "../../components/PageMeta.tsx";
+import { siteHref } from "../../docs/href.ts";
 import { type ApiEntry, apiPackageTree, kindLabels, pageHref } from "../../docs/pages.ts";
 
 const KindCounts = (props: { entry: ApiEntry }) => (
@@ -34,19 +34,19 @@ const ApiOverview = () => (
       <h1 class="mt-3 text-xl font-semibold tracking-tight sm:text-2xl">API Reference</h1>
       <p class="mt-3 max-w-2xl text-[15px] leading-7 text-fg-muted">
         Every exported function, class and type, generated from the TSDoc in the source. Start with{" "}
-        <A
-          href="/api/core/functions/createclient/"
+        <a
+          href={siteHref("/api/core/functions/createclient/")}
           class="text-accent-fg underline decoration-accent-fg/35 underline-offset-3 hover:decoration-current"
         >
           createClient
-        </A>{" "}
+        </a>{" "}
         and{" "}
-        <A
-          href="/api/core/functions/createworkerrunner/"
+        <a
+          href={siteHref("/api/core/functions/createworkerrunner/")}
           class="text-accent-fg underline decoration-accent-fg/35 underline-offset-3 hover:decoration-current"
         >
           createWorkerRunner
-        </A>
+        </a>
         , then pick the adapters for your stack.
       </p>
       <div class="mt-10 grid gap-4 md:grid-cols-2">
@@ -58,8 +58,8 @@ const ApiOverview = () => (
                   <Show
                     when={entry.subpath}
                     fallback={
-                      <A
-                        href={entry.index ? pageHref(entry.index) : "/api/"}
+                      <a
+                        href={siteHref(entry.index ? pageHref(entry.index) : "/api/")}
                         class="group flex flex-1 flex-col gap-3 p-5 hover:bg-surface"
                       >
                         <div class="flex items-center gap-2.5">
@@ -76,12 +76,12 @@ const ApiOverview = () => (
                         </div>
                         <p class="text-[13px] leading-6 text-fg-muted">{entry.summary}</p>
                         <KindCounts entry={entry} />
-                      </A>
+                      </a>
                     }
                   >
                     {(subpath) => (
-                      <A
-                        href={entry.index ? pageHref(entry.index) : "/api/"}
+                      <a
+                        href={siteHref(entry.index ? pageHref(entry.index) : "/api/")}
                         class="group flex flex-col gap-1.5 border-t border-border px-5 py-3 hover:bg-surface"
                       >
                         <div class="flex items-center gap-2.5">
@@ -95,7 +95,7 @@ const ApiOverview = () => (
                         </div>
                         <p class="text-[13px] leading-6 text-fg-muted">{entry.summary}</p>
                         <KindCounts entry={entry} />
-                      </A>
+                      </a>
                     )}
                   </Show>
                 )}

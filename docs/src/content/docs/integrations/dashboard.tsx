@@ -1,11 +1,10 @@
-import { A } from "@solidjs/router";
-
 import { ExampleCode } from "../../../components/ExampleCode.tsx";
 import { ExampleRows } from "../../../components/ExampleList.tsx";
 import { FieldList } from "../../../components/FieldList.tsx";
 import { DashboardDemo } from "../../../components/integrations/dashboard/DashboardDemo.tsx";
 import { Code } from "../../../components/mdx/Code.tsx";
 import { Steps } from "../../../components/mdx/Steps.tsx";
+import { siteHref } from "../../../docs/href.ts";
 
 export const meta = {
   title: "Dashboard",
@@ -158,9 +157,9 @@ const Page = () => (
       the most unfinished (blocked, pending or running) jobs. Types with none of that work are left
       out; each row shows a chip for every status with a non-zero count, completed included, and
       each job type its workers chip. Counts stop at the state adapter's{" "}
-      <A href="/api/core/type-aliases/stateadapterconfig/">
+      <a href={siteHref("/api/core/type-aliases/stateadapterconfig/")}>
         <code>countCap</code>
-      </A>{" "}
+      </a>{" "}
       (10,000 by default) per type and status, so a total that includes a capped count is shown as a
       lower bound (<code>≥</code>).
     </p>
@@ -209,7 +208,8 @@ const Page = () => (
       chain's jobs. <strong>Blocked jobs</strong> lists jobs in other chains that declared this
       chain as a blocker. Those jobs keep that reference even after they finish, and a chain cannot
       be deleted while any job still references it: the delete dialog says so up front and names the
-      job whose chain must be deleted first.
+      job whose chain must be deleted first. Long job sequences and blocked-job lists load more as
+      you scroll.
     </p>
 
     <h3>Job list</h3>
@@ -220,7 +220,7 @@ const Page = () => (
       the job and to its chain (as "#2 of chain-type · chain-id"), links a running job's worker, and
       shows one-line input and, for a tail job, output previews. A warning icon marks an unfinished
       job whose last attempt failed; hover it for the error. Timing, attempts and the full error
-      live on the job's page.
+      live on the job's page. More rows load as you scroll.
     </p>
 
     <h3>Job detail</h3>

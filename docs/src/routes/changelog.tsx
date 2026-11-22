@@ -61,7 +61,7 @@ const ChangelogRoute = () => {
             {(release, index) => (
               <li class="relative grid gap-x-8 pb-14 md:grid-cols-[9rem_minmax(0,1fr)]">
                 <div class="mb-3 md:sticky md:top-22 md:mb-0 md:self-start">
-                  <time class="text-xs text-fg-subtle" dateTime={release.date}>
+                  <time class="text-xs text-fg-subtle" datetime={release.date}>
                     {formatDate(release.date)}
                   </time>
                 </div>

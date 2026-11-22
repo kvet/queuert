@@ -1,7 +1,8 @@
 import { ChevronRightIcon } from "@queuert/ui/components";
-import { A, useLocation } from "@solidjs/router";
+import { useLocation } from "@solidjs/router";
 import { For, Match, Show, Switch } from "solid-js";
 
+import { siteHref } from "../docs/href.ts";
 import {
   type ApiEntry,
   apiPackageTree,
@@ -43,13 +44,13 @@ const GroupedNav = (props: { section: SiteSection }) => {
               <For each={group.pages}>
                 {(page) => (
                   <li>
-                    <A
-                      href={pageHref(page)}
+                    <a
+                      href={siteHref(pageHref(page))}
                       class={linkClass}
                       aria-current={current.is(pageHref(page)) ? "page" : undefined}
                     >
                       {page.title}
-                    </A>
+                    </a>
                   </li>
                 )}
               </For>
@@ -70,13 +71,13 @@ const ApiEntryNav = (props: { entry: ApiEntry }) => {
     <>
       <Show when={props.entry.index}>
         {(index) => (
-          <A
-            href={pageHref(index())}
+          <a
+            href={siteHref(pageHref(index()))}
             class={linkClass}
             aria-current={current.is(pageHref(index())) ? "page" : undefined}
           >
             Overview
-          </A>
+          </a>
         )}
       </Show>
       <For each={props.entry.kinds}>
@@ -89,14 +90,14 @@ const ApiEntryNav = (props: { entry: ApiEntry }) => {
               <For each={kind.pages}>
                 {(page) => (
                   <li>
-                    <A
-                      href={pageHref(page)}
+                    <a
+                      href={siteHref(pageHref(page))}
                       class={`${linkClass} truncate py-0.5!`}
                       aria-current={current.is(pageHref(page)) ? "page" : undefined}
                       title={page.title}
                     >
                       {page.title}
-                    </A>
+                    </a>
                   </li>
                 )}
               </For>
@@ -113,14 +114,13 @@ const ApiNav = () => {
   const isActiveEntry = (entry: ApiEntry) => current.path().includes(`/api/${entry.slug}/`);
   return (
     <div class="flex flex-col gap-1">
-      <A
-        href="/api/"
+      <a
+        href={siteHref("/api/")}
         class={linkClass}
         aria-current={current.path().endsWith("/api/") ? "page" : undefined}
-        end
       >
         Overview
-      </A>
+      </a>
       <h2 class={`${groupLabel} mt-4`}>Packages</h2>
       <For each={apiPackageTree}>
         {(pkg) => (
@@ -176,13 +176,13 @@ const ChangelogNav = () => {
   return (
     <ul class="flex flex-col gap-px">
       <li>
-        <A
-          href="/changelog/"
+        <a
+          href={siteHref("/changelog/")}
           class={linkClass}
           aria-current={current.is("/changelog/") ? "page" : undefined}
         >
           All releases
-        </A>
+        </a>
       </li>
       <li>
         <a

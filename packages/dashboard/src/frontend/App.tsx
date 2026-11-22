@@ -1,5 +1,5 @@
 import { useIsRouting, useLocation } from "@solidjs/router";
-import { type ParentProps, createEffect, onCleanup } from "solid-js";
+import { type ParentProps, createEffect, onSettled } from "solid-js";
 
 import { toLocalPath } from "./base.ts";
 import { FindDialog, handleFindShortcut } from "./shell/FindDialog.tsx";
@@ -10,14 +10,18 @@ export const App = (props: ParentProps) => {
   const location = useLocation();
   const isRouting = useIsRouting();
 
-  createEffect(() => {
-    const here = toLocalPath(location.pathname) + location.search;
-    if (!isRouting()) recordLocation(here);
-  });
+  createEffect(
+    () => (isRouting() ? undefined : toLocalPath(location.pathname) + location.search),
+    (here) => {
+      if (here !== undefined) recordLocation(here);
+    },
+  );
 
-  document.addEventListener("keydown", handleFindShortcut);
-  onCleanup(() => {
-    document.removeEventListener("keydown", handleFindShortcut);
+  onSettled(() => {
+    document.addEventListener("keydown", handleFindShortcut);
+    return () => {
+      document.removeEventListener("keydown", handleFindShortcut);
+    };
   });
 
   return (

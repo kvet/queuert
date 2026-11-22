@@ -1,5 +1,4 @@
-import { A } from "@solidjs/router";
-
+import { siteHref } from "../../../docs/href.ts";
 import type { FieldItem } from "../../FieldList.tsx";
 
 /** Members of `PgStateProvider` / `SqliteStateProvider` / `MysqlStateProvider`, listed on each backend's page. */
@@ -74,7 +73,7 @@ export const stateProviderMembers = (dialect: "postgres" | "sqlite" | "mysql"): 
         events, observability events) here. A provider over a client with transaction events, such
         as MikroORM, runs it from those events; any other provider carries <code>txHooks</code> in
         its transaction context and registers the callback on them. See{" "}
-        <A href="/guides/tx-hooks/">Tx Hooks</A>.
+        <a href={siteHref("/guides/tx-hooks/")}>Tx Hooks</a>.
         {dialect === "sqlite" ? (
           <>
             {" "}

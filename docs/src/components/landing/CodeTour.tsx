@@ -1,4 +1,5 @@
-import { For, type JSX, children, createSignal, createUniqueId } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, children, createSignal, createUniqueId } from "solid-js";
 
 type CodeTourStepProps = { label: string; caption: string; children: JSX.Element };
 
@@ -25,7 +26,7 @@ export const CodeTour = (props: { children: JSX.Element }) => {
                 role="tab"
                 id={`${id}-tab-${index()}`}
                 aria-controls={`${id}-panel-${index()}`}
-                aria-selected={selected() === index()}
+                aria-selected={selected() === index() ? "true" : "false"}
                 class="group flex w-full gap-3 rounded-xs border border-transparent px-3 py-3 text-left hover:bg-surface-2 aria-selected:border-border aria-selected:bg-surface"
                 onClick={() => setSelected(index())}
               >

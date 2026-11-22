@@ -1,6 +1,5 @@
-import { A } from "@solidjs/router";
-
 import { ExampleCode } from "../../../../components/ExampleCode.tsx";
+import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
   title: "Custom Notify Adapter",
@@ -15,17 +14,17 @@ const Page = () => (
       yourself. The conformance suite validates that your implementation behaves correctly. It's the
       same suite Queuert uses internally, exported as lists of cases to register one test each with
       any test runner. To use another client with PostgreSQL or Redis, write a provider instead: see{" "}
-      <A href="/integrations/notify-adapters/postgres/#notify-provider">PostgreSQL</A> or{" "}
-      <A href="/integrations/notify-adapters/redis/#notify-provider">Redis</A>.
+      <a href={siteHref("/integrations/notify-adapters/postgres/#notify-provider")}>PostgreSQL</a>{" "}
+      or <a href={siteHref("/integrations/notify-adapters/redis/#notify-provider")}>Redis</a>.
     </p>
 
     <h2 id="notify-adapter">Write a notify adapter</h2>
     <p>
       Implement the <code>NotifyAdapter</code> type exported from <code>queuert</code>; its members
       and the rules they follow are in{" "}
-      <A href="/integrations/notify-adapters/#notify-adapter-interface">
+      <a href={siteHref("/integrations/notify-adapters/#notify-adapter-interface")}>
         The NotifyAdapter interface
-      </A>
+      </a>
       .
     </p>
     <p>
@@ -64,7 +63,7 @@ const Page = () => (
     />
     <p>
       The cases share one set of options, so run them one at a time. The full API is in the{" "}
-      <A href="/api/conformance/readme/">conformance reference</A>.
+      <a href={siteHref("/api/conformance/readme/")}>conformance reference</a>.
     </p>
     <p>
       For a <code>"sync"</code> <code>NotifyAdapter</code>, register the same cases, with a{" "}
@@ -77,8 +76,10 @@ const Page = () => (
     <p>
       A provider for PostgreSQL or Redis has its own cases and a helper that builds the adapter over
       the provider for you: see{" "}
-      <A href="/integrations/notify-adapters/postgres/#testing-your-provider">PostgreSQL</A> or{" "}
-      <A href="/integrations/notify-adapters/redis/#testing-your-provider">Redis</A>.
+      <a href={siteHref("/integrations/notify-adapters/postgres/#testing-your-provider")}>
+        PostgreSQL
+      </a>{" "}
+      or <a href={siteHref("/integrations/notify-adapters/redis/#testing-your-provider")}>Redis</a>.
     </p>
   </>
 );

@@ -9,10 +9,10 @@ import {
   TopBarNavLink,
   iconButtonClass as iconButton,
 } from "@queuert/ui/components";
-import { A, useLocation } from "@solidjs/router";
+import { useLocation } from "@solidjs/router";
 import { For, Show, createSignal } from "solid-js";
 
-import { toLocalPath } from "../base.ts";
+import { appHref, toLocalPath } from "../base.ts";
 import { theme } from "../state/theme.ts";
 import { openFind } from "./FindDialog.tsx";
 
@@ -42,15 +42,17 @@ export const TopBar = () => {
           >
             <For each={navItems}>
               {(item) => (
-                <A
-                  href={item.href}
-                  class="rounded-xs px-2.5 py-1.5 text-sm text-fg-muted hover:bg-surface-2 data-active:bg-surface-2 data-active:font-medium data-active:text-fg"
-                  data-active={item.match(localPath()) ? "" : undefined}
+                <a
+                  href={appHref(item.href)}
+                  class={[
+                    "rounded-xs px-2.5 py-1.5 text-sm hover:bg-surface-2",
+                    item.match(localPath()) ? "bg-surface-2 font-medium text-fg" : "text-fg-muted",
+                  ]}
                   aria-current={item.match(localPath()) ? "page" : undefined}
                   onClick={() => setMenuOpen(false)}
                 >
                   {item.label}
-                </A>
+                </a>
               )}
             </For>
             <a
@@ -67,19 +69,19 @@ export const TopBar = () => {
     >
       <button
         type="button"
-        class={`${iconButton} -ml-1 sm:hidden`}
+        class={[iconButton, "-ml-1 sm:hidden"]}
         aria-label="Menu"
-        aria-expanded={menuOpen()}
+        aria-expanded={menuOpen() ? "true" : "false"}
         onClick={() => setMenuOpen((open) => !open)}
       >
         <Show when={menuOpen()} fallback={<MenuIcon />}>
           <CloseIcon />
         </Show>
       </button>
-      <A href="/" class="flex items-center gap-2 pr-1 font-mono font-semibold">
+      <a href={appHref("/")} class="flex items-center gap-2 pr-1 font-mono font-semibold">
         <LogoIcon size={20} class="text-brand" />
         <span>Queuert</span>
-      </A>
+      </a>
       <a
         href={`${DOCS_URL}changelog/`}
         target="_blank"
@@ -92,7 +94,7 @@ export const TopBar = () => {
       <nav class="ml-4 hidden items-center gap-0.5 sm:flex" aria-label="Main">
         <For each={navItems}>
           {(item) => (
-            <TopBarNavLink href={item.href} active={item.match(localPath())} link={A}>
+            <TopBarNavLink href={appHref(item.href)} active={item.match(localPath())}>
               {item.label}
             </TopBarNavLink>
           )}
@@ -112,7 +114,7 @@ export const TopBar = () => {
       </button>
       <button
         type="button"
-        class={`${iconButton} lg:hidden`}
+        class={[iconButton, "lg:hidden"]}
         aria-label="Find by ID or type"
         onClick={openFind}
       >

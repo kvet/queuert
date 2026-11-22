@@ -29,8 +29,8 @@ export const createTheme = (storageKey: string): Theme => {
   const [preference, setPreferenceSignal] = createSignal<ThemePreference>("system");
   const media = () => window.matchMedia("(prefers-color-scheme: dark)");
 
-  const apply = () => {
-    document.documentElement.dataset.theme = resolveTheme(preference(), media().matches);
+  const apply = (value: ThemePreference) => {
+    document.documentElement.dataset.theme = resolveTheme(value, media().matches);
   };
 
   return {
@@ -40,21 +40,24 @@ export const createTheme = (storageKey: string): Theme => {
       try {
         localStorage.setItem(storageKey, next);
       } catch {}
-      apply();
+      apply(next);
     },
     init: () => {
+      let stored: ThemePreference = "system";
       try {
-        setPreferenceSignal(parseThemePreference(localStorage.getItem(storageKey)));
+        stored = parseThemePreference(localStorage.getItem(storageKey));
       } catch {}
-      apply();
+      setPreferenceSignal(stored);
+      apply(stored);
       media().addEventListener("change", () => {
-        if (preference() === "system") apply();
+        const current = preference();
+        if (current === "system") apply(current);
       });
       window.addEventListener("storage", (event) => {
         const next = storedThemePreferenceChange(storageKey, event);
         if (next === undefined) return;
         setPreferenceSignal(next);
-        apply();
+        apply(next);
       });
     },
   };

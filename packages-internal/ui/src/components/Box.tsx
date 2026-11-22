@@ -1,4 +1,5 @@
-import { type JSX, Show, children, splitProps } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Show, children, omit } from "solid-js";
 
 const borderTones = {
   default: "border-border",
@@ -27,21 +28,19 @@ export const Box = (props: {
   children: JSX.Element;
   [data: `data-${string}`]: string | undefined;
 }) => {
-  const [, dataAttributes] = splitProps(props, [
-    "title",
-    "actions",
-    "tone",
-    "class",
-    "bodyClass",
-    "children",
-  ]);
+  const dataAttributes = omit(props, "title", "actions", "tone", "class", "bodyClass", "children");
   const tone = () => props.tone ?? "default";
   const title = children(() => props.title);
   const actions = children(() => props.actions);
   return (
     <section
       {...dataAttributes}
-      class={`relative rounded-xs border ${borderTones[tone()]} ${title() ? "pt-2" : ""} ${props.class ?? ""}`}
+      class={[
+        "relative rounded-xs border",
+        borderTones[tone()],
+        { "pt-2": !!title() },
+        props.class,
+      ]}
     >
       <Show when={title() !== undefined || actions() !== undefined}>
         <header
@@ -49,7 +48,10 @@ export const Box = (props: {
           class="absolute inset-x-3 top-0 flex -translate-y-1/2 items-center justify-between gap-3"
         >
           <h2
-            class={`m-0 min-w-0 truncate bg-bg px-1.5 font-mono text-xs font-semibold tracking-wider uppercase ${titleTones[tone()]}`}
+            class={[
+              "m-0 min-w-0 truncate bg-bg px-1.5 font-mono text-xs font-semibold tracking-wider uppercase",
+              titleTones[tone()],
+            ]}
           >
             {title()}
           </h2>

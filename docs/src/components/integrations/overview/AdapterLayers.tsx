@@ -1,6 +1,7 @@
 import { Box, Chip } from "@queuert/ui/components";
-import { A } from "@solidjs/router";
 import { For } from "solid-js";
+
+import { siteHref } from "../../../docs/href.ts";
 
 type AdapterColumn = {
   kind: string;
@@ -103,8 +104,8 @@ export const AdapterLayers = () => (
       <For each={columns}>
         {(column) => (
           <li class="m-0 flex min-w-0">
-            <A
-              href={column.href}
+            <a
+              href={siteHref(column.href)}
               class="unstyled group flex w-full no-underline"
               aria-label={`${column.kind} adapters`}
             >
@@ -136,7 +137,7 @@ export const AdapterLayers = () => (
                   </ul>
                 </div>
               </Box>
-            </A>
+            </a>
           </li>
         )}
       </For>

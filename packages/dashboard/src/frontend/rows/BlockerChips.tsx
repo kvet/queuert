@@ -1,9 +1,9 @@
 import { Chip } from "@queuert/ui/components";
 import { shortId } from "@queuert/ui/lib";
-import { A } from "@solidjs/router";
 import { For, Show, createSignal } from "solid-js";
 
 import type { UnknownChain } from "../../shared/types.ts";
+import { appHref } from "../base.ts";
 
 const VISIBLE = 6;
 
@@ -16,8 +16,7 @@ export const BlockerChips = (props: { blockers: UnknownChain[] }) => {
       <For each={shown()}>
         {(blocker) => (
           <Chip
-            href={`/chains/${blocker.id}`}
-            link={A}
+            href={appHref(`/chains/${blocker.id}`)}
             status={blocker.status}
             statusLabel={blocker.status}
             class="bg-surface"

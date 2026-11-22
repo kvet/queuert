@@ -1,5 +1,6 @@
 import { Box, Chip, type ChipTone } from "@queuert/ui/components";
-import { For, type JSX, Show, onMount } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, onSettled } from "solid-js";
 
 import { revealOnView } from "../../reveal.ts";
 
@@ -50,9 +51,7 @@ export const TraceWaterfall = (props: {
   // On first view the spans draw in start order, the way the trace happened.
   const delay = (value: number) => `${Math.round((value / total()) * 900)}ms`;
   let figure: HTMLElement | undefined = undefined;
-  onMount(() => {
-    revealOnView(figure);
-  });
+  onSettled(() => revealOnView(figure));
 
   return (
     <figure ref={figure} class="my-8 pt-2" aria-label={props.label}>

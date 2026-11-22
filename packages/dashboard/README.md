@@ -5,7 +5,7 @@
 [![stars](https://img.shields.io/github/stars/kvet/queuert.svg)](https://github.com/kvet/queuert)
 [![last commit](https://img.shields.io/github/last-commit/kvet/queuert.svg)](https://github.com/kvet/queuert/commits)
 
-Embeddable web dashboard for [Queuert](https://github.com/kvet/queuert) — a job-chain library: durable, typed background work in your database. Provides a web UI for listing, filtering, inspecting, triggering, and deleting chains and jobs.
+Embeddable web dashboard for [Queuert](https://github.com/kvet/queuert) — a job-chain library: durable, typed background work in your database. Provides a web UI for listing, filtering and inspecting chains, jobs and workers, running a scheduled job now, and deleting chains.
 
 ## Installation
 

@@ -1,5 +1,6 @@
 import { Box, Chip } from "@queuert/ui/components";
-import { For, type JSX, Show, createSignal } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createSignal } from "solid-js";
 
 import {
   type InstallOption,
@@ -9,12 +10,12 @@ import {
   stateInstallOptions,
 } from "../data/installation.tsx";
 import { Code } from "./mdx/Code.tsx";
-import { selectSyncedTab, syncedTab } from "./mdx/Tabs.tsx";
+import { createSyncedTabs, selectSyncedTab } from "./mdx/Tabs.tsx";
 
 /** One pick per option; the synced tab store keeps it across pages and visits. */
 const Choice = (props: {
   label: string;
-  options: { label: string; experimental?: JSX.Element }[];
+  options: { label: string; experimental?: () => JSX.Element }[];
   selected: string;
   onSelect: (label: string) => void;
 }) => (
@@ -24,14 +25,14 @@ const Choice = (props: {
         <button
           type="button"
           role="radio"
-          aria-checked={props.selected === option.label}
+          aria-checked={props.selected === option.label ? "true" : "false"}
           class="rounded-xs border border-border px-2 py-0.5 text-xs text-fg-muted hover:border-border-strong hover:text-fg aria-checked:border-fg aria-checked:bg-fg aria-checked:text-bg"
           onClick={() => {
             props.onSelect(option.label);
           }}
         >
           {option.label}
-          <Show when={option.experimental}>
+          <Show when={option.experimental !== undefined}>
             <span class="ml-1.5 font-mono text-[10px] tracking-wider uppercase opacity-70">
               exp
             </span>
@@ -59,14 +60,14 @@ const Notes = (props: { options: InstallOption[]; selected: InstallOption }) => 
   <For each={props.options}>
     {(option) => (
       <div hidden={option !== props.selected} class="text-[13px] leading-6 text-fg-muted">
-        <p class="m-0">{option.note}</p>
-        <Show when={option.experimental}>
-          {(experimental) => (
-            <p class="m-0 mt-1 flex flex-wrap items-center gap-1.5">
-              <Chip mono>Experimental</Chip>
-              <span>{experimental()} is experimental: its API may change in a minor release.</span>
-            </p>
-          )}
+        <p class="m-0">{option.note()}</p>
+        <Show when={option.experimental !== undefined}>
+          <p class="m-0 mt-1 flex flex-wrap items-center gap-1.5">
+            <Chip mono>Experimental</Chip>
+            <span>
+              {option.experimental?.()} is experimental: its API may change in a minor release.
+            </span>
+          </p>
         </Show>
       </div>
     )}
@@ -88,9 +89,10 @@ const commandHtml = (command: string) => {
 
 /** Builds the single install command for the reader's state adapter, notify adapter and extras. */
 export const InstallPicker = () => {
-  const state = () => pick(stateInstallOptions, syncedTab("state"));
-  const notify = () => pick(state().notify, syncedTab("notify"));
-  const manager = () => pick(packageManagers, syncedTab("pkg"));
+  const picked = createSyncedTabs();
+  const state = () => pick(stateInstallOptions, picked("state"));
+  const notify = () => pick(state().notify, picked("notify"));
+  const manager = () => pick(packageManagers, picked("pkg"));
   const [extras, setExtras] = createSignal<string[]>([]);
 
   const command = () =>
@@ -133,7 +135,7 @@ export const InstallPicker = () => {
               {(extra) => (
                 <button
                   type="button"
-                  aria-pressed={extras().includes(extra.label)}
+                  aria-pressed={extras().includes(extra.label) ? "true" : "false"}
                   title={extra.note}
                   class="rounded-xs border border-border px-2 py-0.5 text-xs text-fg-muted hover:border-border-strong hover:text-fg aria-pressed:border-fg aria-pressed:bg-fg aria-pressed:text-bg"
                   onClick={() => {

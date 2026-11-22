@@ -1,16 +1,16 @@
 import { Box, CloseIcon } from "@queuert/ui/components";
 import { shortId } from "@queuert/ui/lib";
 import { useSearchParams } from "@solidjs/router";
-import { For, Match, Show, Switch, createSignal } from "solid-js";
+import { useQuery } from "@tanstack/solid-query";
+import { For, Show, createSignal } from "solid-js";
 
 import { MAX_IDS } from "../../shared/limits.ts";
-import { serverFns } from "../api.ts";
 import { parseIdList } from "../domain/ids.ts";
 import { ChainRow } from "../rows/ChainRow.tsx";
 import { JobRow } from "../rows/JobRow.tsx";
 import { WorkerRow } from "../rows/WorkerRow.tsx";
-import { createLoader } from "../state/createLoader.ts";
-import { EmptyState, ErrorState, SkeletonRows } from "../ui/kit.tsx";
+import { findQuery } from "../state/queries.ts";
+import { EmptyState, QueryBoundary, SkeletonCard } from "../ui/kit.tsx";
 
 const IdChipsInput = (props: {
   ids: string[];
@@ -107,22 +107,10 @@ export const Find = () => {
     );
   };
 
-  const results = createLoader(
-    () => (ids().length > 0 ? ids().join(",") : null),
-    async (joined, signal) => {
-      const list = joined.split(",");
-      const [chains, jobs, workers] = await Promise.all([
-        serverFns.getChains({ data: { ids: list }, signal }),
-        serverFns.getJobs({ data: { ids: list }, signal }),
-        serverFns.getWorkers({ data: { ids: list }, signal }),
-      ]);
-      return { chains, jobs, workers };
-    },
-  );
+  const results = useQuery(() => ({ ...findQuery(ids()), enabled: ids().length > 0 }));
 
   const notFound = () => {
-    const data = results.data();
-    if (!data) return [];
+    const data = results.data;
     const found = new Set([
       ...data.chains.map((chain) => chain.id),
       ...data.jobs.map((job) => job.id),
@@ -139,61 +127,51 @@ export const Find = () => {
       <div class="mb-4">
         <IdChipsInput ids={ids()} onChange={setIds} overLimit={overLimit()} />
       </div>
-      <Switch>
-        <Match when={ids().length === 0}>
-          <EmptyState title="Paste chain, job or worker IDs above to look them up." />
-        </Match>
-        <Match when={results.error()}>
-          <ErrorState thing="the results" error={results.error()} onRetry={results.retry} />
-        </Match>
-        <Match when={results.loading() || !results.data()}>
-          <div class="rounded-xs border border-border">
-            <SkeletonRows />
+      <Show
+        when={ids().length > 0}
+        fallback={<EmptyState title="Paste chain, job or worker IDs above to look them up." />}
+      >
+        <QueryBoundary thing="the results" fallback={<SkeletonCard />}>
+          <div class="flex flex-col gap-6">
+            <p class="text-sm text-fg-muted">
+              {ids().length} IDs · {results.data.chains.length} chains · {results.data.jobs.length}{" "}
+              jobs · {results.data.workers.length} workers · {notFound().length} not found
+            </p>
+            <Show when={results.data.chains.length > 0}>
+              <Box title="Chains" bodyClass="">
+                <ul class="divide-y divide-border">
+                  <For each={results.data.chains}>
+                    {(chain) => <ChainRow chain={chain} sortKey="createdAt" showType />}
+                  </For>
+                </ul>
+              </Box>
+            </Show>
+            <Show when={results.data.jobs.length > 0}>
+              <Box title="Jobs" bodyClass="">
+                <ul class="divide-y divide-border">
+                  <For each={results.data.jobs}>
+                    {(job) => <JobRow job={job} sortKey="createdAt" showType />}
+                  </For>
+                </ul>
+              </Box>
+            </Show>
+            <Show when={results.data.workers.length > 0}>
+              <Box title="Workers" bodyClass="">
+                <ul class="divide-y divide-border">
+                  <For each={results.data.workers}>{(worker) => <WorkerRow worker={worker} />}</For>
+                </ul>
+              </Box>
+            </Show>
+            <Show when={notFound().length > 0}>
+              <Box title="Not found">
+                <ul class="flex flex-col gap-1 font-mono text-xs text-fg-muted">
+                  <For each={notFound()}>{(id) => <li class="break-all">{id}</li>}</For>
+                </ul>
+              </Box>
+            </Show>
           </div>
-        </Match>
-        <Match when={results.data()}>
-          {(data) => (
-            <div class="flex flex-col gap-6">
-              <p class="text-sm text-fg-muted">
-                {ids().length} IDs · {data().chains.length} chains · {data().jobs.length} jobs ·{" "}
-                {data().workers.length} workers · {notFound().length} not found
-              </p>
-              <Show when={data().chains.length > 0}>
-                <Box title="Chains" bodyClass="">
-                  <ul class="divide-y divide-border">
-                    <For each={data().chains}>
-                      {(chain) => <ChainRow chain={chain} sortKey="createdAt" showType />}
-                    </For>
-                  </ul>
-                </Box>
-              </Show>
-              <Show when={data().jobs.length > 0}>
-                <Box title="Jobs" bodyClass="">
-                  <ul class="divide-y divide-border">
-                    <For each={data().jobs}>
-                      {(job) => <JobRow job={job} sortKey="createdAt" showType />}
-                    </For>
-                  </ul>
-                </Box>
-              </Show>
-              <Show when={data().workers.length > 0}>
-                <Box title="Workers" bodyClass="">
-                  <ul class="divide-y divide-border">
-                    <For each={data().workers}>{(worker) => <WorkerRow worker={worker} />}</For>
-                  </ul>
-                </Box>
-              </Show>
-              <Show when={notFound().length > 0}>
-                <Box title="Not found">
-                  <ul class="flex flex-col gap-1 font-mono text-xs text-fg-muted">
-                    <For each={notFound()}>{(id) => <li class="break-all">{id}</li>}</For>
-                  </ul>
-                </Box>
-              </Show>
-            </div>
-          )}
-        </Match>
-      </Switch>
+        </QueryBoundary>
+      </Show>
     </div>
   );
 };

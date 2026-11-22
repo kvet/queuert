@@ -1,4 +1,6 @@
-import { createSignal } from "solid-js";
+import { type Accessor, createSignal } from "solid-js";
+
+import { createHydrated } from "./components/hydrated.ts";
 
 /** The backends a reader can narrow the benchmark pages to. */
 export const backends = [
@@ -57,6 +59,11 @@ const apply = (next: Backend[]) => {
 /** The backends the reader picked; empty means every backend is shown. */
 export { stack };
 
+export const createPickedStack = (): Accessor<Backend[]> => {
+  const hydrated = createHydrated();
+  return () => (hydrated() ? stack() : []);
+};
+
 export const setStack = (next: Backend[]) => {
   const ordered = parseStack(JSON.stringify(next));
   setStackSignal(ordered);
@@ -67,14 +74,17 @@ export const setStack = (next: Backend[]) => {
 };
 
 export const initStack = () => {
+  let stored: Backend[] = [];
   try {
-    setStackSignal(parseStack(localStorage.getItem(stackStorageKey)));
+    stored = parseStack(localStorage.getItem(stackStorageKey));
   } catch {}
-  apply(stack());
+  setStackSignal(stored);
+  apply(stored);
   window.addEventListener("storage", (event) => {
     if (event.key !== stackStorageKey && event.key !== null) return;
-    setStackSignal(parseStack(event.newValue));
-    apply(stack());
+    const next = parseStack(event.newValue);
+    setStackSignal(next);
+    apply(next);
   });
 };
 

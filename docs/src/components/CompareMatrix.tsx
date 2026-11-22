@@ -1,5 +1,4 @@
-import { A } from "@solidjs/router";
-import { For, Show, createSignal, onMount } from "solid-js";
+import { For, Show, createSignal, onSettled } from "solid-js";
 
 import {
   type CompareMark,
@@ -9,6 +8,7 @@ import {
   compareRows,
   compareTools,
 } from "../data/comparison.ts";
+import { siteHref } from "../docs/href.ts";
 
 const markLabels = {
   yes: "built in",
@@ -64,7 +64,7 @@ const toggleClass =
 
 export const CompareMatrix = (props: { tools?: CompareToolId[]; selectable?: boolean }) => {
   const [picked, setPicked] = createSignal<CompareToolId[]>(neighborIds);
-  onMount(() => {
+  onSettled(() => {
     if (props.selectable !== true) return;
     const fromUrl = parsePicked(new URL(window.location.href).searchParams.get("with"));
     if (fromUrl !== undefined) setPicked(fromUrl);
@@ -111,7 +111,11 @@ export const CompareMatrix = (props: { tools?: CompareToolId[]; selectable?: boo
               <button
                 type="button"
                 class={toggleClass}
-                aria-pressed={picked().length < neighborIds.length && picked().includes(tool.id)}
+                aria-pressed={
+                  picked().length < neighborIds.length && picked().includes(tool.id)
+                    ? "true"
+                    : "false"
+                }
                 onClick={() => {
                   toggle(tool.id);
                 }}
@@ -173,13 +177,13 @@ export const CompareMatrix = (props: { tools?: CompareToolId[]; selectable?: boo
                     </span>
                     <Show when={props.tools === undefined ? tool.href : undefined}>
                       {(href) => (
-                        <A
-                          href={href()}
+                        <a
+                          href={siteHref(href())}
                           class="unstyled text-xs text-accent-fg hover:underline"
                           aria-label={`Queuert vs ${tool.name}`}
                         >
                           →
-                        </A>
+                        </a>
                       )}
                     </Show>
                   </div>

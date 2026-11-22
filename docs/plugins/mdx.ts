@@ -724,7 +724,7 @@ export const mdxOptions = (options: {
   onExampleSources?: (page: string, sources: string[]) => void;
 }): CompileOptions => ({
   jsx: true,
-  jsxImportSource: "solid-js",
+  jsxImportSource: "@solidjs/web",
   elementAttributeNameCase: "html",
   stylePropertyNameCase: "css",
   remarkPlugins: [

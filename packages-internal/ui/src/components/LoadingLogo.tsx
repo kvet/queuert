@@ -1,4 +1,5 @@
-import { type JSX, createUniqueId } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { createUniqueId } from "solid-js";
 
 import { logoViewBox } from "../lib/logo.ts";
 

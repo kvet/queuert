@@ -1,13 +1,11 @@
-import { onCleanup } from "solid-js";
-
 /**
  * Plays a figure's reveal once, the first time it scrolls into view: `data-reveal` goes from
  * `pending` (bars collapsed, labels hidden; see `app.css`) to `done`, and the transitions run.
- * Call it from `onMount`. Nothing is hidden with reduced motion, without JavaScript, or when the
+ * Return it from `onSettled`, which runs the cleanup it returns. Nothing is hidden with reduced motion, without JavaScript, or when the
  * figure is already on screen at load, so the reader never waits for what they can already see.
  * The reveal only scales and fades, so the figure's height never changes.
  */
-export const revealOnView = (element: HTMLElement | undefined) => {
+export const revealOnView = (element: HTMLElement | undefined): (() => void) | undefined => {
   if (element === undefined) return;
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const rect = element.getBoundingClientRect();
@@ -22,7 +20,7 @@ export const revealOnView = (element: HTMLElement | undefined) => {
     { rootMargin: "0px 0px -20% 0px" },
   );
   observer.observe(element);
-  onCleanup(() => {
+  return () => {
     observer.disconnect();
-  });
+  };
 };

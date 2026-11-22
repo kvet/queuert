@@ -1,5 +1,4 @@
-import { A } from "@solidjs/router";
-import type { JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
 
 import { type FieldItem, FieldList } from "../../../../components/FieldList.tsx";
 import { TraceWaterfall } from "../../../../components/integrations/observability/TraceWaterfall.tsx";
@@ -10,6 +9,7 @@ import {
   invoiceTrace,
   shipOrderTrace,
 } from "../../../../data/traces.ts";
+import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
   title: "OpenTelemetry Tracing",
@@ -45,7 +45,7 @@ const span = (options: {
   extra: options.attributes.length === 0 ? undefined : options.attributes,
 });
 
-const spans: FieldItem[] = [
+const spans = (): FieldItem[] => [
   span({
     name: "create chain.{type}",
     id: "create-chain",
@@ -124,7 +124,7 @@ const spans: FieldItem[] = [
   }),
 ];
 
-const attributes: FieldItem[] = [
+const attributes = (): FieldItem[] => [
   { name: "queuert.chain.id", chips: ["string"], description: "Chain ID." },
   { name: "queuert.chain.type", chips: ["string"], description: "Chain type name." },
   {
@@ -187,9 +187,9 @@ const Page = () => (
   <>
     <p>
       Tracing through the{" "}
-      <A href="/integrations/opentelemetry/">
+      <a href={siteHref("/integrations/opentelemetry/")}>
         <code>@queuert/otel</code>
-      </A>{" "}
+      </a>{" "}
       adapter provides end-to-end visibility into chain execution, including job dependencies, retry
       attempts, and blocker relationships.
     </p>
@@ -210,7 +210,7 @@ const Page = () => (
       The row under each span lists its attributes, defined under{" "}
       <a href="#span-attributes">Span attributes</a>.
     </p>
-    <FieldList title="Spans" items={spans} />
+    <FieldList title="Spans" items={spans()} />
 
     <h2>Blocker relationships</h2>
     <p>
@@ -250,9 +250,9 @@ const Page = () => (
     <h2>Workerless outcomes</h2>
     <p>
       When{" "}
-      <A href="/guides/workerless-outcomes/">
+      <a href={siteHref("/guides/workerless-outcomes/")}>
         <code>applyJobOutcome</code>
-      </A>{" "}
+      </a>{" "}
       or <code>applyJobOutcomes</code> completes a job, the job-attempt span marks the completion as
       it does for a worker, without <code>queuert.worker.id</code>, and if the chain is fully
       completed, a CONSUMER chain span closes the trace:
@@ -304,7 +304,7 @@ const Page = () => (
     />
 
     <h2>Span attributes</h2>
-    <FieldList title="Span attributes" items={attributes} idPrefix="attribute" />
+    <FieldList title="Span attributes" items={attributes()} idPrefix="attribute" />
   </>
 );
 

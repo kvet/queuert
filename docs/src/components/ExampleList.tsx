@@ -1,6 +1,6 @@
 import { Box, Chip, Row, SubLine } from "@queuert/ui/components";
-import { A } from "@solidjs/router";
-import { For, type JSX, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show } from "solid-js";
 
 import {
   type Example,
@@ -10,6 +10,7 @@ import {
   exampleUrl,
   findExample,
 } from "../data/examples.ts";
+import { siteHref } from "../docs/href.ts";
 import { CopyButton } from "./CopyButton.tsx";
 import { ExternalLinkIcon } from "./icons.tsx";
 
@@ -92,9 +93,9 @@ export const ExampleRows = (props: { names: string[]; title: JSX.Element }) => {
       title={props.title}
       actions={
         listGuide && (
-          <A href={listGuide.href} class="unstyled text-accent-fg hover:underline">
+          <a href={siteHref(listGuide.href)} class="unstyled text-accent-fg hover:underline">
             {listGuide.title} guide →
-          </A>
+          </a>
         )
       }
       class="my-8"
@@ -120,9 +121,9 @@ export const ExampleRows = (props: { names: string[]; title: JSX.Element }) => {
                   {(guide) => (
                     <>
                       {" "}
-                      <A href={guide().href} class={`${linkClass} whitespace-nowrap`}>
+                      <a href={siteHref(guide().href)} class={`${linkClass} whitespace-nowrap`}>
                         {guide().title} guide →
-                      </A>
+                      </a>
                     </>
                   )}
                 </Show>

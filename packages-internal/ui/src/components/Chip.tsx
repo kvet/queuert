@@ -1,8 +1,7 @@
-import { type JSX, Show } from "solid-js";
-import { Dynamic } from "solid-js/web";
+import type { JSX } from "@solidjs/web";
+import { Show } from "solid-js";
 
 import type { AnyStatus } from "../lib/status.ts";
-import type { LinkComponent } from "./Row.tsx";
 import { StatusDot } from "./StatusPill.tsx";
 
 const chipTones = {
@@ -21,15 +20,16 @@ export const Chip = (props: {
   statusLabel?: string;
   mono?: boolean;
   href?: string;
-  link?: LinkComponent;
   title?: string;
   class?: string;
   children: JSX.Element;
 }) => {
-  const classes = () =>
-    `inline-flex max-w-full items-center gap-1.5 rounded-xs border px-2 py-0.5 text-xs ${chipTones[props.tone ?? "default"]} ${
-      props.mono ? "font-mono" : ""
-    } ${props.class ?? ""}`;
+  const classes = () => [
+    "inline-flex max-w-full items-center gap-1.5 rounded-xs border px-2 py-0.5 text-xs",
+    chipTones[props.tone ?? "default"],
+    { "font-mono": props.mono === true },
+    props.class,
+  ];
   const content = () => (
     <>
       <Show when={props.status}>
@@ -48,14 +48,13 @@ export const Chip = (props: {
       }
     >
       {(href) => (
-        <Dynamic
-          component={props.link ?? "a"}
+        <a
           href={href()}
-          class={`relative z-10 hover:border-border-strong ${classes()}`}
+          class={["relative z-10 hover:border-border-strong", classes()]}
           title={props.title}
         >
           {content()}
-        </Dynamic>
+        </a>
       )}
     </Show>
   );

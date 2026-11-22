@@ -2,9 +2,9 @@ import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
 import { faviconDataUri } from "@queuert/ui/logo";
+import solidPlugin from "@solidjs/vite-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import { type Plugin, defineConfig } from "vite";
-import solidPlugin from "vite-plugin-solid";
 
 const contentTypes: Record<string, string> = {
   ".html": "text/html; charset=utf-8",

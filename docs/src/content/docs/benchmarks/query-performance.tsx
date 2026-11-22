@@ -1,3 +1,5 @@
+import { createMemo } from "solid-js";
+
 import { BenchChart, type BenchGroup } from "../../../components/BenchChart.tsx";
 import { type KeyValueItem, KeyValueList } from "../../../components/KeyValueList.tsx";
 import { Code } from "../../../components/mdx/Code.tsx";
@@ -43,15 +45,12 @@ const queryGroups = (groups: BenchGroup[]): BenchGroup[] =>
     })),
   );
 
-const QueryChart = (props: { title: string; groups: BenchGroup[] }) => (
-  <BenchChart
-    title={props.title}
-    unit="p50 ms"
-    decimals={2}
-    series={["p50"]}
-    groups={queryGroups(props.groups)}
-  />
-);
+const QueryChart = (props: { title: string; groups: BenchGroup[] }) => {
+  const groups = createMemo(() => queryGroups(props.groups));
+  return (
+    <BenchChart title={props.title} unit="p50 ms" decimals={2} series={["p50"]} groups={groups()} />
+  );
+};
 
 const setup = [
   ...benchmarkMachine,

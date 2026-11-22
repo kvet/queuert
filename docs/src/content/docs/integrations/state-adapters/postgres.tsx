@@ -1,5 +1,3 @@
-import { A } from "@solidjs/router";
-
 import { ExampleCode } from "../../../../components/ExampleCode.tsx";
 import { ExampleRows } from "../../../../components/ExampleList.tsx";
 import { FieldList, type FieldItem } from "../../../../components/FieldList.tsx";
@@ -19,6 +17,7 @@ import {
 import { stateProviderMembers } from "../../../../components/integrations/state-adapters/stateProvider.tsx";
 import { Code } from "../../../../components/mdx/Code.tsx";
 import { TabItem, Tabs } from "../../../../components/mdx/Tabs.tsx";
+import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
   title: "PostgreSQL State Adapter",
@@ -77,7 +76,7 @@ const Page = () => (
       <code>@queuert/postgres</code> supports horizontal scaling with database-level locking (
       <code>FOR UPDATE SKIP LOCKED</code>), writeable CTEs for atomic batch operations, and all
       Queuert features including concurrent multi-worker deployments that share one database; see{" "}
-      <A href="/guides/horizontal-scaling/">Horizontal Scaling</A>.
+      <a href={siteHref("/guides/horizontal-scaling/")}>Horizontal Scaling</a>.
     </p>
 
     <h2>Clients</h2>
@@ -110,7 +109,8 @@ const Page = () => (
     <Code lang="bash">{`npm install @queuert/postgres`}</Code>
     <p>
       Requires PostgreSQL 14 or later, which <code>migrateToLatest()</code> checks. The same package
-      includes the <A href="/integrations/notify-adapters/postgres/">PostgreSQL notify adapter</A> (
+      includes the{" "}
+      <a href={siteHref("/integrations/notify-adapters/postgres/")}>PostgreSQL notify adapter</a> (
       <code>LISTEN</code>/<code>NOTIFY</code>).
     </p>
 
@@ -313,7 +313,8 @@ const Page = () => (
       </TabItem>
     </Tabs>
     <p>
-      The full API is in the <A href="/api/postgres-conformance/readme/">conformance reference</A>.
+      The full API is in the{" "}
+      <a href={siteHref("/api/postgres-conformance/readme/")}>conformance reference</a>.
     </p>
 
     <h2>Isolation level</h2>
@@ -340,9 +341,9 @@ const Page = () => (
       <li>
         The transactions you pass to <code>complete</code>, <code>fence</code> and client methods
         raise it to you. Retry them with fresh <code>txHooks</code> for each try, or inside{" "}
-        <A href="/guides/tx-hooks/#drivers-that-rerun-the-callback">
+        <a href={siteHref("/guides/tx-hooks/#drivers-that-rerun-the-callback")}>
           <code>txHooks.retryBoundary</code>
-        </A>
+        </a>
         .
       </li>
       <li>Migration transactions run at READ COMMITTED whatever the session default.</li>
@@ -374,7 +375,7 @@ const Page = () => (
     </p>
     <p>
       The migrator behind <code>migrateToLatest()</code> is exported for your own tables too; see{" "}
-      <A href="/guides/application-migrations/">Application Migrations</A>.
+      <a href={siteHref("/guides/application-migrations/")}>Application Migrations</a>.
     </p>
     <SchemaTables tables={postgresTables} />
 
@@ -432,8 +433,8 @@ const Page = () => (
       ]}
     />
     <p>
-      The API reference for every export is in <A href="/api/postgres/readme/">@queuert/postgres</A>
-      .
+      The API reference for every export is in{" "}
+      <a href={siteHref("/api/postgres/readme/")}>@queuert/postgres</a>.
     </p>
   </>
 );

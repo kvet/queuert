@@ -1,12 +1,12 @@
 import { Box } from "@queuert/ui/components";
-import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
+import { For, Show, createSignal, onSettled } from "solid-js";
 
 import type { DocHeading } from "../docs/pages.ts";
 
 export const Toc = (props: { headings: DocHeading[] }) => {
   const [active, setActive] = createSignal<string>();
 
-  onMount(() => {
+  onSettled(() => {
     const elements = props.headings
       .map((heading) => document.getElementById(heading.id))
       .filter((element) => element !== null);
@@ -18,9 +18,9 @@ export const Toc = (props: { headings: DocHeading[] }) => {
       { rootMargin: "-56px 0px -70% 0px" },
     );
     for (const element of elements) observer.observe(element);
-    onCleanup(() => {
+    return () => {
       observer.disconnect();
-    });
+    };
   });
 
   return (
