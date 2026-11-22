@@ -57,7 +57,7 @@ await runDoubleRunBenchmark<Infra>({
       const sender = createIpcNotifyAdapter({ directory });
       const receiver = createIpcNotifyAdapter({ directory });
       const warmUp = Promise.withResolvers<void>();
-      const disposeWarmUp = receiver.listenJobScheduled(["warm-up"], () => {
+      const disposeWarmUp = receiver.listenJobsScheduled(["warm-up"], () => {
         warmUp.resolve();
       });
       const sendWarmUp = (): void => {

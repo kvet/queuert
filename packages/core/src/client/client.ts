@@ -211,9 +211,9 @@ export type Client<
   >;
 
   /**
-   * Wait for every chain to complete, with one notify adapter listener per chain and one read of
-   * the chains still running per poll. Returns the completed chains in input order; empty `chains`
-   * returns `[]`.
+   * Wait for every chain to complete, with one notify adapter listener for all the chains and one
+   * read of the chains still running per poll. Returns the completed chains in input order; empty
+   * `chains` returns `[]`.
    *
    * @throws {@link WaitChainsTimeoutError} on timeout or abort, listing the chains still running.
    * @throws {@link ChainsNotFoundError} if any chain disappears or never existed.
@@ -1162,13 +1162,9 @@ export const createClient = <
       resetNotificationPromise();
 
       try {
-        const disposes = await Promise.all(
-          uniqueChainIds.map(async (chainId) =>
-            helpers.notifyHelper.listenChainCompleted(chainId, () => {
-              resolveNotification?.();
-            }),
-          ),
-        );
+        const dispose = await helpers.notifyHelper.listenChainsCompleted(uniqueChainIds, () => {
+          resolveNotification?.();
+        });
         try {
           const firstChains = await readChains(chainIds);
           assertChainsTypeName(firstChains, { chainIds, typeNames });
@@ -1194,7 +1190,7 @@ export const createClient = <
             { chainIds: stillRunningChainIds, timeoutMs, cause: signal?.reason },
           );
         } finally {
-          await Promise.all(disposes.map(async (dispose) => dispose()));
+          await dispose();
         }
       } finally {
         clearTimeoutTimer();

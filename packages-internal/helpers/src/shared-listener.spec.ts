@@ -3,7 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 import { createSharedListener, type SharedListenerOpen } from "./shared-listener.ts";
 
 const createFakeTransport = () => {
-  const dispatchers: ((key: string, payload: string) => void)[] = [];
+  const dispatchers: ((key: string) => void)[] = [];
   let openCount = 0;
   let closeCount = 0;
 
@@ -17,8 +17,8 @@ const createFakeTransport = () => {
     };
   };
 
-  const emit = (key: string, payload: string): void => {
-    for (const dispatch of dispatchers) dispatch(key, payload);
+  const emit = (key: string): void => {
+    for (const dispatch of dispatchers) dispatch(key);
   };
 
   return {
@@ -43,7 +43,7 @@ describe("createSharedListener", () => {
 
     expect(transport.openCount).toBe(0);
 
-    await listener.subscribe("k", () => {});
+    await listener.subscribe(["k"], () => {});
     expect(transport.openCount).toBe(1);
   });
 
@@ -53,14 +53,14 @@ describe("createSharedListener", () => {
 
     const a = vi.fn();
     const b = vi.fn();
-    await listener.subscribe("k", a);
-    await listener.subscribe("k", b);
+    await listener.subscribe(["k"], a);
+    await listener.subscribe(["k"], b);
 
     expect(transport.openCount).toBe(1);
 
-    transport.emit("k", "hello");
-    expect(a).toHaveBeenCalledWith("hello");
-    expect(b).toHaveBeenCalledWith("hello");
+    transport.emit("k");
+    expect(a).toHaveBeenCalledWith("k");
+    expect(b).toHaveBeenCalledWith("k");
   });
 
   test("only callbacks for matching key are invoked", async () => {
@@ -69,13 +69,32 @@ describe("createSharedListener", () => {
 
     const onA = vi.fn();
     const onB = vi.fn();
-    await listener.subscribe("a", onA);
-    await listener.subscribe("b", onB);
+    await listener.subscribe(["a"], onA);
+    await listener.subscribe(["b"], onB);
 
-    transport.emit("a", "for-a");
+    transport.emit("a");
 
-    expect(onA).toHaveBeenCalledWith("for-a");
+    expect(onA).toHaveBeenCalledWith("a");
     expect(onB).not.toHaveBeenCalled();
+  });
+
+  test("one callback for many keys receives each dispatched key and detaches from all of them", async () => {
+    const transport = createFakeTransport();
+    const listener = createSharedListener(transport.open);
+
+    const callback = vi.fn();
+    const unsubscribe = await listener.subscribe(["a", "b"], callback);
+    expect(transport.openCount).toBe(1);
+
+    transport.emit("a");
+    transport.emit("b");
+    transport.emit("c");
+    expect(callback.mock.calls).toEqual([["a"], ["b"]]);
+
+    await unsubscribe();
+    expect(transport.closeCount).toBe(1);
+    transport.emit("a");
+    expect(callback).toHaveBeenCalledTimes(2);
   });
 
   test("dispatch for unknown key is a no-op", async () => {
@@ -83,9 +102,9 @@ describe("createSharedListener", () => {
     const listener = createSharedListener(transport.open);
 
     const cb = vi.fn();
-    await listener.subscribe("a", cb);
+    await listener.subscribe(["a"], cb);
 
-    transport.emit("z", "nobody-cares");
+    transport.emit("z");
     expect(cb).not.toHaveBeenCalled();
   });
 
@@ -93,8 +112,8 @@ describe("createSharedListener", () => {
     const transport = createFakeTransport();
     const listener = createSharedListener(transport.open);
 
-    const unsubA = await listener.subscribe("a", () => {});
-    const unsubB = await listener.subscribe("b", () => {});
+    const unsubA = await listener.subscribe(["a"], () => {});
+    const unsubB = await listener.subscribe(["b"], () => {});
 
     await unsubA();
     expect(transport.closeCount).toBe(0);
@@ -108,11 +127,11 @@ describe("createSharedListener", () => {
     const transport = createFakeTransport();
     const listener = createSharedListener(transport.open);
 
-    const unsub = await listener.subscribe("k", () => {});
+    const unsub = await listener.subscribe(["k"], () => {});
     await unsub();
     expect(transport.closeCount).toBe(1);
 
-    await listener.subscribe("k", () => {});
+    await listener.subscribe(["k"], () => {});
     expect(transport.openCount).toBe(2);
   });
 
@@ -134,9 +153,9 @@ describe("createSharedListener", () => {
 
     const listener = createSharedListener(open);
 
-    const p1 = listener.subscribe("a", () => {});
-    const p2 = listener.subscribe("b", () => {});
-    const p3 = listener.subscribe("c", () => {});
+    const p1 = listener.subscribe(["a"], () => {});
+    const p2 = listener.subscribe(["b"], () => {});
+    const p3 = listener.subscribe(["c"], () => {});
 
     resolveOpen();
     await Promise.all([p1, p2, p3]);
@@ -160,9 +179,9 @@ describe("createSharedListener", () => {
 
     const listener = createSharedListener(open);
 
-    const unsub = await listener.subscribe("k", () => {});
+    const unsub = await listener.subscribe(["k"], () => {});
     const unsubPromise = unsub();
-    const subscribeDuringStop = listener.subscribe("k", () => {});
+    const subscribeDuringStop = listener.subscribe(["k"], () => {});
 
     closeGate.resolve();
     await unsubPromise;
@@ -178,14 +197,14 @@ describe("createSharedListener", () => {
 
     const a = vi.fn();
     const b = vi.fn();
-    const unsubA = await listener.subscribe("k", a);
-    await listener.subscribe("k", b);
+    const unsubA = await listener.subscribe(["k"], a);
+    await listener.subscribe(["k"], b);
 
     await unsubA();
-    transport.emit("k", "payload");
+    transport.emit("k");
 
     expect(a).not.toHaveBeenCalled();
-    expect(b).toHaveBeenCalledWith("payload");
+    expect(b).toHaveBeenCalledWith("k");
   });
 
   test("dispose tears down running subscription and removes callbacks", async () => {
@@ -193,12 +212,12 @@ describe("createSharedListener", () => {
     const listener = createSharedListener(transport.open);
 
     const cb = vi.fn();
-    await listener.subscribe("k", cb);
+    await listener.subscribe(["k"], cb);
 
     await listener.dispose();
     expect(transport.closeCount).toBe(1);
 
-    transport.emit("k", "after-dispose");
+    transport.emit("k");
     expect(cb).not.toHaveBeenCalled();
   });
 
@@ -209,7 +228,7 @@ describe("createSharedListener", () => {
     });
     let openCount = 0;
     let closeCount = 0;
-    const dispatchers: ((key: string, payload: string) => void)[] = [];
+    const dispatchers: ((key: string) => void)[] = [];
 
     const open: SharedListenerOpen = async (dispatch) => {
       openCount++;
@@ -225,7 +244,7 @@ describe("createSharedListener", () => {
     const listener = createSharedListener(open);
 
     const cb = vi.fn();
-    const subscribePromise = listener.subscribe("k", cb);
+    const subscribePromise = listener.subscribe(["k"], cb);
     const disposePromise = listener.dispose();
 
     resolveOpen();
@@ -251,7 +270,7 @@ describe("createSharedListener", () => {
 
   test("open() rejection resets state to idle so the next subscribe can retry", async () => {
     let attempts = 0;
-    const dispatchers: ((key: string, payload: string) => void)[] = [];
+    const dispatchers: ((key: string) => void)[] = [];
 
     const open: SharedListenerOpen = async (dispatch) => {
       attempts++;
@@ -262,14 +281,14 @@ describe("createSharedListener", () => {
 
     const listener = createSharedListener(open);
 
-    await expect(listener.subscribe("k", () => {})).rejects.toThrow("transport down");
+    await expect(listener.subscribe(["k"], () => {})).rejects.toThrow("transport down");
 
     const cb = vi.fn();
-    await listener.subscribe("k", cb);
+    await listener.subscribe(["k"], cb);
     expect(attempts).toBe(2);
 
-    for (const d of dispatchers) d("k", "hello");
-    expect(cb).toHaveBeenCalledWith("hello");
+    for (const d of dispatchers) d("k");
+    expect(cb).toHaveBeenCalledWith("k");
   });
 
   test("open() rejection fails only the in-flight subscriber; concurrent subscribers transparently retry", async () => {
@@ -287,8 +306,8 @@ describe("createSharedListener", () => {
 
     const listener = createSharedListener(open);
 
-    const p1 = listener.subscribe("a", () => {});
-    const p2 = listener.subscribe("b", () => {});
+    const p1 = listener.subscribe(["a"], () => {});
+    const p2 = listener.subscribe(["b"], () => {});
 
     rejectFirst(new Error("boom"));
 
@@ -311,7 +330,7 @@ describe("createSharedListener", () => {
 
     const listener = createSharedListener(open);
 
-    const subscribePromise = listener.subscribe("k", () => {});
+    const subscribePromise = listener.subscribe(["k"], () => {});
     const disposePromise = listener.dispose();
 
     rejectOpen(new Error("transport down"));
@@ -329,20 +348,20 @@ describe("createSharedListener", () => {
     });
     const b = vi.fn();
 
-    await listener.subscribe("k", a);
-    await listener.subscribe("k", b);
+    await listener.subscribe(["k"], a);
+    await listener.subscribe(["k"], b);
 
     expect(() => {
-      transport.emit("k", "payload");
+      transport.emit("k");
     }).not.toThrow();
 
-    expect(a).toHaveBeenCalledWith("payload");
-    expect(b).toHaveBeenCalledWith("payload");
+    expect(a).toHaveBeenCalledWith("k");
+    expect(b).toHaveBeenCalledWith("k");
   });
 
   test("unsubscribe rejection resets state to idle so the listener can be reused", async () => {
     let unsubAttempts = 0;
-    const dispatchers: ((key: string, payload: string) => void)[] = [];
+    const dispatchers: ((key: string) => void)[] = [];
 
     const open: SharedListenerOpen = async (dispatch) => {
       dispatchers.push(dispatch);
@@ -356,13 +375,13 @@ describe("createSharedListener", () => {
 
     const listener = createSharedListener(open);
 
-    const unsub1 = await listener.subscribe("k", () => {});
+    const unsub1 = await listener.subscribe(["k"], () => {});
     await expect(unsub1()).rejects.toThrow("teardown failed");
 
     const cb = vi.fn();
-    const unsub2 = await listener.subscribe("k", cb);
-    for (const d of dispatchers) d("k", "ok");
-    expect(cb).toHaveBeenCalledWith("ok");
+    const unsub2 = await listener.subscribe(["k"], cb);
+    for (const d of dispatchers) d("k");
+    expect(cb).toHaveBeenCalledWith("k");
     await unsub2();
   });
 });

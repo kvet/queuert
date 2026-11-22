@@ -51,16 +51,16 @@ describe("wrapNotifyAdapterWithLogging", () => {
     const error = new Error("unsubscribe failed");
     const notifyAdapter: NotifyAdapter<"async"> = {
       ...createInProcessNotifyAdapter({ mode: "async" }),
-      listenChainCompleted: async () => async () => {
+      listenChainsCompleted: async () => async () => {
         throw error;
       },
     };
     const { wrapped, log } = createLoggedAdapter(notifyAdapter);
 
-    const dispose = await wrapped.listenChainCompleted("chain-a", () => {});
+    const dispose = await wrapped.listenChainsCompleted(["chain-a"], () => {});
     expect(log).not.toHaveBeenCalled();
     await expect(async () => dispose()).rejects.toThrow(error);
-    expectReportedOnce(log, "listenChainCompleted", error);
+    expectReportedOnce(log, "listenChainsCompleted", error);
   });
 
   test("reports a synchronous throw of an async adapter once and rejects with its error", async () => {
@@ -69,11 +69,11 @@ describe("wrapNotifyAdapterWithLogging", () => {
       notifyJobsScheduled: () => {
         throw error;
       },
-      listenJobScheduled: async () => async () => {},
+      listenJobsScheduled: async () => async () => {},
       notifyChainsCompleted: async () => {},
-      listenChainCompleted: async () => async () => {},
+      listenChainsCompleted: async () => async () => {},
       notifyJobAttemptsLost: async () => {},
-      listenJobAttemptLost: async () => async () => {},
+      listenJobAttemptsLost: async () => async () => {},
       close: async () => {},
       [Symbol.asyncDispose]: async () => {},
     };
@@ -105,17 +105,17 @@ describe("wrapNotifyAdapterWithLogging", () => {
     const base = createInProcessNotifyAdapter();
     const notifyAdapter: typeof base = {
       ...base,
-      listenChainCompleted: () => () => {
+      listenChainsCompleted: () => () => {
         throw error;
       },
     };
     const { wrapped, log } = createLoggedAdapter(notifyAdapter);
 
-    const dispose = wrapped.listenChainCompleted("chain-a", () => {});
+    const dispose = wrapped.listenChainsCompleted(["chain-a"], () => {});
     expect(log).not.toHaveBeenCalled();
     expect(() => {
       dispose();
     }).toThrow(error);
-    expectReportedOnce(log, "listenChainCompleted", error);
+    expectReportedOnce(log, "listenChainsCompleted", error);
   });
 });

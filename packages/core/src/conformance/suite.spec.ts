@@ -126,7 +126,7 @@ describe("conformance cases check the adapter's mode", () => {
           withPromiseFrom(createInProcessNotifyAdapter(), "notifyJobsScheduled"),
         mode: "sync",
       }),
-      "notifyJobsScheduled / listenJobScheduled",
+      "notifyJobsScheduled / listenJobsScheduled",
     );
 
     expect(failures).toContain("A synchronous step got a promise: the value must be synchronous");

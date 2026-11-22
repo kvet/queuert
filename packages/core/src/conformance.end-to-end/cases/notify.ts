@@ -558,12 +558,12 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
           },
           notifyAdapter: {
             ...notifyAdapter,
-            listenJobScheduled: (typeNames, onNotification) =>
+            listenJobsScheduled: (typeNames, onNotification) =>
               runInModeOf(
                 notifyAdapter,
                 syncAsync(function* () {
                   const dispose = yield* step(
-                    notifyAdapter.listenJobScheduled(typeNames, onNotification),
+                    notifyAdapter.listenJobsScheduled(typeNames, onNotification),
                   );
                   listeningCount++;
                   return () =>

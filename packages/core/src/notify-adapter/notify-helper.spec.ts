@@ -17,18 +17,18 @@ const toAsyncNotifyAdapter = (adapter: NotifyAdapter<"sync">): NotifyAdapter<"as
     notifyJobsScheduled: async (typeNames) => {
       adapter.notifyJobsScheduled(typeNames);
     },
-    listenJobScheduled: async (typeNames, onNotification) =>
-      promisifyDispose(adapter.listenJobScheduled(typeNames, onNotification)),
+    listenJobsScheduled: async (typeNames, onNotification) =>
+      promisifyDispose(adapter.listenJobsScheduled(typeNames, onNotification)),
     notifyChainsCompleted: async (chainIds) => {
       adapter.notifyChainsCompleted(chainIds);
     },
-    listenChainCompleted: async (chainId, onNotification) =>
-      promisifyDispose(adapter.listenChainCompleted(chainId, onNotification)),
+    listenChainsCompleted: async (chainIds, onNotification) =>
+      promisifyDispose(adapter.listenChainsCompleted(chainIds, onNotification)),
     notifyJobAttemptsLost: async (jobIds) => {
       adapter.notifyJobAttemptsLost(jobIds);
     },
-    listenJobAttemptLost: async (jobId, onNotification) =>
-      promisifyDispose(adapter.listenJobAttemptLost(jobId, onNotification)),
+    listenJobAttemptsLost: async (jobIds, onNotification) =>
+      promisifyDispose(adapter.listenJobAttemptsLost(jobIds, onNotification)),
     close,
     [Symbol.asyncDispose]: close,
   };
@@ -36,7 +36,7 @@ const toAsyncNotifyAdapter = (adapter: NotifyAdapter<"sync">): NotifyAdapter<"as
 
 const createRecordingNotifyAdapter = (
   mode: Mode,
-  overrides: Partial<Pick<NotifyAdapter<"sync">, "listenChainCompleted">> = {},
+  overrides: Partial<Pick<NotifyAdapter<"sync">, "listenChainsCompleted">> = {},
 ): { adapter: NotifyAdapter<Mode>; calls: string[][] } => {
   const calls: string[][] = [];
   const adapter: NotifyAdapter<"sync"> = {
@@ -44,15 +44,15 @@ const createRecordingNotifyAdapter = (
     notifyJobsScheduled: (typeNames) => {
       calls.push(["notifyJobsScheduled", ...typeNames]);
     },
-    listenJobScheduled: () => () => {},
+    listenJobsScheduled: () => () => {},
     notifyChainsCompleted: (chainIds) => {
       calls.push(["notifyChainsCompleted", ...chainIds]);
     },
-    listenChainCompleted: () => () => {},
+    listenChainsCompleted: () => () => {},
     notifyJobAttemptsLost: (jobIds) => {
       calls.push(["notifyJobAttemptsLost", ...jobIds]);
     },
-    listenJobAttemptLost: () => () => {},
+    listenJobAttemptsLost: () => () => {},
     close: () => {},
     [Symbol.dispose]: () => {},
     ...overrides,
@@ -67,11 +67,11 @@ const createFailingNotifyAdapter = (mode: Mode): NotifyAdapter<Mode> => {
   const adapter: NotifyAdapter<"sync"> = {
     sync: true,
     notifyJobsScheduled: fail,
-    listenJobScheduled: fail,
+    listenJobsScheduled: fail,
     notifyChainsCompleted: fail,
-    listenChainCompleted: fail,
+    listenChainsCompleted: fail,
     notifyJobAttemptsLost: fail,
-    listenJobAttemptLost: fail,
+    listenJobAttemptsLost: fail,
     close: fail,
     [Symbol.dispose]: fail,
   };
@@ -120,24 +120,24 @@ describe.each(["async", "sync"] as const)("createNotifyHelper over a %s adapter"
     await notifyHelper.notifyChainsCompleted(["chain-a"]);
     await notifyHelper.notifyJobAttemptsLost(["job-a"]);
 
-    const dispose = await notifyHelper.listenJobScheduled(["type-a"], () => {});
+    const dispose = await notifyHelper.listenJobsScheduled(["type-a"], () => {});
     await dispose();
   });
 
   test("calls the dispose function the adapter returned", async () => {
     const disposed: string[] = [];
     const { adapter } = createRecordingNotifyAdapter(mode, {
-      listenChainCompleted: (chainId) => () => {
-        disposed.push(chainId);
+      listenChainsCompleted: (chainIds) => () => {
+        disposed.push(...chainIds);
       },
     });
     const notifyHelper = createNotifyHelper({ adapter });
 
-    const dispose = await notifyHelper.listenChainCompleted("chain-a", () => {});
+    const dispose = await notifyHelper.listenChainsCompleted(["chain-a", "chain-b"], () => {});
     expect(disposed).toEqual([]);
     await dispose();
 
-    expect(disposed).toEqual(["chain-a"]);
+    expect(disposed).toEqual(["chain-a", "chain-b"]);
   });
 });
 

@@ -54,7 +54,7 @@ const waitForNextJob = async (
     }
 
     const { promise: notified, resolve: onNotification } = Promise.withResolvers<void>();
-    const disposeNotified = await helpers.notifyHelper.listenJobScheduled(typeNames, () => {
+    const disposeNotified = await helpers.notifyHelper.listenJobsScheduled(typeNames, () => {
       onNotification();
     });
 

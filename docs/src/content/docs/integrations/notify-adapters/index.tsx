@@ -76,12 +76,12 @@ const members = (): FieldItem[] => [
         worker polling meanwhile skipped them. Every listener receives each notification.
       </>
     ),
-    extra: ["notifyJobsScheduled", "listenJobScheduled"],
+    extra: ["notifyJobsScheduled", "listenJobsScheduled"],
   },
   {
     name: "Chain completed",
     description: <>The given chains have completed; wakes whoever is waiting on one of them.</>,
-    extra: ["notifyChainsCompleted", "listenChainCompleted"],
+    extra: ["notifyChainsCompleted", "listenChainsCompleted"],
   },
   {
     name: "Attempt lost",
@@ -91,7 +91,7 @@ const members = (): FieldItem[] => [
         that stopped, completed by the client, or their chain was deleted.
       </>
     ),
-    extra: ["notifyJobAttemptsLost", "listenJobAttemptLost"],
+    extra: ["notifyJobAttemptsLost", "listenJobAttemptsLost"],
   },
   {
     name: "Lifecycle",

@@ -7,7 +7,7 @@ import { createIpcNotifyAdapter } from "../notify-adapter/notify-adapter.ipc.ts"
 if (process.argv[1] === import.meta.filename) {
   const directory = process.argv[2];
   const notifyAdapter = createIpcNotifyAdapter({ directory });
-  notifyAdapter.listenJobScheduled(["type-a"], (typeName) => {
+  notifyAdapter.listenJobsScheduled(["type-a"], (typeName) => {
     process.stdout.write(`received ${typeName}\n`);
   });
   const isRegistered = (): boolean => {

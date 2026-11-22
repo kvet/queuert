@@ -7,11 +7,11 @@ const listenNothing = (): (() => void) => notifyNothing;
 export const noopNotifyAdapter: NotifyAdapter<"sync"> = Object.freeze({
   sync: true,
   notifyJobsScheduled: notifyNothing,
-  listenJobScheduled: listenNothing,
+  listenJobsScheduled: listenNothing,
   notifyChainsCompleted: notifyNothing,
-  listenChainCompleted: listenNothing,
+  listenChainsCompleted: listenNothing,
   notifyJobAttemptsLost: notifyNothing,
-  listenJobAttemptLost: listenNothing,
+  listenJobAttemptsLost: listenNothing,
   close: notifyNothing,
   [Symbol.dispose]: notifyNothing,
 });

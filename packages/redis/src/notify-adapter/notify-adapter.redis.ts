@@ -25,17 +25,17 @@ export const createRedisNotifyAdapter = ({
 
   const jobScheduledListener = createSharedListener(async (dispatch) =>
     notifyProvider.subscribe(jobScheduledChannel, (payload) => {
-      dispatch(payload, payload);
+      dispatch(payload);
     }),
   );
   const chainCompletedListener = createSharedListener(async (dispatch) =>
     notifyProvider.subscribe(chainCompletedChannel, (payload) => {
-      dispatch(payload, payload);
+      dispatch(payload);
     }),
   );
   const attemptLostListener = createSharedListener(async (dispatch) =>
     notifyProvider.subscribe(attemptLostChannel, (payload) => {
-      dispatch(payload, payload);
+      dispatch(payload);
     }),
   );
 
@@ -57,18 +57,11 @@ export const createRedisNotifyAdapter = ({
       await notifyProvider.eval(PUBLISH_MESSAGES_SCRIPT, [], [jobScheduledChannel, ...typeNames]);
     },
 
-    listenJobScheduled: async (typeNames, onNotification) => {
+    listenJobsScheduled: async (typeNames, onNotification) => {
       closed.throwIfTripped();
-      const unsubs = await Promise.all(
-        typeNames.map(async (typeName) =>
-          jobScheduledListener.subscribe(typeName, () => {
-            onNotification(typeName);
-          }),
-        ),
-      );
-      return async () => {
-        await Promise.all(unsubs.map(async (u) => u()));
-      };
+      return jobScheduledListener.subscribe(typeNames, (typeName) => {
+        onNotification(typeName);
+      });
     },
 
     notifyChainsCompleted: async (chainIds) => {
@@ -76,10 +69,10 @@ export const createRedisNotifyAdapter = ({
       await notifyProvider.eval(PUBLISH_MESSAGES_SCRIPT, [], [chainCompletedChannel, ...chainIds]);
     },
 
-    listenChainCompleted: async (chainId, onNotification) => {
+    listenChainsCompleted: async (chainIds, onNotification) => {
       closed.throwIfTripped();
-      return chainCompletedListener.subscribe(chainId, () => {
-        onNotification();
+      return chainCompletedListener.subscribe(chainIds, (chainId) => {
+        onNotification(chainId);
       });
     },
 
@@ -88,10 +81,10 @@ export const createRedisNotifyAdapter = ({
       await notifyProvider.eval(PUBLISH_MESSAGES_SCRIPT, [], [attemptLostChannel, ...jobIds]);
     },
 
-    listenJobAttemptLost: async (jobId, onNotification) => {
+    listenJobAttemptsLost: async (jobIds, onNotification) => {
       closed.throwIfTripped();
-      return attemptLostListener.subscribe(jobId, () => {
-        onNotification();
+      return attemptLostListener.subscribe(jobIds, (jobId) => {
+        onNotification(jobId);
       });
     },
 

@@ -31,8 +31,8 @@ const withFailingAttemptLostDispose = (
   notifyAdapter: NotifyAdapter<"async">,
 ): NotifyAdapter<"async"> => ({
   ...notifyAdapter,
-  listenJobAttemptLost: async (jobId, onNotification) => {
-    const dispose = await notifyAdapter.listenJobAttemptLost(jobId, onNotification);
+  listenJobAttemptsLost: async (jobIds, onNotification) => {
+    const dispose = await notifyAdapter.listenJobAttemptsLost(jobIds, onNotification);
     return async () => {
       await dispose();
       throw new Error("dispose failed");

@@ -39,7 +39,7 @@ const sharedDirectoryIt = it.extend(
       const sender = createIpcNotifyAdapter({ directory });
 
       let connected = false;
-      const disposeWarmUp = receiver.listenJobScheduled(["warm-up"], () => {
+      const disposeWarmUp = receiver.listenJobsScheduled(["warm-up"], () => {
         connected = true;
       });
       await expect

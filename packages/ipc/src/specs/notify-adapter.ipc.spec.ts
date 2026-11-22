@@ -133,7 +133,7 @@ describe("between adapter instances", () => {
   }) => {
     const listener = createAdapter();
     const received: string[] = [];
-    listener.listenJobScheduled(["type-a"], (typeName) => {
+    listener.listenJobsScheduled(["type-a"], (typeName) => {
       received.push(typeName);
     });
     await waitForRegistry(1);
@@ -149,7 +149,7 @@ describe("between adapter instances", () => {
   }) => {
     const listener = createAdapter();
     const received: string[] = [];
-    listener.listenJobScheduled(["type-a"], (typeName) => {
+    listener.listenJobsScheduled(["type-a"], (typeName) => {
       received.push(typeName);
     });
     await waitForRegistry(1);
@@ -171,10 +171,10 @@ describe("between adapter instances", () => {
     const sameGroup = createAdapter(join(directory, "group-a"));
     let otherGroupReceived = false;
     let sameGroupReceived = false;
-    otherGroup.listenJobScheduled(["type-a"], () => {
+    otherGroup.listenJobsScheduled(["type-a"], () => {
       otherGroupReceived = true;
     });
-    sameGroup.listenJobScheduled(["type-a"], () => {
+    sameGroup.listenJobsScheduled(["type-a"], () => {
       sameGroupReceived = true;
     });
 
@@ -191,7 +191,7 @@ describe("between adapter instances", () => {
   it("ignores malformed lines on the socket", async ({ createAdapter, waitForRegistry }) => {
     const receiver = createAdapter();
     const received: string[] = [];
-    receiver.listenJobScheduled(["type-a"], (typeName) => received.push(typeName));
+    receiver.listenJobsScheduled(["type-a"], (typeName) => received.push(typeName));
     const [{ address }] = await waitForRegistry(1);
 
     const socket = createConnection(address);
@@ -323,7 +323,7 @@ describe("registry", () => {
     const adapter = createAdapter(groupDirectory);
     expect(existsSync(groupDirectory)).toBe(false);
 
-    adapter.listenJobScheduled(["type-a"], () => {});
+    adapter.listenJobsScheduled(["type-a"], () => {});
 
     const [entry] = await waitForRegistry(1, groupDirectory);
     expect(entry.pid).toBe(process.pid);
@@ -352,7 +352,7 @@ describe("registry", () => {
   }) => {
     const adapter = createAdapter();
 
-    adapter.listenJobScheduled(["type-a"], () => {});
+    adapter.listenJobsScheduled(["type-a"], () => {});
     adapter.close();
     await sleep(100);
 
@@ -369,10 +369,10 @@ describe("registry", () => {
     const errors: unknown[] = [];
     const adapter = createAdapter(registryDirectory, (error) => errors.push(error));
 
-    adapter.listenJobScheduled(["type-a"], () => {});
+    adapter.listenJobsScheduled(["type-a"], () => {});
     await expect.poll(() => errors).toEqual([expect.any(Error)]);
     await rm(registryDirectory);
-    adapter.listenJobScheduled(["type-a"], () => {});
+    adapter.listenJobsScheduled(["type-a"], () => {});
 
     const [entry] = await waitForRegistry(1, registryDirectory);
     expect(entry.pid).toBe(process.pid);
@@ -474,7 +474,7 @@ describe("registry", () => {
     waitForRegistry,
   }) => {
     const adapter = createAdapter();
-    adapter.listenJobScheduled(["type-a"], () => {});
+    adapter.listenJobsScheduled(["type-a"], () => {});
     const [entry] = await waitForRegistry(1);
 
     await rm(join(directory, entry.fileName));
@@ -489,7 +489,7 @@ describe("registry", () => {
     const sender = createAdapter();
     const receiver = createAdapter();
     let received = false;
-    receiver.listenJobScheduled(["type-a"], () => {
+    receiver.listenJobsScheduled(["type-a"], () => {
       received = true;
     });
 

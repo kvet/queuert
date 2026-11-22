@@ -1129,7 +1129,7 @@ export const createChainsNotifyGroup: ConformanceGroup<EndToEndNotifyContext> = 
 
         const notified: string[] = [];
         const dispose = yield* step(
-          notifyAdapter.listenJobScheduled(["dependency", "main", "sentinel"], (typeName) =>
+          notifyAdapter.listenJobsScheduled(["dependency", "main", "sentinel"], (typeName) =>
             notified.push(typeName),
           ),
         );

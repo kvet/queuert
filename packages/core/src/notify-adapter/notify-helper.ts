@@ -8,12 +8,18 @@ export type NotifyHelper = {
   notifyJobsScheduled: (typeNames: string[]) => MaybePromise<void>;
   notifyChainsCompleted: (chainIds: string[]) => MaybePromise<void>;
   notifyJobAttemptsLost: (jobIds: string[]) => MaybePromise<void>;
-  listenJobScheduled: (
+  listenJobsScheduled: (
     typeNames: string[],
     onNotification: (typeName: string) => void,
   ) => MaybePromise<Dispose>;
-  listenChainCompleted: (chainId: string, onNotification: () => void) => MaybePromise<Dispose>;
-  listenJobAttemptLost: (jobId: string, onNotification: () => void) => MaybePromise<Dispose>;
+  listenChainsCompleted: (
+    chainIds: string[],
+    onNotification: (chainId: string) => void,
+  ) => MaybePromise<Dispose>;
+  listenJobAttemptsLost: (
+    jobIds: string[],
+    onNotification: (jobId: string) => void,
+  ) => MaybePromise<Dispose>;
 };
 
 const sendQuietly = syncAsync(function* (
@@ -85,11 +91,11 @@ export const createNotifyHelper = ({ adapter }: { adapter: NotifyAdapter<Mode> }
     notifyJobsScheduled: batch((typeNames) => notifyAdapter.notifyJobsScheduled(typeNames)),
     notifyChainsCompleted: batch((chainIds) => notifyAdapter.notifyChainsCompleted(chainIds)),
     notifyJobAttemptsLost: batch((jobIds) => notifyAdapter.notifyJobAttemptsLost(jobIds)),
-    listenJobScheduled: (typeNames, onNotification) =>
-      subscribe(() => notifyAdapter.listenJobScheduled(typeNames, onNotification), dispose),
-    listenChainCompleted: (chainId, onNotification) =>
-      subscribe(() => notifyAdapter.listenChainCompleted(chainId, onNotification), dispose),
-    listenJobAttemptLost: (jobId, onNotification) =>
-      subscribe(() => notifyAdapter.listenJobAttemptLost(jobId, onNotification), dispose),
+    listenJobsScheduled: (typeNames, onNotification) =>
+      subscribe(() => notifyAdapter.listenJobsScheduled(typeNames, onNotification), dispose),
+    listenChainsCompleted: (chainIds, onNotification) =>
+      subscribe(() => notifyAdapter.listenChainsCompleted(chainIds, onNotification), dispose),
+    listenJobAttemptsLost: (jobIds, onNotification) =>
+      subscribe(() => notifyAdapter.listenJobAttemptsLost(jobIds, onNotification), dispose),
   };
 };

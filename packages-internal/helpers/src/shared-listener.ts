@@ -1,28 +1,26 @@
 import { createAsyncRwLock } from "./async-rw-lock.ts";
 
 /**
- * Opens an underlying subscription that pushes payloads to `dispatch`, and
+ * Opens an underlying subscription that pushes routing keys to `dispatch`, and
  * resolves with a function that tears that subscription down. The adapter
- * extracts a routing `key` from the wire payload and passes both, so per-key
- * subscribers can be matched in O(1) at dispatch time.
+ * extracts the `key` from the wire payload, so per-key subscribers can be
+ * matched in O(1) at dispatch time.
  */
-export type SharedListenerOpen = (
-  dispatch: (key: string, payload: string) => void,
-) => Promise<() => Promise<void>>;
+export type SharedListenerOpen = (dispatch: (key: string) => void) => Promise<() => Promise<void>>;
 
 export type SharedListener = {
   /**
-   * Attaches a callback for a given routing key, opening the underlying
-   * subscription lazily if not already open. Returns a function that detaches
-   * this callback and tears down the underlying subscription if it was the
-   * last one.
+   * Attaches a callback for the given routing keys, opening the underlying
+   * subscription lazily if not already open. The callback receives the key
+   * that was dispatched. Returns a function that detaches this callback from
+   * every key and tears down the underlying subscription if it was the last one.
    */
-  subscribe: (key: string, callback: (payload: string) => void) => Promise<() => Promise<void>>;
+  subscribe: (keys: string[], callback: (key: string) => void) => Promise<() => Promise<void>>;
   /** Force-tears the underlying subscription regardless of remaining callbacks. */
   dispose: () => Promise<void>;
 };
 
-type Callbacks = Map<string, Set<(payload: string) => void>>;
+type Callbacks = Map<string, Set<(key: string) => void>>;
 
 type State =
   | { running: false }
@@ -44,13 +42,13 @@ export const createSharedListener = (open: SharedListenerOpen): SharedListener =
   let state: State = { running: false };
   const lock = createAsyncRwLock();
 
-  const dispatch = (key: string, payload: string): void => {
+  const dispatch = (key: string): void => {
     if (!state.running) return;
     const set = state.callbacks.get(key);
     if (!set) return;
     for (const callback of set) {
       try {
-        callback(payload);
+        callback(key);
       } catch {}
     }
   };
@@ -63,26 +61,30 @@ export const createSharedListener = (open: SharedListenerOpen): SharedListener =
   };
 
   return {
-    subscribe: async (key, callback) => {
+    subscribe: async (keys, callback) => {
       using _h = await lock.acquireWrite();
       if (!state.running) {
         const unsubscribe = await open(dispatch);
         state = { running: true, callbacks: new Map(), unsubscribe };
       }
-      let set = state.callbacks.get(key);
-      if (!set) {
-        set = new Set();
-        state.callbacks.set(key, set);
+      for (const key of keys) {
+        let set = state.callbacks.get(key);
+        if (!set) {
+          set = new Set();
+          state.callbacks.set(key, set);
+        }
+        set.add(callback);
       }
-      set.add(callback);
 
       return async () => {
         using _h2 = await lock.acquireWrite();
         if (!state.running) return;
-        const s = state.callbacks.get(key);
-        if (s) {
-          s.delete(callback);
-          if (s.size === 0) state.callbacks.delete(key);
+        for (const key of keys) {
+          const s = state.callbacks.get(key);
+          if (s) {
+            s.delete(callback);
+            if (s.size === 0) state.callbacks.delete(key);
+          }
         }
         if (totalCallbacks(state.callbacks) === 0) await tearDown();
       };

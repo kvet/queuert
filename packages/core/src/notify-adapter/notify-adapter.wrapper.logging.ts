@@ -38,10 +38,10 @@ export const wrapNotifyAdapterWithLogging = <TNotifyAdapter extends NotifyAdapte
   return {
     ...notifyAdapter,
     notifyJobsScheduled: wrap("notifyJobsScheduled", notifyAdapter.notifyJobsScheduled),
-    listenJobScheduled: wrapListen("listenJobScheduled", notifyAdapter.listenJobScheduled),
+    listenJobsScheduled: wrapListen("listenJobsScheduled", notifyAdapter.listenJobsScheduled),
     notifyChainsCompleted: wrap("notifyChainsCompleted", notifyAdapter.notifyChainsCompleted),
-    listenChainCompleted: wrapListen("listenChainCompleted", notifyAdapter.listenChainCompleted),
+    listenChainsCompleted: wrapListen("listenChainsCompleted", notifyAdapter.listenChainsCompleted),
     notifyJobAttemptsLost: wrap("notifyJobAttemptsLost", notifyAdapter.notifyJobAttemptsLost),
-    listenJobAttemptLost: wrapListen("listenJobAttemptLost", notifyAdapter.listenJobAttemptLost),
+    listenJobAttemptsLost: wrapListen("listenJobAttemptsLost", notifyAdapter.listenJobAttemptsLost),
   };
 };

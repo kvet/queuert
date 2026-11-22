@@ -18,26 +18,54 @@ export function createInProcessNotifyAdapter(options: { mode: Mode }): NotifyAda
 export function createInProcessNotifyAdapter({
   mode = "sync",
 }: { mode?: Mode } = {}): NotifyAdapter<Mode> {
-  const jobScheduledListeners = new Map<string, Set<(typeName: string) => void>>();
-  const chainCompletedListeners = new Map<string, Set<() => void>>();
-  const jobAttemptLostListeners = new Map<string, Set<() => void>>();
+  const jobScheduledListeners = new Map<string, Set<(key: string) => void>>();
+  const chainCompletedListeners = new Map<string, Set<(key: string) => void>>();
+  const jobAttemptLostListeners = new Map<string, Set<(key: string) => void>>();
 
   const closed = createLatch("NotifyAdapter is closed");
 
-  const addListener = <V>(map: Map<string, Set<V>>, key: string, value: V): void => {
-    let set = map.get(key);
-    if (!set) {
-      set = new Set();
-      map.set(key, set);
+  const notify = (
+    listenersByKey: Map<string, Set<(key: string) => void>>,
+    keys: string[],
+  ): void => {
+    closed.throwIfTripped();
+    for (const key of keys) {
+      const listeners = listenersByKey.get(key);
+      if (!listeners) continue;
+      for (const listener of Array.from(listeners)) {
+        try {
+          listener(key);
+        } catch {}
+      }
     }
-    set.add(value);
   };
 
-  const removeListener = <V>(map: Map<string, Set<V>>, key: string, value: V): void => {
-    const set = map.get(key);
-    if (!set) return;
-    set.delete(value);
-    if (set.size === 0) map.delete(key);
+  const listen = (
+    listenersByKey: Map<string, Set<(key: string) => void>>,
+    keys: string[],
+    onNotification: (key: string) => void,
+  ): (() => void) => {
+    closed.throwIfTripped();
+    const listener = (key: string): void => {
+      onNotification(key);
+    };
+    for (const key of keys) {
+      let listeners = listenersByKey.get(key);
+      if (!listeners) {
+        listeners = new Set();
+        listenersByKey.set(key, listeners);
+      }
+      listeners.add(listener);
+    }
+
+    return () => {
+      for (const key of keys) {
+        const listeners = listenersByKey.get(key);
+        if (!listeners) continue;
+        listeners.delete(listener);
+        if (listeners.size === 0) listenersByKey.delete(key);
+      }
+    };
   };
 
   const close = (): void => {
@@ -52,86 +80,31 @@ export function createInProcessNotifyAdapter({
 
   const members = {
     notifyJobsScheduled: (typeNames: string[]): void => {
-      closed.throwIfTripped();
-      for (const typeName of typeNames) {
-        const listeners = jobScheduledListeners.get(typeName);
-        if (!listeners) continue;
-        for (const listener of Array.from(listeners)) {
-          try {
-            listener(typeName);
-          } catch {}
-        }
-      }
+      notify(jobScheduledListeners, typeNames);
     },
 
-    listenJobScheduled: (
+    listenJobsScheduled: (
       typeNames: string[],
       onNotification: (typeName: string) => void,
-    ): (() => void) => {
-      closed.throwIfTripped();
-      const listener = (typeName: string): void => {
-        onNotification(typeName);
-      };
-      for (const typeName of typeNames) {
-        addListener(jobScheduledListeners, typeName, listener);
-      }
-
-      return () => {
-        for (const typeName of typeNames) {
-          removeListener(jobScheduledListeners, typeName, listener);
-        }
-      };
-    },
+    ): (() => void) => listen(jobScheduledListeners, typeNames, onNotification),
 
     notifyChainsCompleted: (chainIds: string[]): void => {
-      closed.throwIfTripped();
-      for (const chainId of chainIds) {
-        const listeners = chainCompletedListeners.get(chainId);
-        if (!listeners) continue;
-        for (const listener of Array.from(listeners)) {
-          try {
-            listener();
-          } catch {}
-        }
-      }
+      notify(chainCompletedListeners, chainIds);
     },
 
-    listenChainCompleted: (targetChainId: string, onNotification: () => void): (() => void) => {
-      closed.throwIfTripped();
-      const listener = (): void => {
-        onNotification();
-      };
-      addListener(chainCompletedListeners, targetChainId, listener);
-
-      return () => {
-        removeListener(chainCompletedListeners, targetChainId, listener);
-      };
-    },
+    listenChainsCompleted: (
+      chainIds: string[],
+      onNotification: (chainId: string) => void,
+    ): (() => void) => listen(chainCompletedListeners, chainIds, onNotification),
 
     notifyJobAttemptsLost: (jobIds: string[]): void => {
-      closed.throwIfTripped();
-      for (const jobId of jobIds) {
-        const listeners = jobAttemptLostListeners.get(jobId);
-        if (!listeners) continue;
-        for (const listener of Array.from(listeners)) {
-          try {
-            listener();
-          } catch {}
-        }
-      }
+      notify(jobAttemptLostListeners, jobIds);
     },
 
-    listenJobAttemptLost: (targetJobId: string, onNotification: () => void): (() => void) => {
-      closed.throwIfTripped();
-      const listener = (): void => {
-        onNotification();
-      };
-      addListener(jobAttemptLostListeners, targetJobId, listener);
-
-      return () => {
-        removeListener(jobAttemptLostListeners, targetJobId, listener);
-      };
-    },
+    listenJobAttemptsLost: (
+      jobIds: string[],
+      onNotification: (jobId: string) => void,
+    ): (() => void) => listen(jobAttemptLostListeners, jobIds, onNotification),
   };
 
   if (mode === "sync") return { ...members, sync: true, close, [Symbol.dispose]: close };
@@ -139,8 +112,8 @@ export function createInProcessNotifyAdapter({
     notifyJobsScheduled: async (typeNames) => {
       members.notifyJobsScheduled(typeNames);
     },
-    listenJobScheduled: async (typeNames, onNotification) => {
-      const dispose = members.listenJobScheduled(typeNames, onNotification);
+    listenJobsScheduled: async (typeNames, onNotification) => {
+      const dispose = members.listenJobsScheduled(typeNames, onNotification);
       return async () => {
         dispose();
       };
@@ -148,8 +121,8 @@ export function createInProcessNotifyAdapter({
     notifyChainsCompleted: async (chainIds) => {
       members.notifyChainsCompleted(chainIds);
     },
-    listenChainCompleted: async (targetChainId, onNotification) => {
-      const dispose = members.listenChainCompleted(targetChainId, onNotification);
+    listenChainsCompleted: async (chainIds, onNotification) => {
+      const dispose = members.listenChainsCompleted(chainIds, onNotification);
       return async () => {
         dispose();
       };
@@ -157,8 +130,8 @@ export function createInProcessNotifyAdapter({
     notifyJobAttemptsLost: async (jobIds) => {
       members.notifyJobAttemptsLost(jobIds);
     },
-    listenJobAttemptLost: async (targetJobId, onNotification) => {
-      const dispose = members.listenJobAttemptLost(targetJobId, onNotification);
+    listenJobAttemptsLost: async (jobIds, onNotification) => {
+      const dispose = members.listenJobAttemptsLost(jobIds, onNotification);
       return async () => {
         dispose();
       };

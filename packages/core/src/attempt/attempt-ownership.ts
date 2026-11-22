@@ -27,8 +27,8 @@ export const startAttemptOwnership = async (
   if (abortSignal.aborted) abort();
 
   const released = createLatch();
-  const disposeAttemptLostListener = await helpers.notifyHelper.listenJobAttemptLost(
-    stateJob.id,
+  const disposeAttemptLostListener = await helpers.notifyHelper.listenJobAttemptsLost(
+    [stateJob.id],
     () => {
       if (!released.tripped) abortController.abort();
     },

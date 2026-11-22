@@ -45,7 +45,7 @@ export const createMemoryNotifyAdapter = (): NotifyAdapter<"async"> => {
       assertOpen();
       for (const typeName of typeNames) publish(`job-scheduled:${typeName}`);
     },
-    listenJobScheduled: async (typeNames, onNotification) => {
+    listenJobsScheduled: async (typeNames, onNotification) => {
       assertOpen();
       const unsubscribes = typeNames.map((typeName) =>
         subscribe(`job-scheduled:${typeName}`, () => {
@@ -61,13 +61,15 @@ export const createMemoryNotifyAdapter = (): NotifyAdapter<"async"> => {
       assertOpen();
       for (const chainId of chainIds) publish(`chain-completed:${chainId}`);
     },
-    listenChainCompleted: async (chainId, onNotification) => {
+    listenChainsCompleted: async (chainIds, onNotification) => {
       assertOpen();
-      const unsubscribe = subscribe(`chain-completed:${chainId}`, () => {
-        onNotification();
-      });
+      const unsubscribes = chainIds.map((chainId) =>
+        subscribe(`chain-completed:${chainId}`, () => {
+          onNotification(chainId);
+        }),
+      );
       return async () => {
-        unsubscribe();
+        for (const unsubscribe of unsubscribes) unsubscribe();
       };
     },
 
@@ -75,13 +77,15 @@ export const createMemoryNotifyAdapter = (): NotifyAdapter<"async"> => {
       assertOpen();
       for (const jobId of jobIds) publish(`job-attempt-lost:${jobId}`);
     },
-    listenJobAttemptLost: async (jobId, onNotification) => {
+    listenJobAttemptsLost: async (jobIds, onNotification) => {
       assertOpen();
-      const unsubscribe = subscribe(`job-attempt-lost:${jobId}`, () => {
-        onNotification();
-      });
+      const unsubscribes = jobIds.map((jobId) =>
+        subscribe(`job-attempt-lost:${jobId}`, () => {
+          onNotification(jobId);
+        }),
+      );
       return async () => {
-        unsubscribe();
+        for (const unsubscribe of unsubscribes) unsubscribe();
       };
     },
 

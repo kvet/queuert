@@ -12,7 +12,7 @@ const natsSubjectOpen =
     const subscription = nc.subscribe(subject, {
       callback: (_error, message) => {
         const payload = decoder.decode(message.data);
-        dispatch(payload, payload);
+        dispatch(payload);
       },
     });
     return async () => {
@@ -63,18 +63,11 @@ export const createNatsNotifyAdapter = ({
       await nc.flush();
     },
 
-    listenJobScheduled: async (typeNames, onNotification) => {
+    listenJobsScheduled: async (typeNames, onNotification) => {
       closed.throwIfTripped();
-      const unsubs = await Promise.all(
-        typeNames.map(async (typeName) =>
-          jobScheduledListener.subscribe(typeName, () => {
-            onNotification(typeName);
-          }),
-        ),
-      );
-      return async () => {
-        await Promise.all(unsubs.map(async (u) => u()));
-      };
+      return jobScheduledListener.subscribe(typeNames, (typeName) => {
+        onNotification(typeName);
+      });
     },
 
     notifyChainsCompleted: async (chainIds) => {
@@ -85,10 +78,10 @@ export const createNatsNotifyAdapter = ({
       await nc.flush();
     },
 
-    listenChainCompleted: async (chainId, onNotification) => {
+    listenChainsCompleted: async (chainIds, onNotification) => {
       closed.throwIfTripped();
-      return chainCompletedListener.subscribe(chainId, () => {
-        onNotification();
+      return chainCompletedListener.subscribe(chainIds, (chainId) => {
+        onNotification(chainId);
       });
     },
 
@@ -100,10 +93,10 @@ export const createNatsNotifyAdapter = ({
       await nc.flush();
     },
 
-    listenJobAttemptLost: async (jobId, onNotification) => {
+    listenJobAttemptsLost: async (jobIds, onNotification) => {
       closed.throwIfTripped();
-      return attemptLostListener.subscribe(jobId, () => {
-        onNotification();
+      return attemptLostListener.subscribe(jobIds, (jobId) => {
+        onNotification(jobId);
       });
     },
 

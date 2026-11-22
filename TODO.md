@@ -1,6 +1,5 @@
 # Short term
 
-- [TASK] Batched chain-completion subscriptions — `NotifyAdapter.listenChainCompleted` takes one chain id, so `awaitChains` subscribes once per chain; a `listenChainsCompleted(chainIds, onNotification)` lets each notify adapter wait on many chains with one subscription.
 - [TASK] Failing and overdue. See `design/failing-and-overdue.md`.
 - [TASK] State gauges. See `design/state-gauges.md`.
 - [EPIC] Row locks. See `design/row-locks.md`.

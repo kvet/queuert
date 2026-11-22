@@ -28,7 +28,7 @@ const waitFor = async <T>(promise: Promise<T>, label: string): Promise<T> => {
 
 export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceContext>[] = [
   {
-    name: "notifyJobsScheduled / listenJobScheduled",
+    name: "notifyJobsScheduled / listenJobsScheduled",
     cases: [
       {
         name: "listener receives a notification for each type name in the batch",
@@ -37,7 +37,7 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
 
           const received: string[] = [];
           const unsubscribe = yield* step(
-            notifyAdapter.listenJobScheduled(["type-a", "type-b", "type-c"], (typeName) => {
+            notifyAdapter.listenJobsScheduled(["type-a", "type-b", "type-c"], (typeName) => {
               received.push(typeName);
             }),
           );
@@ -62,7 +62,7 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
 
           let count = 0;
           const unsubscribe = yield* step(
-            notifyAdapter.listenJobScheduled(["type-a"], () => {
+            notifyAdapter.listenJobsScheduled(["type-a"], () => {
               count++;
             }),
           );
@@ -89,7 +89,7 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
 
           let callCount = 0;
           const unsubscribe = yield* step(
-            notifyAdapter.listenJobScheduled(["type-a"], () => {
+            notifyAdapter.listenJobsScheduled(["type-a"], () => {
               callCount++;
             }),
           );
@@ -108,7 +108,7 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
 
           const received = Promise.withResolvers<string>();
           const unsubscribe = yield* step(
-            notifyAdapter.listenJobScheduled(["type-a", "type-b"], (typeName) => {
+            notifyAdapter.listenJobsScheduled(["type-a", "type-b"], (typeName) => {
               received.resolve(typeName);
             }),
           );
@@ -130,12 +130,12 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
           const received2 = Promise.withResolvers<void>();
 
           const unsubscribe1 = yield* step(
-            notifyAdapter.listenJobScheduled(["type-multi"], () => {
+            notifyAdapter.listenJobsScheduled(["type-multi"], () => {
               received1.resolve();
             }),
           );
           const unsubscribe2 = yield* step(
-            notifyAdapter.listenJobScheduled(["type-multi"], () => {
+            notifyAdapter.listenJobsScheduled(["type-multi"], () => {
               received2.resolve();
             }),
           );
@@ -157,7 +157,7 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
 
           let callCount = 0;
           const unsubscribe = yield* step(
-            notifyAdapter.listenJobScheduled(["type-a"], () => {
+            notifyAdapter.listenJobsScheduled(["type-a"], () => {
               callCount++;
             }),
           );
@@ -182,25 +182,20 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
     ],
   },
   {
-    name: "notifyChainsCompleted / listenChainCompleted",
+    name: "notifyChainsCompleted / listenChainsCompleted",
     cases: [
       {
-        name: "listener receives chain completion for each chain ID in the batch",
+        name: "one listener receives chain completion for each of its chain IDs",
         run: dynamicSyncAsync(function* ({ createNotifyAdapter }) {
           const notifyAdapter = yield* resource(createNotifyAdapter());
 
           const chainIds = ["chain-1", "chain-2", "chain-3"];
           const received: string[] = [];
-          const unsubscribes = [];
-          for (const chainId of chainIds) {
-            unsubscribes.push(
-              yield* step(
-                notifyAdapter.listenChainCompleted(chainId, () => {
-                  received.push(chainId);
-                }),
-              ),
-            );
-          }
+          const unsubscribe = yield* step(
+            notifyAdapter.listenChainsCompleted(chainIds, (chainId) => {
+              received.push(chainId);
+            }),
+          );
 
           yield* step(notifyAdapter.notifyChainsCompleted(chainIds));
 
@@ -212,17 +207,17 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
               { timeoutMs: DELIVERY_TIMEOUT_MS },
             ),
           );
-          for (const unsubscribe of unsubscribes) yield* step(unsubscribe());
+          yield* step(unsubscribe());
         }),
       },
       {
-        name: "listener does not receive chain completion for different chain ID",
+        name: "listener does not receive chain completion for chain IDs it does not listen on",
         run: dynamicSyncAsync(function* ({ createNotifyAdapter }) {
           const notifyAdapter = yield* resource(createNotifyAdapter());
 
           let callCount = 0;
           const unsubscribe = yield* step(
-            notifyAdapter.listenChainCompleted("chain-123", () => {
+            notifyAdapter.listenChainsCompleted(["chain-123", "chain-124"], () => {
               callCount++;
             }),
           );
@@ -243,12 +238,12 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
           const received2 = Promise.withResolvers<void>();
 
           const unsubscribe1 = yield* step(
-            notifyAdapter.listenChainCompleted("chain-multi", () => {
+            notifyAdapter.listenChainsCompleted(["chain-multi"], () => {
               received1.resolve();
             }),
           );
           const unsubscribe2 = yield* step(
-            notifyAdapter.listenChainCompleted("chain-multi", () => {
+            notifyAdapter.listenChainsCompleted(["chain-multi"], () => {
               received2.resolve();
             }),
           );
@@ -270,13 +265,18 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
 
           let callCount = 0;
           const unsubscribe = yield* step(
-            notifyAdapter.listenChainCompleted("chain-unsubscribe", () => {
-              callCount++;
-            }),
+            notifyAdapter.listenChainsCompleted(
+              ["chain-unsubscribe-1", "chain-unsubscribe-2"],
+              () => {
+                callCount++;
+              },
+            ),
           );
 
           yield* step(unsubscribe());
-          yield* step(notifyAdapter.notifyChainsCompleted(["chain-unsubscribe"]));
+          yield* step(
+            notifyAdapter.notifyChainsCompleted(["chain-unsubscribe-1", "chain-unsubscribe-2"]),
+          );
           yield* wait(sleep(NEGATIVE_ASSERTION_DELAY_MS));
 
           assert.equal(callCount, 0);
@@ -285,25 +285,20 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
     ],
   },
   {
-    name: "notifyJobAttemptsLost / listenJobAttemptLost",
+    name: "notifyJobAttemptsLost / listenJobAttemptsLost",
     cases: [
       {
-        name: "listener receives attempt lost for each job ID in the batch",
+        name: "one listener receives attempt lost for each of its job IDs",
         run: dynamicSyncAsync(function* ({ createNotifyAdapter }) {
           const notifyAdapter = yield* resource(createNotifyAdapter());
 
           const jobIds = ["job-1", "job-2", "job-3"];
           const received: string[] = [];
-          const unsubscribes = [];
-          for (const jobId of jobIds) {
-            unsubscribes.push(
-              yield* step(
-                notifyAdapter.listenJobAttemptLost(jobId, () => {
-                  received.push(jobId);
-                }),
-              ),
-            );
-          }
+          const unsubscribe = yield* step(
+            notifyAdapter.listenJobAttemptsLost(jobIds, (jobId) => {
+              received.push(jobId);
+            }),
+          );
 
           yield* step(notifyAdapter.notifyJobAttemptsLost(jobIds));
 
@@ -315,17 +310,17 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
               { timeoutMs: DELIVERY_TIMEOUT_MS },
             ),
           );
-          for (const unsubscribe of unsubscribes) yield* step(unsubscribe());
+          yield* step(unsubscribe());
         }),
       },
       {
-        name: "listener does not receive attempt lost for different job ID",
+        name: "listener does not receive attempt lost for job IDs it does not listen on",
         run: dynamicSyncAsync(function* ({ createNotifyAdapter }) {
           const notifyAdapter = yield* resource(createNotifyAdapter());
 
           let callCount = 0;
           const unsubscribe = yield* step(
-            notifyAdapter.listenJobAttemptLost("job-123", () => {
+            notifyAdapter.listenJobAttemptsLost(["job-123", "job-124"], () => {
               callCount++;
             }),
           );
@@ -346,12 +341,12 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
           const received2 = Promise.withResolvers<void>();
 
           const unsubscribe1 = yield* step(
-            notifyAdapter.listenJobAttemptLost("job-multi", () => {
+            notifyAdapter.listenJobAttemptsLost(["job-multi"], () => {
               received1.resolve();
             }),
           );
           const unsubscribe2 = yield* step(
-            notifyAdapter.listenJobAttemptLost("job-multi", () => {
+            notifyAdapter.listenJobAttemptsLost(["job-multi"], () => {
               received2.resolve();
             }),
           );
@@ -373,13 +368,15 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
 
           let callCount = 0;
           const unsubscribe = yield* step(
-            notifyAdapter.listenJobAttemptLost("job-unsubscribe", () => {
+            notifyAdapter.listenJobAttemptsLost(["job-unsubscribe-1", "job-unsubscribe-2"], () => {
               callCount++;
             }),
           );
 
           yield* step(unsubscribe());
-          yield* step(notifyAdapter.notifyJobAttemptsLost(["job-unsubscribe"]));
+          yield* step(
+            notifyAdapter.notifyJobAttemptsLost(["job-unsubscribe-1", "job-unsubscribe-2"]),
+          );
           yield* wait(sleep(NEGATIVE_ASSERTION_DELAY_MS));
 
           assert.equal(callCount, 0);
@@ -400,16 +397,11 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
           let received = 0;
           const chainIds = Array.from({ length: count }, (_, i) => `chain-flush-${i}`);
 
-          const unsubscribes = [];
-          for (const id of chainIds) {
-            unsubscribes.push(
-              yield* step(
-                notifyAdapter.listenChainCompleted(id, () => {
-                  received++;
-                }),
-              ),
-            );
-          }
+          const unsubscribe = yield* step(
+            notifyAdapter.listenChainsCompleted(chainIds, () => {
+              received++;
+            }),
+          );
 
           for (let i = 0; i < half; i++) {
             yield* step(notifyAdapter.notifyChainsCompleted([chainIds[i]]));
@@ -431,7 +423,7 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
           );
           assert.ok(receivedMidLoop > 0);
 
-          for (const unsubscribe of unsubscribes) yield* step(unsubscribe());
+          yield* step(unsubscribe());
         }),
       },
     ],
@@ -455,17 +447,17 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
           const sharedId = "shared-id";
           const received: string[] = [];
           const unsubscribeScheduled = yield* step(
-            notifyAdapter.listenJobScheduled([sharedId], () => {
+            notifyAdapter.listenJobsScheduled([sharedId], () => {
               received.push("scheduled");
             }),
           );
           const unsubscribeCompleted = yield* step(
-            notifyAdapter.listenChainCompleted(sharedId, () => {
+            notifyAdapter.listenChainsCompleted([sharedId], () => {
               received.push("completed");
             }),
           );
           const unsubscribeLost = yield* step(
-            notifyAdapter.listenJobAttemptLost(sharedId, () => {
+            notifyAdapter.listenJobAttemptsLost([sharedId], () => {
               received.push("lost");
             }),
           );
@@ -510,9 +502,13 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
         run: dynamicSyncAsync(function* ({ createNotifyAdapter }) {
           const notifyAdapter = yield* resource(createNotifyAdapter());
 
-          const unsubscribe1 = yield* step(notifyAdapter.listenJobScheduled(["type-a"], () => {}));
-          const unsubscribe2 = yield* step(notifyAdapter.listenChainCompleted("chain-1", () => {}));
-          const unsubscribe3 = yield* step(notifyAdapter.listenJobAttemptLost("job-1", () => {}));
+          const unsubscribe1 = yield* step(notifyAdapter.listenJobsScheduled(["type-a"], () => {}));
+          const unsubscribe2 = yield* step(
+            notifyAdapter.listenChainsCompleted(["chain-1"], () => {}),
+          );
+          const unsubscribe3 = yield* step(
+            notifyAdapter.listenJobAttemptsLost(["job-1"], () => {}),
+          );
 
           assert.equal(typeof unsubscribe1, "function");
           assert.equal(typeof unsubscribe2, "function");
@@ -528,12 +524,12 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
         run: dynamicSyncAsync(function* ({ createNotifyAdapter }) {
           const notifyAdapter = yield* resource(createNotifyAdapter());
 
-          const unsubscribe1 = yield* step(notifyAdapter.listenJobScheduled(["type-a"], () => {}));
+          const unsubscribe1 = yield* step(notifyAdapter.listenJobsScheduled(["type-a"], () => {}));
           yield* step(unsubscribe1());
 
           const received = Promise.withResolvers<string>();
           const unsubscribe2 = yield* step(
-            notifyAdapter.listenJobScheduled(["type-a"], (typeName) => {
+            notifyAdapter.listenJobsScheduled(["type-a"], (typeName) => {
               received.resolve(typeName);
             }),
           );
@@ -547,31 +543,40 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
         }),
       },
       {
-        name: "unsubscribe one of two listeners, remaining still receives",
+        name: "unsubscribe one of two listeners sharing a callback and a chain ID, remaining still receives",
         run: dynamicSyncAsync(function* ({ createNotifyAdapter }) {
           const notifyAdapter = yield* resource(createNotifyAdapter());
 
-          let count1 = 0;
-          const received2 = Promise.withResolvers<void>();
+          const received: string[] = [];
+          const receivedShared = Promise.withResolvers<void>();
+          const onNotification = (chainId: string): void => {
+            received.push(chainId);
+            if (chainId === "chain-partial-shared") receivedShared.resolve();
+          };
 
           const unsubscribe1 = yield* step(
-            notifyAdapter.listenChainCompleted("chain-partial", () => {
-              count1++;
-            }),
+            notifyAdapter.listenChainsCompleted(
+              ["chain-partial-only-1", "chain-partial-shared"],
+              onNotification,
+            ),
           );
           const unsubscribe2 = yield* step(
-            notifyAdapter.listenChainCompleted("chain-partial", () => {
-              received2.resolve();
-            }),
+            notifyAdapter.listenChainsCompleted(
+              ["chain-partial-shared", "chain-partial-only-2"],
+              onNotification,
+            ),
           );
 
           yield* step(unsubscribe1());
 
-          yield* step(notifyAdapter.notifyChainsCompleted(["chain-partial"]));
+          yield* step(
+            notifyAdapter.notifyChainsCompleted(["chain-partial-only-1", "chain-partial-shared"]),
+          );
 
-          yield* wait(waitFor(received2.promise, "notification"));
+          yield* wait(waitFor(receivedShared.promise, "notification"));
+          yield* wait(sleep(NEGATIVE_ASSERTION_DELAY_MS));
 
-          assert.equal(count1, 0);
+          assert.deepEqual(received, ["chain-partial-shared"]);
           yield* step(unsubscribe2());
         }),
       },
@@ -587,12 +592,12 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
 
           const peerCalled = Promise.withResolvers<void>();
           const unsubBad = yield* step(
-            notifyAdapter.listenChainCompleted("chain-throw", () => {
+            notifyAdapter.listenChainsCompleted(["chain-throw"], () => {
               throw new Error("bad listener");
             }),
           );
           const unsubGood = yield* step(
-            notifyAdapter.listenChainCompleted("chain-throw", () => {
+            notifyAdapter.listenChainsCompleted(["chain-throw"], () => {
               peerCalled.resolve();
             }),
           );
@@ -612,12 +617,12 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
           const peerCalled = Promise.withResolvers<void>();
           let unsubSelf: (() => unknown) | undefined;
           unsubSelf = yield* step(
-            notifyAdapter.listenChainCompleted("chain-self-unsub", () => {
+            notifyAdapter.listenChainsCompleted(["chain-self-unsub"], () => {
               void unsubSelf?.();
             }),
           );
           const unsubPeer = yield* step(
-            notifyAdapter.listenChainCompleted("chain-self-unsub", () => {
+            notifyAdapter.listenChainsCompleted(["chain-self-unsub"], () => {
               peerCalled.resolve();
             }),
           );
@@ -644,9 +649,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
           };
           process.on("unhandledRejection", handler);
           try {
-            const u1 = yield* step(notifyAdapter.listenJobScheduled(["type-a"], () => {}));
-            const u2 = yield* step(notifyAdapter.listenChainCompleted("chain-1", () => {}));
-            const u3 = yield* step(notifyAdapter.listenJobAttemptLost("job-1", () => {}));
+            const u1 = yield* step(notifyAdapter.listenJobsScheduled(["type-a"], () => {}));
+            const u2 = yield* step(notifyAdapter.listenChainsCompleted(["chain-1"], () => {}));
+            const u3 = yield* step(notifyAdapter.listenJobAttemptsLost(["job-1"], () => {}));
 
             yield* step(notifyAdapter.notifyJobsScheduled(["type-a"]));
             yield* step(notifyAdapter.notifyChainsCompleted(["chain-1"]));
@@ -676,7 +681,9 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
         run: dynamicSyncAsync(function* ({ createNotifyAdapter }) {
           const notifyAdapter = yield* resource(createNotifyAdapter());
 
-          const unsubscribe = yield* step(notifyAdapter.listenChainCompleted("chain-1", () => {}));
+          const unsubscribe = yield* step(
+            notifyAdapter.listenChainsCompleted(["chain-1"], () => {}),
+          );
 
           yield* step(notifyAdapter.close());
           yield* step(notifyAdapter.close());
@@ -684,11 +691,15 @@ export const notifyAdapterBaseGroups: ConformanceGroup<NotifyAdapterConformanceC
           yield* step(unsubscribe());
 
           yield* step(assertRejects(() => notifyAdapter.notifyJobsScheduled(["type-a"])));
-          yield* step(assertRejects(() => notifyAdapter.listenJobScheduled(["type-a"], () => {})));
+          yield* step(assertRejects(() => notifyAdapter.listenJobsScheduled(["type-a"], () => {})));
           yield* step(assertRejects(() => notifyAdapter.notifyChainsCompleted(["chain-1"])));
-          yield* step(assertRejects(() => notifyAdapter.listenChainCompleted("chain-1", () => {})));
+          yield* step(
+            assertRejects(() => notifyAdapter.listenChainsCompleted(["chain-1"], () => {})),
+          );
           yield* step(assertRejects(() => notifyAdapter.notifyJobAttemptsLost(["job-1"])));
-          yield* step(assertRejects(() => notifyAdapter.listenJobAttemptLost("job-1", () => {})));
+          yield* step(
+            assertRejects(() => notifyAdapter.listenJobAttemptsLost(["job-1"], () => {})),
+          );
         }),
       },
     ],

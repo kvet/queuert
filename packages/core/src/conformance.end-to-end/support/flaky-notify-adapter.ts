@@ -7,11 +7,11 @@ export type FlakyCallCounts = { calls: number; errors: number };
 
 const flakyMethods = [
   "notifyJobsScheduled",
-  "listenJobScheduled",
+  "listenJobsScheduled",
   "notifyChainsCompleted",
-  "listenChainCompleted",
+  "listenChainsCompleted",
   "notifyJobAttemptsLost",
-  "listenJobAttemptLost",
+  "listenJobAttemptsLost",
 ] as const;
 
 export const createFlakyNotifyAdapter = <TNotifyAdapter extends NotifyAdapter<Mode>>(

@@ -298,18 +298,18 @@ export const createIpcNotifyAdapter = ({
     notifyJobsScheduled: (typeNames) => {
       publish("jobScheduled", typeNames);
     },
-    listenJobScheduled: (typeNames, onNotification) =>
+    listenJobsScheduled: (typeNames, onNotification) =>
       subscribe("jobScheduled", typeNames, onNotification),
     notifyChainsCompleted: (chainIds) => {
       publish("chainCompleted", chainIds);
     },
-    listenChainCompleted: (chainId, onNotification) =>
-      subscribe("chainCompleted", [chainId], onNotification),
+    listenChainsCompleted: (chainIds, onNotification) =>
+      subscribe("chainCompleted", chainIds, onNotification),
     notifyJobAttemptsLost: (jobIds) => {
       publish("jobAttemptLost", jobIds);
     },
-    listenJobAttemptLost: (jobId, onNotification) =>
-      subscribe("jobAttemptLost", [jobId], onNotification),
+    listenJobAttemptsLost: (jobIds, onNotification) =>
+      subscribe("jobAttemptLost", jobIds, onNotification),
     close,
     [Symbol.dispose]: close,
   };
