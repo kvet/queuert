@@ -90,7 +90,7 @@ export const countChainsByTypeNameGroup: ConformanceGroup<StateAdapterConformanc
 
         const [acquired] = yield* step(
           stateAdapter.startJobAttempts({
-            typeNames: ["chain-done"],
+            batchLimits: { "chain-done": 1 },
             workerId: worker.id,
             workerToken: worker.token,
             limit: 1,

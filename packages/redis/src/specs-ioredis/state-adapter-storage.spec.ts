@@ -95,7 +95,7 @@ describe("Redis state adapter storage", () => {
       leaseMs: 60_000,
     });
     await stateAdapter.startJobAttempts({
-      typeNames: ["send-welcome-email"],
+      batchLimits: { "send-welcome-email": 1 },
       workerId: worker.id,
       workerToken: worker.token,
       limit: 1,

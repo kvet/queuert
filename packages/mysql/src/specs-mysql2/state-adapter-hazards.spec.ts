@@ -101,7 +101,7 @@ const defineMysqlHazardsSuite = async ({
       });
 
       const claimed = await adapter.startJobAttempts({
-        typeNames: [base],
+        batchLimits: { [base]: 1 },
         workerId: worker.id,
         workerToken: worker.token,
         limit: 10,

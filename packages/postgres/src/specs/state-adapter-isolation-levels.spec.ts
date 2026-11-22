@@ -130,7 +130,7 @@ describe.each([
         txCtx,
         workerId: worker.id,
         workerToken: worker.token,
-        typeNames: [typeName],
+        batchLimits: { [typeName]: 1 },
         limit: 1,
       });
       acquired.resolve();

@@ -94,7 +94,7 @@ describe("Redis state adapter reliability", () => {
     const claimed = await stateAdapter.startJobAttempts({
       workerId: worker.id,
       workerToken: worker.token,
-      typeNames: ["task"],
+      batchLimits: { task: 1 },
       limit: 1,
     });
     setIntercept(undefined);
@@ -140,7 +140,7 @@ describe("Redis state adapter reliability", () => {
       const jobs = await stateAdapter.startJobAttempts({
         workerId: worker.id,
         workerToken: worker.token,
-        typeNames: ["task"],
+        batchLimits: { task: 1 },
         limit: 1,
       });
       return [delay, jobs] as const;
@@ -244,7 +244,7 @@ describe("Redis state adapter reliability", () => {
     const [first] = await stateAdapter.startJobAttempts({
       workerId: worker.id,
       workerToken: worker.token,
-      typeNames: ["task"],
+      batchLimits: { task: 1 },
       limit: 1,
     });
     await stateAdapter.withTransaction(async (txCtx) =>
@@ -257,7 +257,7 @@ describe("Redis state adapter reliability", () => {
     const [second] = await stateAdapter.startJobAttempts({
       workerId: worker.id,
       workerToken: worker.token,
-      typeNames: ["task"],
+      batchLimits: { task: 1 },
       limit: 1,
     });
 

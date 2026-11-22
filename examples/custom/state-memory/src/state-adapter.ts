@@ -414,21 +414,27 @@ export const createMemoryStateAdapter = (
         return deleted;
       }),
 
-    startJobAttempts: async ({ txCtx, typeNames, workerId, workerToken, limit }) =>
+    startJobAttempts: async ({ txCtx, batchLimits, workerId, workerToken, limit }) =>
       write(txCtx, (state) => {
         const now = new Date();
         const worker = state.workers.get(workerId);
         if (!worker || worker.token !== workerToken || !isLive(worker, now)) return [];
 
-        const due = [...state.jobs.values()]
-          .filter(
-            (job) =>
-              job.status === "pending" &&
-              typeNames.includes(job.typeName) &&
-              job.scheduledAt <= now,
-          )
-          .toSorted((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime())
-          .slice(0, limit);
+        const due = Object.entries(batchLimits)
+          .flatMap(([typeName, batchLimit]) => {
+            const typeJobs = [...state.jobs.values()]
+              .filter(
+                (job) =>
+                  job.status === "pending" && job.typeName === typeName && job.scheduledAt <= now,
+              )
+              .toSorted((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
+            return Array.from({ length: Math.ceil(typeJobs.length / batchLimit) }, (_, index) =>
+              typeJobs.slice(index * batchLimit, (index + 1) * batchLimit),
+            );
+          })
+          .toSorted((a, b) => a[0].scheduledAt.getTime() - b[0].scheduledAt.getTime())
+          .slice(0, limit)
+          .flat();
         return due.map((job) => {
           job.status = "running";
           job.attempt += 1;

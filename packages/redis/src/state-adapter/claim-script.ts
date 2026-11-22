@@ -44,13 +44,14 @@ if worker.token ~= args.workerToken or worker.leaseUntil <= args.now then
   return {}
 end
 
-local candidates = {}
-local pageSize = args.limit + args.lockedSlack
-for _, typeName in ipairs(args.typeNames) do
+local batches = {}
+for typeName, batchLimit in pairs(args.batchLimits) do
   local dueKey = ${keyOf(keys.due, "typeName")}
-  local found = 0
+  local typeLimit = args.limit * batchLimit
+  local pageSize = typeLimit + args.lockedSlack
+  local candidates = {}
   local offset = 0
-  while found < args.limit and offset < args.scanCap do
+  while #candidates < typeLimit and offset < args.scanCap do
     local due = redis.call(
       'ZRANGEBYSCORE', dueKey, '-inf', args.now, 'WITHSCORES', 'LIMIT', offset, pageSize
     )
@@ -59,8 +60,7 @@ for _, typeName in ipairs(args.typeNames) do
       local id = ${dueJobIdLua("member")}
       if redis.call('EXISTS', ${keyOf(keys.jobLock, "id")}) == 0 then
         table.insert(candidates, { member = member, id = id, score = tonumber(due[index + 1]) })
-        found = found + 1
-        if found >= args.limit then
+        if #candidates >= typeLimit then
           break
         end
       end
@@ -70,8 +70,15 @@ for _, typeName in ipairs(args.typeNames) do
     end
     offset = offset + pageSize
   end
+  for first = 1, #candidates, batchLimit do
+    local batch = { member = candidates[first].member, score = candidates[first].score, jobs = {} }
+    for index = first, math.min(first + batchLimit - 1, #candidates) do
+      table.insert(batch.jobs, candidates[index])
+    end
+    table.insert(batches, batch)
+  end
 end
-table.sort(candidates, function(a, b)
+table.sort(batches, function(a, b)
   if a.score ~= b.score then
     return a.score < b.score
   end
@@ -81,35 +88,34 @@ end)
 local version = nil
 local claimed = {}
 local claimedCount = 0
-for index = 1, #candidates do
-  if claimedCount >= args.limit then
-    break
-  end
-  local id = candidates[index].id
-  local jobKey = ${keyOf(keys.job, "id")}
-  local data = redis.call('HGET', jobKey, 'd')
-  if data then
-    local job = cjson.decode(data)
-    if job.status == 'pending' then
-      version = version or redis.call('INCR', KEYS[1])
-      job.status = 'running'
-      job.attempt = job.attempt + 1
-      job.attemptAt = args.now
-      job.attemptBy = args.workerId
-      claimedCount = claimedCount + 1
-      job.attemptToken = args.attemptTokens[claimedCount]
-      local encoded = cjson.encode(job)
-      redis.call('HSET', jobKey, 'v', version, 'd', encoded)
+for batchIndex = 1, math.min(#batches, args.limit) do
+  for _, candidate in ipairs(batches[batchIndex].jobs) do
+    local id = candidate.id
+    local jobKey = ${keyOf(keys.job, "id")}
+    local data = redis.call('HGET', jobKey, 'd')
+    if data then
+      local job = cjson.decode(data)
+      if job.status == 'pending' then
+        version = version or redis.call('INCR', KEYS[1])
+        job.status = 'running'
+        job.attempt = job.attempt + 1
+        job.attemptAt = args.now
+        job.attemptBy = args.workerId
+        claimedCount = claimedCount + 1
+        job.attemptToken = args.attemptTokens[claimedCount]
+        local encoded = cjson.encode(job)
+        redis.call('HSET', jobKey, 'v', version, 'd', encoded)
 ${claimIndexMovesLua}
-      table.insert(claimed, encoded)
-      table.insert(claimed, redis.call('HGET', jobKey, 'u') or false)
-      if job.chainId == id then
-        table.insert(claimed, false)
-        table.insert(claimed, false)
-      else
-        local headKey = ${keyOf(keys.job, "job.chainId")}
-        table.insert(claimed, redis.call('HGET', headKey, 'd') or false)
-        table.insert(claimed, redis.call('HGET', headKey, 'u') or false)
+        table.insert(claimed, encoded)
+        table.insert(claimed, redis.call('HGET', jobKey, 'u') or false)
+        if job.chainId == id then
+          table.insert(claimed, false)
+          table.insert(claimed, false)
+        else
+          local headKey = ${keyOf(keys.job, "job.chainId")}
+          table.insert(claimed, redis.call('HGET', headKey, 'd') or false)
+          table.insert(claimed, redis.call('HGET', headKey, 'u') or false)
+        end
       end
     end
   end

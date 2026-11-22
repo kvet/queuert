@@ -456,7 +456,7 @@ for (const { label, snapshotIsolation, it } of suites) {
         }),
       );
       const [attempt] = await stateAdapter.startJobAttempts({
-        typeNames: [typeName],
+        batchLimits: { [typeName]: 1 },
         workerId: worker.id,
         workerToken: worker.token,
         limit: 1,

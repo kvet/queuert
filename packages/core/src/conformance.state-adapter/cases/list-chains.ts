@@ -414,7 +414,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["task"],
+            batchLimits: { task: 1 },
             limit: 1,
           }),
         );
@@ -422,7 +422,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["task"],
+            batchLimits: { task: 1 },
             limit: 1,
           }),
         );
@@ -503,7 +503,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
             stateAdapter.startJobAttempts({
               workerId: worker.id,
               workerToken: worker.token,
-              typeNames: ["task"],
+              batchLimits: { task: 1 },
               limit: 1,
             }),
           );
@@ -582,7 +582,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
             stateAdapter.startJobAttempts({
               workerId: worker.id,
               workerToken: worker.token,
-              typeNames: ["task"],
+              batchLimits: { task: 1 },
               limit: 1,
             }),
           );
@@ -666,7 +666,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["test-type"],
+            batchLimits: { "test-type": 1 },
             limit: 1,
           }),
         );
@@ -981,7 +981,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["task"],
+            batchLimits: { task: 1 },
             limit: 1,
           }),
         );
@@ -989,7 +989,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["task"],
+            batchLimits: { task: 1 },
             limit: 1,
           }),
         );
@@ -997,7 +997,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["task"],
+            batchLimits: { task: 1 },
             limit: 1,
           }),
         );
@@ -1073,7 +1073,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["task"],
+            batchLimits: { task: 1 },
             limit: 1,
           }),
         );
@@ -1081,7 +1081,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["task"],
+            batchLimits: { task: 1 },
             limit: 1,
           }),
         );
@@ -1132,7 +1132,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
             stateAdapter.startJobAttempts({
               workerId: worker.id,
               workerToken: worker.token,
-              typeNames: ["task"],
+              batchLimits: { task: 1 },
               limit: 1,
             }),
           );
@@ -1221,7 +1221,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
             stateAdapter.startJobAttempts({
               workerId: worker.id,
               workerToken: worker.token,
-              typeNames: ["task"],
+              batchLimits: { task: 1 },
               limit: 1,
             }),
           );
@@ -1307,7 +1307,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
             stateAdapter.startJobAttempts({
               workerId: worker.id,
               workerToken: worker.token,
-              typeNames: ["task"],
+              batchLimits: { task: 1 },
               limit: 1,
             }),
           );
@@ -1366,7 +1366,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
             stateAdapter.startJobAttempts({
               workerId: worker.id,
               workerToken: worker.token,
-              typeNames: ["task"],
+              batchLimits: { task: 1 },
               limit: 1,
             }),
           );
@@ -1447,7 +1447,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["task"],
+            batchLimits: { task: 1 },
             limit: 1,
           }),
         );
@@ -1472,7 +1472,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["task"],
+            batchLimits: { task: 1 },
             limit: 1,
           }),
         );
@@ -1516,7 +1516,7 @@ export const listChainsGroup: ConformanceGroup<StateAdapterConformanceContext> =
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["task-step2"],
+            batchLimits: { "task-step2": 1 },
             limit: 1,
           }),
         );

@@ -174,7 +174,7 @@ describe("transaction conflict retries", () => {
     );
 
     const acquired = await stateAdapter.startJobAttempts({
-      typeNames: ["retried-acquisition"],
+      batchLimits: { "retried-acquisition": 1 },
       workerId: worker.id,
       workerToken: worker.token,
       limit: 1,

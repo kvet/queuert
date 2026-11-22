@@ -75,7 +75,7 @@ export const startAttempt = async (
   await stateAdapter.startJobAttempts({
     workerId: "worker-1",
     workerToken: worker!.token,
-    typeNames: [typeName],
+    batchLimits: { [typeName]: 1 },
     limit: 1,
   });
 };

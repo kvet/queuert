@@ -1776,7 +1776,7 @@ SELECT
       });
     },
 
-    startJobAttempts: async ({ txCtx, typeNames, workerId, workerToken, limit }) => {
+    startJobAttempts: async ({ txCtx, batchLimits, workerId, workerToken, limit }) => {
       const results = await execute(
         txCtx,
         prepared(
@@ -1791,24 +1791,38 @@ WITH live_worker AS (
     AND ${FENCE_GUARD}
   RETURNING w.id
 ),
-acquired_jobs AS (
-  SELECT j.id
+candidate_jobs AS (
+  SELECT j.id, j.scheduled_at, t.type_order, t.batch_limit
   FROM (
-    SELECT type_name
-    FROM unnest($1::text[]) AS u(type_name)
-    ORDER BY random()
+    SELECT type_name, batch_limit, random() AS type_order
+    FROM unnest($1::text[], $5::int[]) AS u(type_name, batch_limit)
+    ORDER BY type_order
   ) AS t
   CROSS JOIN LATERAL (
-    SELECT j.id
+    SELECT j.id, j.scheduled_at
     FROM {{schema}}.{{table_prefix}}job j
     WHERE j.type_name = t.type_name
       AND j.status = 'pending'
       AND j.scheduled_at <= statement_timestamp()
     ORDER BY j.scheduled_at ASC
-    LIMIT $3
+    LIMIT $3 * t.batch_limit
     FOR UPDATE OF j SKIP LOCKED
   ) j
   WHERE EXISTS (SELECT 1 FROM live_worker)
+  LIMIT $3 * (SELECT max(batch_limit) FROM unnest($5::int[]) AS u(batch_limit))
+),
+numbered_jobs AS (
+  SELECT
+    id,
+    type_order,
+    (row_number() OVER (PARTITION BY type_order ORDER BY scheduled_at, id) - 1)
+      / batch_limit AS batch_index
+  FROM candidate_jobs
+),
+acquired_batches AS (
+  SELECT DISTINCT type_order, batch_index
+  FROM numbered_jobs
+  ORDER BY type_order, batch_index
   LIMIT $3
 ),
 updated AS (
@@ -1818,8 +1832,9 @@ updated AS (
     attempt_at = statement_timestamp(),
     attempt_by = $2::{{worker_id_type}},
     attempt_token = gen_random_uuid()
-  FROM acquired_jobs a
-  WHERE job.id = a.id
+  FROM numbered_jobs n
+  JOIN acquired_batches b ON b.type_order = n.type_order AND b.batch_index = n.batch_index
+  WHERE job.id = n.id
     AND ${FENCE_GUARD}
   RETURNING job.*
 )
@@ -1833,11 +1848,11 @@ FROM updated u
 JOIN {{schema}}.{{table_prefix}}job h ON h.id = u.chain_id
 `,
           {
-            params: [t.array(), workerIdDataType, t.number(), t.uuid()],
+            params: [t.array(), workerIdDataType, t.number(), t.uuid(), t.array<number>()],
             columns: { ...dbStateJobColumns, has_blockers: t.boolean() },
           },
         ),
-        [typeNames, workerId, limit, workerToken],
+        [Object.keys(batchLimits), workerId, limit, workerToken, Object.values(batchLimits)],
       );
 
       return results.map((row) => ({

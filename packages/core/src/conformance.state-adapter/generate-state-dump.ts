@@ -260,7 +260,7 @@ export const generateStateDump = ({ scale = 1 }: { scale?: number } = {}): {
   ): StateJob[] =>
     stateAdapter.startJobAttempts({
       txCtx,
-      typeNames: [typeName],
+      batchLimits: { [typeName]: 1 },
       workerId: worker.id,
       workerToken: worker.token,
       limit,

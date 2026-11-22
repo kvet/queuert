@@ -651,19 +651,26 @@ SCAN queuert_schema_fence_v2
 
 ```
 SEARCH queuert_job USING COVERING INDEX sqlite_autoindex_queuert_job_1 (id=?)
-LIST SUBQUERY 3
-SEARCH queuert_job USING INDEX queuert_job_pending_idx (type_name=? AND scheduled_at<?)
-LIST SUBQUERY 2
-SCAN json_each VIRTUAL TABLE INDEX 1:
+LIST SUBQUERY 5
+MATERIALIZE candidate_jobs
+CO-ROUTINE (subquery-15)
+SCAN t VIRTUAL TABLE INDEX 1:
+SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED LIST SUBQUERY 1
+SEARCH p USING INDEX queuert_job_pending_idx (type_name=? AND scheduled_at<?)
 USE TEMP B-TREE FOR ORDER BY
-SCALAR SUBQUERY 1
-SEARCH queuert_worker USING INDEX sqlite_autoindex_queuert_worker_1 (id=?)
+SCAN (subquery-15)
+MATERIALIZE acquired_batches
+SCAN candidate_jobs
+USE TEMP B-TREE FOR GROUP BY
+USE TEMP B-TREE FOR ORDER BY
+SCAN b
+BLOOM FILTER ON c (batch_index=? AND type_name=?)
+SEARCH c USING AUTOMATIC COVERING INDEX (batch_index=? AND type_name=?)
 SCALAR SUBQUERY 4
+SEARCH queuert_worker USING INDEX sqlite_autoindex_queuert_worker_1 (id=?)
+SCALAR SUBQUERY 6
 SCAN queuert_schema_fence_v2
-CORRELATED SCALAR SUBQUERY 5
-SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
-CORRELATED SCALAR SUBQUERY 6
-SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
 CORRELATED SCALAR SUBQUERY 7
 SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
 CORRELATED SCALAR SUBQUERY 8
@@ -675,6 +682,10 @@ SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
 CORRELATED SCALAR SUBQUERY 11
 SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
 CORRELATED SCALAR SUBQUERY 12
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 13
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 14
 SEARCH jb USING COVERING INDEX sqlite_autoindex_queuert_job_blocker_1 (job_id=?)
 ```
 
@@ -684,19 +695,26 @@ SEARCH jb USING COVERING INDEX sqlite_autoindex_queuert_job_blocker_1 (job_id=?)
 
 ```
 SEARCH queuert_job USING COVERING INDEX sqlite_autoindex_queuert_job_1 (id=?)
-LIST SUBQUERY 3
-SEARCH queuert_job USING INDEX queuert_job_pending_idx (type_name=? AND scheduled_at<?)
-LIST SUBQUERY 2
-SCAN json_each VIRTUAL TABLE INDEX 1:
+LIST SUBQUERY 5
+MATERIALIZE candidate_jobs
+CO-ROUTINE (subquery-15)
+SCAN t VIRTUAL TABLE INDEX 1:
+SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED LIST SUBQUERY 1
+SEARCH p USING INDEX queuert_job_pending_idx (type_name=? AND scheduled_at<?)
 USE TEMP B-TREE FOR ORDER BY
-SCALAR SUBQUERY 1
-SEARCH queuert_worker USING INDEX sqlite_autoindex_queuert_worker_1 (id=?)
+SCAN (subquery-15)
+MATERIALIZE acquired_batches
+SCAN candidate_jobs
+USE TEMP B-TREE FOR GROUP BY
+USE TEMP B-TREE FOR ORDER BY
+SCAN b
+BLOOM FILTER ON c (batch_index=? AND type_name=?)
+SEARCH c USING AUTOMATIC COVERING INDEX (batch_index=? AND type_name=?)
 SCALAR SUBQUERY 4
+SEARCH queuert_worker USING INDEX sqlite_autoindex_queuert_worker_1 (id=?)
+SCALAR SUBQUERY 6
 SCAN queuert_schema_fence_v2
-CORRELATED SCALAR SUBQUERY 5
-SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
-CORRELATED SCALAR SUBQUERY 6
-SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
 CORRELATED SCALAR SUBQUERY 7
 SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
 CORRELATED SCALAR SUBQUERY 8
@@ -708,6 +726,54 @@ SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
 CORRELATED SCALAR SUBQUERY 11
 SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
 CORRELATED SCALAR SUBQUERY 12
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 13
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 14
+SEARCH jb USING COVERING INDEX sqlite_autoindex_queuert_job_blocker_1 (job_id=?)
+```
+
+## startJobAttempts/batchLimit10
+
+1. `startJobAttempts`
+
+```
+SEARCH queuert_job USING COVERING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+LIST SUBQUERY 5
+MATERIALIZE candidate_jobs
+CO-ROUTINE (subquery-15)
+SCAN t VIRTUAL TABLE INDEX 1:
+SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED LIST SUBQUERY 1
+SEARCH p USING INDEX queuert_job_pending_idx (type_name=? AND scheduled_at<?)
+USE TEMP B-TREE FOR ORDER BY
+SCAN (subquery-15)
+MATERIALIZE acquired_batches
+SCAN candidate_jobs
+USE TEMP B-TREE FOR GROUP BY
+USE TEMP B-TREE FOR ORDER BY
+SCAN b
+BLOOM FILTER ON c (batch_index=? AND type_name=?)
+SEARCH c USING AUTOMATIC COVERING INDEX (batch_index=? AND type_name=?)
+SCALAR SUBQUERY 4
+SEARCH queuert_worker USING INDEX sqlite_autoindex_queuert_worker_1 (id=?)
+SCALAR SUBQUERY 6
+SCAN queuert_schema_fence_v2
+CORRELATED SCALAR SUBQUERY 7
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 8
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 9
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 10
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 11
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 12
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 13
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 14
 SEARCH jb USING COVERING INDEX sqlite_autoindex_queuert_job_blocker_1 (job_id=?)
 ```
 
@@ -717,19 +783,26 @@ SEARCH jb USING COVERING INDEX sqlite_autoindex_queuert_job_blocker_1 (job_id=?)
 
 ```
 SEARCH queuert_job USING COVERING INDEX sqlite_autoindex_queuert_job_1 (id=?)
-LIST SUBQUERY 3
-SEARCH queuert_job USING INDEX queuert_job_pending_idx (type_name=? AND scheduled_at<?)
-LIST SUBQUERY 2
-SCAN json_each VIRTUAL TABLE INDEX 1:
+LIST SUBQUERY 5
+MATERIALIZE candidate_jobs
+CO-ROUTINE (subquery-15)
+SCAN t VIRTUAL TABLE INDEX 1:
+SEARCH j USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED LIST SUBQUERY 1
+SEARCH p USING INDEX queuert_job_pending_idx (type_name=? AND scheduled_at<?)
 USE TEMP B-TREE FOR ORDER BY
-SCALAR SUBQUERY 1
-SEARCH queuert_worker USING INDEX sqlite_autoindex_queuert_worker_1 (id=?)
+SCAN (subquery-15)
+MATERIALIZE acquired_batches
+SCAN candidate_jobs
+USE TEMP B-TREE FOR GROUP BY
+USE TEMP B-TREE FOR ORDER BY
+SCAN b
+BLOOM FILTER ON c (batch_index=? AND type_name=?)
+SEARCH c USING AUTOMATIC COVERING INDEX (batch_index=? AND type_name=?)
 SCALAR SUBQUERY 4
+SEARCH queuert_worker USING INDEX sqlite_autoindex_queuert_worker_1 (id=?)
+SCALAR SUBQUERY 6
 SCAN queuert_schema_fence_v2
-CORRELATED SCALAR SUBQUERY 5
-SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
-CORRELATED SCALAR SUBQUERY 6
-SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
 CORRELATED SCALAR SUBQUERY 7
 SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
 CORRELATED SCALAR SUBQUERY 8
@@ -741,6 +814,10 @@ SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
 CORRELATED SCALAR SUBQUERY 11
 SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
 CORRELATED SCALAR SUBQUERY 12
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 13
+SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+CORRELATED SCALAR SUBQUERY 14
 SEARCH jb USING COVERING INDEX sqlite_autoindex_queuert_job_blocker_1 (job_id=?)
 ```
 

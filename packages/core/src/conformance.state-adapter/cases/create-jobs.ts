@@ -414,7 +414,7 @@ export const createJobsGroup: ConformanceGroup<StateAdapterConformanceContext> =
                     txCtx,
                     workerId: worker.id,
                     workerToken: worker.token,
-                    typeNames: ["step1"],
+                    batchLimits: { step1: 1 },
                     limit: 1,
                   }),
                 );

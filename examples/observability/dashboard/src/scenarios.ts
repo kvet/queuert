@@ -447,7 +447,7 @@ export const populateScenarios = async ({
       leaseMs: options.leaseMs,
     });
     stateAdapter.startJobAttempts({
-      typeNames: ["long-task"],
+      batchLimits: { "long-task": 1 },
       workerId,
       workerToken: worker.token,
       limit: 1,

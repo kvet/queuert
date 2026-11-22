@@ -215,7 +215,7 @@ const buildState = async (stateAdapter: RedisStateAdapter) => {
   const claimed = await stateAdapter.startJobAttempts({
     workerId: crmWorker.id,
     workerToken: crmWorker.token,
-    typeNames: ["sync-to-crm", "send-welcome-email"],
+    batchLimits: { "sync-to-crm": 1, "send-welcome-email": 1 },
     limit: 4,
   });
   const [completed, continued, rescheduled] = claimed;
@@ -373,7 +373,7 @@ describe.each(targets)("Redis index rebuild ($name)", { timeout: 60_000 }, ({ co
     const claimed = await stateAdapter.startJobAttempts({
       workerId: worker.id,
       workerToken: worker.token,
-      typeNames,
+      batchLimits: Object.fromEntries(typeNames.map((typeName) => [typeName, 1])),
       limit: 100,
     });
 

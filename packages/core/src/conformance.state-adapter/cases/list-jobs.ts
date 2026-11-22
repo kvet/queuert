@@ -120,7 +120,7 @@ export const listJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["test-type"],
+            batchLimits: { "test-type": 1 },
             limit: 1,
           }),
         );
@@ -183,7 +183,7 @@ export const listJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["pending-type"],
+            batchLimits: { "pending-type": 1 },
             limit: 1,
           }),
         );
@@ -239,7 +239,7 @@ export const listJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["running-type"],
+            batchLimits: { "running-type": 1 },
             limit: 1,
           }),
         );
@@ -389,7 +389,7 @@ export const listJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["completed-mixed"],
+            batchLimits: { "completed-mixed": 1 },
             limit: 1,
           }),
         );
@@ -397,7 +397,7 @@ export const listJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["completed-mixed"],
+            batchLimits: { "completed-mixed": 1 },
             limit: 1,
           }),
         );
@@ -483,7 +483,7 @@ export const listJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["sort-complete"],
+            batchLimits: { "sort-complete": 1 },
             limit: 1,
           }),
         );
@@ -491,7 +491,7 @@ export const listJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["sort-complete"],
+            batchLimits: { "sort-complete": 1 },
             limit: 1,
           }),
         );
@@ -577,7 +577,7 @@ export const listJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["sort-running"],
+            batchLimits: { "sort-running": 1 },
             limit: 1,
           }),
         );
@@ -586,7 +586,7 @@ export const listJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["sort-running"],
+            batchLimits: { "sort-running": 1 },
             limit: 1,
           }),
         );
@@ -717,7 +717,7 @@ export const listJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
             stateAdapter.startJobAttempts({
               workerId: worker.id,
               workerToken: worker.token,
-              typeNames: ["page-type"],
+              batchLimits: { "page-type": 1 },
               limit: 1,
             }),
           );
@@ -994,7 +994,7 @@ export const listJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["multi-step"],
+            batchLimits: { "multi-step": 1 },
             limit: 1,
           }),
         );
@@ -1047,7 +1047,7 @@ export const listJobsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["multi-step"],
+            batchLimits: { "multi-step": 1 },
             limit: 1,
           }),
         );

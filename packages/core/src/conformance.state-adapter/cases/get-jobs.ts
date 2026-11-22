@@ -187,7 +187,7 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
                 txCtx,
                 workerId: worker.id,
                 workerToken: worker.token,
-                typeNames: ["iso-update"],
+                batchLimits: { "iso-update": 1 },
                 limit: 1,
               });
               assert.equal(acquired?.id, seedChain.head.id);
@@ -276,7 +276,7 @@ export const getJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapterCo
                 txCtx,
                 workerId: worker.id,
                 workerToken: worker.token,
-                typeNames: ["iso-locked-job"],
+                batchLimits: { "iso-locked-job": 1 },
                 limit: 1,
               });
               signalTxReady();

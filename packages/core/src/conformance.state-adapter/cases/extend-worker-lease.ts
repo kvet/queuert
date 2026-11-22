@@ -202,7 +202,7 @@ export const extendWorkerLeaseConcurrentTransactionsGroup: ConformanceGroup<Stat
               txCtx,
               workerId: worker.id,
               workerToken: worker.token,
-              typeNames: ["lease-open-claim"],
+              batchLimits: { "lease-open-claim": 1 },
               limit: 1,
             });
             claimed.resolve();
@@ -254,7 +254,7 @@ export const extendWorkerLeaseConcurrentTransactionsGroup: ConformanceGroup<Stat
           await stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["lease-contention"],
+            batchLimits: { "lease-contention": 1 },
             limit: 4,
           });
 
@@ -263,7 +263,7 @@ export const extendWorkerLeaseConcurrentTransactionsGroup: ConformanceGroup<Stat
               stateAdapter.startJobAttempts({
                 workerId: worker.id,
                 workerToken: worker.token,
-                typeNames: ["lease-contention"],
+                batchLimits: { "lease-contention": 1 },
                 limit: 2,
               }),
             ),

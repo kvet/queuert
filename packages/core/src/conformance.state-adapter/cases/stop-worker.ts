@@ -91,7 +91,7 @@ export const stopWorkerGroup: ConformanceGroup<StateAdapterConformanceContext> =
         );
         const [claimed] = yield* step(
           stateAdapter.startJobAttempts({
-            typeNames: ["stop-running"],
+            batchLimits: { "stop-running": 1 },
             workerId: worker.id,
             workerToken: worker.token,
             limit: 1,

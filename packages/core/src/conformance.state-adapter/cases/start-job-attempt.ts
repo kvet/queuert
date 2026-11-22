@@ -59,7 +59,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["acquire-test"],
+            batchLimits: { "acquire-test": 1 },
             limit: 1,
           }),
         );
@@ -91,7 +91,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["nonexistent-type"],
+            batchLimits: { "nonexistent-type": 1 },
             limit: 1,
           }),
         );
@@ -149,7 +149,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["blocked-skip"],
+            batchLimits: { "blocked-skip": 1 },
             limit: 1,
           }),
         );
@@ -235,7 +235,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["blocked-only"],
+            batchLimits: { "blocked-only": 1 },
             limit: 1,
           }),
         );
@@ -247,7 +247,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["blocked-only"],
+            batchLimits: { "blocked-only": 1 },
             limit: 1,
           }),
         );
@@ -288,7 +288,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["future-acquire"],
+            batchLimits: { "future-acquire": 1 },
             limit: 1,
           }),
         );
@@ -332,7 +332,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["acquire-limit"],
+            batchLimits: { "acquire-limit": 1 },
             limit: 2,
           }),
         );
@@ -351,7 +351,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["acquire-limit"],
+            batchLimits: { "acquire-limit": 1 },
             limit: 5,
           }),
         );
@@ -398,7 +398,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["acquire-multi-a", "acquire-multi-b"],
+            batchLimits: { "acquire-multi-a": 1, "acquire-multi-b": 1 },
             limit: 5,
           }),
         );
@@ -443,7 +443,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["acquire-fill-a", "acquire-fill-b", "acquire-fill-c"],
+            batchLimits: { "acquire-fill-a": 1, "acquire-fill-b": 1, "acquire-fill-c": 1 },
             limit: 5,
           }),
         );
@@ -456,6 +456,128 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
             true,
           );
         }
+      }),
+    },
+    {
+      name: "acquires up to limit batches of a type's oldest jobs, every batch full but the last",
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
+
+        const worker = yield* step(
+          stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["acquire-batch"],
+            concurrency: 2,
+            leaseMs: 60_000,
+          }),
+        );
+        const older = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: Array.from({ length: 6 }, () => ({
+                id: stateAdapter.config.generateJobId(),
+                typeName: "acquire-batch",
+                input: null,
+              })),
+            }),
+          ),
+        );
+        yield* wait(sleep(10));
+        const newer = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: Array.from({ length: 2 }, () => ({
+                id: stateAdapter.config.generateJobId(),
+                typeName: "acquire-batch",
+                input: null,
+              })),
+            }),
+          ),
+        );
+
+        const acquired = yield* step(
+          stateAdapter.startJobAttempts({
+            workerId: worker.id,
+            workerToken: worker.token,
+            batchLimits: { "acquire-batch": 3 },
+            limit: 2,
+          }),
+        );
+
+        assert.deepEqual(
+          acquired.map((job) => job.id).sort(),
+          older.map((chain) => chain.head.id).sort(),
+        );
+
+        const rest = yield* step(
+          stateAdapter.startJobAttempts({
+            workerId: worker.id,
+            workerToken: worker.token,
+            batchLimits: { "acquire-batch": 3 },
+            limit: 2,
+          }),
+        );
+
+        assert.deepEqual(
+          rest.map((job) => job.id).sort(),
+          newer.map((chain) => chain.head.id).sort(),
+        );
+      }),
+    },
+    {
+      name: "counts batches of every type against limit",
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
+
+        const worker = yield* step(
+          stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["acquire-batch-a", "acquire-batch-b"],
+            concurrency: 3,
+            leaseMs: 60_000,
+          }),
+        );
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: Array.from({ length: 4 }, () => ({
+                id: stateAdapter.config.generateJobId(),
+                typeName: "acquire-batch-a",
+                input: null,
+              })),
+            }),
+          ),
+        );
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: Array.from({ length: 3 }, () => ({
+                id: stateAdapter.config.generateJobId(),
+                typeName: "acquire-batch-b",
+                input: null,
+              })),
+            }),
+          ),
+        );
+
+        const acquired = yield* step(
+          stateAdapter.startJobAttempts({
+            workerId: worker.id,
+            workerToken: worker.token,
+            batchLimits: { "acquire-batch-a": 3, "acquire-batch-b": 1 },
+            limit: 3,
+          }),
+        );
+
+        assert.equal(
+          Math.ceil(acquired.filter((job) => job.typeName === "acquire-batch-a").length / 3) +
+            acquired.filter((job) => job.typeName === "acquire-batch-b").length,
+          3,
+        );
       }),
     },
     {
@@ -491,7 +613,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["acquire-chain"],
+            batchLimits: { "acquire-chain": 1 },
             limit: 1,
           }),
         );
@@ -569,7 +691,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["has-blockers"],
+            batchLimits: { "has-blockers": 1 },
             limit: 1,
           }),
         );
@@ -597,7 +719,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["has-no-blockers"],
+            batchLimits: { "has-no-blockers": 1 },
             limit: 1,
           }),
         );
@@ -634,7 +756,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["timeout-unrelated"],
+            batchLimits: { "timeout-unrelated": 1 },
             limit: 1,
           }),
         );
@@ -681,7 +803,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["acquire-autocommit"],
+            batchLimits: { "acquire-autocommit": 1 },
             limit: 1,
           }),
         );
@@ -698,7 +820,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
           stateAdapter.startJobAttempts({
             workerId: otherWorker.id,
             workerToken: otherWorker.token,
-            typeNames: ["acquire-autocommit"],
+            batchLimits: { "acquire-autocommit": 1 },
             limit: 1,
           }),
         );
@@ -726,7 +848,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
             stateAdapter.startJobAttempts({
               workerId: stateAdapter.config.generateWorkerId(),
               workerToken: crypto.randomUUID(),
-              typeNames: ["gate-no-row"],
+              batchLimits: { "gate-no-row": 1 },
               limit: 1,
             }),
           ),
@@ -769,7 +891,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
             stateAdapter.startJobAttempts({
               workerId: worker.id,
               workerToken: worker.token,
-              typeNames: ["gate-expired"],
+              batchLimits: { "gate-expired": 1 },
               limit: 1,
             }),
           ),
@@ -812,7 +934,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
             stateAdapter.startJobAttempts({
               workerId: worker.id,
               workerToken: worker.token,
-              typeNames: ["gate-stopped"],
+              batchLimits: { "gate-stopped": 1 },
               limit: 1,
             }),
           )).length,
@@ -831,7 +953,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
             stateAdapter.startJobAttempts({
               workerId: worker.id,
               workerToken: worker.token,
-              typeNames: ["gate-stopped"],
+              batchLimits: { "gate-stopped": 1 },
               limit: 1,
             }),
           ),
@@ -884,7 +1006,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
             stateAdapter.startJobAttempts({
               workerId,
               workerToken: staleRun.token,
-              typeNames: ["gate-stale-run"],
+              batchLimits: { "gate-stale-run": 1 },
               limit: 1,
             }),
           ),
@@ -900,7 +1022,7 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
           stateAdapter.startJobAttempts({
             workerId,
             workerToken: currentRun.token,
-            typeNames: ["gate-stale-run"],
+            batchLimits: { "gate-stale-run": 1 },
             limit: 1,
           }),
         );
@@ -946,7 +1068,7 @@ export const startJobAttemptHeldTransactionGroup: ConformanceGroup<StateAdapterC
               txCtx,
               workerId: worker.id,
               workerToken: worker.token,
-              typeNames: ["acquire-schedule-in-tx"],
+              batchLimits: { "acquire-schedule-in-tx": 1 },
               limit: 1,
             });
           });
@@ -1008,7 +1130,7 @@ export const startJobAttemptHeldTransactionLockWaitGroup: ConformanceGroup<State
             stateAdapter.startJobAttempts({
               workerId: worker.id,
               workerToken: worker.token,
-              typeNames: ["gate-reclaimed"],
+              batchLimits: { "gate-reclaimed": 1 },
               limit: 1,
             }),
           );
@@ -1065,7 +1187,7 @@ export const startJobAttemptConcurrentTransactionsGroup: ConformanceGroup<StateA
               stateAdapter.startJobAttempts({
                 workerId: worker.id,
                 workerToken: worker.token,
-                typeNames: ["acquire-concurrency"],
+                batchLimits: { "acquire-concurrency": 1 },
                 limit: 1,
               }),
             ),
@@ -1106,7 +1228,7 @@ export const startJobAttemptConcurrentTransactionsGroup: ConformanceGroup<StateA
               stateAdapter.startJobAttempts({
                 workerId: worker.id,
                 workerToken: worker.token,
-                typeNames: ["acquire-batch-concurrency"],
+                batchLimits: { "acquire-batch-concurrency": 1 },
                 limit: 3,
               }),
             ),
@@ -1121,7 +1243,7 @@ export const startJobAttemptConcurrentTransactionsGroup: ConformanceGroup<StateA
           const remaining = await stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["acquire-batch-concurrency"],
+            batchLimits: { "acquire-batch-concurrency": 1 },
             limit: count,
           });
           assert.equal(acquiredIds.length + remaining.length, count);
@@ -1164,7 +1286,7 @@ export const startJobAttemptConcurrentTransactionsGroup: ConformanceGroup<StateA
               txCtx,
               workerId: firstWorker.id,
               workerToken: firstWorker.token,
-              typeNames: ["claim-footprint"],
+              batchLimits: { "claim-footprint": 1 },
               limit: firstLimit,
             });
             firstClaimed.resolve();
@@ -1176,7 +1298,7 @@ export const startJobAttemptConcurrentTransactionsGroup: ConformanceGroup<StateA
           const secondClaim = stateAdapter.startJobAttempts({
             workerId: secondWorker.id,
             workerToken: secondWorker.token,
-            typeNames: ["claim-footprint"],
+            batchLimits: { "claim-footprint": 1 },
             limit: count - firstLimit,
           });
           try {
@@ -1226,7 +1348,7 @@ export const startJobAttemptConcurrentTransactionsGroup: ConformanceGroup<StateA
               txCtx,
               workerId: worker.id,
               workerToken: worker.token,
-              typeNames: ["claim-drained"],
+              batchLimits: { "claim-drained": 1 },
               limit: 5,
             });
             claimed.resolve();
@@ -1317,7 +1439,7 @@ export const startJobAttemptConcurrentTransactionsGroup: ConformanceGroup<StateA
             const [acquired] = await stateAdapter.startJobAttempts({
               workerId: worker.id,
               workerToken: worker.token,
-              typeNames: ["locked-head-acquire"],
+              batchLimits: { "locked-head-acquire": 1 },
               limit: 1,
             });
             assert.equal(acquired?.id, continuation.id);
@@ -1381,7 +1503,7 @@ export const startJobAttemptConcurrentTransactionsGroup: ConformanceGroup<StateA
             const [acquired] = await stateAdapter.startJobAttempts({
               workerId: worker.id,
               workerToken: worker.token,
-              typeNames: ["locked-job"],
+              batchLimits: { "locked-job": 1 },
               limit: 1,
             });
             assert.equal(acquired?.id, otherChain.head.id);
@@ -1393,7 +1515,7 @@ export const startJobAttemptConcurrentTransactionsGroup: ConformanceGroup<StateA
           const [acquiredAfterRelease] = await stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["locked-job"],
+            batchLimits: { "locked-job": 1 },
             limit: 1,
           });
           assert.equal(acquiredAfterRelease?.id, lockedChain.head.id);

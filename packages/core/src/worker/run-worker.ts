@@ -337,6 +337,7 @@ export const runWorker = async ({
   stopSignal: AbortSignal;
 }): Promise<boolean> => {
   const { stateAdapter, observabilityHelper } = helpers;
+  const batchLimits = Object.fromEntries(typeNames.map((typeName) => [typeName, 1]));
   const backoffConfigFor = (typeName: string): BackoffConfig =>
     (Object.hasOwn(processors, typeName) ? processors[typeName].backoffConfig : undefined) ??
     defaultBackoffConfig;
@@ -446,7 +447,7 @@ export const runWorker = async ({
     while (executor.idleSlots() > 0 && !signal.aborted) {
       const limit = executor.idleSlots();
       const stateJobs = await stateAdapter.startJobAttempts({
-        typeNames,
+        batchLimits,
         workerId,
         workerToken,
         limit,

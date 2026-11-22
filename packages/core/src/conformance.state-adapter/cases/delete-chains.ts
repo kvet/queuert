@@ -367,7 +367,7 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["delete-repeated:step"],
+            batchLimits: { "delete-repeated:step": 1 },
             limit: 2,
           }),
         );

@@ -108,7 +108,7 @@ export const countJobsByTypeNameGroup: ConformanceGroup<StateAdapterConformanceC
 
         yield* step(
           stateAdapter.startJobAttempts({
-            typeNames: ["count-run"],
+            batchLimits: { "count-run": 1 },
             workerId: worker.id,
             workerToken: worker.token,
             limit: 1,
@@ -183,7 +183,7 @@ export const countJobsByTypeNameGroup: ConformanceGroup<StateAdapterConformanceC
 
         const [acquired] = yield* step(
           stateAdapter.startJobAttempts({
-            typeNames: ["count-done"],
+            batchLimits: { "count-done": 1 },
             workerId: worker.id,
             workerToken: worker.token,
             limit: 1,

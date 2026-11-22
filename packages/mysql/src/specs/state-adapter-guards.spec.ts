@@ -50,7 +50,7 @@ describe("createMysqlStateAdapter guards", () => {
 
       await expect(
         stateAdapter.startJobAttempts({
-          typeNames: [`${typeName}-idle`],
+          batchLimits: { [`${typeName}-idle`]: 1 },
           workerId: worker.id,
           workerToken: worker.token,
           limit: 1,

@@ -105,7 +105,7 @@ export const withTransactionGroup: ConformanceGroup<StateAdapterConformanceConte
                       txCtx,
                       workerId: worker.id,
                       workerToken: worker.token,
-                      typeNames: ["update-rollback"],
+                      batchLimits: { "update-rollback": 1 },
                       limit: 1,
                     }),
                   );
@@ -127,7 +127,7 @@ export const withTransactionGroup: ConformanceGroup<StateAdapterConformanceConte
               txCtx,
               workerId: worker.id,
               workerToken: worker.token,
-              typeNames: ["update-rollback"],
+              batchLimits: { "update-rollback": 1 },
               limit: 1,
             }),
           ),
@@ -189,7 +189,7 @@ export const withTransactionGroup: ConformanceGroup<StateAdapterConformanceConte
               txCtx,
               workerId: worker.id,
               workerToken: worker.token,
-              typeNames: ["delete-rollback"],
+              batchLimits: { "delete-rollback": 1 },
               limit: 1,
             }),
           ),
@@ -340,7 +340,7 @@ export const withTransactionGroup: ConformanceGroup<StateAdapterConformanceConte
                         txCtx,
                         workerId: worker.id,
                         workerToken: worker.token,
-                        typeNames: ["mixed-rollback"],
+                        batchLimits: { "mixed-rollback": 1 },
                         limit: 1,
                       }),
                     );
@@ -395,7 +395,7 @@ export const withTransactionGroup: ConformanceGroup<StateAdapterConformanceConte
           stateAdapter.withTransaction((txCtx) =>
             stateAdapter.startJobAttempts({
               txCtx,
-              typeNames: ["mixed-rollback"],
+              batchLimits: { "mixed-rollback": 1 },
               workerId: otherWorker.id,
               workerToken: otherWorker.token,
               limit: 1,

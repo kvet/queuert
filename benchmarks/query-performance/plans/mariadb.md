@@ -556,7 +556,16 @@ id=1  select_type=PRIMARY  table=queuert_worker  type=const  possible_keys=PRIMA
 id=2  select_type=SUBQUERY  table=null  type=null  possible_keys=null  key=null  key_len=null  ref=null  Extra=Impossible WHERE
 ```
 
-2. `claimJobs`
+2. `pickPendingJobBatches:1`
+
+```
+id=1  select_type=PRIMARY  table=<derived2>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using where
+id=2  select_type=DERIVED  table=<derived3>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using temporary
+id=3  select_type=DERIVED  table=<derived4>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using temporary
+id=4  select_type=DERIVED  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+```
+
+3. `claimJobs`
 
 ```
 id=1  select_type=PRIMARY  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
@@ -564,7 +573,7 @@ id=1  select_type=PRIMARY  table=j  type=eq_ref  possible_keys=PRIMARY  key=PRIM
 id=2  select_type=SUBQUERY  table=null  type=null  possible_keys=null  key=null  key_len=null  ref=null  Extra=Impossible WHERE
 ```
 
-3. `readClaimedJobs`
+4. `readClaimedJobs`
 
 ```
 id=1  select_type=PRIMARY  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
@@ -582,7 +591,16 @@ id=1  select_type=PRIMARY  table=queuert_worker  type=const  possible_keys=PRIMA
 id=2  select_type=SUBQUERY  table=null  type=null  possible_keys=null  key=null  key_len=null  ref=null  Extra=Impossible WHERE
 ```
 
-2. `claimJobs`
+2. `pickPendingJobBatches:1`
+
+```
+id=1  select_type=PRIMARY  table=<derived2>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using where
+id=2  select_type=DERIVED  table=<derived3>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using temporary
+id=3  select_type=DERIVED  table=<derived4>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using temporary
+id=4  select_type=DERIVED  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+```
+
+3. `claimJobs`
 
 ```
 id=1  select_type=PRIMARY  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
@@ -590,7 +608,42 @@ id=1  select_type=PRIMARY  table=j  type=eq_ref  possible_keys=PRIMARY  key=PRIM
 id=2  select_type=SUBQUERY  table=null  type=null  possible_keys=null  key=null  key_len=null  ref=null  Extra=Impossible WHERE
 ```
 
-3. `readClaimedJobs`
+4. `readClaimedJobs`
+
+```
+id=1  select_type=PRIMARY  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
+id=1  select_type=PRIMARY  table=j  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=*any*.d.id  Extra=
+id=1  select_type=PRIMARY  table=h  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=queuert_bench.j.chain_id  Extra=
+id=2  select_type=DEPENDENT SUBQUERY  table=jb  type=ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=queuert_bench.j.id  Extra=
+```
+
+## startJobAttempts/batchLimit10
+
+1. `lockLiveWorker`
+
+```
+id=1  select_type=PRIMARY  table=queuert_worker  type=const  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=const  Extra=
+id=2  select_type=SUBQUERY  table=null  type=null  possible_keys=null  key=null  key_len=null  ref=null  Extra=Impossible WHERE
+```
+
+2. `pickPendingJobBatches:1`
+
+```
+id=1  select_type=PRIMARY  table=<derived2>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using where
+id=2  select_type=DERIVED  table=<derived3>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using temporary
+id=3  select_type=DERIVED  table=<derived4>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using temporary
+id=4  select_type=DERIVED  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+```
+
+3. `claimJobs`
+
+```
+id=1  select_type=PRIMARY  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
+id=1  select_type=PRIMARY  table=j  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=*any*.d.id  Extra=
+id=2  select_type=SUBQUERY  table=null  type=null  possible_keys=null  key=null  key_len=null  ref=null  Extra=Impossible WHERE
+```
+
+4. `readClaimedJobs`
 
 ```
 id=1  select_type=PRIMARY  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
@@ -608,7 +661,115 @@ id=1  select_type=PRIMARY  table=queuert_worker  type=const  possible_keys=PRIMA
 id=2  select_type=SUBQUERY  table=null  type=null  possible_keys=null  key=null  key_len=null  ref=null  Extra=Impossible WHERE
 ```
 
-2. `claimJobs`
+2. `pickPendingJobBatches:100`
+
+```
+id=1  select_type=PRIMARY  table=<derived2>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using where
+id=2  select_type=DERIVED  table=<derived3>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using temporary
+id=3  select_type=DERIVED  table=<derived4>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using temporary
+id=4  select_type=DERIVED  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=5  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=6  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=7  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=8  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=9  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=10  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=11  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=12  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=13  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=14  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=15  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=16  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=17  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=18  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=19  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=20  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=21  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=22  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=23  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=24  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=25  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=26  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=27  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=28  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=29  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=30  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=31  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=32  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=33  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=34  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=35  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=36  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=37  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=38  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=39  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=40  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=41  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=42  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=43  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=44  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=45  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=46  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=47  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=48  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=49  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=50  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=51  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=52  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=53  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=54  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=55  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=56  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=57  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=58  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=59  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=60  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=61  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=62  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=63  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=64  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=65  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=66  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=67  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=68  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=69  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=70  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=71  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=72  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=73  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=74  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=75  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=76  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=77  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=78  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=79  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=80  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=81  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=82  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=83  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=84  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=85  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=86  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=87  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=88  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=89  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=90  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=91  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=92  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=93  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=94  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=95  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=96  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=97  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=98  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=99  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=100  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=101  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=102  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+id=103  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
+```
+
+3. `claimJobs`
 
 ```
 id=1  select_type=PRIMARY  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
@@ -616,7 +777,7 @@ id=1  select_type=PRIMARY  table=j  type=eq_ref  possible_keys=PRIMARY  key=PRIM
 id=2  select_type=SUBQUERY  table=null  type=null  possible_keys=null  key=null  key_len=null  ref=null  Extra=Impossible WHERE
 ```
 
-3. `readClaimedJobs`
+4. `readClaimedJobs`
 
 ```
 id=1  select_type=PRIMARY  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where

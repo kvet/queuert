@@ -201,7 +201,7 @@ export const continueJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["head"],
+            batchLimits: { head: 1 },
             limit: 1,
           }),
         );
@@ -814,7 +814,7 @@ export const continueJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["continue-token-match"],
+            batchLimits: { "continue-token-match": 1 },
             limit: 1,
           }),
         );
@@ -875,7 +875,7 @@ export const continueJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["continue-token-unknown"],
+            batchLimits: { "continue-token-unknown": 1 },
             limit: 1,
           }),
         );
@@ -942,7 +942,7 @@ export const continueJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["continue-token-replaced"],
+            batchLimits: { "continue-token-replaced": 1 },
             limit: 1,
           }),
         );
@@ -951,7 +951,7 @@ export const continueJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["continue-token-replaced"],
+            batchLimits: { "continue-token-replaced": 1 },
             limit: 1,
           }),
         );
@@ -1006,7 +1006,7 @@ export const continueJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["continue-token-recreated"],
+            batchLimits: { "continue-token-recreated": 1 },
             limit: 1,
           }),
         );
@@ -1027,7 +1027,7 @@ export const continueJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["continue-token-recreated"],
+            batchLimits: { "continue-token-recreated": 1 },
             limit: 1,
           }),
         );

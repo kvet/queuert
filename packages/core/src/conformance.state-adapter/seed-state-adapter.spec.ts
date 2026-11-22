@@ -34,7 +34,7 @@ it("writes every timestamp from the clock it is given", () => {
   const [job] = stateAdapter.withTransaction((txCtx) =>
     stateAdapter.startJobAttempts({
       txCtx,
-      typeNames: ["a"],
+      batchLimits: { a: 1 },
       workerId: worker.id,
       workerToken: worker.token,
       limit: 1,

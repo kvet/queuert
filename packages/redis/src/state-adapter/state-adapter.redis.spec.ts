@@ -55,7 +55,7 @@ it("claims nothing and calls no script for a limit of 0", async () => {
     await stateAdapter.startJobAttempts({
       workerId: "worker",
       workerToken: "token",
-      typeNames: ["task"],
+      batchLimits: { task: 1 },
       limit: 0,
     }),
   ).toEqual([]);

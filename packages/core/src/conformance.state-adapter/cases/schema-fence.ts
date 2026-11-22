@@ -80,7 +80,7 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceContext> =
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["fenced-continue"],
+            batchLimits: { "fenced-continue": 1 },
             limit: 1,
           }),
         );
@@ -318,7 +318,7 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceContext> =
                 stateAdapter.startJobAttempts({
                   workerId: worker.id,
                   workerToken: worker.token,
-                  typeNames: ["fenced-start-attempt"],
+                  batchLimits: { "fenced-start-attempt": 1 },
                   limit: 1,
                 }),
               SchemaFencedError,

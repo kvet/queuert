@@ -933,7 +933,7 @@ export const createInProcessState = (
         return results;
       }),
 
-    startJobAttempts: ({ txCtx, typeNames, workerId, workerToken, limit }) =>
+    startJobAttempts: ({ txCtx, batchLimits, workerId, workerToken, limit }) =>
       write(txCtx, (journal) => {
         const acquired: (StateJob & { hasBlockers: boolean })[] = [];
         const now = new Date(clock());
@@ -942,36 +942,42 @@ export const createInProcessState = (
         if (worker === undefined || worker.token !== workerToken || !isLive(worker, nowMs)) {
           return acquired;
         }
-        const queues: SortedList<JobSlot>[] = [];
-        for (const typeName of typeNames) {
+        const queues: { queue: SortedList<JobSlot>; batchLimit: number }[] = [];
+        for (const [typeName, batchLimit] of Object.entries(batchLimits)) {
           const queue = claimIndex.buckets.get(typeName);
-          if (queue !== undefined) queues.push(queue);
+          if (queue !== undefined) queues.push({ queue, batchLimit });
         }
 
-        while (acquired.length < limit) {
-          let best: JobSlot | undefined;
-          for (const queue of queues) {
-            const candidate = firstOfSortedList(queue);
-            if (candidate === undefined || candidate.state!.scheduledAt.getTime() > nowMs) continue;
-            if (best === undefined || claimIndex.compare(candidate, best) < 0) best = candidate;
+        for (let batches = 0; batches < limit; batches++) {
+          let best: { queue: SortedList<JobSlot>; batchLimit: number; head: JobSlot } | undefined;
+          for (const { queue, batchLimit } of queues) {
+            const head = firstOfSortedList(queue);
+            if (head === undefined || head.state!.scheduledAt.getTime() > nowMs) continue;
+            if (best === undefined || claimIndex.compare(head, best.head) < 0) {
+              best = { queue, batchLimit, head };
+            }
           }
           if (best === undefined) break;
 
-          const state = best.state!;
-          const running: StateJobInfo = {
-            ...state,
-            status: "running",
-            attempt: state.attempt + 1,
-            attemptAt: now,
-            attemptBy: workerId,
-            attemptToken: crypto.randomUUID(),
-          };
-          setJob(journal, best, running);
-          acquired.push({
-            ...running,
-            chain: best.chain.state!.info,
-            hasBlockers: best.blockers.length > 0,
-          });
+          for (let taken = 0; taken < best.batchLimit; taken++) {
+            const slot = firstOfSortedList(best.queue);
+            if (slot === undefined || slot.state!.scheduledAt.getTime() > nowMs) break;
+            const state = slot.state!;
+            const running: StateJobInfo = {
+              ...state,
+              status: "running",
+              attempt: state.attempt + 1,
+              attemptAt: now,
+              attemptBy: workerId,
+              attemptToken: crypto.randomUUID(),
+            };
+            setJob(journal, slot, running);
+            acquired.push({
+              ...running,
+              chain: slot.chain.state!.info,
+              hasBlockers: slot.blockers.length > 0,
+            });
+          }
         }
         return acquired;
       }),

@@ -1566,7 +1566,8 @@ WHERE h.blocking = TRUE AND {{fence_guard}}`,
       });
     },
 
-    startJobAttempts: async ({ txCtx, typeNames, workerId, workerToken, limit }) => {
+    startJobAttempts: async ({ txCtx, batchLimits, workerId, workerToken, limit }) => {
+      const typeNames = Object.keys(batchLimits);
       if (typeNames.length === 0) return [];
       return withOwnTransaction(txCtx, async (txCtx) => {
         const [liveWorker] = await execute(
@@ -1583,59 +1584,43 @@ WHERE h.blocking = TRUE AND {{fence_guard}}`,
         const pickedRows = await execute(
           txCtx,
           prepared(
-            `pickPendingJobs:${typeNames.length}`,
-            `${typeNames
-              .map(
-                () =>
-                  `(SELECT id, type_name, CAST(status_ts AS CHAR) AS picked_ts FROM {{prefix}}job FORCE INDEX ({{name_prefix}}job_status_idx) WHERE type_name = ? AND status = 'pending' AND status_ts <= UTC_TIMESTAMP(6) ORDER BY status_ts LIMIT ? FOR UPDATE SKIP LOCKED)`,
-              )
-              .join(" UNION ALL ")} ORDER BY picked_ts LIMIT ?`,
+            `pickPendingJobBatches:${typeNames.length}`,
+            `
+SELECT id
+FROM (
+  SELECT id, DENSE_RANK() OVER (ORDER BY batch_index, type_name) AS batch_rank
+  FROM (
+    SELECT id, type_name,
+      (ROW_NUMBER() OVER (PARTITION BY type_name ORDER BY picked_ts, id) - 1) DIV batch_limit AS batch_index
+    FROM (
+      ${typeNames
+        .map(
+          () =>
+            `(SELECT id, type_name, status_ts AS picked_ts, CAST(? AS UNSIGNED) AS batch_limit FROM {{prefix}}job FORCE INDEX ({{name_prefix}}job_status_idx) WHERE type_name = ? AND status = 'pending' AND status_ts <= UTC_TIMESTAMP(6) ORDER BY status_ts LIMIT ? FOR UPDATE SKIP LOCKED)`,
+        )
+        .join("\n      UNION ALL\n      ")}
+    ) AS candidate_jobs
+  ) AS numbered_jobs
+) AS ranked_jobs
+WHERE batch_rank <= ?`,
             {
-              params: [...typeNames.flatMap(() => [t.string(), t.number()]), t.number()],
-              columns: { id: jobIdDataType, type_name: t.string(), picked_ts: t.string() },
+              params: [
+                ...typeNames.flatMap(() => [t.number(), t.string(), t.number()]),
+                t.number(),
+              ],
+              columns: { id: jobIdDataType },
             },
           ),
           [
-            ...typeNames.flatMap((typeName) => [typeName, Math.ceil(limit / typeNames.length)]),
+            ...typeNames.flatMap((typeName) => [
+              batchLimits[typeName],
+              typeName,
+              limit * batchLimits[typeName],
+            ]),
             limit,
           ],
         );
         const pickedIds = pickedRows.map((row) => row.id as string);
-        const saturatedTypeNames = typeNames.filter(
-          (typeName) =>
-            pickedRows.filter((row) => row.type_name === typeName).length ===
-            Math.ceil(limit / typeNames.length),
-        );
-        if (pickedIds.length < limit && saturatedTypeNames.length > 0) {
-          const fillRows = await execute(
-            txCtx,
-            prepared(
-              `pickMorePendingJobs:${saturatedTypeNames.length}`,
-              `${saturatedTypeNames
-                .map(
-                  () =>
-                    `(SELECT id, CAST(status_ts AS CHAR) AS picked_ts FROM {{prefix}}job FORCE INDEX ({{name_prefix}}job_status_idx) WHERE type_name = ? AND status = 'pending' AND status_ts <= UTC_TIMESTAMP(6) AND id NOT IN (${jobIds()}) ORDER BY status_ts LIMIT ? FOR UPDATE SKIP LOCKED)`,
-                )
-                .join(" UNION ALL ")} ORDER BY picked_ts LIMIT ?`,
-              {
-                params: [
-                  ...saturatedTypeNames.flatMap(() => [t.string(), t.string(), t.number()]),
-                  t.number(),
-                ],
-                columns: { id: jobIdDataType, picked_ts: t.string() },
-              },
-            ),
-            [
-              ...saturatedTypeNames.flatMap((typeName) => [
-                typeName,
-                JSON.stringify(pickedIds),
-                limit - pickedIds.length,
-              ]),
-              limit - pickedIds.length,
-            ],
-          );
-          pickedIds.push(...fillRows.map((row) => row.id as string));
-        }
         if (pickedIds.length === 0) return [];
 
         await execute(

@@ -80,7 +80,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["trigger-acquire"],
+            batchLimits: { "trigger-acquire": 1 },
             limit: 1,
           }),
         );
@@ -92,7 +92,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["trigger-acquire"],
+            batchLimits: { "trigger-acquire": 1 },
             limit: 1,
           }),
         );
@@ -352,7 +352,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["resched-fail-test"],
+            batchLimits: { "resched-fail-test": 1 },
             limit: 1,
           }),
         );
@@ -415,7 +415,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["resched-running-test"],
+            batchLimits: { "resched-running-test": 1 },
             limit: 1,
           }),
         );
@@ -471,7 +471,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["resched-count-test"],
+            batchLimits: { "resched-count-test": 1 },
             limit: 1,
           }),
         );
@@ -484,7 +484,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["resched-count-test"],
+            batchLimits: { "resched-count-test": 1 },
             limit: 1,
           }),
         );
@@ -502,7 +502,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["resched-count-test"],
+            batchLimits: { "resched-count-test": 1 },
             limit: 1,
           }),
         );
@@ -521,7 +521,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["resched-count-test"],
+            batchLimits: { "resched-count-test": 1 },
             limit: 1,
           }),
         );
@@ -864,7 +864,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["resched-token-unknown"],
+            batchLimits: { "resched-token-unknown": 1 },
             limit: 1,
           }),
         );
@@ -918,7 +918,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["resched-token-replaced"],
+            batchLimits: { "resched-token-replaced": 1 },
             limit: 1,
           }),
         );
@@ -927,7 +927,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["resched-token-replaced"],
+            batchLimits: { "resched-token-replaced": 1 },
             limit: 1,
           }),
         );
@@ -976,7 +976,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["resched-token-recreated"],
+            batchLimits: { "resched-token-recreated": 1 },
             limit: 1,
           }),
         );
@@ -997,7 +997,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["resched-token-recreated"],
+            batchLimits: { "resched-token-recreated": 1 },
             limit: 1,
           }),
         );
@@ -1054,7 +1054,7 @@ export const rescheduleJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["resched-autocommit"],
+            batchLimits: { "resched-autocommit": 1 },
             limit: 1,
           }),
         );

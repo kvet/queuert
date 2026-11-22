@@ -1522,13 +1522,38 @@ WHERE ((id IN (SELECT value FROM json_each(?)) AND chain_index = 0)
     ),
 
     startJobAttempts: pick(
-      syncAsync(function* ({ txCtx, typeNames, workerId, workerToken, limit }) {
+      syncAsync(function* ({ txCtx, batchLimits, workerId, workerToken, limit }) {
         const results = yield* step(
           execute(
             txCtx,
             prepared(
               "startJobAttempts",
               `
+WITH candidate_jobs AS (
+  SELECT
+    j.id,
+    j.type_name,
+    j.scheduled_at,
+    (row_number() OVER (PARTITION BY j.type_name ORDER BY j.scheduled_at, j.id) - 1)
+      / t.value AS batch_index
+  FROM json_each(?) AS t
+  JOIN {{table_prefix}}job AS j ON j.id IN (
+    SELECT p.id
+    FROM {{table_prefix}}job AS p INDEXED BY {{table_prefix}}job_pending_idx
+    WHERE p.type_name = t.key
+      AND p.status = 'pending'
+      AND p.scheduled_at <= datetime('now', 'subsec')
+    ORDER BY p.scheduled_at ASC
+    LIMIT CAST(? AS INTEGER)
+  )
+),
+acquired_batches AS (
+  SELECT type_name, batch_index
+  FROM candidate_jobs
+  GROUP BY type_name, batch_index
+  ORDER BY min(scheduled_at), type_name, batch_index
+  LIMIT CAST(? AS INTEGER)
+)
 UPDATE {{table_prefix}}job
 SET status = 'running',
   attempt = attempt + 1,
@@ -1542,13 +1567,9 @@ WHERE EXISTS (
       AND lease_until > datetime('now', 'subsec')
   )
   AND id IN (
-    SELECT id
-    FROM {{table_prefix}}job INDEXED BY {{table_prefix}}job_pending_idx
-    WHERE type_name IN (SELECT value FROM json_each(?))
-      AND status = 'pending'
-      AND scheduled_at <= datetime('now', 'subsec')
-    ORDER BY scheduled_at ASC
-    LIMIT CAST(? AS INTEGER)
+    SELECT c.id
+    FROM candidate_jobs AS c
+    JOIN acquired_batches AS b ON b.type_name = c.type_name AND b.batch_index = c.batch_index
   )
   AND ${FENCE_GUARD}
 RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}, EXISTS (
@@ -1556,11 +1577,18 @@ RETURNING *, ${chainColumnsReturning("{{table_prefix}}job")}, EXISTS (
 ) AS has_blockers
 `,
               {
-                params: [t.string(), t.string(), t.string(), t.string(), t.number()],
+                params: [t.string(), t.number(), t.number(), t.string(), t.string(), t.string()],
                 columns: { ...dbJobColumns, ...dbChainColumns, has_blockers: t.number() },
               },
             ),
-            [workerId, workerId, workerToken, JSON.stringify(typeNames), limit],
+            [
+              JSON.stringify(batchLimits),
+              limit * Math.max(1, ...Object.values(batchLimits)),
+              limit,
+              workerId,
+              workerId,
+              workerToken,
+            ],
           ),
         );
 

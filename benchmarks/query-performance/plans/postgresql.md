@@ -1041,37 +1041,57 @@ Nested Loop
                 ->  Index Scan using queuert_worker_pkey on queuert_worker w
                       Index Cond: (id = '<uuid>'::uuid)
                       Filter: ((token = '<uuid>'::uuid) AND (lease_until > statement_timestamp()))
-  CTE acquired_jobs
+  CTE candidate_jobs
     ->  Limit
           InitPlan 3
             ->  CTE Scan on live_worker
+          InitPlan 4
+            ->  Aggregate
+                  ->  Function Scan on unnest u_1
           ->  Result
                 One-Time Filter: (InitPlan 3).col1
                 ->  Nested Loop
                       ->  Sort
                             Sort Key: (random())
-                            ->  Function Scan on unnest u_1
+                            ->  Function Scan on u_2
                       ->  Subquery Scan on j
                             ->  Limit
                                   ->  LockRows
                                         ->  Index Scan using queuert_job_pending_idx on queuert_job j_1
-                                              Index Cond: ((type_name = u_1.type_name) AND (scheduled_at <= statement_timestamp()))
+                                              Index Cond: ((type_name = u_2.type_name) AND (scheduled_at <= statement_timestamp()))
                                               Filter: (status = 'pending'::text)
+  CTE numbered_jobs
+    ->  WindowAgg
+          Window: w1 AS (PARTITION BY candidate_jobs.type_order ORDER BY candidate_jobs.scheduled_at, candidate_jobs.id ROWS UNBOUNDED PRECEDING)
+          ->  Sort
+                Sort Key: candidate_jobs.type_order, candidate_jobs.scheduled_at, candidate_jobs.id
+                ->  CTE Scan on candidate_jobs
   CTE updated
     ->  Update on queuert_job job
-          InitPlan 5
+          InitPlan 7
             ->  Result
                   One-Time Filter: false
           ->  Result
-                One-Time Filter: (NOT (InitPlan 5).col1)
+                One-Time Filter: (NOT (InitPlan 7).col1)
                 ->  Nested Loop
-                      ->  CTE Scan on acquired_jobs a
+                      ->  Merge Join
+                            Merge Cond: (n.type_order = b.type_order)
+                            Join Filter: (n.batch_index = b.batch_index)
+                            ->  CTE Scan on numbered_jobs n
+                            ->  Materialize
+                                  ->  Subquery Scan on b
+                                        ->  Limit
+                                              ->  Unique
+                                                    ->  Incremental Sort
+                                                          Sort Key: numbered_jobs.type_order, numbered_jobs.batch_index
+                                                          Presorted Key: numbered_jobs.type_order
+                                                          ->  CTE Scan on numbered_jobs
                       ->  Index Scan using queuert_job_pkey on queuert_job job
-                            Index Cond: (id = a.id)
+                            Index Cond: (id = n.id)
   ->  CTE Scan on updated u
   ->  Index Scan using queuert_job_pkey on queuert_job h
         Index Cond: (id = u.chain_id)
-  SubPlan 7
+  SubPlan 9
     ->  Index Only Scan using queuert_job_blocker_pkey on queuert_job_blocker jb
           Index Cond: (job_id = u.id)
 ```
@@ -1092,40 +1112,128 @@ Nested Loop
                 ->  Index Scan using queuert_worker_pkey on queuert_worker w
                       Index Cond: (id = '<uuid>'::uuid)
                       Filter: ((token = '<uuid>'::uuid) AND (lease_until > statement_timestamp()))
-  CTE acquired_jobs
+  CTE candidate_jobs
     ->  Limit
           InitPlan 3
             ->  CTE Scan on live_worker
+          InitPlan 4
+            ->  Aggregate
+                  ->  Function Scan on unnest u_1
           ->  Result
                 One-Time Filter: (InitPlan 3).col1
                 ->  Nested Loop
                       ->  Sort
                             Sort Key: (random())
-                            ->  Function Scan on unnest u_1
+                            ->  Function Scan on u_2
                       ->  Subquery Scan on j
                             ->  Limit
                                   ->  LockRows
                                         ->  Index Scan using queuert_job_pending_idx on queuert_job j_1
-                                              Index Cond: ((type_name = u_1.type_name) AND (scheduled_at <= statement_timestamp()))
+                                              Index Cond: ((type_name = u_2.type_name) AND (scheduled_at <= statement_timestamp()))
                                               Filter: (status = 'pending'::text)
+  CTE numbered_jobs
+    ->  WindowAgg
+          Window: w1 AS (PARTITION BY candidate_jobs.type_order ORDER BY candidate_jobs.scheduled_at, candidate_jobs.id ROWS UNBOUNDED PRECEDING)
+          ->  Sort
+                Sort Key: candidate_jobs.type_order, candidate_jobs.scheduled_at, candidate_jobs.id
+                ->  CTE Scan on candidate_jobs
   CTE updated
     ->  Update on queuert_job job
-          InitPlan 5
+          InitPlan 7
             ->  Result
                   One-Time Filter: false
           ->  Result
-                One-Time Filter: (NOT (InitPlan 5).col1)
+                One-Time Filter: (NOT (InitPlan 7).col1)
                 ->  Nested Loop
-                      ->  CTE Scan on acquired_jobs a
+                      ->  Merge Join
+                            Merge Cond: (n.type_order = b.type_order)
+                            Join Filter: (n.batch_index = b.batch_index)
+                            ->  CTE Scan on numbered_jobs n
+                            ->  Materialize
+                                  ->  Subquery Scan on b
+                                        ->  Limit
+                                              ->  Unique
+                                                    ->  Incremental Sort
+                                                          Sort Key: numbered_jobs.type_order, numbered_jobs.batch_index
+                                                          Presorted Key: numbered_jobs.type_order
+                                                          ->  CTE Scan on numbered_jobs
                       ->  Index Scan using queuert_job_pkey on queuert_job job
-                            Index Cond: (id = a.id)
+                            Index Cond: (id = n.id)
   ->  CTE Scan on updated u
-  ->  Memoize
-        Cache Key: u.chain_id
-        Cache Mode: logical
-        ->  Index Scan using queuert_job_pkey on queuert_job h
-              Index Cond: (id = u.chain_id)
-  SubPlan 7
+  ->  Index Scan using queuert_job_pkey on queuert_job h
+        Index Cond: (id = u.chain_id)
+  SubPlan 9
+    ->  Index Only Scan using queuert_job_blocker_pkey on queuert_job_blocker jb
+          Index Cond: (job_id = u.id)
+```
+
+## startJobAttempts/batchLimit10
+
+1. `startJobAttempts`
+
+```
+Nested Loop
+  CTE live_worker
+    ->  Update on queuert_worker w
+          InitPlan 1
+            ->  Result
+                  One-Time Filter: false
+          ->  Result
+                One-Time Filter: (NOT (InitPlan 1).col1)
+                ->  Index Scan using queuert_worker_pkey on queuert_worker w
+                      Index Cond: (id = '<uuid>'::uuid)
+                      Filter: ((token = '<uuid>'::uuid) AND (lease_until > statement_timestamp()))
+  CTE candidate_jobs
+    ->  Limit
+          InitPlan 3
+            ->  CTE Scan on live_worker
+          InitPlan 4
+            ->  Aggregate
+                  ->  Function Scan on unnest u_1
+          ->  Result
+                One-Time Filter: (InitPlan 3).col1
+                ->  Nested Loop
+                      ->  Sort
+                            Sort Key: (random())
+                            ->  Function Scan on u_2
+                      ->  Subquery Scan on j
+                            ->  Limit
+                                  ->  LockRows
+                                        ->  Index Scan using queuert_job_pending_idx on queuert_job j_1
+                                              Index Cond: ((type_name = u_2.type_name) AND (scheduled_at <= statement_timestamp()))
+                                              Filter: (status = 'pending'::text)
+  CTE numbered_jobs
+    ->  WindowAgg
+          Window: w1 AS (PARTITION BY candidate_jobs.type_order ORDER BY candidate_jobs.scheduled_at, candidate_jobs.id ROWS UNBOUNDED PRECEDING)
+          ->  Sort
+                Sort Key: candidate_jobs.type_order, candidate_jobs.scheduled_at, candidate_jobs.id
+                ->  CTE Scan on candidate_jobs
+  CTE updated
+    ->  Update on queuert_job job
+          InitPlan 7
+            ->  Result
+                  One-Time Filter: false
+          ->  Result
+                One-Time Filter: (NOT (InitPlan 7).col1)
+                ->  Nested Loop
+                      ->  Merge Join
+                            Merge Cond: (n.type_order = b.type_order)
+                            Join Filter: (n.batch_index = b.batch_index)
+                            ->  CTE Scan on numbered_jobs n
+                            ->  Materialize
+                                  ->  Subquery Scan on b
+                                        ->  Limit
+                                              ->  Unique
+                                                    ->  Incremental Sort
+                                                          Sort Key: numbered_jobs.type_order, numbered_jobs.batch_index
+                                                          Presorted Key: numbered_jobs.type_order
+                                                          ->  CTE Scan on numbered_jobs
+                      ->  Index Scan using queuert_job_pkey on queuert_job job
+                            Index Cond: (id = n.id)
+  ->  CTE Scan on updated u
+  ->  Index Scan using queuert_job_pkey on queuert_job h
+        Index Cond: (id = u.chain_id)
+  SubPlan 9
     ->  Index Only Scan using queuert_job_blocker_pkey on queuert_job_blocker jb
           Index Cond: (job_id = u.id)
 ```
@@ -1146,40 +1254,60 @@ Nested Loop
                 ->  Index Scan using queuert_worker_pkey on queuert_worker w
                       Index Cond: (id = '<uuid>'::uuid)
                       Filter: ((token = '<uuid>'::uuid) AND (lease_until > statement_timestamp()))
-  CTE acquired_jobs
+  CTE candidate_jobs
     ->  Limit
           InitPlan 3
             ->  CTE Scan on live_worker
+          InitPlan 4
+            ->  Aggregate
+                  ->  Function Scan on unnest u_1
           ->  Result
                 One-Time Filter: (InitPlan 3).col1
                 ->  Nested Loop
                       ->  Sort
                             Sort Key: (random())
-                            ->  Function Scan on unnest u_1
+                            ->  Function Scan on u_2
                       ->  Subquery Scan on j
                             ->  Limit
                                   ->  LockRows
                                         ->  Index Scan using queuert_job_pending_idx on queuert_job j_1
-                                              Index Cond: ((type_name = u_1.type_name) AND (scheduled_at <= statement_timestamp()))
+                                              Index Cond: ((type_name = u_2.type_name) AND (scheduled_at <= statement_timestamp()))
                                               Filter: (status = 'pending'::text)
+  CTE numbered_jobs
+    ->  WindowAgg
+          Window: w1 AS (PARTITION BY candidate_jobs.type_order ORDER BY candidate_jobs.scheduled_at, candidate_jobs.id ROWS UNBOUNDED PRECEDING)
+          ->  Sort
+                Sort Key: candidate_jobs.type_order, candidate_jobs.scheduled_at, candidate_jobs.id
+                ->  CTE Scan on candidate_jobs
   CTE updated
     ->  Update on queuert_job job
-          InitPlan 5
+          InitPlan 7
             ->  Result
                   One-Time Filter: false
           ->  Result
-                One-Time Filter: (NOT (InitPlan 5).col1)
+                One-Time Filter: (NOT (InitPlan 7).col1)
                 ->  Nested Loop
-                      ->  CTE Scan on acquired_jobs a
+                      ->  Merge Join
+                            Merge Cond: (n.type_order = b.type_order)
+                            Join Filter: (n.batch_index = b.batch_index)
+                            ->  CTE Scan on numbered_jobs n
+                            ->  Materialize
+                                  ->  Subquery Scan on b
+                                        ->  Limit
+                                              ->  Unique
+                                                    ->  Incremental Sort
+                                                          Sort Key: numbered_jobs.type_order, numbered_jobs.batch_index
+                                                          Presorted Key: numbered_jobs.type_order
+                                                          ->  CTE Scan on numbered_jobs
                       ->  Index Scan using queuert_job_pkey on queuert_job job
-                            Index Cond: (id = a.id)
+                            Index Cond: (id = n.id)
   ->  CTE Scan on updated u
   ->  Memoize
         Cache Key: u.chain_id
         Cache Mode: logical
         ->  Index Scan using queuert_job_pkey on queuert_job h
               Index Cond: (id = u.chain_id)
-  SubPlan 7
+  SubPlan 9
     ->  Index Only Scan using queuert_job_blocker_pkey on queuert_job_blocker jb
           Index Cond: (job_id = u.id)
 ```

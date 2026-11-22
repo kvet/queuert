@@ -75,7 +75,7 @@ describe("Redis state adapter job locks", () => {
     await stateAdapter.startJobAttempts({
       workerId: worker.id,
       workerToken: worker.token,
-      typeNames: ["task"],
+      batchLimits: { task: 1 },
       limit: 1,
     });
 
@@ -138,7 +138,7 @@ describe("Redis state adapter job locks", () => {
           txCtx,
           workerId: worker.id,
           workerToken: worker.token,
-          typeNames: ["task"],
+          batchLimits: { task: 1 },
           limit: 1,
         }),
       );

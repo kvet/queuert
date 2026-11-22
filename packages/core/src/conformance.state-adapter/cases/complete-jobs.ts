@@ -45,7 +45,7 @@ export const completeJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["complete-test"],
+            batchLimits: { "complete-test": 1 },
             limit: 1,
           }),
         );
@@ -314,7 +314,7 @@ export const completeJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["double-complete-test"],
+            batchLimits: { "double-complete-test": 1 },
             limit: 1,
           }),
         );
@@ -390,7 +390,7 @@ export const completeJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["complete-clears-error"],
+            batchLimits: { "complete-clears-error": 1 },
             limit: 1,
           }),
         );
@@ -414,7 +414,7 @@ export const completeJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["complete-clears-error"],
+            batchLimits: { "complete-clears-error": 1 },
             limit: 1,
           }),
         );
@@ -667,7 +667,7 @@ export const completeJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["complete-token-unknown"],
+            batchLimits: { "complete-token-unknown": 1 },
             limit: 1,
           }),
         );
@@ -724,7 +724,7 @@ export const completeJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["complete-token-replaced"],
+            batchLimits: { "complete-token-replaced": 1 },
             limit: 1,
           }),
         );
@@ -733,7 +733,7 @@ export const completeJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["complete-token-replaced"],
+            batchLimits: { "complete-token-replaced": 1 },
             limit: 1,
           }),
         );
@@ -800,7 +800,7 @@ export const completeJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["complete-token-recreated"],
+            batchLimits: { "complete-token-recreated": 1 },
             limit: 1,
           }),
         );
@@ -827,7 +827,7 @@ export const completeJobsGroup: ConformanceGroup<StateAdapterConformanceContext>
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["complete-token-recreated"],
+            batchLimits: { "complete-token-recreated": 1 },
             limit: 1,
           }),
         );

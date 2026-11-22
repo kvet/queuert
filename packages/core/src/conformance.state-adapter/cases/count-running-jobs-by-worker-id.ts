@@ -61,7 +61,7 @@ export const countRunningJobsByWorkerIdGroup: ConformanceGroup<StateAdapterConfo
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["get-count"],
+            batchLimits: { "get-count": 1 },
             limit: 3,
           }),
         );
@@ -69,7 +69,7 @@ export const countRunningJobsByWorkerIdGroup: ConformanceGroup<StateAdapterConfo
           stateAdapter.startJobAttempts({
             workerId: otherWorker.id,
             workerToken: otherWorker.token,
-            typeNames: ["get-count-other"],
+            batchLimits: { "get-count-other": 1 },
             limit: 1,
           }),
         );
@@ -135,7 +135,7 @@ export const countRunningJobsByWorkerIdGroup: ConformanceGroup<StateAdapterConfo
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["provision-account"],
+            batchLimits: { "provision-account": 1 },
             limit: 2,
           }),
         );

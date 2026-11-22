@@ -330,10 +330,17 @@ export type StateAdapter<
     params: { chainIds: TJobId[] } & TransactionTxContextParam<TTxContext>,
   ) => ModeResult<TMode, (StateChain | StateBlockedJob[] | undefined)[]>;
 
-  /** Claims up to `limit` due jobs of `typeNames` with a new `attemptToken` while the worker row holds `workerToken` with a live lease, skipping locked rows so no two callers get the same job; fewer only when no more are available. */
+  /**
+   * Claims due jobs of the types in `batchLimits` in up to `limit` batches, each job with a new
+   * `attemptToken`, while the worker row holds `workerToken` with a live lease, skipping locked rows
+   * so no two callers get the same job. A type's claimed jobs are its oldest due ones, split oldest
+   * first into batches of its batch limit, all full but the last; fewer batches only when no more
+   * jobs are available. With a batch limit of 1, a batch is a job.
+   */
   startJobAttempts: (
     params: {
-      typeNames: string[];
+      /** The job types to claim, each with the most jobs in one of its batches. */
+      batchLimits: Record<string, number>;
       workerId: TWorkerId;
       workerToken: string;
       limit: number;

@@ -690,7 +690,7 @@ export const unblockJobsGroup: ConformanceGroup<StateAdapterConformanceContext> 
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["fairness-main"],
+            batchLimits: { "fairness-main": 1 },
             limit: 1,
           }),
         );
@@ -698,7 +698,7 @@ export const unblockJobsGroup: ConformanceGroup<StateAdapterConformanceContext> 
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["fairness-main"],
+            batchLimits: { "fairness-main": 1 },
             limit: 1,
           }),
         );

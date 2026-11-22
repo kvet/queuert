@@ -1,3 +1,4 @@
+import { chunk } from "@queuert/helpers/chunk";
 import { createLatch } from "@queuert/helpers/latch";
 import { type MigrationResult, createMigrator } from "@queuert/typed-sql";
 import {
@@ -1150,7 +1151,7 @@ export const createRedisStateAdapter = ({
         });
       }),
 
-    startJobAttempts: async ({ txCtx, typeNames, workerId, workerToken, limit }) => {
+    startJobAttempts: async ({ txCtx, batchLimits, workerId, workerToken, limit }) => {
       if (limit <= 0) return [];
       if (transactionOf(txCtx) === undefined) {
         closed.throwIfTripped();
@@ -1170,8 +1171,11 @@ export const createRedisStateAdapter = ({
                 lockedSlack: claimLockedSlack,
                 scanCap: claimScanCap,
                 replayTtlMs,
-                typeNames,
-                attemptTokens: Array.from({ length: limit }, () => crypto.randomUUID()),
+                batchLimits,
+                attemptTokens: Array.from(
+                  { length: limit * Math.max(1, ...Object.values(batchLimits)) },
+                  () => crypto.randomUUID(),
+                ),
               }),
             ],
           )
@@ -1203,33 +1207,34 @@ export const createRedisStateAdapter = ({
         const worker = await loadWorker(tx, workerId);
         if (!worker || worker.token !== workerToken || !isLive(worker, nowMs)) return acquired;
 
-        while (acquired.length < limit) {
-          const remaining = limit - acquired.length;
+        let acquiredBatches = 0;
+        while (acquiredBatches < limit) {
+          const remaining = limit - acquiredBatches;
           const window = tryNumber === 1 ? remaining : remaining * Math.min(2 ** tryNumber, 64);
-          const due = (
+          const batches = (
             await Promise.all(
-              typeNames.map(async (typeName) => unlockedDue(tx, typeName, window, nowMs)),
+              Object.entries(batchLimits).map(async ([typeName, batchLimit]) =>
+                chunk(await unlockedDue(tx, typeName, window * batchLimit, nowMs), batchLimit),
+              ),
             )
           )
             .flat()
-            .toSorted(compareZsetMembers)
+            .toSorted((a, b) => compareZsetMembers(a[0], b[0]))
             .slice(0, window);
-          const candidates = (
+          const candidateBatches =
             window === remaining
-              ? due
-              : due
-                  .map((member) => ({ member, order: Math.random() }))
+              ? batches
+              : batches
+                  .map((batch) => ({ batch, order: Math.random() }))
                   .toSorted((a, b) => a.order - b.order)
                   .slice(0, remaining)
-                  .map(({ member }) => member)
-          ).toSorted(compareZsetMembers);
-          if (candidates.length === 0) break;
+                  .map(({ batch }) => batch);
+          if (candidateBatches.length === 0) break;
 
-          let claimedAny = false;
           const claimed: DbJob[] = [];
           for (const job of await loadPresentJobs(
             tx,
-            candidates.map(({ member }) => dueJobId(member)),
+            candidateBatches.flat().map(({ member }) => dueJobId(member)),
           )) {
             if (job.status !== "pending" || job.scheduledAt.getTime() > nowMs) continue;
             const updated: DbJob = {
@@ -1242,12 +1247,15 @@ export const createRedisStateAdapter = ({
             };
             writeJob(tx, job, updated);
             claimed.push(updated);
-            claimedAny = true;
           }
           for (const [index, view] of (await jobViews(tx, claimed)).entries()) {
             acquired.push({ ...view, hasBlockers: claimed[index].blockers.length > 0 });
           }
-          if (!claimedAny) break;
+          if (claimed.length === 0) break;
+          const claimedIds = new Set(claimed.map((job) => job.id));
+          acquiredBatches += candidateBatches.filter((batch) =>
+            batch.some(({ member }) => claimedIds.has(dueJobId(member))),
+          ).length;
         }
         return acquired;
       });

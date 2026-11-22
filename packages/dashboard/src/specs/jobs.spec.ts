@@ -278,7 +278,7 @@ describe("job server functions", () => {
       await stateAdapter.startJobAttempts({
         workerId: "test-worker",
         workerToken: worker.token,
-        typeNames: ["test-type"],
+        batchLimits: { "test-type": 1 },
         limit: 1,
       });
 

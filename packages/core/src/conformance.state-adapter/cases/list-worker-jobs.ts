@@ -46,7 +46,7 @@ export const listWorkerJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["reserve-stock"],
+            batchLimits: { "reserve-stock": 1 },
             limit: 1,
           }),
         );
@@ -55,7 +55,7 @@ export const listWorkerJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["ship-order"],
+            batchLimits: { "ship-order": 1 },
             limit: 1,
           }),
         );
@@ -63,7 +63,7 @@ export const listWorkerJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: otherWorker.id,
             workerToken: otherWorker.token,
-            typeNames: ["reserve-stock"],
+            batchLimits: { "reserve-stock": 1 },
             limit: 1,
           }),
         );
@@ -118,7 +118,7 @@ export const listWorkerJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["daily-digest"],
+            batchLimits: { "daily-digest": 1 },
             limit: 3,
           }),
         );
@@ -166,7 +166,7 @@ export const listWorkerJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["daily-digest"],
+            batchLimits: { "daily-digest": 1 },
             limit: 3,
           }),
         );
@@ -250,7 +250,7 @@ export const listWorkerJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["capture-payment"],
+            batchLimits: { "capture-payment": 1 },
             limit: 3,
           }),
         );
@@ -331,7 +331,7 @@ export const listWorkerJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["provision-account"],
+            batchLimits: { "provision-account": 1 },
             limit: 2,
           }),
         );
@@ -405,7 +405,7 @@ export const listWorkerJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["daily-digest"],
+            batchLimits: { "daily-digest": 1 },
             limit: 3,
           }),
         );
@@ -454,7 +454,7 @@ export const listWorkerJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["daily-digest"],
+            batchLimits: { "daily-digest": 1 },
             limit: 3,
           }),
         );
@@ -516,7 +516,7 @@ export const listWorkerJobsGroup: ConformanceGroup<StateAdapterConformanceContex
           stateAdapter.startJobAttempts({
             workerId: worker.id,
             workerToken: worker.token,
-            typeNames: ["daily-digest"],
+            batchLimits: { "daily-digest": 1 },
             limit: 3,
           }),
         );

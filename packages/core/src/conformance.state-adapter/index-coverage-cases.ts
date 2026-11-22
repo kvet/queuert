@@ -106,6 +106,7 @@ export type IndexCoverageCaseKey =
   | "stopWorker/default"
   | "startJobAttempts/default"
   | "startJobAttempts/limit100"
+  | "startJobAttempts/batchLimit10"
   | "startJobAttempts/batch100"
   | "completeJobs/default"
   | "completeJobs/batch100"
@@ -1764,7 +1765,7 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
               );
               const [acquired] = yield* step(
                 stateAdapter.startJobAttempts({
-                  typeNames: ["seed:throwaway:pending"],
+                  batchLimits: { "seed:throwaway:pending": 1 },
                   workerId: worker.id,
                   workerToken: worker.token,
                   limit: 1,
@@ -1828,7 +1829,7 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
                 stateAdapter.withTransaction((txCtx) =>
                   stateAdapter.startJobAttempts({
                     txCtx,
-                    typeNames: ["idx:batch:continue"],
+                    batchLimits: { "idx:batch:continue": 1 },
                     workerId: worker.id,
                     workerToken: worker.token,
                     limit: BATCH_SIZE,
@@ -2230,7 +2231,7 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
                   syncAsync(function* () {
                     yield* step(
                       stateAdapter.startJobAttempts({
-                        typeNames: ["seed:throwaway:pending"],
+                        batchLimits: { "seed:throwaway:pending": 1 },
                         workerId: worker.id,
                         workerToken: worker.token,
                         limit: 1,
@@ -2248,7 +2249,6 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
           runInModeOf(
             stateAdapter,
             syncAsync(function* () {
-              const typeNames = ["idx:batch:start"];
               yield* step(
                 stateAdapter.withTransaction((txCtx) =>
                   stateAdapter.createJobs({
@@ -2264,7 +2264,7 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
               const worker = yield* step(
                 stateAdapter.startWorker({
                   workerId: stateAdapter.config.generateWorkerId(),
-                  typeNames,
+                  typeNames: ["idx:batch:start"],
                   concurrency: BATCH_SIZE,
                   leaseMs: 60_000,
                 }),
@@ -2275,10 +2275,54 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
                   syncAsync(function* () {
                     yield* step(
                       stateAdapter.startJobAttempts({
-                        typeNames,
+                        batchLimits: { "idx:batch:start": 1 },
                         workerId: worker.id,
                         workerToken: worker.token,
                         limit: BATCH_SIZE,
+                      }),
+                    );
+                  }),
+                );
+            }),
+          ),
+      },
+      {
+        key: "startJobAttempts/batchLimit10",
+        label: "10 batches of 10",
+        run: (stateAdapter) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.createJobs({
+                    txCtx,
+                    jobs: Array.from({ length: BATCH_SIZE }, () => ({
+                      id: stateAdapter.config.generateJobId(),
+                      typeName: "idx:batch:start-batches",
+                      input: {},
+                    })),
+                  }),
+                ),
+              );
+              const worker = yield* step(
+                stateAdapter.startWorker({
+                  workerId: stateAdapter.config.generateWorkerId(),
+                  typeNames: ["idx:batch:start-batches"],
+                  concurrency: 10,
+                  leaseMs: 60_000,
+                }),
+              );
+              return (stateAdapter: StateAdapter<any, any, any, Mode>) =>
+                runInModeOf(
+                  stateAdapter,
+                  syncAsync(function* () {
+                    yield* step(
+                      stateAdapter.startJobAttempts({
+                        batchLimits: { "idx:batch:start-batches": 10 },
+                        workerId: worker.id,
+                        workerToken: worker.token,
+                        limit: 10,
                       }),
                     );
                   }),
@@ -2311,7 +2355,7 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
                   syncAsync(function* () {
                     yield* step(
                       stateAdapter.startJobAttempts({
-                        typeNames,
+                        batchLimits: Object.fromEntries(typeNames.map((typeName) => [typeName, 1])),
                         workerId: worker.id,
                         workerToken: worker.token,
                         limit: 10,
@@ -2345,7 +2389,7 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
               );
               const [acquired] = yield* step(
                 stateAdapter.startJobAttempts({
-                  typeNames: ["seed:throwaway:pending"],
+                  batchLimits: { "seed:throwaway:pending": 1 },
                   workerId: worker.id,
                   workerToken: worker.token,
                   limit: 1,
@@ -2407,7 +2451,7 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
                 stateAdapter.withTransaction((txCtx) =>
                   stateAdapter.startJobAttempts({
                     txCtx,
-                    typeNames: ["idx:batch:complete"],
+                    batchLimits: { "idx:batch:complete": 1 },
                     workerId: worker.id,
                     workerToken: worker.token,
                     limit: BATCH_SIZE,
@@ -2533,7 +2577,7 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
                 stateAdapter.withTransaction((txCtx) =>
                   stateAdapter.startJobAttempts({
                     txCtx,
-                    typeNames: ["idx:batch:reschedule"],
+                    batchLimits: { "idx:batch:reschedule": 1 },
                     workerId: worker.id,
                     workerToken: worker.token,
                     limit: BATCH_SIZE,
