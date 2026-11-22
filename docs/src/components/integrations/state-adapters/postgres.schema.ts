@@ -46,7 +46,7 @@ export const postgresTables: SchemaTable[] = [
       {
         name: "completed_by",
         type: "same as worker.id",
-        description: "Worker ID that completed the job (null for workerless)",
+        description: "Worker ID that completed the job; null when the client completed it",
       },
       {
         name: "attempt",

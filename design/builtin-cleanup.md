@@ -77,7 +77,7 @@ await scheduleCleanup({
 ```ts
 const identity = { key: `__queuert/cleanup:${name}`, scope: "running" } as const;
 
-const existing = await client.getChain({ ...txCtx, identity, lock: true });
+const existing = await client.getChain({ ...txCtx, identity, lock: "exclusive" });
 if (!existing) {
   await client.createChain({ ...txCtx, txHooks, identity /* new schedule */ });
 } else if (configDiffers(existing.input, next)) {
@@ -87,7 +87,7 @@ if (!existing) {
 // config unchanged → no-op: no delete, no timer reset
 ```
 
-This leans on both primitives: `getChain({ identity })` to find the running chain for the name ([chain-identity.md](chain-identity.md)), and `lock` to serialize the compare-and-swap against a concurrent scheduler (not shipped — a client-level `lock: true` on reads was removed before release for lack of a caller; reintroduce it with this work). The absent-row race (two boots, neither sees a chain, both create) is caught by the `running`-scope unique index — `lock` alone cannot cover it. Delete and create happen in the caller's single transaction, so there is never a window with zero or two running chains.
+This leans on both primitives: `getChain({ identity })` to find the running chain for the name ([chain-identity.md](chain-identity.md)), and `lock` to serialize the compare-and-swap against a concurrent scheduler (not shipped — a client-level `lock: "exclusive"` on reads was removed before release for lack of a caller; reintroduce it with this work). The absent-row race (two boots, neither sees a chain, both create) is caught by the `running`-scope unique index — `lock` alone cannot cover it. Delete and create happen in the caller's single transaction, so there is never a window with zero or two running chains.
 
 ### Deleting a running schedule is safe
 
@@ -170,7 +170,7 @@ A dedicated `queuert/cleanup` subpath (matching the existing `./conformance` pre
 
 ## Dependencies
 
-Requires [chain-identity.md](chain-identity.md), which supplies the post-completion scheduling the handler's self-reschedule depends on, and reintroducing locked client reads (`lock: true`); the two compose into `getChain({ identity, lock: true })`.
+Requires [chain-identity.md](chain-identity.md), which supplies the post-completion scheduling the handler's self-reschedule depends on, and reintroducing locked client reads (`lock: "exclusive"`); the two compose into `getChain({ identity, lock: "exclusive" })`.
 
 ## Docs
 

@@ -116,7 +116,7 @@ When `complete`'s write misses, `complete` writes nothing, throws and aborts the
 
 ### `fence`
 
-`complete` checks ownership for its own transaction only. For writes in the other transactions your handler opens, call `fence({ ...txCtx })` at the start of that transaction. It takes the same transaction context as `complete`, with the same SQLite write-lock and Redis requirements, though like a read it needs only part of it: `fence({ tx })` without the `txHooks` some providers carry is enough. It locks the job row and its chain head and checks that the job is `running` under this attempt's token. Reclaiming the job, completing it with `client.completeChain`, reading it with `lock: "exclusive"` and deleting its chain all lock or update the same rows, so they wait until your transaction commits or rolls back: every write that commits after a successful `fence` committed while the attempt owned the job. On Redis nothing waits: the transaction that commits second runs again, and its `fence` then throws; see [Locks](/queuert/integrations/state-adapters/redis/#locks).
+`complete` checks ownership for its own transaction only. For writes in the other transactions your handler opens, call `fence({ ...txCtx })` at the start of that transaction. It takes the same transaction context as `complete`, with the same SQLite write-lock and Redis requirements, though like a read it needs only part of it: `fence({ tx })` without the `txHooks` some providers carry is enough. It locks the job row and its chain head and checks that the job is `running` under this attempt's token. Reclaiming the job, completing it with `client.applyJobOutcome`, reading it with `lock: "exclusive"` and deleting its chain all lock or update the same rows, so they wait until your transaction commits or rolls back: every write that commits after a successful `fence` committed while the attempt owned the job. On Redis nothing waits: the transaction that commits second runs again, and its `fence` then throws; see [Locks](/queuert/integrations/state-adapters/redis/#locks).
 
 ```typescript
 attemptHandler: async ({ signal, fence, complete }) => {
@@ -162,7 +162,7 @@ Completing a chain from outside the worker also aborts the `signal` of the attem
 
 <ExampleCode example="guides" file="src/signals.ts" region="polling-handler" />
 
-A payment webhook completes the job with `completeChain` while the handler polls. The handler stops polling, and since its attempt no longer owns the job, nothing it does afterwards is written:
+A payment webhook completes the job with `client.applyJobOutcome` while the handler polls. The handler stops polling, and since its attempt no longer owns the job, nothing it does afterwards is written:
 
 <ExampleCode example="guides" file="src/signals.ts" region="external-completion" />
 
@@ -173,4 +173,4 @@ A payment webhook completes the job with `completeChain` while the handler polls
 - [Worker Runner](../worker-runner/) — Worker lifecycle, worker lease, reclaim
 - [State Adapters — the transaction context](/queuert/integrations/state-adapters/#transaction-context) — what the transaction context represents and how it is passed
 - [`guides/src/timeouts.ts`](https://github.com/kvet/queuert/blob/main/examples/guides/src/timeouts.ts) — Runnable example: work that outlasts the worker lease while the heartbeat renews it, then `complete` in your own transaction
-- [`guides/src/signals.ts`](https://github.com/kvet/queuert/blob/main/examples/guides/src/signals.ts) — Runnable example: external completion via `completeChain`, graceful shutdown with partial results
+- [`guides/src/signals.ts`](https://github.com/kvet/queuert/blob/main/examples/guides/src/signals.ts) — Runnable example: external completion via `applyJobOutcome`, graceful shutdown with partial results

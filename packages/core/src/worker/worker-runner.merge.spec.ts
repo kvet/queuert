@@ -681,21 +681,13 @@ describe("cross-slice blocker type resolution in workerless completion", () => {
     );
 
     await stateAdapter.withTransaction(async (txCtx) =>
-      client.completeChain({
+      client.applyJobOutcome({
         ...txCtx,
-        ...chain,
-        handler: async ({ job, completeJob }) => {
-          if (job.typeName === "local.start") {
-            return completeJob(job, async ({ complete }) =>
-              complete({
-                continueWith: {
-                  typeName: "local.finish",
-                  input: { id: "1" },
-                  blockers: [blockerChain],
-                },
-              }),
-            );
-          }
+        job: { id: chain.id, typeName: "local.start" },
+        continueWith: {
+          typeName: "local.finish",
+          input: { id: "1" },
+          blockers: [blockerChain],
         },
       }),
     );

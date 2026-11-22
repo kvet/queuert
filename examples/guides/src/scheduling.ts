@@ -164,10 +164,10 @@ const reminder = await stateAdapter.withTransaction(async (txCtx) =>
 
 // #region push-back
 const pushedBack = await stateAdapter.withTransaction(async (txCtx) =>
-  client.rescheduleJob({
+  client.applyJobOutcome({
     ...txCtx,
-    id: reminder.id,
-    schedule: { afterMs: 2 * 60 * 60 * 1000 },
+    job: { id: reminder.id },
+    reschedule: { afterMs: 2 * 60 * 60 * 1000 },
     reason: "snoozed by user",
   }),
 );
@@ -177,9 +177,16 @@ assert.equal(pushedBack.lastRescheduleReason, "snoozed by user");
 assert.ok(pushedBack.scheduledAt.getTime() > Date.now() + 60 * 60 * 1000);
 
 // #region run-now
-await stateAdapter.withTransaction(async (txCtx) =>
-  client.rescheduleJob({ ...txCtx, id: reminder.id }),
-);
+await stateAdapter.withTransaction(async (txCtx) => {
+  const job = await client.getChainTailJob({
+    ...txCtx,
+    chainId: reminder.id,
+    lock: "exclusive",
+  });
+  if (job?.status === "pending" || job?.status === "blocked") {
+    await client.applyJobOutcome({ ...txCtx, job, reschedule: { afterMs: 0 } });
+  }
+});
 // #endregion
 await client.awaitChain(reminder, { timeoutMs: 5000 });
 assert.deepEqual(sentEmails, ["Weekly standup"]);
@@ -218,7 +225,11 @@ assert.notEqual(secondDigest.id, firstDigest.id);
 
 await stateAdapter.withTransaction(async (txCtx) => {
   subscribedUserIds.delete("user-1");
-  await client.rescheduleJob({ ...txCtx, id: secondDigest.id });
+  await client.applyJobOutcome({
+    ...txCtx,
+    job: { id: secondDigest.id },
+    reschedule: { afterMs: 0 },
+  });
 });
 await client.awaitChain(secondDigest, { timeoutMs: 5000 });
 assert.deepEqual(await runningDigests(), []);

@@ -641,11 +641,10 @@ describe("Logging", () => {
 
     const completeBlocker = async (blocker: typeof blockerA) =>
       withTransaction(async (txCtx) =>
-        client.completeChain({
+        client.applyJobOutcome({
           ...txCtx,
-          ...blocker,
-          handler: async ({ job, completeJob }) =>
-            completeJob(job, async ({ complete }) => complete({ output: null })),
+          job: { id: blocker.id, typeName: "blocker" },
+          output: null,
         }),
       );
     const unblockedLogs = () =>
@@ -717,12 +716,10 @@ describe("Logging", () => {
     );
 
     await withTransaction(async (txCtx) =>
-      client.completeChain({
+      client.applyJobOutcome({
         ...txCtx,
-        ...chain,
-        handler: async ({ job, completeJob }) => {
-          return completeJob(job, async ({ complete }) => complete({ output: { result: 84 } }));
-        },
+        job: { id: chain.id, typeName: "test" },
+        output: { result: 84 },
       }),
     );
 
@@ -913,11 +910,10 @@ describe("Logging", () => {
     await workerRunner.start();
     await started.promise;
     await withTransaction(async (txCtx) =>
-      client.completeChain({
+      client.applyJobOutcome({
         ...txCtx,
-        ...chain,
-        handler: async ({ job, completeJob }) =>
-          completeJob(job, async ({ complete }) => complete({ output: { by: "workerless" } })),
+        job: { id: chain.id, typeName: "test" },
+        output: { by: "workerless" },
       }),
     );
     takenOver.resolve();
@@ -1246,11 +1242,10 @@ describe("Logging rollback", () => {
     log.mockClear();
 
     await withTransaction(async (txCtx) => {
-      await client.completeChain({
+      await client.applyJobOutcome({
         ...txCtx,
-        ...chain,
-        handler: async ({ job, completeJob }) =>
-          completeJob(job, async ({ complete }) => complete({ output: { result: 42 } })),
+        job: { id: chain.id, typeName: "test" },
+        output: { result: 42 },
       });
       throw new Error("simulated rollback");
     }).catch(() => {});
@@ -1644,11 +1639,10 @@ describe("Logging rollback", () => {
 
     // First attempt: unblockJobs fails inside finishJob → entire transaction rolls back
     await withTransaction(async (txCtx) =>
-      erroringClient.completeChain({
+      erroringClient.applyJobOutcome({
         ...txCtx,
-        ...chain,
-        handler: async ({ job, completeJob }) =>
-          completeJob(job, async ({ complete }) => complete({ output: { result: 42 } })),
+        job: { id: chain.id, typeName: "test" },
+        output: { result: 42 },
       }),
     ).catch(() => {});
 
@@ -1658,11 +1652,10 @@ describe("Logging rollback", () => {
 
     // Second attempt: succeeds
     await withTransaction(async (txCtx) =>
-      client.completeChain({
+      client.applyJobOutcome({
         ...txCtx,
-        ...chain,
-        handler: async ({ job, completeJob }) =>
-          completeJob(job, async ({ complete }) => complete({ output: { result: 42 } })),
+        job: { id: chain.id, typeName: "test" },
+        output: { result: 42 },
       }),
     );
 
@@ -1967,7 +1960,9 @@ describe("Logging rollback", () => {
       }),
     );
 
-    await withTransaction(async (txCtx) => client.rescheduleJob({ ...txCtx, id: chain.id }));
+    await withTransaction(async (txCtx) =>
+      client.applyJobOutcome({ ...txCtx, job: { id: chain.id }, reschedule: { afterMs: 0 } }),
+    );
 
     expectLogs([
       { type: "chain_created", data: { typeName: "test" } },

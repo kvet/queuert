@@ -47,6 +47,7 @@
   },
   "devDependencies": {
     "@queuert/rpc": "workspace:*",
+    "@queuert/sync-async": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@queuert/ui": "workspace:*",
     "@solidjs/router": "1.0.1",

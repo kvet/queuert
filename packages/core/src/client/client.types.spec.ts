@@ -8,9 +8,9 @@ import type { InProcessStateAdapter } from "../state-adapter.in-process/state-ad
 import type { GetStateAdapterTxContext, StateAdapter } from "../state-adapter/state-adapter.ts";
 import type { createClient } from "./client.ts";
 
-type InProcessClient<TJobTypes extends JobTypes<any>> = ReturnType<
-  typeof createClient<TJobTypes, InProcessStateAdapter<"async">>
->;
+type InProcessClient<
+  TJobTypes extends JobTypes<any> | readonly [JobTypes<any>, ...JobTypes<any>[]],
+> = ReturnType<typeof createClient<TJobTypes, InProcessStateAdapter<"async">>>;
 
 declare const txCtx: GetStateAdapterTxContext<InProcessStateAdapter<"async">>;
 
@@ -117,7 +117,9 @@ describe("createChain", () => {
       type MainBlockers = Parameters<typeof client.createChain<"main">>[0]["blockers"];
       expectTypeOf<[{ id: string }]>().toExtend<MainBlockers>();
       expectTypeOf<[typeof blockerChain, typeof otherChain]>().toExtend<MainBlockers>();
+      expectTypeOf<readonly [{ id: string }, { id: string }]>().toExtend<MainBlockers>();
       expectTypeOf<[{ id: string; typeName: "other" }]>().not.toExtend<MainBlockers>();
+      expectTypeOf<readonly [{ id: string; typeName: "other" }]>().not.toExtend<MainBlockers>();
     }).toBeFunction();
   });
 });
@@ -264,245 +266,455 @@ describe("queries", () => {
   });
 });
 
-describe("completeChain", () => {
-  it("types a simple chain completed without worker", () => {
-    const jobTypes = defineJobTypes<{
-      test: { entry: true; input: { value: number }; output: { result: number } };
-    }>();
+describe("locked reads", () => {
+  const jobTypes = defineJobTypes<{
+    test: { entry: true; input: null; output: null };
+  }>();
+  type LockClient = InProcessClient<typeof jobTypes>;
 
-    expectTypeOf(async (client: InProcessClient<typeof jobTypes>) => {
-      const chain = await client.createChain({
+  it("accepts a lock only with a transaction context", () => {
+    expectTypeOf(async (client: LockClient) => {
+      await client.getJob({ ...txCtx, id: "id", lock: "exclusive" });
+      await client.getJobs({ ...txCtx, ids: ["id"], lock: "exclusive" });
+      await client.getChain({ ...txCtx, id: "id", lock: "exclusive" });
+      await client.getChains({ ...txCtx, ids: ["id"], lock: "exclusive" });
+      await client.getChainTailJob({ ...txCtx, chainId: "id", lock: "exclusive" });
+      await client.getChainTailJobs({ ...txCtx, chainIds: ["id"], lock: "exclusive" });
+      // @ts-expect-error lock takes a lock mode, not a boolean
+      await client.getJob({ ...txCtx, id: "id", lock: true });
+      await client.getJob({ id: "id" });
+
+      // @ts-expect-error lock: "exclusive" requires a transaction context
+      await client.getJob({ id: "id", lock: "exclusive" });
+      // @ts-expect-error lock: "exclusive" requires a transaction context
+      await client.getChainTailJobs({ chainIds: ["id"], lock: "exclusive" });
+    }).toBeFunction();
+  });
+});
+
+describe("applyJobOutcome", () => {
+  const jobTypes = defineJobTypes<{
+    "await-payment": {
+      entry: true;
+      input: { orderId: string };
+      output: { paid: boolean };
+      continueWith: { typeName: "ship" };
+    };
+    ship: { input: { orderId: string }; output: { shipped: boolean } };
+    blocker: { entry: true; input: null; output: null };
+    other: { entry: true; input: null; output: null };
+    report: {
+      entry: true;
+      input: null;
+      continueWith: { typeName: "summarize" };
+    };
+    summarize: {
+      input: null;
+      output: { sum: number };
+      blockers: [{ typeName: "blocker" }, ...{ typeName: "blocker" | "other" }[]];
+    };
+  }>();
+  type OutcomeClient = InProcessClient<typeof jobTypes>;
+
+  it("types the output result by the job's typeName", () => {
+    expectTypeOf(async (client: OutcomeClient) => {
+      const completed = await client.applyJobOutcome({
         ...txCtx,
-        typeName: "test",
-        input: { value: 42 },
-      });
-      const completedChain = await client.completeChain({
-        ...txCtx,
-        ...chain,
-        handler: async ({ job, completeJob }) =>
-          completeJob(job, async ({ complete }) => complete({ output: { result: 84 } })),
+        job: { id: "id", typeName: "await-payment" },
+        output: { paid: true },
       });
 
-      expectTypeOf(completedChain.status).toEqualTypeOf<"completed">();
-      expectTypeOf(completedChain.output).toEqualTypeOf<{ result: number }>();
+      expectTypeOf(completed.status).toEqualTypeOf<"completed">();
+      expectTypeOf(completed.typeName).toEqualTypeOf<"await-payment">();
+      expectTypeOf(completed.output).toEqualTypeOf<{ paid: boolean }>();
+      expectTypeOf(completed.continuedTo).toEqualTypeOf<undefined>();
     }).toBeFunction();
   });
 
-  it("types a complex chain completed without worker", () => {
-    const jobTypes = defineJobTypes<{
-      "awaiting-approval": {
-        entry: true;
-        input: { requestId: string };
-        continueWith: { typeName: "process-approved" };
-      };
-      "process-approved": { input: { approved: boolean }; output: { done: boolean } };
-    }>();
-
-    expectTypeOf(async (client: InProcessClient<typeof jobTypes>) => {
-      const chain = await client.createChain({
+  it("types the continueWith result with its continuation", () => {
+    expectTypeOf(async (client: OutcomeClient) => {
+      const continued = await client.applyJobOutcome({
         ...txCtx,
-        typeName: "awaiting-approval",
-        input: { requestId: "req-123" },
+        job: { id: "id", typeName: "await-payment" },
+        continueWith: { typeName: "ship", input: { orderId: "o-1" } },
       });
-      const completedChain = await client.completeChain({
+
+      expectTypeOf(continued.status).toEqualTypeOf<"completed">();
+      expectTypeOf(continued.continuedTo.typeName).toEqualTypeOf<"ship">();
+      expectTypeOf(continued.continuedTo.input).toEqualTypeOf<{ orderId: string }>();
+
+      const continuedOnly = await client.applyJobOutcome({
         ...txCtx,
-        ...chain,
-        handler: async ({ job, completeJob }) => {
-          if (job.typeName === "awaiting-approval") {
-            job = await completeJob(job, async ({ complete }) =>
-              complete({
-                continueWith: { typeName: "process-approved", input: { approved: true } },
-              }),
-            );
-            expectTypeOf<(typeof job)["typeName"]>().toEqualTypeOf<"process-approved">();
-            return completeJob(job, async ({ complete }) => complete({ output: { done: true } }));
-          }
-          return completeJob(job, async ({ complete }) => complete({ output: { done: true } }));
+        job: { id: "id", typeName: "report" },
+        continueWith: {
+          typeName: "summarize",
+          input: null,
+          blockers: [{ id: "blocker-id", typeName: "blocker" }],
         },
       });
 
-      expectTypeOf(completedChain.status).toEqualTypeOf<"completed">();
+      expectTypeOf(continuedOnly.status).toEqualTypeOf<"completed">();
+      expectTypeOf(continuedOnly.continuedTo.typeName).toEqualTypeOf<"summarize">();
     }).toBeFunction();
   });
 
-  it("rejects continueWith typeName/input mismatches in completeChain", () => {
-    const jobTypes = defineJobTypes<{
-      start: { entry: true; input: { requestId: string }; continueWith: { typeName: "step-a" } };
-      "step-a": { input: { valueA: number }; continueWith: { typeName: "step-b" } };
-      "step-b": { input: { valueB: boolean }; output: { result: string } };
-    }>();
-
-    expectTypeOf(async (client: InProcessClient<typeof jobTypes>) => {
-      const chain = await client.createChain({
+  it("types the reschedule result as a blocked or pending job", () => {
+    expectTypeOf(async (client: OutcomeClient) => {
+      const rescheduled = await client.applyJobOutcome({
         ...txCtx,
-        typeName: "start",
-        input: { requestId: "req-1" },
+        job: { id: "id" },
+        reschedule: { afterMs: 0 },
+        reason: "wake",
       });
-      await client.completeChain({
+
+      expectTypeOf(rescheduled.status).toEqualTypeOf<"blocked" | "pending">();
+    }).toBeFunction();
+  });
+
+  it("accepts only a job status as job.status", () => {
+    expectTypeOf(async (client: OutcomeClient) => {
+      await client.applyJobOutcome({
         ...txCtx,
-        ...chain,
-        handler: async ({ job, completeJob }) => {
-          // @ts-expect-error complete({ output: ... }) rejects un-narrowed union job types
-          void completeJob(job, async ({ complete }) => complete({ output: { result: "done" } }));
-        },
+        job: { id: "id", status: "pending" },
+        reschedule: { afterMs: 0 },
+      });
+      await client.applyJobOutcome({
+        ...txCtx,
+        // @ts-expect-error status must be a job status
+        job: { id: "id", status: "paused" },
+        reschedule: { afterMs: 0 },
+      });
+    }).toBeFunction();
+  });
+
+  it("applies an outcome to a job read earlier once its typeName is narrowed", () => {
+    expectTypeOf(async (client: OutcomeClient) => {
+      const job = await client.getChainTailJob({
+        ...txCtx,
+        chainId: "id",
+        chainTypeName: "await-payment",
+        lock: "exclusive",
+      });
+      if (job === undefined) return;
+
+      await client.applyJobOutcome({ ...txCtx, job, reschedule: { afterMs: 0 } });
+      // @ts-expect-error output needs a job narrowed to a single type
+      await client.applyJobOutcome({ ...txCtx, job, output: { paid: true } });
+
+      if (job.typeName === "await-payment" && job.status !== "completed") {
+        const completed = await client.applyJobOutcome({ ...txCtx, job, output: { paid: true } });
+        expectTypeOf(completed.chainTypeName).toEqualTypeOf<"await-payment">();
+      }
+    }).toBeFunction();
+  });
+
+  it("rejects an output or continueWith without a typeName", () => {
+    expectTypeOf(async (client: OutcomeClient) => {
+      // @ts-expect-error output needs job.typeName
+      await client.applyJobOutcome({ ...txCtx, job: { id: "id" }, output: { paid: true } });
+    }).toBeFunction();
+  });
+
+  it("rejects an output, continueWith or input of the wrong type", () => {
+    expectTypeOf(async (client: OutcomeClient) => {
+      await client.applyJobOutcome({
+        ...txCtx,
+        job: { id: "id", typeName: "await-payment" },
+        // @ts-expect-error output of the wrong shape
+        output: { paid: "yes" },
+      });
+      await client.applyJobOutcome({
+        ...txCtx,
+        job: { id: "id", typeName: "ship" },
+        // @ts-expect-error ship does not continue
+        continueWith: { typeName: "ship", input: { orderId: "o-1" } },
+      });
+      await client.applyJobOutcome({
+        ...txCtx,
+        job: { id: "id", typeName: "await-payment" },
+        // @ts-expect-error continuation input of the wrong shape
+        continueWith: { typeName: "ship", input: { orderId: 1 } },
       });
     }).toBeFunction();
   });
 
   it("rejects a continueWith blocker whose chain type the slot does not accept", () => {
-    const jobTypes = defineJobTypes<{
-      blocker: {
+    expectTypeOf(async (client: OutcomeClient) => {
+      await client.applyJobOutcome({
+        ...txCtx,
+        job: { id: "id", typeName: "report" },
+        continueWith: {
+          typeName: "summarize",
+          input: null,
+          // @ts-expect-error the first blocker slot only accepts "blocker"
+          blockers: [{ id: "other-id", typeName: "other" }],
+        },
+      });
+      await client.applyJobOutcome({
+        ...txCtx,
+        job: { id: "id", typeName: "report" },
+        continueWith: {
+          typeName: "summarize",
+          input: null,
+          blockers: [{ id: "blocker-id", typeName: "blocker" }],
+        },
+      });
+    }).toBeFunction();
+  });
+
+  it("types a continueWith blocker from another merged slice", () => {
+    const reportJobTypes = defineJobTypes<
+      {
+        "merged-report": {
+          entry: true;
+          input: null;
+          continueWith: { typeName: "merged-summarize" };
+        };
+        "merged-summarize": { input: null; output: null; blockers: [{ typeName: "blocker" }] };
+      },
+      { blocker: { entry: true; input: null; output: null } }
+    >();
+
+    expectTypeOf(
+      async (client: InProcessClient<readonly [typeof jobTypes, typeof reportJobTypes]>) => {
+        await client.applyJobOutcome({
+          ...txCtx,
+          job: { id: "id", typeName: "merged-report" },
+          continueWith: {
+            typeName: "merged-summarize",
+            input: null,
+            blockers: [{ id: "blocker-id", typeName: "blocker" }],
+          },
+        });
+        await client.applyJobOutcome({
+          ...txCtx,
+          job: { id: "id", typeName: "merged-report" },
+          continueWith: {
+            typeName: "merged-summarize",
+            input: null,
+            // @ts-expect-error the blocker slot only accepts "blocker"
+            blockers: [{ id: "other-id", typeName: "other" }],
+          },
+        });
+      },
+    ).toBeFunction();
+  });
+
+  it("rejects more than one outcome", () => {
+    expectTypeOf(async (client: OutcomeClient) => {
+      // @ts-expect-error reason goes only with reschedule
+      await client.applyJobOutcome({
+        ...txCtx,
+        job: { id: "id", typeName: "ship" },
+        output: { shipped: true },
+        reason: "done",
+      });
+      // @ts-expect-error output and reschedule are separate outcomes
+      await client.applyJobOutcome({
+        ...txCtx,
+        job: { id: "id", typeName: "ship" },
+        output: { shipped: true },
+        reschedule: { afterMs: 0 },
+      });
+      // @ts-expect-error output and continueWith are separate outcomes
+      await client.applyJobOutcome({
+        ...txCtx,
+        job: { id: "id", typeName: "await-payment" },
+        output: { paid: true },
+        continueWith: { typeName: "ship", input: { orderId: "o-1" } },
+      });
+      // @ts-expect-error continueWith and reschedule are separate outcomes
+      await client.applyJobOutcome({
+        ...txCtx,
+        job: { id: "id", typeName: "await-payment" },
+        continueWith: { typeName: "ship", input: { orderId: "o-1" } },
+        reschedule: { afterMs: 0 },
+      });
+      await client.applyJobOutcome({
+        ...txCtx,
+        job: { id: "id" },
+        reschedule: { afterMs: 0 },
+        // @ts-expect-error output needs job.typeName, so only reschedule is accepted
+        output: { shipped: true },
+      });
+    }).toBeFunction();
+  });
+});
+
+describe("applyJobOutcomes", () => {
+  const jobTypes = defineJobTypes<{
+    "await-payment": {
+      entry: true;
+      input: { orderId: string };
+      output: { paid: boolean };
+      continueWith: { typeName: "ship" };
+    };
+    ship: { input: { orderId: string }; output: { shipped: boolean } };
+    blocker: { entry: true; input: null; output: null };
+  }>();
+  type OutcomeClient = InProcessClient<typeof jobTypes>;
+
+  it("returns a tuple for a const array of items, each typed by its outcome", () => {
+    expectTypeOf(async (client: OutcomeClient) => {
+      const [paid, shipped, woken] = await client.applyJobOutcomes({
+        ...txCtx,
+        items: [
+          { job: { id: "a", typeName: "await-payment" }, output: { paid: true } },
+          {
+            job: { id: "b", typeName: "await-payment" },
+            continueWith: { typeName: "ship", input: { orderId: "o-1" } },
+          },
+          { job: { id: "c" }, reschedule: { afterMs: 0 } },
+        ],
+      });
+
+      expectTypeOf(paid.output).toEqualTypeOf<{ paid: boolean }>();
+      expectTypeOf(shipped.continuedTo.typeName).toEqualTypeOf<"ship">();
+      expectTypeOf(woken.status).toEqualTypeOf<"blocked" | "pending">();
+    }).toBeFunction();
+  });
+
+  it("checks each item against its own job type", () => {
+    expectTypeOf(async (client: OutcomeClient) => {
+      await client.applyJobOutcomes({
+        ...txCtx,
+        items: [
+          { job: { id: "a", typeName: "ship" }, output: { shipped: true } },
+          // @ts-expect-error the output belongs to "ship", not "await-payment"
+          { job: { id: "b", typeName: "await-payment" }, output: { shipped: true } },
+        ],
+      });
+    }).toBeFunction();
+  });
+
+  it("rejects an item with more than one outcome", () => {
+    expectTypeOf(async (client: OutcomeClient) => {
+      await client.applyJobOutcomes({
+        ...txCtx,
+        items: [
+          // @ts-expect-error output and reschedule are separate outcomes
+          {
+            job: { id: "a", typeName: "ship" },
+            output: { shipped: true },
+            reschedule: { afterMs: 0 },
+          },
+        ],
+      });
+      await client.applyJobOutcomes({
+        ...txCtx,
+        items: [
+          // @ts-expect-error output and continueWith are separate outcomes
+          {
+            job: { id: "b", typeName: "await-payment" },
+            output: { paid: true },
+            continueWith: { typeName: "ship", input: { orderId: "o-1" } },
+          },
+        ],
+      });
+    }).toBeFunction();
+  });
+
+  it("types a continueWith item of a job type without output, with a blocker from another merged slice", () => {
+    const reportJobTypes = defineJobTypes<
+      {
+        report: { entry: true; input: null; continueWith: { typeName: "summarize" } };
+        summarize: { input: null; output: null; blockers: [{ typeName: "blocker" }] };
+      },
+      { blocker: { entry: true; input: null; output: null } }
+    >();
+
+    expectTypeOf(
+      async (client: InProcessClient<readonly [typeof jobTypes, typeof reportJobTypes]>) => {
+        const [summarized] = await client.applyJobOutcomes({
+          ...txCtx,
+          items: [
+            {
+              job: { id: "a", typeName: "report" },
+              continueWith: {
+                typeName: "summarize",
+                input: null,
+                blockers: [{ id: "blocker-id", typeName: "blocker" }],
+              },
+            },
+          ],
+        });
+
+        expectTypeOf(summarized.continuedTo.typeName).toEqualTypeOf<"summarize">();
+
+        await client.applyJobOutcomes({
+          ...txCtx,
+          items: [
+            {
+              job: { id: "a", typeName: "report" },
+              continueWith: {
+                typeName: "summarize",
+                input: null,
+                // @ts-expect-error the blocker slot only accepts "blocker"
+                blockers: [{ id: "other-id", typeName: "ship" }],
+              },
+            },
+          ],
+        });
+      },
+    ).toBeFunction();
+  });
+
+  it("accepts array literals in an item's output and continueWith input", () => {
+    const listJobTypes = defineJobTypes<{
+      collect: {
         entry: true;
-        input: { value: number };
-        output: { result: number };
-      };
-      other: {
-        entry: true;
-        input: { value: number };
-        output: { result: number };
-      };
-      first: {
-        entry: true;
-        input: { blockerId: string; otherId: string };
-        continueWith: { typeName: "second" };
-      };
-      second: {
         input: null;
-        output: { sum: number };
-        blockers: [{ typeName: "blocker" }, ...{ typeName: "blocker" | "other" }[]];
+        output: { list: string[] };
+        continueWith: { typeName: "tag" };
       };
+      tag: { input: { tags: string[]; nested: { ids: number[] } }; output: null };
     }>();
 
-    expectTypeOf(async (client: InProcessClient<typeof jobTypes>) => {
-      const chain = await client.createChain({
+    expectTypeOf(async (client: InProcessClient<typeof listJobTypes>) => {
+      const [collected, tagged] = await client.applyJobOutcomes({
         ...txCtx,
-        typeName: "first",
-        input: { blockerId: "blocker-id", otherId: "other-id" },
+        items: [
+          { job: { id: "a", typeName: "collect" }, output: { list: ["x"] } },
+          {
+            job: { id: "b", typeName: "collect" },
+            continueWith: { typeName: "tag", input: { tags: ["x"], nested: { ids: [1] } } },
+          },
+        ],
       });
-      await client.completeChain({
-        ...txCtx,
-        ...chain,
-        handler: async ({ job, completeJob }) => {
-          if (job.typeName !== "first") return;
-          await completeJob(job, async ({ complete }) => {
-            void complete({
-              continueWith: {
-                typeName: "second",
-                input: null,
-                // @ts-expect-error the first blocker slot only accepts "blocker"
-                blockers: [{ id: "other-id", typeName: "other" }],
-              },
-            });
 
-            return complete({
-              continueWith: {
-                typeName: "second",
-                input: null,
-                blockers: [{ id: "other-id", typeName: "blocker" }],
-              },
-            });
-          });
-        },
+      expectTypeOf(collected.output).toEqualTypeOf<{ list: string[] }>();
+      expectTypeOf(tagged.continuedTo.typeName).toEqualTypeOf<"tag">();
+
+      await client.applyJobOutcomes({
+        ...txCtx,
+        items: [
+          {
+            job: { id: "a", typeName: "collect" },
+            // @ts-expect-error list holds strings
+            output: { list: [1] },
+          },
+        ],
       });
     }).toBeFunction();
   });
 
-  it("types a partially completed chain", () => {
-    const jobTypes = defineJobTypes<{
-      "awaiting-approval": {
-        entry: true;
-        input: { requestId: string };
-        continueWith: { typeName: "process-approved" };
-      };
-      "process-approved": { input: { approved: boolean }; output: { done: true } };
-    }>();
-
-    expectTypeOf(async (client: InProcessClient<typeof jobTypes>) => {
-      const chain = await client.createChain({
+  it("accepts reschedule items built from jobs read earlier", () => {
+    expectTypeOf(async (client: OutcomeClient) => {
+      const tails = await client.getChainTailJobs({
         ...txCtx,
-        typeName: "awaiting-approval",
-        input: { requestId: "req-123" },
+        chainIds: ["a", "b"],
+        lock: "exclusive",
       });
-      const partiallyCompletedChain = await client.completeChain({
+      const woken = await client.applyJobOutcomes({
         ...txCtx,
-        ...chain,
-        handler: async ({ job, completeJob }) => {
-          if (job.typeName === "awaiting-approval") {
-            job = await completeJob(job, async ({ complete }) =>
-              complete({
-                continueWith: { typeName: "process-approved", input: { approved: true } },
-              }),
-            );
-            expectTypeOf<(typeof job)["typeName"]>().toEqualTypeOf<"process-approved">();
-          }
-        },
+        items: tails.flatMap((job) =>
+          job && (job.status === "pending" || job.status === "blocked")
+            ? [{ job, reschedule: { afterMs: 0 } }]
+            : [],
+        ),
       });
 
-      const succeededChain = await client.awaitChain(partiallyCompletedChain, { timeoutMs: 0 });
-      expectTypeOf(succeededChain.status).toEqualTypeOf<"completed">();
-    }).toBeFunction();
-  });
-
-  it("narrows chainTypeName in completeChain", () => {
-    const jobTypes = defineJobTypes<{
-      entryA: { entry: true; input: null; continueWith: { typeName: "shared" } };
-      entryB: { entry: true; input: null; continueWith: { typeName: "shared" } };
-      shared: { input: null; output: { done: boolean } };
-    }>();
-
-    expectTypeOf(async (client: InProcessClient<typeof jobTypes>) => {
-      const chain = await client.createChain({
-        ...txCtx,
-        typeName: "entryA",
-        input: null,
-      });
-      await client.completeChain({
-        ...txCtx,
-        ...chain,
-        handler: async ({ job, completeJob }) => {
-          expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA">();
-
-          if (job.typeName === "entryA") {
-            job = await completeJob(job, async ({ complete }) =>
-              complete({ continueWith: { typeName: "shared", input: null } }),
-            );
-          }
-
-          expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA">();
-
-          return completeJob(job, async ({ complete }) => complete({ output: { done: true } }));
-        },
-      });
-    }).toBeFunction();
-  });
-
-  it("types the terminal transition applied inline", () => {
-    const jobTypes = defineJobTypes<{
-      review: {
-        entry: true;
-        input: { requestId: string };
-        output: { approved: boolean };
-        continueWith: { typeName: "archive" };
-      };
-      archive: { input: { requestId: string }; output: { archived: boolean } };
-    }>();
-
-    expectTypeOf(async (client: InProcessClient<typeof jobTypes>) => {
-      const chain = await client.createChain({
-        ...txCtx,
-        typeName: "review",
-        input: { requestId: "req-1" },
-      });
-      const completedChain = await client.completeChain({
-        ...txCtx,
-        ...chain,
-        handler: async ({ job, completeJob }) => {
-          if (job.typeName !== "review") throw new Error("unexpected job type");
-          return completeJob(job, async ({ complete }) => complete({ output: { approved: true } }));
-        },
-      });
-
-      expectTypeOf(completedChain.status).toEqualTypeOf<"completed">();
+      expectTypeOf(woken[0].status).toEqualTypeOf<"blocked" | "pending">();
     }).toBeFunction();
   });
 });

@@ -71,28 +71,31 @@ const requestApproval = async (requestId: string) =>
   );
 // #endregion
 
-// #region complete
+// #region decide
 const decideApproval = async (chainId: string, approved: boolean) =>
-  stateAdapter.withTransaction(async (txCtx) =>
-    client.completeChain({
+  stateAdapter.withTransaction(async (txCtx) => {
+    const job = await client.getChainTailJob({
       ...txCtx,
-      id: chainId,
-      typeName: "await-approval",
-      handler: async ({ job, completeJob }) => {
-        if (job.typeName !== "await-approval") return;
-        await completeJob(job, async ({ complete }) =>
-          approved
-            ? complete({
-                continueWith: {
-                  typeName: "process-request",
-                  input: { requestId: job.input.requestId },
-                },
-              })
-            : complete({ output: { rejected: true, reason: "manager denied" } }),
-        );
-      },
-    }),
-  );
+      chainId,
+      chainTypeName: "await-approval",
+      lock: "exclusive",
+    });
+    if (job?.typeName !== "await-approval" || job.status === "completed") return;
+
+    if (approved) {
+      await client.applyJobOutcome({
+        ...txCtx,
+        job,
+        continueWith: { typeName: "process-request", input: { requestId: job.input.requestId } },
+      });
+      return;
+    }
+    await client.applyJobOutcome({
+      ...txCtx,
+      job,
+      output: { rejected: true, reason: "manager denied" },
+    });
+  });
 // #endregion
 
 const approvedChain = await requestApproval("request-1");

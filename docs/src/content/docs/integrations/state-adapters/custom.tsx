@@ -100,8 +100,8 @@ const Page = () => (
       <li>
         <code>createStateAdapterEndToEndConformanceCases</code> returns the cases that check what an
         application sees end to end: each case builds a client and worker runners over your adapter
-        and checks chains, continuations, blockers, scheduling, deduplication, deletion, workerless
-        completion, queries, notifications and recovery from errors. They take a few seconds in all,
+        and checks chains, continuations, blockers, scheduling, deduplication, deletion, client
+        outcomes, queries, notifications and recovery from errors. They take a few seconds in all,
         so you may run them apart from the contract cases, such as only in CI.
       </li>
     </ul>

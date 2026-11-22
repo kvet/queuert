@@ -803,12 +803,10 @@ describe("Metrics", () => {
     );
 
     await withTransaction(async (txCtx) =>
-      client.completeChain({
+      client.applyJobOutcome({
         ...txCtx,
-        ...chain,
-        handler: async ({ job, completeJob }) => {
-          return completeJob(job, async ({ complete }) => complete({ output: { result: 84 } }));
-        },
+        job: { id: chain.id, typeName: "test" },
+        output: { result: 84 },
       }),
     );
 
@@ -992,11 +990,10 @@ describe("Metrics", () => {
     await workerRunner.start();
     await started.promise;
     await withTransaction(async (txCtx) =>
-      client.completeChain({
+      client.applyJobOutcome({
         ...txCtx,
-        ...chain,
-        handler: async ({ job, completeJob }) =>
-          completeJob(job, async ({ complete }) => complete({ output: { by: "workerless" } })),
+        job: { id: chain.id, typeName: "test" },
+        output: { by: "workerless" },
       }),
     );
     takenOver.resolve();
@@ -1264,7 +1261,9 @@ describe("Metrics", () => {
       }),
     );
 
-    await withTransaction(async (txCtx) => client.rescheduleJob({ ...txCtx, id: chain.id }));
+    await withTransaction(async (txCtx) =>
+      client.applyJobOutcome({ ...txCtx, job: { id: chain.id }, reschedule: { afterMs: 0 } }),
+    );
 
     await expectMetrics([
       { method: "chainCreated", args: { typeName: "test" } },
@@ -2052,11 +2051,10 @@ describe("Spans", () => {
       }),
     );
     await withTransaction(async (txCtx) =>
-      client.completeChain({
+      client.applyJobOutcome({
         ...txCtx,
-        ...completedChain,
-        handler: async ({ job, completeJob }) =>
-          completeJob(job, async ({ complete }) => complete({ output: null })),
+        job: { id: completedChain.id, typeName: "completed" },
+        output: null,
       }),
     );
 
@@ -2265,12 +2263,10 @@ describe("Spans", () => {
     );
 
     await withTransaction(async (txCtx) =>
-      client.completeChain({
+      client.applyJobOutcome({
         ...txCtx,
-        ...chain,
-        handler: async ({ job, completeJob }) => {
-          return completeJob(job, async ({ complete }) => complete({ output: { result: 84 } }));
-        },
+        job: { id: chain.id, typeName: "test" },
+        output: { result: 84 },
       }),
     );
 
@@ -2318,29 +2314,21 @@ describe("Spans", () => {
       }),
     );
 
-    const completedChain = await withTransaction(async (txCtx) =>
-      client.completeChain({
+    const completedJob = await withTransaction(async (txCtx) => {
+      const continuedJob = await client.applyJobOutcome({
         ...txCtx,
-        ...chain,
-        handler: async ({ job, completeJob }) => {
-          if (job.typeName === "awaiting-approval") {
-            job = await completeJob(job, async ({ complete }) => {
-              return complete({
-                continueWith: {
-                  typeName: "process-approved",
-                  input: { approved: true },
-                },
-              });
-            });
-            return completeJob(job, async ({ complete }) => complete({ output: { done: true } }));
-          }
-          return completeJob(job, async ({ complete }) => complete({ output: { done: true } }));
-        },
-      }),
-    );
+        job: { id: chain.id, typeName: "awaiting-approval" },
+        continueWith: { typeName: "process-approved", input: { approved: true } },
+      });
+      return client.applyJobOutcome({
+        ...txCtx,
+        job: { id: continuedJob.continuedTo.id, typeName: "process-approved" },
+        output: { done: true },
+      });
+    });
 
-    expectTypeOf(completedChain.status).toEqualTypeOf<"completed">();
-    expect(completedChain.output).toEqual({ done: true });
+    expectTypeOf(completedJob.status).toEqualTypeOf<"completed">();
+    expect(completedJob.output).toEqual({ done: true });
 
     await expectSpans([
       { name: "create chain.awaiting-approval", kind: "PRODUCER" },
@@ -2687,11 +2675,10 @@ describe("Rollback", () => {
     );
 
     await withTransaction(async (txCtx) => {
-      await client.completeChain({
+      await client.applyJobOutcome({
         ...txCtx,
-        ...chain,
-        handler: async ({ job, completeJob }) =>
-          completeJob(job, async ({ complete }) => complete({ output: { result: 42 } })),
+        job: { id: chain.id, typeName: "test" },
+        output: { result: 42 },
       });
       throw new Error("simulated rollback");
     }).catch(() => {});
@@ -3118,21 +3105,19 @@ describe("Rollback", () => {
 
     // First attempt: unblockJobs fails inside finishJob → entire transaction rolls back
     await withTransaction(async (txCtx) =>
-      erroringClient.completeChain({
+      erroringClient.applyJobOutcome({
         ...txCtx,
-        ...chain,
-        handler: async ({ job, completeJob }) =>
-          completeJob(job, async ({ complete }) => complete({ output: { result: 42 } })),
+        job: { id: chain.id, typeName: "test" },
+        output: { result: 42 },
       }),
     ).catch(() => {});
 
     // Second attempt: succeeds
     await withTransaction(async (txCtx) =>
-      client.completeChain({
+      client.applyJobOutcome({
         ...txCtx,
-        ...chain,
-        handler: async ({ job, completeJob }) =>
-          completeJob(job, async ({ complete }) => complete({ output: { result: 42 } })),
+        job: { id: chain.id, typeName: "test" },
+        output: { result: 42 },
       }),
     );
 

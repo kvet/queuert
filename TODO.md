@@ -1,18 +1,17 @@
 # Short term
 
-- [EPIC] MongoDB adapter. See `design/mongodb-adapter.md`.
-- [TASK] Lock-order race between job creation and `deleteChains` (PostgreSQL, MySQL/MariaDB) — creation locks blocker chain heads by id (`getChains({ lock: "exclusive" })`), while `deleteChains` and completion lock blocker-first by height, so a create and a delete that reference the same two blocker heads deadlock when the lower id has the higher height; creation and completion can collide the same way with non-time-ordered ids. Options: a shared lock order that does not put a recursive read on creation, or retrying on deadlock.
-- [TASK] Lock-order race between locked reads and completion (PostgreSQL, MySQL/MariaDB) — a locked client read (`getChain`, `getJob`, `getChainTailJob` with `lock: "exclusive"`) and `completeChain` lock the chain head before the job row, while `completeJobs` locks the job row and then writes the head, so a client that reads with a lock and then writes deadlocks with a worker completing the same continued job; the database aborts one side. A head-first `completeJobs` (a leading `FOR UPDATE ... ORDER BY id` pass over the heads on PostgreSQL, an unlocked chain-id pre-read on MySQL) was dropped unmeasured: the leading lock pass is the shape `accepted.md` rejected for `completeJobs` (p50 ~2ms → ~250ms), and the MySQL pre-read reads from the snapshot at REPEATABLE READ and share-locks the job row first at SERIALIZABLE. MySQL also locks chain by chain (head A, job A, head B, job B) where PostgreSQL locks every head first. Options: benchmark a head-first `completeJobs`, pass `chainId` with each completion so no pre-read is needed, or accept the race as self-recovering.
-- [TASK] Wake workers for blocker heads `deleteChains` locks (PostgreSQL, MySQL/MariaDB) — `lockDeletedChains` also locks the head of every blocker chain the deleted chains' jobs wait on, so a worker can skip a pending blocker head while the delete runs and nothing wakes it when the transaction ends; the client only wakes the deleted or refused chains' own jobs. Options: `deleteChains` returns the blocker chains it locked, or the client reads the deleted jobs' blockers first.
-- [TASK] Best-effort `rescheduleJobs` — today it fails the whole batch if any job is not pending, so apps hand-roll "wake a sleeping chain" loops (`listChainJobs` + `rescheduleJob` + catch `JobNotReschedulableError`). Add an option such as `skipNotReschedulable: true` that returns a per-job outcome (`rescheduled` / `not-pending` / `completed`) instead of throwing.
+- [TASK] Batch variants for the remaining client errors — a batch call reports only the first offending item for `JobTypeValidationError`, `ChainNotFoundError` (blockers), `BlockerLimitExceededError`, `InvalidJobIdError` and the like, while not-found, already-completed, status and type mismatches list every id. Add `Jobs*` / `Chains*` variants and map them back in the single-item methods with `toSingleJobError` / `toSingleChainError`. Attempt-side errors (`JobAttemptReclaimedError`, `JobTakenByAnotherWorkerError`) get batch variants with batched processors.
+- [TASK] `awaitChain` takes one options object like `applyJobOutcome` — `awaitChain({ chain, timeoutMs, pollIntervalMs?, signal? })` with an exported `ChainRef = { id, typeName? }` mirroring `JobRef`, instead of `awaitChain(chain, options)`. About 330 call sites across tests, examples and docs; TypeScript 7 has no JS compiler API, so a codemod needs `oxc-parser`.
+- [TASK] `client.awaitChains` — batch variant of `awaitChain` that waits for several chains with one listener and one poll per tick, returning the completed chains in input order, instead of apps running `Promise.all` over `awaitChain`.
+- [TASK] Unify workerless and worker tracing — client completion (`applyJobOutcome` with `output` or `continueWith`) should create an attempt span like the worker path, eliminating the asymmetric `completeJobSpan` adapter method
 - [TASK] Failing and overdue. See `design/failing-and-overdue.md`.
 - [TASK] State gauges. See `design/state-gauges.md`.
-- [EPIC] Redis state adapter performance and open problems — claim cache, fewer index updates, lock-wait divergences, notify latency. See `design/redis-state-adapter-performance.md`.
+- [EPIC] Row locks. See `design/row-locks.md`.
+- [EPIC] Redis state adapter performance and open problems. See `design/redis-state-adapter-performance.md`.
+- [EPIC] MongoDB adapter. See `design/mongodb-adapter.md`.
 
 # Medium term
 
-- [IDEA] Change complete job chain to something more empirical? (leverages rescheduleJob, new completeJob (maybe even some))
-- [TASK] Unify workerless and worker tracing — workerless completion (`completeChain`) should create an attempt span like the worker path, eliminating the asymmetric `completeJobSpan` adapter method
 - [TASK] Built-in cleanup. See `design/builtin-cleanup.md`.
 - [EPIC] Chain identity. Closing [#3](https://github.com/kvet/queuert/issues/3). See `design/chain-identity.md`.
   - [TASK] List chains by identity — `listChains` gains an `identity` filter to page through the full recurrence history of a key

@@ -184,15 +184,10 @@ export const createChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
         );
         yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...dep,
-              handler: ({ job, completeJob }) =>
-                job.typeName === "dependency"
-                  ? completeJob(job, ({ complete }) =>
-                      complete({ continueWith: { typeName: "dependencyStep", input: null } }),
-                    )
-                  : undefined,
+              job: { id: dep.id, typeName: "dependency" },
+              continueWith: { typeName: "dependencyStep", input: null },
             }),
           ),
         );
@@ -256,39 +251,32 @@ export const createChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
             client.createChain({ ...txCtx, typeName: "start", input: null }),
           ),
         );
-        const continuationErrors: unknown[] = [];
-        yield* step(
+        const continuationError = yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
-              ...txCtx,
-              ...start,
-              handler: ({ job, completeJob }) =>
-                runInModeOf(
-                  stateAdapter,
-                  syncAsync(function* () {
-                    if (job.typeName !== "start") return;
-                    try {
-                      yield* step(
-                        completeJob(job, ({ complete }) =>
-                          complete({
-                            continueWith: {
-                              typeName: "startStep",
-                              input: null,
-                              blockers: [staleBlocker],
-                            },
-                          }),
-                        ),
-                      );
-                    } catch (error) {
-                      continuationErrors.push(error);
-                    }
-                  }),
-                ),
-            }),
+            runInModeOf(
+              stateAdapter,
+              syncAsync(function* () {
+                try {
+                  yield* step(
+                    client.applyJobOutcome({
+                      ...txCtx,
+                      job: { id: start.id, typeName: "start" },
+                      continueWith: {
+                        typeName: "startStep",
+                        input: null,
+                        blockers: [staleBlocker],
+                      },
+                    }),
+                  );
+                  return undefined;
+                } catch (error) {
+                  return error;
+                }
+              }),
+            ),
           ),
         );
-        assert.equal(continuationErrors.length, 1);
-        assert.ok(continuationErrors[0] instanceof ChainNotFoundError);
+        assert.ok(continuationError instanceof ChainNotFoundError);
 
         const startJobs = yield* step(client.listChainJobs({ chainId: start.id, limit: 10 }));
         assert.equal(startJobs.items.length, 1);

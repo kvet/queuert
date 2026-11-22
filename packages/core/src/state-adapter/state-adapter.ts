@@ -31,7 +31,7 @@ export type StateJobInfo = {
   scheduledAt: Date;
   /** When the job completed, or `null` before. */
   completedAt: Date | null;
-  /** Worker that completed the job, or `null` for a workerless completion or before. */
+  /** Worker that completed the job, or `null` when the client completed it or before. */
   completedBy: string | null;
   /** ID of the job it continued to, or `null` for a terminal or not yet completed job. */
   continuedToId: string | null;

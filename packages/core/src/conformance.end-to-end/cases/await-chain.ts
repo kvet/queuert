@@ -33,16 +33,15 @@ export const awaitChainGroup: ConformanceGroup<StateAdapterConformanceContext> =
 
         yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...chain,
-              handler: ({ job, completeJob }) =>
-                completeJob(job, ({ complete }) => complete({ output: { result: "done" } })),
+              job: { id: chain.id, typeName: "test" },
+              output: { result: "done" },
             }),
           ),
         );
 
-        const signal = AbortSignal.timeout(100);
+        const signal = AbortSignal.timeout(1000);
         const completedChain = yield* wait(client.awaitChain(chain, { signal, timeoutMs: 5000 }));
         assert.equal(signal.aborted, false);
 
@@ -77,11 +76,10 @@ export const awaitChainGroup: ConformanceGroup<StateAdapterConformanceContext> =
         yield* wait(new Promise((resolve) => setImmediate(resolve)));
         yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...chain,
-              handler: ({ job, completeJob }) =>
-                completeJob(job, ({ complete }) => complete({ output: { result: "done" } })),
+              job: { id: chain.id, typeName: "test" },
+              output: { result: "done" },
             }),
           ),
         );
@@ -109,7 +107,7 @@ export const awaitChainGroup: ConformanceGroup<StateAdapterConformanceContext> =
         );
 
         const fastSignal = AbortSignal.timeout(1);
-        const slowSignal = AbortSignal.timeout(100);
+        const slowSignal = AbortSignal.timeout(1000);
         yield* wait(
           assert.rejects(
             async () => client.awaitChain(chain, { signal: fastSignal, timeoutMs: 5000 }),

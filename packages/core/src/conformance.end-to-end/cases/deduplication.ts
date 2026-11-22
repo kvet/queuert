@@ -75,28 +75,20 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const completed1 = yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...chain1,
-              handler: ({ job, completeJob }) => {
-                return completeJob(job, ({ complete }) =>
-                  complete({ output: { result: job.input.value } }),
-                );
-              },
+              job: { id: chain1.id, typeName: "test" },
+              output: { result: chain1.input.value },
             }),
           ),
         );
 
         const completed3 = yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...chain3,
-              handler: ({ job, completeJob }) => {
-                return completeJob(job, ({ complete }) =>
-                  complete({ output: { result: job.input.value } }),
-                );
-              },
+              job: { id: chain3.id, typeName: "test" },
+              output: { result: chain3.input.value },
             }),
           ),
         );
@@ -146,18 +138,12 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         assert.equal(chain1.deduplicated, false);
 
-        yield* step(
+        const step2Job = yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...chain1,
-              handler: ({ job, completeJob }) => {
-                if (job.typeName === "step1") {
-                  return completeJob(job, ({ complete }) =>
-                    complete({ continueWith: { typeName: "step2", input: { continued: true } } }),
-                  );
-                }
-              },
+              job: { id: chain1.id, typeName: "step1" },
+              continueWith: { typeName: "step2", input: { continued: true } },
             }),
           ),
         );
@@ -178,14 +164,10 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...chain1,
-              handler: ({ job, completeJob }) => {
-                if (job.typeName === "step2") {
-                  return completeJob(job, ({ complete }) => complete({ output: { result: 42 } }));
-                }
-              },
+              job: { id: step2Job.continuedTo.id, typeName: "step2" },
+              output: { result: 42 },
             }),
           ),
         );
@@ -239,30 +221,25 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
-              ...txCtx,
-              ...chain,
-              handler: ({ job, completeJob }) =>
-                runInModeOf(
-                  stateAdapter,
-                  syncAsync(function* () {
-                    if (job.typeName === "step1") {
-                      job = yield* step(
-                        completeJob(job, ({ complete }) =>
-                          complete({ continueWith: { typeName: "step2", input: { value: 42 } } }),
-                        ),
-                      );
-                    }
-                    if (job.typeName === "step2") {
-                      return yield* step(
-                        completeJob(job, ({ complete }) =>
-                          complete({ output: { result: job.input.value } }),
-                        ),
-                      );
-                    }
+            runInModeOf(
+              stateAdapter,
+              syncAsync(function* () {
+                const step1Job = yield* step(
+                  client.applyJobOutcome({
+                    ...txCtx,
+                    job: { id: chain.id, typeName: "step1" },
+                    continueWith: { typeName: "step2", input: { value: 42 } },
                   }),
-                ),
-            }),
+                );
+                return yield* step(
+                  client.applyJobOutcome({
+                    ...txCtx,
+                    job: { id: step1Job.continuedTo.id, typeName: "step2" },
+                    output: { result: 42 },
+                  }),
+                );
+              }),
+            ),
           ),
         );
 
@@ -313,12 +290,10 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...chain1,
-              handler: ({ job, completeJob }) => {
-                return completeJob(job, ({ complete }) => complete({ output: { result: 1 } }));
-              },
+              job: { id: chain1.id, typeName: "test" },
+              output: { result: 1 },
             }),
           ),
         );
@@ -382,14 +357,10 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...allChain1,
-              handler: ({ job, completeJob }) => {
-                return completeJob(job, ({ complete }) =>
-                  complete({ output: { result: job.input.value } }),
-                );
-              },
+              job: { id: allChain1.id, typeName: "test" },
+              output: { result: allChain1.input.value },
             }),
           ),
         );
@@ -421,14 +392,10 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...completedChain1,
-              handler: ({ job, completeJob }) => {
-                return completeJob(job, ({ complete }) =>
-                  complete({ output: { result: job.input.value } }),
-                );
-              },
+              job: { id: completedChain1.id, typeName: "test" },
+              output: { result: completedChain1.input.value },
             }),
           ),
         );
@@ -449,14 +416,10 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         const completed2 = yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...completedChain2,
-              handler: ({ job, completeJob }) => {
-                return completeJob(job, ({ complete }) =>
-                  complete({ output: { result: job.input.value } }),
-                );
-              },
+              job: { id: completedChain2.id, typeName: "test" },
+              output: { result: completedChain2.input.value },
             }),
           ),
         );
@@ -652,14 +615,10 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...anyChain,
-              handler: ({ job, completeJob }) => {
-                return completeJob(job, ({ complete }) =>
-                  complete({ output: { result: job.input.value } }),
-                );
-              },
+              job: { id: anyChain.id, typeName: "test" },
+              output: { result: anyChain.input.value },
             }),
           ),
         );
@@ -677,14 +636,10 @@ export const deduplicationGroup: ConformanceGroup<StateAdapterConformanceContext
 
         yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...incompleteChain,
-              handler: ({ job, completeJob }) => {
-                return completeJob(job, ({ complete }) =>
-                  complete({ output: { result: job.input.value } }),
-                );
-              },
+              job: { id: incompleteChain.id, typeName: "test" },
+              output: { result: incompleteChain.input.value },
             }),
           ),
         );

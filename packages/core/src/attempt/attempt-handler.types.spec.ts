@@ -312,6 +312,21 @@ describe("AttemptComplete", () => {
         terminalCommit({ ...tx, output: { y: 123 } }),
       ).toBeFunction();
     });
+
+    it("rejects more than one outcome", () => {
+      expectTypeOf(async () =>
+        // @ts-expect-error output and reschedule are separate outcomes
+        terminalCommit({ ...tx, output: { y: "done" }, reschedule: { afterMs: 0 } }),
+      ).toBeFunction();
+      expectTypeOf(async () =>
+        // @ts-expect-error continueWith and reschedule are separate outcomes
+        linearCommit({
+          ...tx,
+          continueWith: { typeName: "step", input: { stepValue: true } },
+          reschedule: { afterMs: 0 },
+        }),
+      ).toBeFunction();
+    });
   });
 });
 

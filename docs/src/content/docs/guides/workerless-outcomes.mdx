@@ -1,0 +1,36 @@
+---
+title: Workerless Outcomes
+description: Decide a job's outcome outside a worker, from an API endpoint, webhook or approval step.
+sidebar:
+  order: 12
+---
+
+A job's outcome can be decided outside a worker with `applyJobOutcome`: an API endpoint, a webhook or an approval step completes the job, continues its chain or reschedules it, instead of a worker running it. This covers approval workflows, third-party callbacks and jobs that wait for an external event. Deferred start pairs well with this: schedule a job to reject itself after a timeout, and let a user's decision settle it earlier.
+
+An approval request either continues with `process-request` or ends the chain with a rejection:
+
+<ExampleCode example="guides" file="src/workerless-outcomes.ts" region="types" />
+
+Create the request with a [deferred start](../scheduling/), so it waits two hours before a worker can pick it up:
+
+<ExampleCode example="guides" file="src/workerless-outcomes.ts" region="create" />
+
+The worker handles the timeout case: if nobody decided in time, `await-approval` runs and rejects the request. It also processes approved requests:
+
+<ExampleCode example="guides" file="src/workerless-outcomes.ts" region="processors" />
+
+The decision settles the job early without a worker, for example from an API endpoint. It reads the chain's tail job with a [locked read](../queries/#locked-reads), so no worker or other caller changes the job before the write, and leaves a request that has already moved past `await-approval` untouched. Approval continues the chain with `process-request`, which a worker then runs; rejection completes the chain with an output:
+
+<ExampleCode example="guides" file="src/workerless-outcomes.ts" region="decide" />
+
+This pattern lets you interweave external actions with your chains — waiting for user input, third-party callbacks, or manual approval steps.
+
+## How It Works
+
+`applyJobOutcome` takes the job and one outcome, the same outcomes as the attempt handler's `complete`: `{ output: ... }` finishes the chain, `{ continueWith: {...} }` adds the next job, and `{ reschedule }` brings the job back later, as [Scheduling](../scheduling/#rescheduling-from-outside-a-handler) explains. The job is either one you read earlier or `{ id, typeName }` when you know it without a read. With `output` or `continueWith`, its `typeName` must name a single job type, which types the outcome; check `job.typeName` first to narrow a job read from a chain. `applyJobOutcomes` takes a batch of `{ job, ...outcome }` items and applies them all or none.
+
+`applyJobOutcome` locks the job and validates it as stored, and applies any outcome to a blocked, pending or running job: which jobs to act on is yours to decide, from a locked read and the job's `status`. It throws `JobNotFoundError` if the job does not exist, `JobAlreadyCompletedError` if it is completed, `JobTypeMismatchError` if `typeName` differs from the stored job's, and `JobStatusMismatchError` if you pass a job read earlier whose `status` has changed since. `applyJobOutcomes` validates every item before the first write and throws `JobsNotFoundError`, `JobsAlreadyCompletedError`, `JobsStatusMismatchError` or `JobsTypeMismatchError` listing every offending id. Both require a transaction context. The Redis state adapter keeps workers off a locked job for at most 60 seconds and makes a second caller run its transaction again instead of waiting; see [Locks](/queuert/integrations/state-adapters/redis/#locks). The completed job has `completedBy: null`, distinguishing it from worker-completed jobs.
+
+If a worker is already processing the job when `applyJobOutcome` applies an outcome to it, its attempt is lost. The handler's abort signal fires when the notify adapter delivers the attempt-lost notification, and its `complete`, when it runs, writes nothing and throws, so the handler's transaction rolls back: `JobAlreadyCompletedError` after `output` or `continueWith`, and `JobTakenByAnotherWorkerError` after `reschedule`, which returns the job to pending. If the handler is inside a [fenced](/queuert/how-it-works/job-processing/#fence) transaction, `applyJobOutcome` waits for it to end, and throws `JobAlreadyCompletedError` if that transaction continued the chain, while a locked `getChainTailJob` that waited returns the continuation; on Redis, the one that commits second runs again instead.
+
+See [examples/guides/src/workerless-outcomes.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/workerless-outcomes.ts) for the runnable code. See also [Tx Hooks](../tx-hooks/) and [Scheduling](../scheduling/).

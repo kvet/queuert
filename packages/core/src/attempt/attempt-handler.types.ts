@@ -23,25 +23,32 @@ import type {
   GetStateAdapterWorkerId,
 } from "../state-adapter/state-adapter.ts";
 
-type AttemptContinueWithOutcome<
+type JobContinueWithOutcome<
   TStateAdapter extends StateAdapter<any, any, any, Mode>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
-> =
-  JobTypeContinuation<TJobTypeDefinitions, TJobTypeName> extends never
+  TSliceJobTypeDefinitions extends BaseJobTypeDefinitions,
+> = TSliceJobTypeDefinitions extends any
+  ? JobTypeContinuation<TSliceJobTypeDefinitions, TJobTypeName> extends never
     ? never
     : {
         continueWith: {
-          [TContinuationTypeName in JobTypeContinuation<TJobTypeDefinitions, TJobTypeName>]: NewJob<
+          [
+            TContinuationTypeName in JobTypeContinuation<TSliceJobTypeDefinitions, TJobTypeName>
+          ]: NewJob<
             GetStateAdapterJobId<TStateAdapter>,
-            TJobTypeDefinitions,
-            TContinuationTypeName
+            TSliceJobTypeDefinitions,
+            TContinuationTypeName,
+            TJobTypeDefinitions
           >;
-        }[JobTypeContinuation<TJobTypeDefinitions, TJobTypeName>];
+        }[JobTypeContinuation<TSliceJobTypeDefinitions, TJobTypeName>];
+        output?: never;
+        reschedule?: never;
         reason?: never;
-      };
+      }
+  : never;
 
-type AttemptOutputOutcome<
+type JobOutputOutcome<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
 > =
@@ -49,11 +56,15 @@ type AttemptOutputOutcome<
     ? never
     : {
         output: JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "output">;
+        continueWith?: never;
+        reschedule?: never;
         reason?: never;
       };
 
-type AttemptRescheduleOutcome = {
+export type JobRescheduleOutcome = {
   reschedule: ScheduleOptions;
+  output?: never;
+  continueWith?: never;
   /**
    * Why the job comes back later, stored as the job's `lastRescheduleReason`. Keep it short; longer
    * reasons are truncated to 10,000 characters.
@@ -61,15 +72,15 @@ type AttemptRescheduleOutcome = {
   reason?: string;
 };
 
-/** Every outcome `complete` accepts, as a single union. */
-export type AttemptOutcome<
+/** Every outcome `complete` and `client.applyJobOutcome` accept for a job type, as a single union. */
+export type JobOutcome<
   TStateAdapter extends StateAdapter<any, any, any, Mode>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
 > =
-  | AttemptOutputOutcome<TJobTypeDefinitions, TJobTypeName>
-  | AttemptContinueWithOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName>
-  | AttemptRescheduleOutcome;
+  | JobOutputOutcome<TJobTypeDefinitions, TJobTypeName>
+  | JobContinueWithOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TJobTypeDefinitions>
+  | JobRescheduleOutcome;
 
 /** Resolves the committed job shape from the outcome's discriminant key. */
 export type AttemptCompleteResult<
@@ -137,7 +148,7 @@ export type AttemptCompleteResult<
  * @throws {@link JobTakenByAnotherWorkerError} if the attempt was reclaimed and the job
  * acquired by another attempt.
  * @throws {@link JobAlreadyCompletedError} if the job was completed elsewhere, for example by
- * `client.completeChain`.
+ * `client.applyJobOutcome`.
  * @throws {@link JobNotFoundError} if the job was deleted.
  * @throws {@link BlockerLimitExceededError} if a `continueWith` outcome declares more blockers
  * than the per-job limit.
@@ -154,11 +165,19 @@ export type AttemptComplete<
   in out TJobTypeDefinitions extends BaseJobTypeDefinitions,
   in out TJobTypeName extends string,
   out TChainTypeName extends string,
-> = <TOutcome extends AttemptOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName>>(
+> = <TOutcome extends JobOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName>>(
   options: TOutcome & GetStateAdapterTxContext<TStateAdapter>,
 ) => ModeResult<
   ModeOf<TStateAdapter>,
-  AttemptCompleteResult<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TChainTypeName, TOutcome>
+  NoInfer<
+    AttemptCompleteResult<
+      TStateAdapter,
+      TJobTypeDefinitions,
+      TJobTypeName,
+      TChainTypeName,
+      TOutcome
+    >
+  >
 >;
 
 /**
@@ -181,7 +200,7 @@ export type AttemptComplete<
  *
  * @throws {@link JobTakenByAnotherWorkerError} if the attempt was reclaimed, and aborts `signal`.
  * @throws {@link JobAlreadyCompletedError} if the job was completed elsewhere, for example by
- * `client.completeChain`, and aborts `signal`.
+ * `client.applyJobOutcome`, and aborts `signal`.
  * @throws {@link JobNotFoundError} if the job was deleted, and aborts `signal`.
  */
 export type AttemptFence<TStateAdapter extends StateAdapter<any, any, any, Mode>> = (
@@ -236,9 +255,16 @@ export type AnyAttemptHandler = (options: {
   fence: (options: BaseTxContext) => MaybePromise<void>;
 }) => Promise<unknown>;
 
-export type AnyCompleteOptions = BaseTxContext & {
+export type AnyCompleteOptions = BaseTxContext & AnyJobOutcomeFields;
+
+export type AnyJobOutcomeFields = {
   output?: unknown;
   continueWith?: AnyNewJob;
   reschedule?: ScheduleOptions;
   reason?: string;
 };
+
+export type AnyJobOutcome =
+  | { output: unknown }
+  | { continueWith: AnyNewJob }
+  | { reschedule: ScheduleOptions; reason?: string };

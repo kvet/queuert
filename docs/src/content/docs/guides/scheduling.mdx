@@ -27,19 +27,17 @@ When a handler needs to defer work without treating it as a failure — for exam
 
 `complete({ reschedule })` is a normal outcome, not an error: no failure event, no error span. It sets `consecutiveFailures` to 0, so if the job later fails for real, backoff starts again from its initial delay. The optional `reason` is stored on the job as `lastRescheduleReason`, where the next attempt and the dashboard can read it; keep it short, since longer reasons are truncated to 10,000 characters. `reschedule` takes the same `{ afterMs }` or `{ at }` as `schedule`.
 
-## Rescheduling Pending Jobs
+## Rescheduling from Outside a Handler
 
-A scheduled job is just a pending job with a future `scheduledAt`. Use `rescheduleJob` (or `rescheduleJobs` for a batch) to change when it runs. Pass `schedule: { at }` or `{ afterMs }` to move it to a different time, and optionally a `reason` — here the reminder moves to two hours from now:
+A scheduled job is just a pending job with a future `scheduledAt`. Use `client.applyJobOutcome` with a `reschedule` outcome to change when it runs. Pass `{ at }` or `{ afterMs }`, and optionally a `reason` — here the reminder moves to two hours from now. A chain id names the chain's first job, so `{ id: reminder.id }` reaches the reminder only until its chain continues:
 
 <ExampleCode example="guides" file="src/scheduling.ts" region="push-back" />
 
-Omit `schedule` to run it immediately — useful for admin "run now" actions or manually advancing a queued reminder. Past times clamp to now, matching `createChain`.
+Pass `{ afterMs: 0 }` to run it immediately — useful for admin "run now" actions or manually advancing a queued reminder. Past times clamp to now, matching `createChain`. An admin action can find the job a worker has just started, or a chain that has moved on, so it reads the chain's current job with a [locked read](../queries/#locked-reads) and reschedules it only if it is waiting:
 
 <ExampleCode example="guides" file="src/scheduling.ts" region="run-now" />
 
-Like a handler reschedule, `rescheduleJob` sets `consecutiveFailures` to 0, restarting backoff, and sets `lastRescheduleReason` to its `reason`, or `null` without one. It keeps `lastAttemptError`, so a job run again by hand still shows why it last failed. `rescheduleJob` throws `JobNotFoundError` if the job does not exist and `JobNotReschedulableError` if it is not `pending` (blocked, running or completed).
-
-`rescheduleJobs` validates atomically — if any id in the batch is missing or not pending, the entire call fails and no job is rescheduled. Both methods are mutating and require a transaction context.
+On a pending or blocked job, a client reschedule works like a handler reschedule: it sets `consecutiveFailures` to 0, restarting backoff, and sets `lastRescheduleReason` to its `reason`, or `null` without one. It keeps `lastAttemptError`, so a job run again by hand still shows why it last failed. A blocked job keeps its status: its `scheduledAt` moves, and it runs no earlier than that once its blockers complete. A running job returns to pending and its attempt is lost, and a completed job throws `JobAlreadyCompletedError`. A blocked job that runs now still waits for its blockers. `applyJobOutcomes` reschedules a batch all or nothing, and also takes the other outcomes, as [Workerless Outcomes](../workerless-outcomes/#how-it-works) explains.
 
 ## Recurring Jobs
 
@@ -47,6 +45,6 @@ Queuert has no cron syntax. For periodic tasks like daily digests, health checks
 
 <ExampleCode example="guides" file="src/scheduling.ts" region="recurring" />
 
-Each occurrence is its own chain, so the next digest can be pushed back or run now with `rescheduleJob` like any other scheduled job. To make sure only one occurrence is ever queued, add a deduplication key and keep `complete` ahead of `createChain`, as [Self-Scheduling Recurring Chains](../deduplication/#self-scheduling-recurring-chains) explains.
+Each occurrence is its own chain, so the next digest can be pushed back or run now with `applyJobOutcome` like any other scheduled job. To make sure only one occurrence is ever queued, add a deduplication key and keep `complete` ahead of `createChain`, as [Self-Scheduling Recurring Chains](../deduplication/#self-scheduling-recurring-chains) explains.
 
 See [examples/guides/src/scheduling.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/scheduling.ts) for the runnable code. See also [Deduplication](../deduplication/) and [Tx Hooks](../tx-hooks/).

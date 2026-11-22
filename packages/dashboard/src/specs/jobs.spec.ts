@@ -271,7 +271,7 @@ describe("job server functions", () => {
       expect((await call("rescheduleJob", { id: "nonexistent" })).status).toBe(404);
     });
 
-    it("returns 409 for non-pending job", async () => {
+    it("returns 409 for a running job", async () => {
       const { call, stateAdapter } = await createTestDashboard();
       const job = await createJob(stateAdapter, "test-type", null);
       const worker = await startWorker(stateAdapter, "test-worker", ["test-type"]);
@@ -285,7 +285,18 @@ describe("job server functions", () => {
       const res = await call("rescheduleJob", { id: job.id });
 
       expect(res.status).toBe(409);
-      expect((await parseBody(res)).error).toContain('not "pending"');
+      expect((await parseBody(res)).error).toContain("job is running");
+    });
+
+    it("returns 409 for a completed job", async () => {
+      const { call, stateAdapter } = await createTestDashboard();
+      const job = await createJob(stateAdapter, "test-type", null);
+      await completeJob(stateAdapter, job.id, null);
+
+      const res = await call("rescheduleJob", { id: job.id });
+
+      expect(res.status).toBe(409);
+      expect((await parseBody(res)).error).toContain(job.id);
     });
 
     it("returns 500 when rescheduling an existing job fails for a non-ID reason", async () => {

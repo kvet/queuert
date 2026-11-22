@@ -150,7 +150,7 @@ export const shipOrderTrace: TraceSpan[] = [
   },
 ];
 
-/** approve-refund is completed by a reviewer through completeChain, without a worker. */
+/** approve-refund is completed by a reviewer through applyJobOutcome, without a worker. */
 export const approveRefundTrace: TraceSpan[] = [
   {
     id: "chain",

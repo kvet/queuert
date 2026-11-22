@@ -240,7 +240,7 @@ const Page = () => (
       follow the state adapter's mode, so the client built over it is synchronous.
     </p>
     <p>
-      That client's state-touching methods, workerless <code>completeChain</code>, and the attempt
+      That client's state-touching methods, such as <code>applyJobOutcome</code>, and the attempt
       handler's <code>complete</code> and <code>fence</code> return plain values and throw
       synchronously, so they run inside the driver's own transaction, such as{" "}
       <code>db.transaction(() =&gt; …)()</code>, and an error rolls it back. The provider's{" "}

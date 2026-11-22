@@ -336,13 +336,10 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
 
         yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...chain,
-              handler: ({ job, completeJob }) =>
-                completeJob(job, ({ complete }) =>
-                  complete({ output: { result: "from-external" } }),
-                ),
+              job: { id: chain.id, typeName: "test" },
+              output: { result: "from-external" },
             }),
           ),
         );
@@ -695,11 +692,10 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               syncAsync(function* () {
                 for (const chain of chains) {
                   yield* step(
-                    client.completeChain({
+                    client.applyJobOutcome({
                       ...txCtx,
-                      ...chain,
-                      handler: ({ job, completeJob }) =>
-                        completeJob(job, ({ complete }) => complete({ output: null })),
+                      job: { id: chain.id, typeName: "test" },
+                      output: null,
                     }),
                   );
                 }
@@ -791,8 +787,20 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
                 runInModeOf(
                   stateAdapter,
                   syncAsync(function* () {
-                    yield* step(client.rescheduleJob({ ...txCtx, id: firstChain.id }));
-                    yield* step(client.rescheduleJob({ ...txCtx, id: secondChain.id }));
+                    yield* step(
+                      client.applyJobOutcome({
+                        ...txCtx,
+                        job: { id: firstChain.id },
+                        reschedule: { afterMs: 0 },
+                      }),
+                    );
+                    yield* step(
+                      client.applyJobOutcome({
+                        ...txCtx,
+                        job: { id: secondChain.id },
+                        reschedule: { afterMs: 0 },
+                      }),
+                    );
                     throw new Error("rolled back");
                   }),
                 ),

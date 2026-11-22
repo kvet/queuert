@@ -909,11 +909,10 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         yield* wait(started.promise);
         yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...chain,
-              handler: ({ job, completeJob }) =>
-                completeJob(job, ({ complete }) => complete({ output: { by: "workerless" } })),
+              job: { id: chain.id, typeName: "test" },
+              output: { by: "workerless" },
             }),
           ),
         );
@@ -1137,14 +1136,10 @@ export const processAsyncGroup: ConformanceGroup<StateAdapterConformanceContext>
                         yield* step(fence({ ...txCtx }));
                         yield* step(fence({ ...txCtx }));
                         const pendingTakeover = stateAdapter.withTransaction((takeoverTxCtx) =>
-                          client.completeChain({
+                          client.applyJobOutcome({
                             ...takeoverTxCtx,
-                            id: job.chainId,
-                            typeName: "test",
-                            handler: async ({ job: headJob, completeJob }) =>
-                              completeJob(headJob, async ({ complete }) =>
-                                complete({ output: { by: "workerless" } }),
-                              ),
+                            job: { id: job.id, typeName: "test" },
+                            output: { by: "workerless" },
                           }),
                         );
                         yield* step(sleep(200));
@@ -1248,11 +1243,10 @@ export const processNotifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
         const signal = yield* wait(rolledBack.promise);
         yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...chain,
-              handler: ({ job, completeJob }) =>
-                completeJob(job, ({ complete }) => complete({ output: { by: "workerless" } })),
+              job: { id: chain.id, typeName: "test" },
+              output: { by: "workerless" },
             }),
           ),
         );
@@ -1532,7 +1526,11 @@ export const processSavepointGroup: ConformanceGroup<EndToEndSavepointContext> =
                                       stateAdapter,
                                       syncAsync(function* () {
                                         yield* step(
-                                          client.rescheduleJob({ ...innerCtx, id: lockedChain.id }),
+                                          client.applyJobOutcome({
+                                            ...innerCtx,
+                                            job: { id: lockedChain.id },
+                                            reschedule: { afterMs: 0 },
+                                          }),
                                         );
                                         throw new Error("inner savepoint rolled back");
                                       }),

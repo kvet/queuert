@@ -168,7 +168,7 @@ When a job handler throws before a `complete` commits, or returns without a comm
 delay = min(initialDelayMs * multiplier^(consecutiveFailures-1), maxDelayMs)
 ```
 
-`consecutiveFailures` counts the failed attempts in a row, including this one, so any other outcome — `complete({ reschedule })` or a client `rescheduleJob` — starts the next failure at `initialDelayMs` again. Example with defaults: 10s → 20s → 40s → 80s → 160s → 300s → 300s...
+`consecutiveFailures` counts the failed attempts in a row, including this one, so any other outcome — `complete({ reschedule })`, or a client `applyJobOutcome` with `reschedule` — starts the next failure at `initialDelayMs` again. Example with defaults: 10s → 20s → 40s → 80s → 160s → 300s → 300s...
 
 See [Job Processing](../job-processing/) for details on error handling and abort signals.
 
@@ -208,4 +208,4 @@ The worker runner design emphasizes:
 - [Job Processing](../job-processing/) — Attempt lifecycle, `complete`, abort signals
 - [Notify Adapters](/queuert/integrations/notify-adapters/) — Notification delivery
 - State provider ([PostgreSQL](/queuert/integrations/state-adapters/postgres/#state-provider), [SQLite](/queuert/integrations/state-adapters/sqlite/#state-provider), [MySQL / MariaDB](/queuert/integrations/state-adapters/mysql/#state-provider), [Redis](/queuert/integrations/state-adapters/redis/#state-provider)) — How a state provider bridges your database client
-- [`guides/src/signals.ts`](https://github.com/kvet/queuert/blob/main/examples/guides/src/signals.ts) — Runnable example: graceful shutdown with partial results, external completion via `completeChain`
+- [`guides/src/signals.ts`](https://github.com/kvet/queuert/blob/main/examples/guides/src/signals.ts) — Runnable example: graceful shutdown with partial results, external completion via `applyJobOutcome`

@@ -697,11 +697,10 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...chain,
-              handler: ({ job, completeJob }) =>
-                completeJob(job, ({ complete }) => complete({ output: { source: "external" } })),
+              job: { id: chain.id, typeName: "test" },
+              output: { source: "external" },
             }),
           ),
         );

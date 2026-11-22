@@ -16,7 +16,7 @@ The runnable code behind the [guides](https://kvet.github.io/queuert/guides/). E
 - `src/scheduling.ts` — [Scheduling](https://kvet.github.io/queuert/guides/scheduling/)
 - `src/signals.ts` — [Job Processing](https://kvet.github.io/queuert/how-it-works/job-processing/)
 - `src/timeouts.ts` — [Timeouts](https://kvet.github.io/queuert/guides/timeouts/)
-- `src/workerless-completion.ts` — [Workerless Completion](https://kvet.github.io/queuert/guides/workerless-completion/)
+- `src/workerless-outcomes.ts` — [Workerless Outcomes](https://kvet.github.io/queuert/guides/workerless-outcomes/)
 
 The [Feature Slices](https://kvet.github.io/queuert/guides/slices/) guide spans several files, so it has its own package, [`guides-slices`](../guides-slices). [Application Migrations](https://kvet.github.io/queuert/guides/application-migrations/) runs in the state examples, such as [`postgresql/state-postgres-js`](../postgresql/state-postgres-js).
 

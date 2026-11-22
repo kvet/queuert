@@ -9,7 +9,7 @@
  * 3. Blockers: Fan-out/fan-in pattern → chain span shows parallel blocker jobs with links
  * 4. Batched Work: Work in the handler's own transactions → still a single attempt span
  * 5. Retries: Job fails then succeeds → job span contains multiple attempt spans
- * 6. Workerless Completion: Job completed externally → CONSUMER job span without attempt spans
+ * 6. Client Completion: Job completed externally → CONSUMER job span without attempt spans
  */
 
 import { createSqliteStateAdapter } from "@queuert/sqlite";
@@ -120,8 +120,8 @@ const jobTypes = defineJobTypes<{
   "might-fail": { entry: true; input: { shouldFail: boolean }; output: { success: true } };
 
   /*
-   * Scenario 6 - Workerless Completion:
-   *   awaiting-approval → completed externally via completeChain
+   * Scenario 6 - Client Completion:
+   *   awaiting-approval → completed externally via applyJobOutcome
    *
    * Trace structure:
    *   chain-span PRODUCER
@@ -379,8 +379,8 @@ const retryChain = stateAdapter.withTransaction((ctx) =>
 const retryResult = await client.awaitChain(retryChain, { timeoutMs: 5000 });
 console.log("Result:", retryResult.output);
 
-// Scenario 6: Workerless Completion
-console.log("\n--- Scenario 6: Workerless Completion ---");
+// Scenario 6: Client Completion
+console.log("\n--- Scenario 6: Client Completion ---");
 console.log("Job completed externally without a worker. CONSUMER job span, no attempt spans.\n");
 const approvalChain = stateAdapter.withTransaction((ctx) =>
   client.createChain({
@@ -390,18 +390,13 @@ const approvalChain = stateAdapter.withTransaction((ctx) =>
   }),
 );
 const approvalResult = stateAdapter.withTransaction((ctx) =>
-  client.completeChain({
+  client.applyJobOutcome({
     ...ctx,
-    ...approvalChain,
-    handler: ({ job, completeJob }) =>
-      completeJob(job, ({ complete }) =>
-        complete({ output: { approved: true, approvedBy: "admin" } }),
-      ),
+    job: { id: approvalChain.id, typeName: "awaiting-approval" },
+    output: { approved: true, approvedBy: "admin" },
   }),
 );
-if (approvalResult.status === "completed") {
-  console.log("Result:", approvalResult.output);
-}
+console.log("Result:", approvalResult.output);
 
 console.log("\n" + "=".repeat(45));
 console.log("All scenarios completed.");

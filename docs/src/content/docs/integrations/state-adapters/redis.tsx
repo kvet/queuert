@@ -218,7 +218,7 @@ const Page = () => (
     <h2>Locks</h2>
     <p>
       A locked read of a pending job, such as a client read with <code>lock: "exclusive"</code> or
-      the one <code>completeChain</code> takes, marks the job for up to 60 seconds; workers skip a
+      the one <code>applyJobOutcome</code> takes, marks the job for up to 60 seconds; workers skip a
       marked job until the transaction commits or rolls back. A transaction that holds the lock
       longer than that can see a worker claim the job. Workers look past marked jobs through at most
       the first 1,000 due jobs of each type, so a worker claims nothing of a type whose first 1,000

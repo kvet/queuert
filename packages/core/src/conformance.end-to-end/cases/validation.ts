@@ -630,11 +630,10 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
 
         const completedChain = yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...chain,
-              handler: ({ job, completeJob }) =>
-                completeJob(job, ({ complete }) => complete({ output: { result: 84 } })),
+              job: { id: chain.id, typeName: "main" },
+              output: { result: 84 },
             }),
           ),
         );
@@ -668,14 +667,11 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
           assertRejects(
             () =>
               stateAdapter.withTransaction((txCtx) =>
-                client.completeChain({
+                client.applyJobOutcome({
                   ...txCtx,
-                  ...chain,
-                  handler: ({ job, completeJob }) =>
-                    completeJob(job, ({ complete }) =>
-                      // @ts-expect-error testing runtime validation
-                      complete({ output: { result: "not-a-number" } }),
-                    ),
+                  job: { id: chain.id, typeName: "main" },
+                  // @ts-expect-error testing runtime validation
+                  output: { result: "not-a-number" },
                 }),
               ),
             JobTypeValidationError,
@@ -724,34 +720,21 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
           ),
         );
 
-        const partialChain = yield* step(
+        const continuedJob = yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...chain,
-              handler: ({ job, completeJob }) => {
-                if (job.typeName === "step1") {
-                  return completeJob(job, ({ complete }) =>
-                    complete({ continueWith: { typeName: "step2", input: { data: 1 } } }),
-                  );
-                }
-              },
+              job: { id: chain.id, typeName: "step1" },
+              continueWith: { typeName: "step2", input: { data: 1 } },
             }),
           ),
         );
 
-        assert.equal(partialChain.status, "running");
-        const partialTail = yield* step(
-          client.listChainJobs({
-            chainId: partialChain.id,
-            orderDirection: "desc",
-            limit: 1,
-          }),
-        );
-        assert.equal(partialTail.items[0].status, "pending");
+        assert.equal(continuedJob.status, "completed");
+        assert.equal(continuedJob.continuedTo.status, "pending");
 
         yield* wait(workerRunner.start());
-        const completed = yield* wait(client.awaitChain(partialChain, completionOptions));
+        const completed = yield* wait(client.awaitChain(chain, completionOptions));
         assert.deepEqual(completed.output, { result: 42 });
       }),
     },
@@ -782,17 +765,10 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
           assertRejects(
             () =>
               stateAdapter.withTransaction((txCtx) =>
-                client.completeChain({
+                client.applyJobOutcome({
                   ...txCtx,
-                  typeName: "step1",
-                  id: chain.id,
-                  handler: ({ job, completeJob }) => {
-                    if (job.typeName === "step1") {
-                      return completeJob(job, ({ complete }) =>
-                        complete({ continueWith: { typeName: "step2", input: { data: 1 } } }),
-                      );
-                    }
-                  },
+                  job: { id: chain.id, typeName: "step1" },
+                  continueWith: { typeName: "step2", input: { data: 1 } },
                 }),
               ),
             JobTypeValidationError,

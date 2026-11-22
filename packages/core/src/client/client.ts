@@ -1,58 +1,40 @@
-import { createCallOnce } from "@queuert/helpers/call-once";
 import { raceWithSleep, setLongTimeout } from "@queuert/helpers/sleep";
 import type { IsUnion } from "@queuert/helpers/typescript";
-import {
-  type MaybePromise,
-  type Mode,
-  type ModeResult,
-  step,
-  syncAsync,
-} from "@queuert/sync-async";
+import { type Mode, type ModeResult, step, syncAsync } from "@queuert/sync-async";
 
 import type { ModeOf } from "../adapter-mode.ts";
-import type { AttemptCompleteResult, AttemptOutcome } from "../attempt/attempt-handler.types.ts";
-import {
-  type ChainFields,
-  type CompletedChainFields,
-  assertChainsTypeName,
-  mapStateChainToChain,
-} from "../entities/chain.ts";
-import {
-  type AnyJob,
-  type CompletedJob,
-  type JobStatus,
-  assertJobsTypeName,
-  mapStateJobToJob,
-} from "../entities/job.ts";
+import type {
+  AnyJobOutcomeFields,
+  AttemptCompleteResult,
+  JobOutcome,
+  JobRescheduleOutcome,
+} from "../attempt/attempt-handler.types.ts";
+import { assertChainsTypeName, mapStateChainToChain } from "../entities/chain.ts";
+import { assertJobsTypeName, mapStateJobToJob } from "../entities/job.ts";
+import type { JobRef } from "../entities/job.types.ts";
 import type { OrderDirection, Page } from "../entities/pagination.ts";
-import type { ScheduleOptions } from "../entities/schedule.ts";
 import { type Worker, mapStateWorkerToWorker } from "../entities/worker.ts";
 import {
   BlockerReferenceError,
   ChainNotFoundError,
-  JobAlreadyCompletedError,
-  JobNotFoundError,
-  JobNotReschedulableError,
+  JobsAlreadyCompletedError,
+  JobsStatusMismatchError,
   JobsNotFoundError,
-  JobsNotReschedulableError,
   WaitChainTimeoutError,
   toSingleChainError,
   toSingleJobError,
 } from "../errors.ts";
 import type { BaseJobTypeDefinitions } from "../job-types/job-type.ts";
 import type {
-  AnyNewJob,
   BlockerChains,
   JobTypeBlockedNames,
-  JobTypeChainNames,
   JobTypeEntryNames,
   JobTypeNames,
-  JobTypeProperty,
+  JobTypeReachingEntry,
   NewChain,
   ResolvedChain,
   ResolvedChainJobs,
   ResolvedJob,
-  ResolvedRunningChain,
 } from "../job-types/job-types.resolvers.ts";
 import type { JobTypes } from "../job-types/job-types.ts";
 import {
@@ -65,22 +47,14 @@ import { notifyAfterTransaction } from "../notify-adapter/tx-notifications.ts";
 import type { Log } from "../observability-adapter/log.ts";
 import type { ObservabilityAdapter } from "../observability-adapter/observability-adapter.ts";
 import type {
-  BaseTxContext,
   GetStateAdapterJobId,
   GetStateAdapterTxContext,
   GetStateAdapterWorkerId,
   StateAdapter,
   StateChain,
-  StateJob,
-  StateJobInfo,
 } from "../state-adapter/state-adapter.ts";
 import { normalizeTxCtx, requireTxCtx } from "../state-adapter/tx-context.ts";
-import {
-  runCompleteChain,
-  runContinueChain,
-  runCreateChains,
-  runRescheduleJobs,
-} from "./implementation.ts";
+import { parseJobOutcome, runApplyJobOutcomes, runCreateChains } from "./implementation.ts";
 import { type Helpers, createHelpers, runInMode } from "./setup-helpers.ts";
 
 export const helpersSymbol: unique symbol = Symbol("queuert.helpers");
@@ -89,95 +63,95 @@ type LockableReadTxContext<TStateAdapter extends StateAdapter<any, any, any, Mod
   | ({ lock?: undefined } & Partial<GetStateAdapterTxContext<TStateAdapter>>)
   | ({ lock: "exclusive" } & GetStateAdapterTxContext<TStateAdapter>);
 
-type AnyWorkerlessOutcome = { output: unknown } | { continueWith: AnyNewJob };
-
-type ChainCompleteOptions<
+type ClientJobOutcome<
   TStateAdapter extends StateAdapter<any, any, any, Mode>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
-  TChainTypeName extends string,
-> = {
-  complete: <TOutcome extends AttemptOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName>>(
-    outcome: TOutcome,
-  ) => ModeResult<
-    ModeOf<TStateAdapter>,
-    AttemptCompleteResult<
+> =
+  true extends IsUnion<TJobTypeName>
+    ? JobRescheduleOutcome
+    : JobOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
+
+type ApplyJobOutcomeResult<
+  TStateAdapter extends StateAdapter<any, any, any, Mode>,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends string,
+  TOutcome,
+> = TOutcome extends { reschedule: any }
+  ? Exclude<
+      ResolvedJob<
+        GetStateAdapterJobId<TStateAdapter>,
+        GetStateAdapterWorkerId<TStateAdapter>,
+        TJobTypeDefinitions,
+        TJobTypeName
+      >,
+      { status: "running" | "completed" }
+    >
+  : AttemptCompleteResult<
       TStateAdapter,
       TJobTypeDefinitions,
       TJobTypeName,
-      TChainTypeName,
+      JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
       TOutcome
-    >
-  >;
-} & GetStateAdapterTxContext<TStateAdapter>;
+    >;
 
-type ChainCompleteJobResult<TResult> = TResult extends { continuedTo: undefined }
-  ? TResult
-  : TResult extends { continuedTo: infer TContinuation }
-    ? TContinuation
-    : TResult;
-
-type ChainHandler<
+type ApplyJobOutcomesSliceItem<
   TStateAdapter extends StateAdapter<any, any, any, Mode>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>,
-> = (options: {
-  job: ResolvedChainJobs<
-    GetStateAdapterJobId<TStateAdapter>,
-    GetStateAdapterWorkerId<TStateAdapter>,
-    TJobTypeDefinitions,
-    TChainTypeName
-  >;
-  completeJob: <
-    TJobTypeName extends JobTypeChainNames<TJobTypeDefinitions, TChainTypeName> & string,
-    TResult extends CompletedJob<AnyJob>,
-  >(
-    ...args: true extends IsUnion<TJobTypeName>
-      ? [job: "Error: narrow the job type before calling completeJob (e.g. check job.typeName)"]
-      : [
-          job: ResolvedJob<
-            GetStateAdapterJobId<TStateAdapter>,
-            GetStateAdapterWorkerId<TStateAdapter>,
-            TJobTypeDefinitions,
-            TJobTypeName,
-            TChainTypeName
-          >,
-          completeCallback: (
-            completeOptions: ChainCompleteOptions<
-              TStateAdapter,
-              TJobTypeDefinitions,
-              TJobTypeName,
-              TChainTypeName
-            >,
-          ) => ModeResult<ModeOf<TStateAdapter>, TResult>,
-        ]
-  ) => ModeResult<ModeOf<TStateAdapter>, ChainCompleteJobResult<TResult>>;
-}) => ModeResult<ModeOf<TStateAdapter>, CompletedJob<AnyJob> | void>;
-
-type CompleteChainResult<
-  TJobId,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>,
-  TReturn,
-> = TReturn extends { continuedTo: undefined; output: infer TOutput }
-  ? ChainFields<
-      TJobId,
-      TChainTypeName,
-      JobTypeProperty<TJobTypeDefinitions, TChainTypeName, "input">
-    > &
-      CompletedChainFields<TOutput>
-  : TReturn extends { continuedTo: AnyJob }
-    ? ResolvedRunningChain<TJobId, TJobTypeDefinitions, TChainTypeName>
-    : ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName>;
-
-type CompleteChainResultFromHandler<
-  TJobId,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>,
-  THandler,
-> = THandler extends (...args: any[]) => infer TReturn
-  ? CompleteChainResult<TJobId, TJobTypeDefinitions, TChainTypeName, Awaited<TReturn>>
+  TSliceJobTypeDefinitions extends BaseJobTypeDefinitions,
+> = TSliceJobTypeDefinitions extends any
+  ? {
+      [TJobTypeName in keyof TSliceJobTypeDefinitions & string]: {
+        job: JobRef<GetStateAdapterJobId<TStateAdapter>, TJobTypeName>;
+      } & JobOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName>;
+    }[keyof TSliceJobTypeDefinitions & string]
   : never;
+
+type ApplyJobOutcomesItem<
+  TStateAdapter extends StateAdapter<any, any, any, Mode>,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+> =
+  | ApplyJobOutcomesSliceItem<TStateAdapter, TJobTypeDefinitions, TJobTypeDefinitions>
+  | ({
+      job: JobRef<GetStateAdapterJobId<TStateAdapter>, JobTypeNames<TJobTypeDefinitions>>;
+    } & JobRescheduleOutcome);
+
+type ApplyJobOutcomesItemFor<
+  TStateAdapter extends StateAdapter<any, any, any, Mode>,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TItem,
+> = TItem extends {
+  job: { typeName: infer TJobTypeName extends JobTypeNames<TJobTypeDefinitions> };
+}
+  ? {
+      job: JobRef<GetStateAdapterJobId<TStateAdapter>, TJobTypeName>;
+    } & AcceptReadonlyArrays<ClientJobOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName>>
+  : {
+      job: JobRef<GetStateAdapterJobId<TStateAdapter>, JobTypeNames<TJobTypeDefinitions>>;
+    } & JobRescheduleOutcome;
+
+type AcceptReadonlyArrays<T> = T extends readonly unknown[]
+  ? { readonly [K in keyof T]: AcceptReadonlyArrays<T[K]> }
+  : T extends Date
+    ? T
+    : T extends object
+      ? { [K in keyof T]: AcceptReadonlyArrays<T[K]> }
+      : T;
+
+type ApplyJobOutcomesResult<
+  TStateAdapter extends StateAdapter<any, any, any, Mode>,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TItems extends readonly unknown[],
+> = {
+  -readonly [K in keyof TItems]: ApplyJobOutcomeResult<
+    TStateAdapter,
+    TJobTypeDefinitions,
+    TItems[K] extends { job: { typeName?: infer TJobTypeName extends string } }
+      ? TJobTypeName
+      : JobTypeNames<TJobTypeDefinitions>,
+    TItems[K]
+  >;
+};
 
 type CreateChainsResult<
   TJobId,
@@ -195,7 +169,7 @@ type CreateChainsResult<
  * The public API for managing chains. Created via {@link createClient}.
  *
  * Methods are split into three categories:
- * - **Mutating** — `createChain`, `createChains`, `completeChain`, `deleteChain`, `deleteChains`, `rescheduleJob`, `rescheduleJobs`. Require a transaction context; they throw `Error` if called without a transaction context, or with one the state adapter's `getTransaction` reports as outside an open transaction. With an adapter that fences writes (PostgreSQL, SQLite, Redis), all but the deletions throw {@link SchemaFencedError} once a breaking migration fenced this code version, and change nothing.
+ * - **Mutating** — `createChain`, `createChains`, `applyJobOutcome`, `applyJobOutcomes`, `deleteChain`, `deleteChains`. Require a transaction context; they throw `Error` if called without a transaction context, or with one the state adapter's `getTransaction` reports as outside an open transaction. With an adapter that fences writes (PostgreSQL, SQLite, Redis), all but the deletions throw {@link SchemaFencedError} once a breaking migration fenced this code version, and change nothing.
  * - **Read-only** — `getChain`, `getChains`, `getJob`, `getJobs`, `getChainTypeNames`, `getJobTypeNames`, `countChainsByTypeName`, `countJobsByTypeName`, `listChains`, `listJobs`, `listChainJobs`, `getChainTailJob`, `getChainTailJobs`, `getJobBlockers`, `listBlockedJobs`, `getWorker`, `getWorkers`, `countWorkers`, `countWorkersByTypeName`, `countRunningJobsByWorkerId`, `listWorkers`, `listWorkerJobs`. Accept an optional transaction context; `getChain`, `getChains`, `getJob`, `getJobs`, `getChainTailJob` and `getChainTailJobs` require one with `lock: "exclusive"`.
  * - **Waiting** — `awaitChain`. Takes no transaction context: it polls outside any transaction and listens for notify adapter events.
  */
@@ -315,92 +289,71 @@ export type Client<
   ) => ModeResult<TMode, ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName>[]>;
 
   /**
-   * Reschedule a pending job by setting its `scheduledAt` from the optional
-   * `schedule` (`{ at }` | `{ afterMs }`); omitting `schedule` reschedules to
-   * now. Past times clamp to now. Sets `consecutiveFailures` to 0 and the
-   * job's `lastRescheduleReason` to the optional `reason`, keeping
-   * `lastAttemptError`.
+   * Apply one outcome to a job, the same outcomes an attempt handler's `complete` takes: `output`
+   * completes the job and its chain, `continueWith` completes the job and continues the chain, and
+   * `reschedule` brings the job back later. `job` is `{ id, typeName? }` or a job read earlier; with
+   * `output` or `continueWith` its `typeName` must name a single job type.
+   *
+   * The job is locked and validated as stored; a passed `status` must match the stored one, so a job
+   * read earlier without a lock that changed since throws instead of being overwritten. `output` and
+   * `continueWith` complete a blocked, pending or running job. `reschedule` sets `scheduledAt` on a
+   * pending job, moves it on a blocked one, which stays blocked, and returns a running one to
+   * pending; `reason` is stored as `lastRescheduleReason`. A running job's attempt is lost either
+   * way: its `complete` throws {@link JobAlreadyCompletedError} after `output` or `continueWith`, and
+   * {@link JobTakenByAnotherWorkerError} after `reschedule`. To leave running jobs alone, read with
+   * `lock: "exclusive"` and check `status` first.
    *
    * @throws {@link JobNotFoundError} if the job does not exist.
-   * @throws {@link JobNotReschedulableError} if the job is not pending.
+   * @throws {@link JobAlreadyCompletedError} if the job is already completed.
+   * @throws {@link JobStatusMismatchError} if `job.status` differs from the stored job's.
+   * @throws {@link JobTypeMismatchError} if `job.typeName` differs from the stored job's.
+   * @throws {@link BlockerLimitExceededError} if a `continueWith` outcome declares more blockers than the per-job limit.
+   * @throws {@link ChainNotFoundError} if a `continueWith` blocker chain does not exist.
+   * @throws {@link ChainTypeMismatchError} if a `continueWith` blocker's `typeName` differs from the stored chain's.
+   * @throws {@link JobTypeValidationError} if the job type rejects the `output`, or the continuation job type rejects the `continueWith` target, input or blockers.
+   * @throws {@link InvalidJobIdError} if a `continueWith` `id` fails the state adapter's `validateJobId` check.
    */
-  rescheduleJob: <
+  applyJobOutcome: <
     TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
+    const TOutcome extends ClientJobOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName> =
+      ClientJobOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName>,
   >(
-    options: {
-      id: TJobId;
-      schedule?: ScheduleOptions;
-      /** Why the job is rescheduled. Keep it short; longer reasons are truncated to 10,000 characters. */
-      reason?: string;
-    } & GetStateAdapterTxContext<TStateAdapter>,
-  ) => ModeResult<TMode, ResolvedJob<TJobId, TWorkerId, TJobTypeDefinitions, TJobTypeName>>;
+    options: { job: JobRef<TJobId, TJobTypeName> } & TOutcome &
+      GetStateAdapterTxContext<TStateAdapter>,
+  ) => ModeResult<
+    TMode,
+    ApplyJobOutcomeResult<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TOutcome>
+  >;
 
   /**
-   * Reschedule multiple pending jobs, setting each `scheduledAt` from the
-   * optional `schedule` (omitted = now, past times clamped to now). Sets each
-   * job's `consecutiveFailures` to 0 and its `lastRescheduleReason` to the
-   * optional `reason`, keeping `lastAttemptError`. Validation is atomic — no
-   * job is rescheduled on failure.
-   * Returns jobs in input order. Empty `ids` returns `[]`.
+   * Apply an outcome to each of several jobs in one call, each item a `job` with one outcome as in
+   * {@link Client.applyJobOutcome | applyJobOutcome}, checked against that item's own `job.typeName`. All or
+   * nothing: every job is locked and validated before the first write. Returns the jobs in input order; an
+   * array literal of items returns a tuple.
+   * Empty `items` returns `[]`.
    *
-   * @throws {@link JobsNotFoundError} (batch variant listing every offending id) if any input is missing.
-   * @throws {@link JobsNotReschedulableError} (batch variant listing every offending id) if any input is not pending.
+   * @throws {@link JobsNotFoundError} (listing every offending id) if any job does not exist.
+   * @throws {@link JobsAlreadyCompletedError} (listing every offending id) if any job is already completed.
+   * @throws {@link JobsStatusMismatchError} (listing every offending id) if any `job.status` differs from the stored job's.
+   * @throws {@link JobsTypeMismatchError} (listing every offending id) if any `job.typeName` differs from the stored job's.
+   * @throws {@link BlockerLimitExceededError} if a `continueWith` outcome declares more blockers than the per-job limit.
+   * @throws {@link ChainNotFoundError} if a `continueWith` blocker chain does not exist.
+   * @throws {@link ChainTypeMismatchError} if a `continueWith` blocker's `typeName` differs from the stored chain's.
+   * @throws {@link JobTypeValidationError} if a job type rejects an `output`, or a continuation job type rejects a `continueWith` target, input or blockers.
+   * @throws {@link InvalidJobIdError} if a `continueWith` `id` fails the state adapter's `validateJobId` check.
+   * @throws Error if `items` names the same job more than once.
    */
-  rescheduleJobs: <
-    TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
+  applyJobOutcomes: <
+    const TItems extends readonly { job: JobRef<TJobId, JobTypeNames<TJobTypeDefinitions>> }[] & {
+      [K in keyof TItems]: ApplyJobOutcomesItemFor<TStateAdapter, TJobTypeDefinitions, TItems[K]>;
+    },
   >(
-    options: {
-      ids: TJobId[];
-      schedule?: ScheduleOptions;
-      /** Why the jobs are rescheduled. Keep it short; longer reasons are truncated to 10,000 characters. */
-      reason?: string;
-    } & GetStateAdapterTxContext<TStateAdapter>,
-  ) => ModeResult<TMode, ResolvedJob<TJobId, TWorkerId, TJobTypeDefinitions, TJobTypeName>[]>;
+    options: { items: TItems } & GetStateAdapterTxContext<TStateAdapter>,
+  ) => ModeResult<TMode, ApplyJobOutcomesResult<TStateAdapter, TJobTypeDefinitions, TItems>>;
 
   /**
-   * Complete a chain from outside a worker. Validates `typeName`, then passes
-   * the current job and a `completeJob` function to the `handler`. The handler
-   * may decline (return without calling `completeJob`); when it does complete,
-   * the callback passes exactly one outcome — `{ output }` or
-   * `{ continueWith: {...} }` — to `complete`, which writes it before it returns.
-   *
-   * `completeJob` resolves to the continuation when the outcome continued the
-   * chain, so several jobs can be walked in a row:
-   *
-   * ```ts
-   * job = await completeJob(job, async ({ complete }) =>
-   *   complete({ continueWith: { typeName: "step-a", input: { valueA: 42 } } }));
-   * ```
-   *
-   * @throws {@link ChainNotFoundError} if the chain does not exist.
-   * @throws {@link ChainTypeMismatchError} if the chain's type does not match `typeName`.
-   * @throws {@link JobAlreadyCompletedError} from the inner `completeJob` if the job is already completed.
-   * @throws {@link BlockerLimitExceededError} from the inner `complete` if a `continueWith` outcome declares more blockers than the per-job limit.
-   * @throws {@link ChainNotFoundError} from the inner `complete` if a `continueWith` blocker chain does not exist.
-   * @throws {@link ChainTypeMismatchError} from the inner `complete` if a `continueWith` blocker's `typeName` differs from the stored chain's.
-   * @throws {@link JobTypeValidationError} from the inner `complete` if the job type rejects the `output`, or the continuation job type rejects the `continueWith` target, input or blockers.
-   * @throws {@link InvalidJobIdError} from the inner `complete` if a `continueWith` `id` fails the state adapter's `validateJobId` check.
-   */
-  completeChain: <
-    TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>,
-    // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- holds `handler` as a naked type param so a `Client` over a union of job-type definitions stays assignable to a `Client` over one member (client.covariance.spec.ts)
-    THandler extends (...args: any[]) => any = ChainHandler<
-      TStateAdapter,
-      TJobTypeDefinitions,
-      TChainTypeName
-    >,
-    TResult = CompleteChainResultFromHandler<TJobId, TJobTypeDefinitions, TChainTypeName, THandler>,
-  >(
-    options: {
-      typeName: TChainTypeName;
-      id: TJobId;
-      handler: THandler;
-    } & GetStateAdapterTxContext<TStateAdapter>,
-  ) => ModeResult<TMode, NoInfer<TResult>>;
-
-  /**
-   * Get a single chain by ID. Pass `typeName` for type narrowing. Pass `lock: "exclusive"`
-   * (transaction context required) to lock the chain's head job until the transaction ends.
+   * Get a single chain by ID. Pass `typeName` for type narrowing. Pass `lock: "exclusive"` (transaction
+   * context required) to lock the chain's head job until the transaction ends.
    *
    * @throws {@link ChainTypeMismatchError} if `typeName` is provided and does not match.
    */
@@ -750,8 +703,7 @@ export type Client<
  * The client follows its state adapter's mode. Over an async {@link StateAdapter} its
  * state-touching methods return promises. Over a `"sync"` one (better-sqlite3, node:sqlite,
  * bun:sqlite) they return their results directly and throw synchronously, so Queuert's writes join
- * the driver's own transaction, such as `db.transaction(() => …)()`, and a failure rolls it back;
- * their callbacks (`completeChain`'s `handler`, `completeJob`'s callback) must be synchronous too.
+ * the driver's own transaction, such as `db.transaction(() => …)()`, and a failure rolls it back.
  * `awaitChain` returns a promise in both modes: it waits on notifications and polls.
  *
  * @param options - Client configuration.
@@ -964,319 +916,145 @@ export const createClient = <
         }),
       ),
 
-    rescheduleJob: <
+    applyJobOutcome: <
       TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
     >(
-      options: {
-        id: TJobId;
-        schedule?: ScheduleOptions;
-        reason?: string;
-      } & GetStateAdapterTxContext<TStateAdapter>,
+      options: { job: JobRef<TJobId, TJobTypeName> } & ClientJobOutcome<
+        TStateAdapter,
+        TJobTypeDefinitions,
+        TJobTypeName
+      > &
+        GetStateAdapterTxContext<TStateAdapter>,
     ) =>
       runInMode(
         helpers,
         syncAsync(function* () {
-          const { id, schedule, reason, ...rest } = options;
+          const { job, output, continueWith, reschedule, reason, ...txCtx } = options as {
+            job: JobRef<TJobId, TJobTypeName>;
+          } & AnyJobOutcomeFields;
+          const item = {
+            job,
+            ...("output" in options && { output }),
+            ...("continueWith" in options && { continueWith }),
+            ...("reschedule" in options && { reschedule }),
+            ...(reason !== undefined && { reason }),
+          };
           try {
-            const [job] = yield* step(
-              client.rescheduleJobs<TJobTypeName>({
-                ids: [id],
-                schedule,
-                reason,
-                ...(rest as GetStateAdapterTxContext<TStateAdapter>),
+            const [applied] = yield* step(
+              client.applyJobOutcomes({
+                ...(txCtx as GetStateAdapterTxContext<TStateAdapter>),
+                items: [item as ApplyJobOutcomesItem<TStateAdapter, TJobTypeDefinitions>],
               }),
             );
-            return job;
+            return applied;
           } catch (error) {
-            if (error instanceof JobsNotFoundError) {
-              throw new JobNotFoundError(`Job with id ${String(id)} not found`, {
-                jobId: id as string,
-                cause: error,
-              });
-            }
-            if (error instanceof JobsNotReschedulableError) {
-              throw new JobNotReschedulableError(
-                `Cannot reschedule job ${String(id)}: job is not "pending"`,
-                { jobId: id as string, cause: error },
-              );
-            }
-            throw error;
+            throw toSingleJobError(error, job.id);
           }
         }),
       ),
 
-    rescheduleJobs: <
-      TJobTypeName extends JobTypeNames<TJobTypeDefinitions> = JobTypeNames<TJobTypeDefinitions>,
+    applyJobOutcomes: <
+      const TItems extends readonly { job: JobRef<TJobId, JobTypeNames<TJobTypeDefinitions>> }[] & {
+        [K in keyof TItems]: ApplyJobOutcomesItemFor<TStateAdapter, TJobTypeDefinitions, TItems[K]>;
+      },
     >(
-      options: {
-        ids: TJobId[];
-        schedule?: ScheduleOptions;
-        reason?: string;
-      } & GetStateAdapterTxContext<TStateAdapter>,
+      options: { items: TItems } & GetStateAdapterTxContext<TStateAdapter>,
     ) =>
       runInMode(
         helpers,
         syncAsync(function* () {
-          const { ids, schedule, reason, ...rest } = options;
-          const txCtx = requireTxCtx(helpers.stateAdapter, rest, "rescheduleJobs");
-
-          if (ids.length === 0) {
-            return [] as ResolvedJob<TJobId, TWorkerId, TJobTypeDefinitions, TJobTypeName>[];
+          const { items, ...rest } = options;
+          const txCtx = requireTxCtx(helpers.stateAdapter, rest, "applyJobOutcomes");
+          if (items.length === 0) {
+            return [] as unknown as ApplyJobOutcomesResult<
+              TStateAdapter,
+              TJobTypeDefinitions,
+              TItems
+            >;
           }
-          const assertReschedulable = (existingJobs: (StateJob | undefined)[]): void => {
-            const notFound: TJobId[] = [];
-            const notReschedulable: { jobId: TJobId; status: JobStatus }[] = [];
-            existingJobs.forEach((stateJob, index) => {
-              if (stateJob === undefined) {
-                notFound.push(ids[index]);
-              } else if (stateJob.status !== "pending") {
-                notReschedulable.push({
-                  jobId: stateJob.id as TJobId,
-                  status: stateJob.status,
-                });
-              }
-            });
+
+          const typedItems = items as readonly ({
+            job: JobRef<TJobId, string>;
+          } & AnyJobOutcomeFields)[];
+          const parsedItems = typedItems.map((item) => ({
+            job: item.job,
+            outcome: parseJobOutcome(item, "applyJobOutcomes"),
+          }));
+          const jobIds = parsedItems.map(({ job }) => job.id);
+          if (new Set(jobIds).size !== jobIds.length) {
+            throw new Error("applyJobOutcomes requires each job at most once");
+          }
+
+          const stateJobs = yield* step(
+            helpers.stateAdapter.getJobs({ txCtx, jobIds, lock: "exclusive" }),
+          );
+          notifyAfterTransaction(helpers, txCtx, {
+            lockedPendingJobs: stateJobs.flatMap((job) => (job?.status === "pending" ? [job] : [])),
+          });
+          const assertApplicable = (): void => {
+            const notFound = jobIds.filter((_, index) => stateJobs[index] === undefined);
             if (notFound.length > 0) {
               throw new JobsNotFoundError(`Jobs not found: ${notFound.join(", ")}`, {
                 jobIds: notFound,
               });
             }
-            if (notReschedulable.length > 0) {
-              throw new JobsNotReschedulableError(
-                `Cannot reschedule jobs whose status is not "pending": ${notReschedulable
-                  .map((j) => `${j.jobId} (${j.status})`)
-                  .join(", ")}`,
-                { jobIds: notReschedulable.map((j) => j.jobId) },
+            const alreadyCompleted = jobIds.filter(
+              (_, index) => stateJobs[index]!.status === "completed",
+            );
+            if (alreadyCompleted.length > 0) {
+              throw new JobsAlreadyCompletedError(
+                `Cannot apply outcomes to jobs that are already completed: ${alreadyCompleted.join(", ")}`,
+                { jobIds: alreadyCompleted },
               );
             }
+            const changed = parsedItems.flatMap(({ job: { id, status } }, index) =>
+              status !== undefined && stateJobs[index]!.status !== status
+                ? [{ id, expectedStatus: status, actualStatus: stateJobs[index]!.status }]
+                : [],
+            );
+            if (changed.length > 0) {
+              throw new JobsStatusMismatchError(
+                `Jobs changed status since they were read: ${changed.map(({ id }) => id).join(", ")}`,
+                {
+                  jobIds: changed.map(({ id }) => id),
+                  expectedStatuses: changed.map(({ expectedStatus }) => expectedStatus),
+                  actualStatuses: changed.map(({ actualStatus }) => actualStatus),
+                },
+              );
+            }
+            assertJobsTypeName(stateJobs, {
+              jobIds,
+              typeNames: parsedItems.map(({ job }) => job.typeName),
+            });
           };
 
-          const existingJobs = yield* step(
-            helpers.stateAdapter.getJobs({
-              txCtx,
-              jobIds: ids,
-              lock: "exclusive",
-            }),
-          );
+          assertApplicable();
+          const applied = yield* runApplyJobOutcomes.steps(helpers, {
+            txCtx,
+            items: parsedItems.map(({ outcome }, index) => ({ job: stateJobs[index]!, outcome })),
+          });
           notifyAfterTransaction(helpers, txCtx, {
-            lockedPendingJobs: existingJobs.flatMap((job) =>
-              job?.status === "pending" ? [job] : [],
+            settledJobIds: jobIds,
+            jobAttemptsLost: applied.flatMap((written, index) =>
+              written !== undefined && stateJobs[index]!.status === "running" ? [written.id] : [],
             ),
           });
-          assertReschedulable(existingJobs);
-          const rescheduledOrMissing = yield* runRescheduleJobs.steps(helpers, {
-            txCtx,
-            jobs: ids.map((id: TJobId) => ({ jobId: id, schedule, reason })),
-          });
-          notifyAfterTransaction(helpers, txCtx, { settledJobIds: ids });
-          return rescheduledOrMissing.map((stateJob, index) => {
-            if (stateJob === undefined) {
-              throw new JobNotFoundError(`Job ${ids[index]} not found or already completed`, {
-                jobId: ids[index],
+
+          return applied.map((written, index) => {
+            if (written === undefined) {
+              throw new Error(`Job ${jobIds[index]} changed under its lock`);
+            }
+            if (written.status === "completed") {
+              const { continuation, ...finishedJob } = written;
+              helpers.stateAdapter.onTransactionCommit(txCtx, () => {
+                helpers.observabilityHelper.completeJobSpan(finishedJob, {
+                  continuedWith: continuation,
+                  chainCompleted: continuation === undefined,
+                });
               });
             }
-            return mapStateJobToJob(stateJob, helpers.jobTypes) as ResolvedJob<
-              TJobId,
-              TWorkerId,
-              TJobTypeDefinitions,
-              TJobTypeName
-            >;
-          });
-        }),
-      ),
-
-    completeChain: <
-      TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions>,
-      // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- see the `Client` declaration
-      THandler extends (...args: any[]) => any = ChainHandler<
-        TStateAdapter,
-        TJobTypeDefinitions,
-        TChainTypeName
-      >,
-      TResult = CompleteChainResultFromHandler<
-        TJobId,
-        TJobTypeDefinitions,
-        TChainTypeName,
-        THandler
-      >,
-    >(
-      options: {
-        typeName: TChainTypeName;
-        id: TJobId;
-        handler: THandler;
-      } & GetStateAdapterTxContext<TStateAdapter>,
-    ) =>
-      runInMode(
-        helpers,
-        syncAsync(function* () {
-          const { id, typeName, handler, ...rest } = options;
-          const txCtx = requireTxCtx(helpers.stateAdapter, rest, "completeChain");
-
-          const [stateChain] = yield* step(
-            helpers.stateAdapter.getChains({
-              txCtx,
-              chainIds: [id],
-              lock: "exclusive",
-            }),
-          );
-          if (stateChain === undefined) {
-            throw new ChainNotFoundError(`Chain with id ${id} not found`, {
-              chainId: id,
-            });
-          }
-          try {
-            assertChainsTypeName([stateChain], { chainIds: [id], typeName });
-          } catch (error) {
-            throw toSingleChainError(error, id);
-          }
-
-          let [lockedJob] = yield* step(
-            helpers.stateAdapter.getJobs({
-              txCtx,
-              jobIds: [(stateChain.tail ?? stateChain.head).id],
-              lock: "exclusive",
-            }),
-          );
-          while (lockedJob?.continuedToId != null) {
-            [lockedJob] = yield* step(
-              helpers.stateAdapter.getJobs({
-                txCtx,
-                jobIds: [lockedJob.continuedToId],
-                lock: "exclusive",
-              }),
-            );
-          }
-          if (!lockedJob) {
-            throw new Error(`Current job of chain ${id} not found under the chain lock`);
-          }
-          const currentJob = lockedJob;
-          notifyAfterTransaction(helpers, txCtx, {
-            lockedPendingJobs: currentJob.status === "pending" ? [currentJob] : [],
-          });
-
-          const completeJob = (
-            job: AnyJob,
-            completeCallback: (
-              options: {
-                complete: (
-                  outcome: AnyWorkerlessOutcome,
-                ) => MaybePromise<AnyJob & { continuedTo?: AnyJob }>;
-              } & BaseTxContext,
-            ) => MaybePromise<AnyJob & { continuedTo?: AnyJob }>,
-          ): MaybePromise<AnyJob & { continuedTo?: AnyJob }> =>
-            runInMode(
-              helpers,
-              syncAsync(function* () {
-                if (job.status === "completed") {
-                  throw new JobAlreadyCompletedError(
-                    `Cannot complete job ${job.id}: job is already completed`,
-                    { jobId: job.id },
-                  );
-                }
-
-                const [stateJob] = yield* step(
-                  helpers.stateAdapter.getJobs({
-                    txCtx,
-                    jobIds: [job.id],
-                    lock: job.id === currentJob.id ? undefined : "exclusive",
-                  }),
-                );
-                if (!stateJob) {
-                  throw new JobNotFoundError(`Job ${job.id} not found`, { jobId: job.id });
-                }
-                if (stateJob.completedAt !== null) {
-                  throw new JobAlreadyCompletedError(
-                    `Cannot complete job ${job.id}: job is already completed`,
-                    { jobId: job.id },
-                  );
-                }
-
-                const wasRunning = stateJob.status === "running";
-                const completeOnce = createCallOnce(
-                  "complete",
-                  (
-                    outcome: AnyWorkerlessOutcome,
-                  ): MaybePromise<StateJob & { continuation?: StateJobInfo }> =>
-                    runInMode(
-                      helpers,
-                      syncAsync(function* () {
-                        const written =
-                          "output" in outcome
-                            ? yield* runCompleteChain.steps(helpers, {
-                                job: stateJob,
-                                output: outcome.output,
-                                txCtx,
-                                attemptToken: null,
-                                workerId: null,
-                              })
-                            : yield* runContinueChain.steps(helpers, {
-                                job: stateJob,
-                                continueWith: outcome.continueWith,
-                                txCtx,
-                                attemptToken: null,
-                                workerId: null,
-                              });
-                        if (written === undefined) {
-                          throw new JobNotFoundError(
-                            `Job ${job.id} not found or already completed`,
-                            { jobId: job.id },
-                          );
-                        }
-                        return written;
-                      }),
-                    ),
-                  { sync: helpers.sync },
-                );
-
-                const callbackResult = completeCallback({
-                  complete: (outcome) =>
-                    runInMode(
-                      helpers,
-                      syncAsync(function* () {
-                        const written = yield* step(completeOnce.call(outcome));
-                        return mapStateJobToJob(written, helpers.jobTypes);
-                      }),
-                    ),
-                  ...txCtx,
-                });
-                const result = yield* step(callbackResult);
-
-                const { continuation, ...finishedJob } = completeOnce.requireResult(
-                  "complete must be called before the completeJob callback returns",
-                );
-                helpers.stateAdapter.onTransactionCommit(txCtx, () => {
-                  helpers.observabilityHelper.completeJobSpan(finishedJob, {
-                    continuedWith: continuation,
-                    chainCompleted: continuation === undefined,
-                  });
-                });
-                notifyAfterTransaction(helpers, txCtx, {
-                  settledJobIds: [job.id],
-                  jobAttemptsLost: wasRunning ? [job.id] : [],
-                });
-
-                return result.continuedTo ?? result;
-              }),
-            );
-
-          const handlerResult = (handler as (...args: unknown[]) => MaybePromise<unknown>)({
-            job: mapStateJobToJob(currentJob, helpers.jobTypes),
-            completeJob,
-          });
-          yield* step(handlerResult);
-
-          const [updatedChain] = yield* step(
-            helpers.stateAdapter.getChains({
-              txCtx,
-              chainIds: [id],
-            }),
-          );
-          if (!updatedChain) {
-            throw new ChainNotFoundError(`Chain with id ${id} not found after complete`, {
-              chainId: id as string,
-            });
-          }
-          return mapStateChainToChain(updatedChain, helpers.jobTypes) as TResult;
+            return mapStateJobToJob(written, helpers.jobTypes);
+          }) as unknown as ApplyJobOutcomesResult<TStateAdapter, TJobTypeDefinitions, TItems>;
         }),
       ),
 

@@ -117,7 +117,11 @@ const spans: FieldItem[] = [
     name: "complete job.{type}",
     id: "complete-job",
     kind: consumer,
-    created: <>workerless completion</>,
+    created: (
+      <>
+        <code>applyJobOutcome</code> completes the job
+      </>
+    ),
     ended: "immediately",
     duration: "~0ms",
     attributes: [...chainIds, ...jobIds, ...continuedWith],
@@ -250,22 +254,26 @@ const Page = () => (
       </ol>
     </Steps>
 
-    <h2>Workerless completion</h2>
+    <h2>Workerless outcomes</h2>
     <p>
-      When a job is completed via <code>completeChain</code> (without a worker), there is no
-      job-attempt. Instead, a CONSUMER job span marks the completion, and if the chain is fully
-      completed, a CONSUMER chain span closes the trace:
+      When{" "}
+      <A href="/guides/workerless-outcomes/">
+        <code>applyJobOutcome</code>
+      </A>{" "}
+      completes a job, there is no job-attempt. Instead, a CONSUMER job span marks the completion,
+      and if the chain is fully completed, a CONSUMER chain span closes the trace:
     </p>
     <TraceWaterfall
       title="trace"
       subtitle="chain approve-refund"
-      label="approve-refund is created, then completed three minutes later through completeChain: a complete job span and its complete chain child"
+      label="approve-refund is created, then completed three minutes later through applyJobOutcome: a complete job span and its complete chain child"
       spans={approveRefundTrace}
     />
     <p>
       The CONSUMER job span is a child of the PRODUCER job span and carries the same chain/job
-      attributes. When <code>continueWith</code> is called during workerless completion, the
-      CONSUMER chain span is omitted (the chain continues).
+      attributes. When <code>applyJobOutcome</code> continues the chain with{" "}
+      <code>continueWith</code>, the CONSUMER chain span is omitted. A <code>reschedule</code>{" "}
+      outcome emits no span.
     </p>
 
     <h2>Chain completion link</h2>

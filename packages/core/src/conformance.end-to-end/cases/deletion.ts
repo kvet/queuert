@@ -15,6 +15,7 @@ import { createWorkerRunner } from "../../worker/worker-runner.ts";
 import { createCaseNotifyAdapter } from "../support/create-case-notify-adapter.ts";
 import { createCaseStateAdapter } from "../support/create-case-state-adapter.ts";
 import { createLogCollector } from "../support/log-collector.ts";
+import { createSpyNotifyAdapter } from "../support/spy-notify-adapter.ts";
 import type { EndToEndNotifyContext } from "../types.ts";
 
 const completionOptions = {
@@ -113,16 +114,10 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...chain,
-              handler: ({ job, completeJob }) => {
-                if (job.typeName === "step1") {
-                  return completeJob(job, ({ complete }) =>
-                    complete({ continueWith: { typeName: "step2", input: { continued: true } } }),
-                  );
-                }
-              },
+              job: { id: chain.id, typeName: "step1" },
+              continueWith: { typeName: "step2", input: { continued: true } },
             }),
           ),
         );
@@ -195,21 +190,19 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...blockerChain,
-              handler: ({ job, completeJob }) =>
-                completeJob(job, ({ complete }) => complete({ output: null })),
+              job: { id: blockerChain.id, typeName: "blocker" },
+              output: null,
             }),
           ),
         );
         yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...mainChain,
-              handler: ({ job, completeJob }) =>
-                completeJob(job, ({ complete }) => complete({ output: null })),
+              job: { id: mainChain.id, typeName: "main" },
+              output: null,
             }),
           ),
         );
@@ -827,6 +820,55 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         assert.notEqual(
           yield* step(client.getChain({ id: chain.id, typeName: "test" })),
           undefined,
+        );
+      }),
+    },
+    {
+      name: "deleteChains after a locked read does not wake workers for the job it deleted",
+      run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
+        const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
+        const notifyAdapter = createSpyNotifyAdapter(
+          yield* resource(createCaseNotifyAdapter(createNotifyAdapter, stateAdapter)),
+        );
+        const jobTypes = defineJobTypes<{
+          "await-approval": {
+            entry: true;
+            input: null;
+            output: { approved: boolean };
+            continueWith: { typeName: "process-request" };
+          };
+          "process-request": { input: null; output: null };
+        }>();
+        const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+
+        const chain = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            client.createChain({ ...txCtx, typeName: "await-approval", input: null }),
+          ),
+        );
+        notifyAdapter.calls.length = 0;
+
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            runInModeOf(
+              stateAdapter,
+              syncAsync(function* () {
+                yield* step(client.getChain({ ...txCtx, id: chain.id, lock: "exclusive" }));
+                yield* step(client.deleteChains({ ...txCtx, ids: [chain.id] }));
+              }),
+            ),
+          ),
+        );
+
+        assert.deepEqual(
+          [
+            ...new Set(
+              notifyAdapter.calls.flatMap(({ name, args }) =>
+                name === "notifyJobsScheduled" ? args : [],
+              ),
+            ),
+          ],
+          [],
         );
       }),
     },

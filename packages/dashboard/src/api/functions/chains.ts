@@ -1,5 +1,6 @@
 import { RpcError } from "@queuert/rpc";
 import type { ServerFn } from "@queuert/rpc/server";
+import { step, syncAsync } from "@queuert/sync-async";
 import { BlockerReferenceError, type Client, type Page } from "queuert";
 import { helpersSymbol } from "queuert/internal";
 import * as v from "valibot";
@@ -166,14 +167,25 @@ export const listBlockedJobs: ServerFn<
     return result;
   });
 
+const deleteChainInTransaction = syncAsync(function* (
+  client: Client<any, any>,
+  chainId: string,
+  txCtx: object,
+) {
+  return yield* step(client.deleteChains({ ...txCtx, ids: [chainId] }));
+});
+
 const deleteChainNow = async (
   client: Client<any, any>,
   chainId: string,
 ): Promise<DeleteChainOutcome> => {
+  const helpers = client[helpersSymbol];
   try {
     // oxlint-disable-next-line typescript/promise-function-async -- runs in the client's mode: a sync state adapter rejects an async callback
-    const deleted = await client[helpersSymbol].stateAdapter.withTransaction((txCtx) =>
-      client.deleteChains({ ids: [chainId], ...txCtx }),
+    const deleted = await helpers.stateAdapter.withTransaction((txCtx) =>
+      helpers.sync
+        ? deleteChainInTransaction.sync(client, chainId, txCtx)
+        : deleteChainInTransaction.async(client, chainId, txCtx),
     );
     return { outcome: "deleted", count: deleted.length };
   } catch (err) {

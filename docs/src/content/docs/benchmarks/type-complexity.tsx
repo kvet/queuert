@@ -45,7 +45,7 @@ const setup = [
   ...benchmarkMachine,
   {
     label: "Compilers",
-    value: "TypeScript 6.0.2, TypeScript 7.0.2 and tsrs 0.20.1",
+    value: "TypeScript 6.0.2, TypeScript 7.0.2 and tsrs 7.1.0-beta.tsrs3",
     note: "The last JavaScript-based tsc, the native compiler, and an experimental Rust port of the TypeScript 7.1 beta checker.",
   },
   { label: "Runs", value: "3 per scenario", note: "The best time counts." },

@@ -124,6 +124,10 @@ export const createUuidStrictDashboard = async (): Promise<{
       assertUuids(params.chainIds);
       return inner.getChains(params);
     },
+    getChainTails: async (params) => {
+      assertUuids(params.chainIds);
+      return inner.getChainTails(params);
+    },
     getJobs: async (params) => {
       assertUuids(params.jobIds);
       return inner.getJobs(params);

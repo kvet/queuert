@@ -79,8 +79,8 @@ const jobCounters = (): FieldItem[] => [
     chips: [counter],
     description: (
       <>
-        Job completed (by a worker or workerless). Use <code>queuert.job.attempt.completed</code> to
-        count only worker-processed completions.
+        Job completed by a worker or by the client. Use <code>queuert.job.attempt.completed</code>{" "}
+        to count only worker-processed completions.
       </>
     ),
     extra: [...jobAttributes, "queuert.job.continued"],
@@ -102,9 +102,10 @@ const jobCounters = (): FieldItem[] => [
     chips: [counter],
     description: (
       <>
-        Job returned to pending: client reschedule, <code>{"complete({ reschedule })"}</code>, retry
-        after a failed attempt, or reclaim from a worker that lost its lease, stopped or no longer
-        runs it.
+        Job rescheduled: a client reschedule of a pending or blocked job,{" "}
+        <code>{"complete({ reschedule })"}</code>, retry after a failed attempt, or reclaim from a
+        worker that lost its lease, stopped or no longer runs it. A client reschedule of a running
+        job is counted when its attempt applies it.
       </>
     ),
     extra: jobAttributes,

@@ -2057,6 +2057,9 @@ importers:
       '@queuert/rpc':
         specifier: workspace:*
         version: link:../../packages-internal/rpc
+      '@queuert/sync-async':
+        specifier: workspace:*
+        version: link:../../packages-internal/sync-async
       '@queuert/tsconfig':
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig

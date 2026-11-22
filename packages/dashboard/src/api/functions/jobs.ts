@@ -1,6 +1,7 @@
 import { RpcError } from "@queuert/rpc";
 import type { ServerFn } from "@queuert/rpc/server";
-import { JobNotFoundError, JobNotReschedulableError, type Page } from "queuert";
+import { step, syncAsync } from "@queuert/sync-async";
+import type { Client, Page } from "queuert";
 import { helpersSymbol } from "queuert/internal";
 import * as v from "valibot";
 
@@ -123,21 +124,34 @@ export const getJobDetail: ServerFn<
     return { job, continuation: continuation ?? null, blockers };
   });
 
+const rescheduleLockedJob = syncAsync(function* (
+  client: Client<any, any>,
+  jobId: string,
+  txCtx: object,
+) {
+  const job = yield* step(client.getJob({ ...txCtx, id: jobId, lock: "exclusive" }));
+  if (job === undefined) throw jobNotFound();
+  if (job.status === "running" || job.status === "completed") {
+    throw new RpcError(`Cannot reschedule job ${jobId}: job is ${job.status}`, { status: 409 });
+  }
+  return yield* step(client.applyJobOutcome({ ...txCtx, job, reschedule: { afterMs: 0 } }));
+});
+
 export const rescheduleJob: ServerFn<{ id: string }, UnknownJob> = createServerFn()
   .inputValidator(v.strictObject({ id }))
   .handler(async ({ data, client }) => {
+    const helpers = client[helpersSymbol];
     try {
       // oxlint-disable-next-line typescript/promise-function-async -- runs in the client's mode: a sync state adapter rejects an async callback
-      return await client[helpersSymbol].stateAdapter.withTransaction((txCtx) =>
-        client.rescheduleJob({ id: data.id, ...txCtx }),
+      return await helpers.stateAdapter.withTransaction((txCtx) =>
+        helpers.sync
+          ? rescheduleLockedJob.sync(client, data.id, txCtx)
+          : rescheduleLockedJob.async(client, data.id, txCtx),
       );
     } catch (err) {
-      if (err instanceof JobNotFoundError) throw jobNotFound();
-      if (err instanceof JobNotReschedulableError) {
-        throw new RpcError(err.message, { status: 409, cause: err });
-      }
-      const job = await lookupOrNotFound(client, async () => client.getJob({ id: data.id }));
-      if (job !== undefined) {
+      if (err instanceof RpcError) throw err;
+      const current = await lookupOrNotFound(client, async () => client.getJob({ id: data.id }));
+      if (current !== undefined) {
         // oxlint-disable-next-line typescript/only-throw-error -- re-throwing the original adapter error
         throw err;
       }

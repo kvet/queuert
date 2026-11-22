@@ -168,7 +168,7 @@ const lockedTail = await stateAdapter.withTransaction(async (txCtx) => {
     lock: "exclusive",
   });
   if (tail?.status === "pending") {
-    await client.rescheduleJob({ ...txCtx, id: tail.id, schedule: { afterMs: 60 * 60 * 1000 } });
+    await client.applyJobOutcome({ ...txCtx, job: tail, reschedule: { afterMs: 60 * 60 * 1000 } });
   }
   return tail;
 });

@@ -102,8 +102,8 @@ const members = (): FieldItem[] => [
     description: (
       <>
         Create chain heads (a deduplicated match comes back marked <code>deduplicated</code>),
-        complete a job with its output or continue it with a successor, return jobs to pending (or
-        move a blocked job's schedule), and delete chains.
+        complete a job with its output or continue it with a successor, return jobs to pending, move
+        a blocked job's schedule, and delete chains.
       </>
     ),
     extra: ["createJobs", "continueJobs", "completeJobs", "rescheduleJobs", "deleteChains"],
@@ -150,6 +150,7 @@ const members = (): FieldItem[] => [
       "getChains",
       "getChainTails",
       "getJobs",
+      "getChainTails",
       "getWorkers",
       "getChainTypeNames",
       "getJobTypeNames",

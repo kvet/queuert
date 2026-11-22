@@ -23,8 +23,8 @@ How to measure: Redis main-thread CPU (`INFO cpu`) before and after a fixed loop
 
 ## Current problems
 
-- **Lock waits.** A Redis transaction never waits for another; the one that commits second reruns. 12 conformance cases that expect a lock wait are excluded (`redisStateAdapterLockWaitCaseNames`). Every outcome matches some serial order.
-- **Job locks expire.** An exclusive read of a pending job, such as the one `completeChain` takes, takes a lock key for up to 60 s, and claims skip that job until it is released. A `completeChain` handler that runs longer than that can see a worker claim the job.
+- **Lock waits.** A Redis transaction never waits for another; the one that commits second reruns. The conformance cases that expect a lock wait live in `stateAdapterAsyncLockWaitGroups`, `stateAdapterConcurrentTransactionLockWaitGroups` and `endToEndConcurrentTransactionLockWaitGroups`, which the Redis specs leave out. Every outcome matches some serial order.
+- **Job locks expire.** An exclusive read of a pending job, such as the one `applyJobOutcome` takes, takes a lock key for up to 60 s, and claims skip that job until it is released. A transaction that holds the lock longer than that can see a worker claim the job.
 - **Notify latency.** "notify > handles distributed blocker jobs" takes about 80–88 ms against a 100 ms budget and is flaky under parallel load. The unblock step adds about 15 ms over the chain case. Its round trips have not been counted yet.
 - **Claim scan cap.** Claims and `getStartAttemptDelayMs` look past locked jobs through at most the first 1,000 due jobs of a type. When all of those are locked, a worker claims nothing of that type and waits for its next poll, even if unlocked jobs are due further on.
 - **`deleteChains` loops per chain.** It reads each chain's dependents and scans each chain's jobs separately, so its round trips grow with the number of chains deleted instead of staying constant.

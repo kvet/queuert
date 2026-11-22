@@ -1,6 +1,7 @@
 import { truncate } from "@queuert/helpers/serialize-error";
 import { type SyncAsync, syncAsync, step } from "@queuert/sync-async";
 
+import type { AnyJobOutcome, AnyJobOutcomeFields } from "../attempt/attempt-handler.types.ts";
 import { type Chain, mapStateChainToChain } from "../entities/chain.ts";
 import type { DeduplicationOptions } from "../entities/deduplication.ts";
 import type { ScheduleOptions } from "../entities/schedule.ts";
@@ -347,41 +348,6 @@ const reportCompletedJob = syncAsync(function* (
   reportUnblockedJobs(helpers, { chain, dependentJobs, txCtx });
 });
 
-type CompleteChainOptions = {
-  job: StateJob;
-  output: unknown;
-  txCtx: BaseTxContext;
-  attemptToken: string | null;
-  workerId: string | null;
-};
-
-export const runCompleteChain: SyncAsync<
-  [helpers: Helpers, options: CompleteChainOptions],
-  StateJob | undefined
-> = syncAsync(function* (
-  helpers: Helpers,
-  { job, output, txCtx, attemptToken, workerId }: CompleteChainOptions,
-) {
-  const encodedOutput = helpers.jobTypes.encodeOutput(job.typeName, output);
-
-  const [completed] = yield* step(
-    helpers.stateAdapter.completeJobs({
-      txCtx,
-      jobs: [
-        {
-          jobId: job.id,
-          output: encodedOutput,
-          attemptToken: attemptToken ?? undefined,
-          workerId: workerId ?? undefined,
-        },
-      ],
-    }),
-  );
-  if (completed === undefined) return undefined;
-  yield* reportCompletedJob.steps(helpers, { completed, encodedOutput, txCtx });
-  return completed;
-});
-
 const reportUnblockedJobs = (
   helpers: Helpers,
   {
@@ -414,110 +380,202 @@ const reportUnblockedJobs = (
   }
 };
 
-type ContinueChainOptions = {
+type OutcomeItem = {
   job: StateJob;
-  continueWith: AnyNewJob;
-  txCtx: BaseTxContext;
-  attemptToken: string | null;
-  workerId: string | null;
+  outcome: AnyJobOutcome;
+  attemptToken?: string;
+  workerId?: string;
 };
 
-export const runContinueChain: SyncAsync<
-  [helpers: Helpers, options: ContinueChainOptions],
-  (StateJob & { continuation: StateJobInfo }) | undefined
-> = syncAsync(function* (
-  helpers: Helpers,
-  { job, continueWith, txCtx, attemptToken, workerId }: ContinueChainOptions,
-) {
-  helpers.jobTypes.validateContinueWith(job.typeName, {
-    typeName: continueWith.typeName,
-    input: continueWith.input,
-  });
+export type OutcomeJob = StateJob & { continuation?: StateJobInfo };
 
-  const prepared = prepareJobs(helpers, [continueWith], job);
-  const [{ jobSpan }] = prepared;
+export const parseJobOutcome = (options: AnyJobOutcomeFields, method: string): AnyJobOutcome => {
+  const outcomeCount =
+    Number("output" in options) +
+    Number("continueWith" in options) +
+    Number("reschedule" in options);
+  if (outcomeCount !== 1) {
+    throw new Error(`${method} requires exactly one of output, continueWith or reschedule`);
+  }
+  if (options.reason !== undefined && !("reschedule" in options)) {
+    throw new Error(`${method} accepts reason only together with reschedule`);
+  }
+  if ("reschedule" in options) return { reschedule: options.reschedule!, reason: options.reason };
+  if ("continueWith" in options) return { continueWith: options.continueWith! };
+  return { output: options.output };
+};
+
+const completeOutputItems = syncAsync(function* (
+  helpers: Helpers,
+  {
+    items,
+    encodedOutputs,
+    txCtx,
+  }: { items: OutcomeItem[]; encodedOutputs: unknown[]; txCtx: BaseTxContext },
+) {
+  const completedJobs = yield* step(
+    helpers.stateAdapter.completeJobs({
+      txCtx,
+      jobs: items.map(({ job, attemptToken, workerId }, index) => ({
+        jobId: job.id,
+        output: encodedOutputs[index],
+        attemptToken,
+        workerId,
+      })),
+    }),
+  );
+  for (const [index, completed] of completedJobs.entries()) {
+    if (completed === undefined) continue;
+    yield* reportCompletedJob.steps(helpers, {
+      completed,
+      encodedOutput: encodedOutputs[index],
+      txCtx,
+    });
+  }
+  return completedJobs;
+});
+
+const continueItems = syncAsync(function* (
+  helpers: Helpers,
+  { items, txCtx }: { items: OutcomeItem[]; txCtx: BaseTxContext },
+) {
+  const prepared = items.flatMap(({ job, outcome }) => {
+    const { continueWith } = outcome as { continueWith: AnyNewJob };
+    helpers.jobTypes.validateContinueWith(job.typeName, {
+      typeName: continueWith.typeName,
+      input: continueWith.input,
+    });
+    return prepareJobs(helpers, [continueWith], job);
+  });
   try {
-    const [locked] = yield* lockBlockerChains.steps(helpers, { items: prepared, txCtx });
-    const [continued] = yield* step(
+    const locked = yield* lockBlockerChains.steps(helpers, { items: prepared, txCtx });
+    const continuedJobs = yield* step(
       helpers.stateAdapter.continueJobs({
         txCtx,
-        jobs: [
-          {
-            id: locked.id,
-            typeName: locked.entry.typeName,
-            input: locked.encodedInput,
-            schedule: locked.entry.schedule,
-            traceContext: locked.jobSpan?.traceContext ?? null,
-            continueFromId: job.id,
-            attemptToken: attemptToken ?? undefined,
-            workerId: workerId ?? undefined,
-          },
-        ],
+        jobs: locked.map((item, index) => ({
+          id: item.id,
+          typeName: item.entry.typeName,
+          input: item.encodedInput,
+          schedule: item.entry.schedule,
+          traceContext: item.jobSpan?.traceContext ?? null,
+          continueFromId: items[index].job.id,
+          attemptToken: items[index].attemptToken,
+          workerId: items[index].workerId,
+        })),
       }),
     );
-    if (!continued) {
-      const error = new JobNotFoundError(`Job ${job.id} not found or already completed`, {
-        jobId: job.id,
-      });
-      jobSpan?.end({ status: "error", error });
-      return undefined;
-    }
 
     const created = yield* addJobsBlockers.steps(helpers, {
       txCtx,
-      items: [
-        {
-          ...locked,
-          job: continued.continuation,
-          chain: continued.chain,
-          deduplicated: false,
-        },
-      ],
+      items: locked.flatMap((item, index) => {
+        const continued = continuedJobs[index];
+        return continued === undefined
+          ? []
+          : [{ ...item, job: continued.continuation, chain: continued.chain, deduplicated: false }];
+      }),
     });
     reportCreatedJobs(helpers, created, { isChainHead: false, txCtx });
 
-    const [{ job: continuation }] = created;
-    const completed: StateJob & { continuation: StateJobInfo } = { ...continued, continuation };
-    helpers.stateAdapter.onTransactionCommit(txCtx, () => {
-      helpers.observabilityHelper.jobCompleted(completed, {
-        output: null,
-        continuedWith: continuation,
+    const continuationById = new Map(created.map(({ job }) => [job.id, job]));
+    return continuedJobs.map((continued, index) => {
+      if (continued === undefined) {
+        locked[index].jobSpan?.end({
+          status: "error",
+          error: new JobNotFoundError(`Job ${items[index].job.id} not found or already completed`, {
+            jobId: items[index].job.id,
+          }),
+        });
+        return undefined;
+      }
+      const completed = {
+        ...continued,
+        continuation: continuationById.get(continued.continuation.id)!,
+      };
+      helpers.stateAdapter.onTransactionCommit(txCtx, () => {
+        helpers.observabilityHelper.jobCompleted(completed, {
+          output: null,
+          continuedWith: completed.continuation,
+        });
       });
+      return completed;
     });
-    return completed;
   } catch (error) {
-    jobSpan?.end({ status: "error", error });
+    for (const { jobSpan } of prepared) {
+      jobSpan?.end({ status: "error", error });
+    }
     throw error;
   }
 });
 
-type RescheduleJobsOptions = {
-  jobs: { jobId: string; schedule?: ScheduleOptions; reason?: string; attemptToken?: string }[];
-  txCtx: BaseTxContext;
-};
-
-export const runRescheduleJobs: SyncAsync<
-  [helpers: Helpers, options: RescheduleJobsOptions],
-  (StateJob | undefined)[]
-> = syncAsync(function* (helpers: Helpers, { jobs, txCtx }: RescheduleJobsOptions) {
+const rescheduleItems = syncAsync(function* (
+  helpers: Helpers,
+  { items, txCtx }: { items: OutcomeItem[]; txCtx: BaseTxContext },
+) {
   const rescheduledJobs = yield* step(
     helpers.stateAdapter.rescheduleJobs({
       txCtx,
-      jobs: jobs.map((job) =>
-        job.reason === undefined ? job : { ...job, reason: truncate(job.reason) },
-      ),
+      jobs: items.map(({ job, outcome, attemptToken }) => {
+        const { reschedule, reason } = outcome as { reschedule: ScheduleOptions; reason?: string };
+        return {
+          jobId: job.id,
+          schedule: reschedule,
+          reason: reason === undefined ? undefined : truncate(reason),
+          attemptToken,
+        };
+      }),
     }),
   );
-  reportRescheduledJobs(helpers, { rescheduledJobs, txCtx });
+  reportRescheduledJobs(helpers, {
+    rescheduledJobs,
+    scheduledJobs: rescheduledJobs.filter((job) => job?.status === "pending"),
+    txCtx,
+  });
   return rescheduledJobs;
+});
+
+export const runApplyJobOutcomes: SyncAsync<
+  [helpers: Helpers, options: { items: OutcomeItem[]; txCtx: BaseTxContext }],
+  (OutcomeJob | undefined)[]
+> = syncAsync(function* (
+  helpers: Helpers,
+  { items, txCtx }: { items: OutcomeItem[]; txCtx: BaseTxContext },
+) {
+  const outputItems = items.filter(({ outcome }) => "output" in outcome);
+  const continueWithItems = items.filter(({ outcome }) => "continueWith" in outcome);
+  const reschedulesItems = items.filter(({ outcome }) => "reschedule" in outcome);
+  const encodedOutputs = outputItems.map(({ job, outcome }) =>
+    helpers.jobTypes.encodeOutput(job.typeName, (outcome as { output: unknown }).output),
+  );
+
+  const written: (OutcomeJob | undefined)[] = [
+    ...(continueWithItems.length > 0
+      ? yield* continueItems.steps(helpers, { items: continueWithItems, txCtx })
+      : []),
+    ...(outputItems.length > 0
+      ? yield* completeOutputItems.steps(helpers, { items: outputItems, encodedOutputs, txCtx })
+      : []),
+    ...(reschedulesItems.length > 0
+      ? yield* rescheduleItems.steps(helpers, { items: reschedulesItems, txCtx })
+      : []),
+  ];
+  const writtenById = new Map(written.flatMap((job) => (job === undefined ? [] : [[job.id, job]])));
+  return items.map(({ job }) => writtenById.get(job.id));
 });
 
 const reportRescheduledJobs = (
   helpers: Helpers,
-  { rescheduledJobs, txCtx }: { rescheduledJobs: (StateJob | undefined)[]; txCtx: BaseTxContext },
+  {
+    rescheduledJobs,
+    scheduledJobs,
+    txCtx,
+  }: {
+    rescheduledJobs: (StateJob | undefined)[];
+    scheduledJobs: (StateJob | undefined)[];
+    txCtx: BaseTxContext;
+  },
 ): void => {
   notifyAfterTransaction(helpers, txCtx, {
-    jobsScheduled: rescheduledJobs.flatMap((job) => (job === undefined ? [] : [job.typeName])),
+    jobsScheduled: scheduledJobs.flatMap((job) => (job === undefined ? [] : [job.typeName])),
   });
   for (const job of rescheduledJobs) {
     if (job === undefined) continue;

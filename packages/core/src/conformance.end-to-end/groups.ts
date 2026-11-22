@@ -1,5 +1,11 @@
 import type { StateAdapterConformanceContext } from "../conformance.state-adapter/types.ts";
 import type { ConformanceGroup } from "../conformance/runner.ts";
+import {
+  applyJobOutcomesConcurrentTransactionsGroup,
+  applyJobOutcomesGroup,
+  applyJobOutcomesNotifyConcurrentTransactionsGroup,
+  applyJobOutcomesSavepointGroup,
+} from "./cases/apply-job-outcomes.ts";
 import { awaitChainGroup } from "./cases/await-chain.ts";
 import {
   blockerChainsConcurrentTransactionsGroup,
@@ -33,10 +39,6 @@ import {
   processNotifyGroup,
   processSavepointGroup,
 } from "./cases/process.ts";
-import {
-  rescheduleJobGroup,
-  rescheduleJobNotifyConcurrentTransactionsGroup,
-} from "./cases/reschedule-job.ts";
 import { schedulingGroup } from "./cases/scheduling.ts";
 import {
   stateResilienceConcurrentTransactionsGroup,
@@ -46,12 +48,6 @@ import {
 } from "./cases/state-resilience.ts";
 import { validationGroup } from "./cases/validation.ts";
 import { workerGroup } from "./cases/worker.ts";
-import {
-  workerlessCompletionConcurrentTransactionsGroup,
-  workerlessCompletionConcurrentTransactionsLockWaitGroup,
-  workerlessCompletionGroup,
-  workerlessCompletionNotifyConcurrentTransactionsGroup,
-} from "./cases/workerless-completion.ts";
 import type {
   EndToEndFlakyDbContext,
   EndToEndNotifyContext,
@@ -66,8 +62,7 @@ export const endToEndBaseGroups: ConformanceGroup<StateAdapterConformanceContext
   deduplicationGroup,
   deletionGroup,
   awaitChainGroup,
-  workerlessCompletionGroup,
-  rescheduleJobGroup,
+  applyJobOutcomesGroup,
   schedulingGroup,
   validationGroup,
   clientQueriesGroup,
@@ -94,7 +89,7 @@ export const endToEndNotifyGroups: ConformanceGroup<EndToEndNotifyContext>[] = [
 export const endToEndConcurrentTransactionGroups: ConformanceGroup<StateAdapterConformanceContext>[] =
   [
     blockerChainsConcurrentTransactionsGroup,
-    workerlessCompletionConcurrentTransactionsGroup,
+    applyJobOutcomesConcurrentTransactionsGroup,
     stateResilienceConcurrentTransactionsGroup,
   ];
 
@@ -102,18 +97,15 @@ export const endToEndNotifyConcurrentTransactionGroups: ConformanceGroup<StateAd
   [
     blockerChainsNotifyConcurrentTransactionsGroup,
     deletionNotifyConcurrentTransactionsGroup,
-    workerlessCompletionNotifyConcurrentTransactionsGroup,
-    rescheduleJobNotifyConcurrentTransactionsGroup,
+    applyJobOutcomesNotifyConcurrentTransactionsGroup,
   ];
 
 export const endToEndConcurrentTransactionLockWaitGroups: ConformanceGroup<StateAdapterConformanceContext>[] =
-  [
-    workerlessCompletionConcurrentTransactionsLockWaitGroup,
-    clientQueriesLockedReadsConcurrentTransactionsLockWaitGroup,
-  ];
+  [clientQueriesLockedReadsConcurrentTransactionsLockWaitGroup];
 
 export const endToEndSavepointGroups: ConformanceGroup<EndToEndSavepointContext>[] = [
   processSavepointGroup,
+  applyJobOutcomesSavepointGroup,
   clientQueriesLockedReadsSavepointGroup,
 ];
 

@@ -1,3 +1,5 @@
+import type { JobStatus } from "./entities/job.types.ts";
+
 /** Thrown when a job ID fails the state adapter's `validateJobId` check. */
 export class InvalidJobIdError extends Error {
   /** The ID that failed validation. */
@@ -65,7 +67,7 @@ export class JobNotFoundError extends Error {
 }
 
 /**
- * Thrown when {@link Client.rescheduleJobs | rescheduleJobs} targets any job that does not exist.
+ * Thrown when {@link Client.applyJobOutcomes | applyJobOutcomes} targets any job that does not exist.
  * Batch variant of {@link JobNotFoundError}, listing every input id with no matching job.
  */
 export class JobsNotFoundError extends Error {
@@ -150,7 +152,7 @@ export class SchemaFencedError extends Error {
   }
 }
 
-/** Thrown when attempting to complete an already-completed job. */
+/** Thrown when completing, continuing or rescheduling a job that is already completed. */
 export class JobAlreadyCompletedError extends Error {
   /** The job that was already completed. */
   readonly jobId: string;
@@ -162,29 +164,17 @@ export class JobAlreadyCompletedError extends Error {
   }
 }
 
-/** Thrown when {@link Client.rescheduleJob | rescheduleJob} targets a job that is not `pending`. */
-export class JobNotReschedulableError extends Error {
-  /** The job that could not be rescheduled. */
-  readonly jobId: string;
-
-  constructor(message: string, options: { jobId: string; cause?: unknown }) {
-    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
-    this.name = "JobNotReschedulableError";
-    this.jobId = options.jobId;
-  }
-}
-
 /**
- * Thrown when {@link Client.rescheduleJobs | rescheduleJobs} targets any job that is not
- * `pending`. Batch variant of {@link JobNotReschedulableError}, listing every offending input id.
+ * Thrown when {@link Client.applyJobOutcomes | applyJobOutcomes} targets any job that is already completed.
+ * Batch variant of {@link JobAlreadyCompletedError}, listing every offending input id.
  */
-export class JobsNotReschedulableError extends Error {
-  /** The input ids whose status is not `pending`. */
+export class JobsAlreadyCompletedError extends Error {
+  /** The input ids whose job is already completed. */
   readonly jobIds: readonly string[];
 
   constructor(message: string, options: { jobIds: readonly string[]; cause?: unknown }) {
     super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
-    this.name = "JobsNotReschedulableError";
+    this.name = "JobsAlreadyCompletedError";
     this.jobIds = options.jobIds;
   }
 }
@@ -201,6 +191,60 @@ export class WaitChainTimeoutError extends Error {
     this.name = "WaitChainTimeoutError";
     this.chainId = options.chainId;
     this.timeoutMs = options.timeoutMs;
+  }
+}
+
+/**
+ * Thrown when {@link Client.applyJobOutcome | applyJobOutcome} is passed a job read earlier whose
+ * `status` no longer matches the stored job: it changed since the read.
+ */
+export class JobStatusMismatchError extends Error {
+  /** The job whose status changed. */
+  readonly jobId: string;
+  /** The status of the job that was passed. */
+  readonly expectedStatus: JobStatus;
+  /** The status of the stored job. */
+  readonly actualStatus: JobStatus;
+
+  constructor(
+    message: string,
+    options: { jobId: string; expectedStatus: JobStatus; actualStatus: JobStatus; cause?: unknown },
+  ) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "JobStatusMismatchError";
+    this.jobId = options.jobId;
+    this.expectedStatus = options.expectedStatus;
+    this.actualStatus = options.actualStatus;
+  }
+}
+
+/**
+ * Thrown when {@link Client.applyJobOutcomes | applyJobOutcomes} is passed any job read earlier
+ * whose `status` no longer matches the stored job. Batch variant of {@link JobStatusMismatchError},
+ * listing every offending input id.
+ */
+export class JobsStatusMismatchError extends Error {
+  /** The input ids whose status changed. */
+  readonly jobIds: readonly string[];
+  /** The status passed for each job in `jobIds`, in the same order. */
+  readonly expectedStatuses: readonly JobStatus[];
+  /** The stored status of each job in `jobIds`, in the same order. */
+  readonly actualStatuses: readonly JobStatus[];
+
+  constructor(
+    message: string,
+    options: {
+      jobIds: readonly string[];
+      expectedStatuses: readonly JobStatus[];
+      actualStatuses: readonly JobStatus[];
+      cause?: unknown;
+    },
+  ) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "JobsStatusMismatchError";
+    this.jobIds = options.jobIds;
+    this.expectedStatuses = options.expectedStatuses;
+    this.actualStatuses = options.actualStatuses;
   }
 }
 
@@ -223,8 +267,10 @@ export class JobTypeMismatchError extends Error {
 }
 
 /**
- * Thrown when {@link Client.getJobs | getJobs} narrows by a `typeName` that any found job does not
- * have. Batch variant of {@link JobTypeMismatchError}, listing every offending input id.
+ * Thrown when {@link Client.applyJobOutcomes | applyJobOutcomes} is passed any job whose
+ * `typeName` differs from the stored job's, or when {@link Client.getJobs | getJobs} narrows by a
+ * `typeName` that any found job does not have. Batch variant of {@link JobTypeMismatchError}, listing
+ * every offending input id.
  */
 export class JobsTypeMismatchError extends Error {
   /** The input ids whose type differs. */
@@ -418,6 +464,26 @@ export class JobTypeValidationError extends Error {
 }
 
 export const toSingleJobError = (error: unknown, jobId: string): unknown => {
+  if (error instanceof JobsNotFoundError) {
+    return new JobNotFoundError(`Job with id ${jobId} not found`, { jobId, cause: error });
+  }
+  if (error instanceof JobsAlreadyCompletedError) {
+    return new JobAlreadyCompletedError(
+      `Cannot apply an outcome to job ${jobId}: job is already completed`,
+      { jobId, cause: error },
+    );
+  }
+  if (error instanceof JobsStatusMismatchError) {
+    return new JobStatusMismatchError(
+      `Expected job ${jobId} to have status "${error.expectedStatuses[0]}" but found "${error.actualStatuses[0]}"`,
+      {
+        jobId,
+        expectedStatus: error.expectedStatuses[0],
+        actualStatus: error.actualStatuses[0],
+        cause: error,
+      },
+    );
+  }
   if (error instanceof JobsTypeMismatchError) {
     return new JobTypeMismatchError(
       `Expected job ${jobId} to have type "${error.expectedTypeNames[0]}" but found "${error.actualTypeNames[0]}"`,

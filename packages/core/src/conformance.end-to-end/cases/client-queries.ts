@@ -846,18 +846,10 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
 
         yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...order,
-              handler: ({ job, completeJob }) => {
-                if (job.typeName === "order") {
-                  return completeJob(job, ({ complete }) =>
-                    complete({
-                      continueWith: { typeName: "order_fulfill", input: { orderId: "o1" } },
-                    }),
-                  );
-                }
-              },
+              job: { id: order.id, typeName: "order" },
+              continueWith: { typeName: "order_fulfill", input: { orderId: "o1" } },
             }),
           ),
         );
@@ -959,18 +951,10 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
 
         yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...order,
-              handler: ({ job, completeJob }) => {
-                if (job.typeName === "order") {
-                  return completeJob(job, ({ complete }) =>
-                    complete({
-                      continueWith: { typeName: "order_fulfill", input: { orderId: "o1" } },
-                    }),
-                  );
-                }
-              },
+              job: { id: order.id, typeName: "order" },
+              continueWith: { typeName: "order_fulfill", input: { orderId: "o1" } },
             }),
           ),
         );
@@ -2634,18 +2618,10 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         );
         yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...order,
-              handler: ({ job, completeJob }) => {
-                if (job.typeName === "order") {
-                  return completeJob(job, ({ complete }) =>
-                    complete({
-                      continueWith: { typeName: "order_fulfill", input: { orderId: order.id } },
-                    }),
-                  );
-                }
-              },
+              job: { id: order.id, typeName: "order" },
+              continueWith: { typeName: "order_fulfill", input: { orderId: order.id } },
             }),
           ),
         );
@@ -2660,11 +2636,10 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         );
         yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...notification,
-              handler: ({ job, completeJob }) =>
-                completeJob(job, ({ complete }) => complete({ output: { sent: true } })),
+              job: { id: notification.id, typeName: "notification" },
+              output: { sent: true },
             }),
           ),
         );
@@ -4316,28 +4291,18 @@ export const clientQueriesLockedReadsGroup: ConformanceGroup<StateAdapterConform
             }),
           ),
         );
-        yield* step(
+        const continued = yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...orderChain,
-              handler: ({ job, completeJob }) => {
-                if (job.typeName !== "order") throw new Error(`Unexpected job ${job.typeName}`);
-                return completeJob(job, ({ complete }) =>
-                  complete({
-                    continueWith: { typeName: "order_fulfill", input: { orderId: orderChain.id } },
-                  }),
-                );
-              },
+              job: { id: orderChain.id, typeName: "order" },
+              continueWith: { typeName: "order_fulfill", input: { orderId: orderChain.id } },
             }),
           ),
         );
-        const {
-          items: [, continuation],
-        } = yield* step(client.listChainJobs({ chainId: orderChain.id }));
         const missingId = "00000000-0000-0000-0000-000000000000";
 
-        const unlockedJob = yield* step(client.getJob({ id: continuation.id }));
+        const unlockedJob = yield* step(client.getJob({ id: continued.continuedTo.id }));
         const unlockedJobs = yield* step(
           client.getJobs({ ids: [orderChain.id, notificationChain.id, missingId] }),
         );
@@ -4356,7 +4321,9 @@ export const clientQueriesLockedReadsGroup: ConformanceGroup<StateAdapterConform
               stateAdapter,
               syncAsync(function* () {
                 assert.deepEqual(
-                  yield* step(client.getJob({ ...txCtx, id: continuation.id, lock: "exclusive" })),
+                  yield* step(
+                    client.getJob({ ...txCtx, id: continued.continuedTo.id, lock: "exclusive" }),
+                  ),
                   unlockedJob,
                 );
                 assert.deepEqual(
@@ -4404,10 +4371,10 @@ export const clientQueriesLockedReadsGroup: ConformanceGroup<StateAdapterConform
           ),
         );
 
-        assert.equal(unlockedTail!.id, continuation.id);
+        assert.equal(unlockedTail!.id, continued.continuedTo.id);
         assert.deepEqual(
           unlockedTails.map((job) => job?.id),
-          [continuation.id, notificationChain.id, undefined],
+          [continued.continuedTo.id, notificationChain.id, undefined],
         );
       }),
     },
@@ -4522,7 +4489,7 @@ export const clientQueriesLockedReadsConcurrentTransactionsLockWaitGroup: Confor
     name: "client-queries-locked-reads",
     cases: [
       {
-        name: "a locked getJob blocks a concurrent rescheduleJob until commit",
+        name: "a locked getJob blocks a concurrent applyJobOutcome until commit",
         run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
           const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
           const notifyAdapter = yield* resource(
@@ -4553,7 +4520,11 @@ export const clientQueriesLockedReadsConcurrentTransactionsLockWaitGroup: Confor
 
           const waiterTransaction = Promise.resolve(
             stateAdapter.withTransaction(async (txCtx) =>
-              client.rescheduleJob({ ...txCtx, id: notificationChain.id }),
+              client.applyJobOutcome({
+                ...txCtx,
+                job: { id: notificationChain.id },
+                reschedule: { afterMs: 0 },
+              }),
             ),
           );
 
@@ -4628,7 +4599,7 @@ export const clientQueriesLockedReadsConcurrentTransactionsLockWaitGroup: Confor
         }),
       },
       {
-        name: "a locked getChain blocks a concurrent completeChain until commit",
+        name: "a locked getChain blocks a concurrent applyJobOutcome of its head until commit",
         run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
           const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
           const notifyAdapter = yield* resource(
@@ -4659,11 +4630,10 @@ export const clientQueriesLockedReadsConcurrentTransactionsLockWaitGroup: Confor
 
           const waiterTransaction = Promise.resolve(
             stateAdapter.withTransaction(async (txCtx) =>
-              client.completeChain({
+              client.applyJobOutcome({
                 ...txCtx,
-                ...notificationChain,
-                handler: ({ job, completeJob }) =>
-                  completeJob(job, ({ complete }) => complete({ output: { sent: true } })),
+                job: { id: notificationChain.id, typeName: "notification" },
+                output: { sent: true },
               }),
             ),
           );
@@ -4739,7 +4709,7 @@ export const clientQueriesLockedReadsConcurrentTransactionsLockWaitGroup: Confor
         }),
       },
       {
-        name: "a locked getChainTailJob blocks a concurrent completeChain of the tail until commit",
+        name: "a locked getChainTailJob blocks a concurrent applyJobOutcome of the tail until commit",
         run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
           const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
           const notifyAdapter = yield* resource(
@@ -4758,22 +4728,12 @@ export const clientQueriesLockedReadsConcurrentTransactionsLockWaitGroup: Confor
               }),
             ),
           );
-          yield* step(
+          const continued = yield* step(
             stateAdapter.withTransaction((txCtx) =>
-              client.completeChain({
+              client.applyJobOutcome({
                 ...txCtx,
-                ...orderChain,
-                handler: ({ job, completeJob }) => {
-                  if (job.typeName !== "order") throw new Error(`Unexpected job ${job.typeName}`);
-                  return completeJob(job, ({ complete }) =>
-                    complete({
-                      continueWith: {
-                        typeName: "order_fulfill",
-                        input: { orderId: orderChain.id },
-                      },
-                    }),
-                  );
-                },
+                job: { id: orderChain.id, typeName: "order" },
+                continueWith: { typeName: "order_fulfill", input: { orderId: orderChain.id } },
               }),
             ),
           );
@@ -4789,16 +4749,10 @@ export const clientQueriesLockedReadsConcurrentTransactionsLockWaitGroup: Confor
 
           const waiterTransaction = Promise.resolve(
             stateAdapter.withTransaction(async (txCtx) =>
-              client.completeChain({
+              client.applyJobOutcome({
                 ...txCtx,
-                ...orderChain,
-                handler: ({ job, completeJob }) => {
-                  if (job.typeName !== "order_fulfill")
-                    throw new Error(`Unexpected job ${job.typeName}`);
-                  return completeJob(job, ({ complete }) =>
-                    complete({ output: { shipped: true } }),
-                  );
-                },
+                job: { id: continued.continuedTo.id, typeName: "order_fulfill" },
+                output: { shipped: true },
               }),
             ),
           );
@@ -4924,15 +4878,7 @@ export const clientQueriesLockedReadsConcurrentTransactionsLockWaitGroup: Confor
             if (job?.typeName !== "order_fulfill" || job.status === "completed") {
               throw new Error(`unexpected tail ${job?.typeName} ${job?.status}`);
             }
-            return client.completeChain({
-              ...txCtx,
-              ...orderChain,
-              handler: ({ job: tail, completeJob }) => {
-                if (tail.typeName !== "order_fulfill")
-                  throw new Error(`Unexpected job ${tail.typeName}`);
-                return completeJob(tail, ({ complete }) => complete({ output: { shipped: true } }));
-              },
-            });
+            return client.applyJobOutcome({ ...txCtx, job, output: { shipped: true } });
           });
           assert.equal(
             await raceWithSleep(

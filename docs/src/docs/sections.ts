@@ -35,7 +35,7 @@ export const siteSections: SiteSection[] = [
           "guides/scheduling",
           "guides/deduplication",
           "guides/chain-awaiting",
-          "guides/workerless-completion",
+          "guides/workerless-outcomes",
           "guides/chain-deletion",
           "guides/queries",
           "guides/cleanup",

@@ -109,18 +109,22 @@ ${handler(`            return complete({ ...txCtx, output: null });`)}
   return `{\n${processors.join(",\n")},\n  }`;
 };
 
-const generateCompleteChainCall = (defs: JobTypeDef[], entryDef: JobTypeDef): string => {
+const generateApplyJobOutcomeCall = (defs: JobTypeDef[], entryDef: JobTypeDef): string => {
   const typeName = entryDef.name;
+  const lockedTailRead = `const tail = await client.getChainTailJob({
+  ...txCtx,
+  chainId: chain.id,
+  chainTypeName: "${typeName}",
+  lock: "exclusive",
+});
+if (tail?.typeName !== "${typeName}" || tail.status === "completed") throw new Error("unexpected");`;
 
   if (!entryDef.continueWith) {
-    return `const completed = await client.completeChain({
+    return `${lockedTailRead}
+const completed = await client.applyJobOutcome({
   ...txCtx,
-  typeName: "${typeName}",
-  id: chain.id,
-  handler: async ({ job, completeJob }) => {
-    if (job.typeName !== "${typeName}") throw new Error("unexpected");
-    return completeJob(job, async ({ complete }) => complete({ output: ${typeToValue(entryDef.output ?? "{ result: string }")} }));
-  },
+  job: tail,
+  output: ${typeToValue(entryDef.output ?? "{ result: string }")},
 });`;
   }
 
@@ -139,29 +143,20 @@ const generateCompleteChainCall = (defs: JobTypeDef[], entryDef: JobTypeDef): st
     });
     const blockerArray = targetDef.blockers.map((_, i) => `b${i}`).join(", ");
 
-    return `const completed = await client.completeChain({
+    return `${lockedTailRead}
+${blockerStarts.join("\n")}
+const completed = await client.applyJobOutcome({
   ...txCtx,
-  typeName: "${typeName}",
-  id: chain.id,
-  handler: async ({ job, completeJob }) => {
-    if (job.typeName !== "${typeName}") throw new Error("unexpected");
-    await completeJob(job, async ({ complete, ...txCtx }) => {
-${blockerStarts.map((s) => `      ${s}`).join("\n")}
-      return complete({ continueWith: { typeName: "${firstTarget}", input: ${targetInput}, blockers: [${blockerArray}] } });
-    });
-  },
+  job: tail,
+  continueWith: { typeName: "${firstTarget}", input: ${targetInput}, blockers: [${blockerArray}] },
 });`;
   }
 
-  return `const completed = await client.completeChain({
+  return `${lockedTailRead}
+const completed = await client.applyJobOutcome({
   ...txCtx,
-  typeName: "${typeName}",
-  id: chain.id,
-  handler: async ({ job, completeJob }) => {
-    if (job.typeName !== "${typeName}") throw new Error("unexpected");
-    await completeJob(job, async ({ complete }) =>
-      complete({ continueWith: { typeName: "${firstTarget}", input: ${targetInput} } }));
-  },
+  job: tail,
+  continueWith: { typeName: "${firstTarget}", input: ${targetInput} },
 });`;
 };
 
@@ -179,7 +174,7 @@ await stateAdapter.withTransaction(async (txCtx) => {
     const job = await client.getJob({ typeName: "${typeName}", id: chain.id });
     const chains = await client.listChains({ typeName: "${typeName}" });
     const jobs = await client.listJobs({ typeName: "${typeName}" });
-    ${generateCompleteChainCall(defs, entryDef)}
+    ${generateApplyJobOutcomeCall(defs, entryDef)}
     void fetchedChain;
     void job;
     void chains;

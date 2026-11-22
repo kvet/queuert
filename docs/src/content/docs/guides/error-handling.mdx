@@ -59,7 +59,7 @@ For explicit control over when the next attempt runs, see [Rescheduling from a H
 
 ## lastAttemptError
 
-When the last attempt failed, `job.lastAttemptError` contains its serialized error and `job.consecutiveFailures` is above 0. It is `null` on the first attempt and after an attempt that ended without failing, such as `complete({ reschedule })`. A client `rescheduleJob` runs no attempt, so it leaves the error in place. The handler above records each error; use it for logging or to adjust how the next attempt behaves. When the previous attempt was reclaimed because its worker lost its lease, stopped, or no longer ran it, it holds a serialized `JobAttemptReclaimedError`.
+When the last attempt failed, `job.lastAttemptError` contains its serialized error and `job.consecutiveFailures` is above 0. It is `null` on the first attempt and after an attempt that ended without failing, such as `complete({ reschedule })`. A client `applyJobOutcome` with `reschedule` runs no attempt, so it leaves the error in place. The handler above records each error; use it for logging or to adjust how the next attempt behaves. When the previous attempt was reclaimed because its worker lost its lease, stopped, or no longer ran it, it holds a serialized `JobAttemptReclaimedError`.
 
 | Thrown value   | Stored as                                                                   |
 | -------------- | --------------------------------------------------------------------------- |

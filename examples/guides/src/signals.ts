@@ -94,15 +94,10 @@ await pollingStarted;
 
 // #region external-completion
 await stateAdapter.withTransaction(async (txCtx) =>
-  client.completeChain({
+  client.applyJobOutcome({
     ...txCtx,
-    typeName: "await-payment-confirmation",
-    id: payment.id,
-    handler: async ({ job, completeJob }) => {
-      await completeJob(job, async ({ complete }) =>
-        complete({ output: { confirmedBy: "webhook" } }),
-      );
-    },
+    job: { id: payment.id, typeName: "await-payment-confirmation" },
+    output: { confirmedBy: "webhook" },
   }),
 );
 // #endregion

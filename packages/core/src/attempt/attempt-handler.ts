@@ -6,7 +6,7 @@ import {
   type AnyAttemptMiddleware,
   runHandlerMiddlewareChain,
 } from "../attempt-middleware/attempt-middleware.ts";
-import { runCompleteChain, runContinueChain, runRescheduleJobs } from "../client/implementation.ts";
+import { parseJobOutcome, runApplyJobOutcomes } from "../client/implementation.ts";
 import { type Helpers, runInMode } from "../client/setup-helpers.ts";
 import { type BackoffConfig, calculateBackoffMs } from "../entities/backoff.ts";
 import { mapStateChainToChain } from "../entities/chain.ts";
@@ -73,43 +73,17 @@ const createAttemptWrites = (
   const complete = syncAsync(function* (options: AnyCompleteOptions) {
     closed.throwIfTripped("complete cannot be called after the attempt handler has ended");
     const { output, continueWith, reschedule, reason, ...txCtxFields } = options;
-    const outcomeCount =
-      Number("output" in options) +
-      Number("continueWith" in options) +
-      Number("reschedule" in options);
-    if (outcomeCount !== 1) {
-      throw new Error("complete requires exactly one of output, continueWith or reschedule");
-    }
-    if (reason !== undefined && !("reschedule" in options)) {
-      throw new Error("complete accepts reason only together with reschedule");
-    }
+    const outcome = parseJobOutcome(options, "complete");
     const txCtx = requireTxCtx(helpers.stateAdapter, txCtxFields, "complete");
     inProgress.throwIfTripped();
     written.throwIfTripped();
 
     inProgress.trip();
     try {
-      const stateJobWritten: CompleteWrite["stateJob"] | undefined =
-        "reschedule" in options
-          ? (yield* runRescheduleJobs.steps(helpers, {
-              txCtx,
-              jobs: [{ jobId: stateJob.id, schedule: reschedule, reason, attemptToken }],
-            }))[0]
-          : continueWith === undefined
-            ? yield* runCompleteChain.steps(helpers, {
-                job: stateJob,
-                output,
-                txCtx,
-                attemptToken,
-                workerId,
-              })
-            : yield* runContinueChain.steps(helpers, {
-                job: stateJob,
-                continueWith,
-                txCtx,
-                attemptToken,
-                workerId,
-              });
+      const [stateJobWritten] = yield* runApplyJobOutcomes.steps(helpers, {
+        txCtx,
+        items: [{ job: stateJob, outcome, attemptToken, workerId }],
+      });
       if (stateJobWritten === undefined) {
         throw yield* readLossError.steps(txCtx);
       }

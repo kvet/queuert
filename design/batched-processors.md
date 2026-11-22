@@ -31,7 +31,7 @@ createProcessors({
             complete({
               tx,
               txHooks,
-              outcomes: results.map((r) =>
+              items: results.map((r) =>
                 r.ok
                   ? { output: { messageId: r.id } }
                   : r.throttled
@@ -50,7 +50,7 @@ createProcessors({
 - `batchLimit` is the only opt-in. Absent or `1` = today's behavior.
 - With `batchLimit > 1` the handler receives `jobs: RunningJob[]` instead of `job: RunningJob` — length `1..batchLimit`, all one `typeName`, blockers preloaded.
 - `complete` is per batch, not per job, and is called in the user's transaction like the single-job `complete` (txCtx and `txHooks` required). `signal` is one signal for the batch.
-- `complete` takes `outcomes` aligned with `jobs` (each one of `output` / `continueWith` / `reschedule` / `fail`) and returns results aligned the same way. The handler returns the `complete` result, as its type requires.
+- `complete` takes `items` aligned with `jobs` (each one of `output` / `continueWith` / `reschedule` / `fail`) and returns results aligned the same way. The handler returns the `complete` result, as its type requires.
 - `{ fail: error }` exists only in batched handlers.
 - Middleware unifies on always-array `jobs` (length 1 for non-batched). Breaking, small surface.
 
@@ -68,13 +68,15 @@ createProcessors({
 
 **User writes share the batch's fate.** Writes the handler makes in the transaction it passes to `complete` commit or roll back with the whole batch's outcomes. Writes in other transactions the handler opens are checked against ownership only when that transaction calls `fence`, which locks and checks every job of the batch; without it they must be idempotent.
 
+**`complete` keeps its name.** The handler takes the same outcomes as `client.applyJobOutcomes` (`design/apply-job-outcomes.md`), and for a handler every outcome means the attempt ends, so `complete` still fits.
+
 **Single-job is batched-of-1.** Internally there is one path. That keeps the two shapes from drifting and makes the array vocabulary the same at `batchLimit` 1 and 50.
 
 ## Open questions
 
 1. **Handler signature switching on `batchLimit`.** Proposed above. The alternative — always-array `jobs` — punishes the 99% non-batched case syntactically.
 
-2. **Batch return typing.** `complete(outcomes[])` returns an array of a union, so mixed batches make the caller narrow per slot. Whether a mapped-tuple overload is worth the type complexity for literal call sites is undecided.
+2. **Batch return typing.** `complete({ items })` returns an array of a union, so mixed batches make the caller narrow per slot. Whether a mapped-tuple overload is worth the type complexity for literal call sites is undecided.
 
 3. **Group reclamation.** A running job is live while its worker's lease is, and reclaiming an expired worker releases all of its running jobs at once, so a batch held by one worker already shares its fate. A worker that is still live but no longer runs some of its jobs releases them one by one, with no notion of a batch.
 

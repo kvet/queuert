@@ -112,8 +112,8 @@ export type JobTypeContinuation<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   K extends string,
 > = TJobTypeDefinitions extends any
-  ? K extends keyof TJobTypeDefinitions
-    ? TJobTypeDefinitions[K] extends { continueWith: infer CT }
+  ? TJobTypeDefinitions[K & keyof TJobTypeDefinitions] extends infer TDefinition
+    ? TDefinition extends { continueWith: infer CT }
       ? ResolveReference<TJobTypeDefinitions, CT> & string
       : never
     : never
@@ -414,7 +414,7 @@ type MapBlockersToChainsInput<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TBlockers extends readonly unknown[],
 > = {
-  [K in keyof TBlockers]: TBlockers[K] extends JobTypeReference
+  readonly [K in keyof TBlockers]: TBlockers[K] extends JobTypeReference
     ? {
         id: TJobId;
         typeName?: ResolveReferenceDistributive<TJobTypeDefinitions, TBlockers[K]> & string;
@@ -422,21 +422,17 @@ type MapBlockersToChainsInput<
     : never;
 };
 
-/**
- * What `createChain`, `createChains`, and `continueWith` accept as `blockers`: an `id` per blocker slot, with an
- * optional `typeName` checked against the slot at compile time. A full {@link Chain} also fits.
- * Core loads each blocker chain under lock and validates the stored chain, not the passed object.
- */
-export type BlockerChainsInput<
+type BlockerChainsInput<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
+  TBlockerJobTypeDefinitions extends BaseJobTypeDefinitions,
 > =
   JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "blockers"> extends infer TBlockers
     ? [TBlockers] extends [never]
       ? []
       : TBlockers extends readonly unknown[]
-        ? MapBlockersToChainsInput<TJobId, TJobTypeDefinitions, TBlockers>
+        ? MapBlockersToChainsInput<TJobId, TBlockerJobTypeDefinitions, TBlockers>
         : []
     : [];
 
@@ -444,13 +440,21 @@ export type NewJob<
   TJobId,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
+  TBlockerJobTypeDefinitions extends BaseJobTypeDefinitions,
 > = {
   typeName: TJobTypeName;
   id?: TJobId;
   input: JobTypeProperty<TJobTypeDefinitions, TJobTypeName, "input">;
   schedule?: ScheduleOptions;
 } & (JobTypeHasBlockers<TJobTypeDefinitions, TJobTypeName> extends true
-  ? { blockers: BlockerChainsInput<TJobId, TJobTypeDefinitions, TJobTypeName> }
+  ? {
+      blockers: BlockerChainsInput<
+        TJobId,
+        TJobTypeDefinitions,
+        TJobTypeName,
+        TBlockerJobTypeDefinitions
+      >;
+    }
   : { blockers?: never });
 
 export type NewChain<
@@ -459,7 +463,7 @@ export type NewChain<
   TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
     JobTypeEntryNames<TJobTypeDefinitions>,
 > = {
-  [TName in TChainTypeName]: NewJob<TJobId, TJobTypeDefinitions, TName> & {
+  [TName in TChainTypeName]: NewJob<TJobId, TJobTypeDefinitions, TName, TJobTypeDefinitions> & {
     deduplication?: DeduplicationOptions;
   };
 }[TChainTypeName];
@@ -469,7 +473,7 @@ export type AnyNewJob = {
   id?: string;
   input: unknown;
   schedule?: ScheduleOptions;
-  blockers?: { id: string; typeName?: string }[];
+  blockers?: readonly { id: string; typeName?: string }[];
 };
 
 type BlockerRefNames<

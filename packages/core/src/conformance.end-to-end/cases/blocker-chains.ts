@@ -203,15 +203,12 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
             }),
           ),
         );
-        const completedBlockerChain = yield* step(
+        const completedBlockerJob = yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
+            client.applyJobOutcome({
               ...txCtx,
-              ...blockerChain,
-              handler: ({ job, completeJob }) =>
-                completeJob(job, ({ complete }) =>
-                  complete({ output: { result: job.input.value } }),
-                ),
+              job: { id: blockerChain.id, typeName: "blocker" },
+              output: { result: blockerChain.input.value },
             }),
           ),
         );
@@ -222,7 +219,7 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
               ...txCtx,
               typeName: "main",
               input: null,
-              blockers: [completedBlockerChain],
+              blockers: [blockerChain],
             }),
           ),
         );
@@ -231,7 +228,7 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
         const succeededChain = yield* wait(client.awaitChain(chain, completionOptions));
 
         assert.deepEqual(succeededChain.output, {
-          finalResult: completedBlockerChain.output.result,
+          finalResult: completedBlockerJob.output.result,
         });
       }),
     },
@@ -888,35 +885,20 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
           ),
         );
         yield* step(
-          stateAdapter.withTransaction((txCtx) =>
-            client.completeChain({
-              ...txCtx,
-              ...mismatchChain,
-              handler: ({ job, completeJob }) =>
-                runInModeOf(
-                  stateAdapter,
-                  syncAsync(function* () {
-                    if (job.typeName !== "first") return;
-                    try {
-                      yield* step(
-                        completeJob(job, ({ complete }) => {
-                          return complete({
-                            continueWith: {
-                              typeName: "second",
-                              input: null,
-                              blockers: [{ id: otherChain.id, typeName: "blocker" }],
-                            },
-                          });
-                        }),
-                      );
-                    } catch (error) {
-                      assert.ok(error instanceof ChainTypeMismatchError);
-                      return;
-                    }
-                    throw new Error("Expected completeJob to throw ChainTypeMismatchError");
-                  }),
-                ),
-            }),
+          assertRejects(
+            () =>
+              stateAdapter.withTransaction((txCtx) =>
+                client.applyJobOutcome({
+                  ...txCtx,
+                  job: { id: mismatchChain.id, typeName: "first" },
+                  continueWith: {
+                    typeName: "second",
+                    input: null,
+                    blockers: [{ id: otherChain.id, typeName: "blocker" }],
+                  },
+                }),
+              ),
+            ChainTypeMismatchError,
           ),
         );
 

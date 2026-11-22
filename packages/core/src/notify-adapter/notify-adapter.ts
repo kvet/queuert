@@ -39,7 +39,7 @@ export type NotifyAdapter<TMode extends Mode> = {
   ) => ModeResult<TMode, () => ModeResult<TMode, void>>;
   /**
    * Notify that the given jobs lost their attempts: reclaimed from a worker whose lease expired or
-   * that stopped, completed workerless, or their chain was deleted.
+   * that stopped, completed by the client, or their chain was deleted.
    */
   notifyJobAttemptsLost: (jobIds: string[]) => ModeResult<TMode, void>;
   /** Listen for attempt loss on a specific job. Returns a dispose function. */

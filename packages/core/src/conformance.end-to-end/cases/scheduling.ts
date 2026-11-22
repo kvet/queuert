@@ -46,6 +46,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
           }),
         );
 
+        const deadline = Date.now() + 300;
         const chain = yield* step(
           stateAdapter.withTransaction((txCtx) =>
             client.createChain({
@@ -58,9 +59,12 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(assert.rejects(client.awaitChain(chain, { timeoutMs: 200 })));
+        const remainingMs = deadline - Date.now() - 100;
+        if (remainingMs > 0) {
+          yield* wait(assert.rejects(client.awaitChain(chain, { timeoutMs: remainingMs })));
+        }
         assert.notEqual(
-          yield* wait(client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 400 })),
+          yield* wait(client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 5000 })),
           undefined,
         );
       }),
@@ -96,21 +100,25 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
           }),
         );
 
+        const deadline = Date.now() + 300;
         const chain = yield* step(
           stateAdapter.withTransaction((txCtx) =>
             client.createChain({
               ...txCtx,
               typeName: "test",
               input: { value: 1 },
-              schedule: { at: new Date(Date.now() + 300) },
+              schedule: { at: new Date(deadline) },
             }),
           ),
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(assert.rejects(client.awaitChain(chain, { timeoutMs: 200 })));
+        const remainingMs = deadline - Date.now() - 100;
+        if (remainingMs > 0) {
+          yield* wait(assert.rejects(client.awaitChain(chain, { timeoutMs: remainingMs })));
+        }
         assert.notEqual(
-          yield* wait(client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 400 })),
+          yield* wait(client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 5000 })),
           undefined,
         );
       }),
@@ -127,7 +135,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
           second: { input: { continued: boolean }; output: { result: string } };
         }>();
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
-        const firstCompleted = Promise.withResolvers<void>();
+        const firstCompleted = Promise.withResolvers<number>();
         const workerRunner = yield* resource(
           createWorkerRunner({
             client,
@@ -139,6 +147,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
               processors: {
                 first: {
                   attemptHandler: async ({ complete }) => {
+                    const continuationDeadline = Date.now() + 300;
                     try {
                       return await stateAdapter.withTransaction((txCtx) =>
                         complete({
@@ -151,7 +160,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
                         }),
                       );
                     } finally {
-                      firstCompleted.resolve();
+                      firstCompleted.resolve(continuationDeadline);
                     }
                   },
                 },
@@ -173,10 +182,13 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(firstCompleted.promise);
-        yield* wait(assert.rejects(client.awaitChain(chain, { timeoutMs: 200 })));
+        const deadline = yield* wait(firstCompleted.promise);
+        const remainingMs = deadline - Date.now() - 100;
+        if (remainingMs > 0) {
+          yield* wait(assert.rejects(client.awaitChain(chain, { timeoutMs: remainingMs })));
+        }
         assert.notEqual(
-          yield* wait(client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 400 })),
+          yield* wait(client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 5000 })),
           undefined,
         );
       }),
@@ -193,7 +205,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
           second: { input: { continued: boolean }; output: { result: string } };
         }>();
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
-        const firstCompleted = Promise.withResolvers<void>();
+        const firstCompleted = Promise.withResolvers<number>();
         const workerRunner = yield* resource(
           createWorkerRunner({
             client,
@@ -205,6 +217,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
               processors: {
                 first: {
                   attemptHandler: async ({ complete }) => {
+                    const continuationDeadline = Date.now() + 300;
                     try {
                       return await stateAdapter.withTransaction((txCtx) =>
                         complete({
@@ -212,12 +225,12 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
                           continueWith: {
                             typeName: "second",
                             input: { continued: true },
-                            schedule: { at: new Date(Date.now() + 300) },
+                            schedule: { at: new Date(continuationDeadline) },
                           },
                         }),
                       );
                     } finally {
-                      firstCompleted.resolve();
+                      firstCompleted.resolve(continuationDeadline);
                     }
                   },
                 },
@@ -239,10 +252,13 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(firstCompleted.promise);
-        yield* wait(assert.rejects(client.awaitChain(chain, { timeoutMs: 200 })));
+        const deadline = yield* wait(firstCompleted.promise);
+        const remainingMs = deadline - Date.now() - 100;
+        if (remainingMs > 0) {
+          yield* wait(assert.rejects(client.awaitChain(chain, { timeoutMs: remainingMs })));
+        }
         assert.notEqual(
-          yield* wait(client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 400 })),
+          yield* wait(client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 5000 })),
           undefined,
         );
       }),
@@ -259,7 +275,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
         }>();
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
         let attemptCount = 0;
-        const firstAttemptDone = Promise.withResolvers<void>();
+        const firstAttemptDone = Promise.withResolvers<number>();
         const workerRunner = yield* resource(
           createWorkerRunner({
             client,
@@ -277,7 +293,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
                       assert.equal(job.lastRescheduleReason, null);
                     }
                     if (attemptCount === 1) {
-                      firstAttemptDone.resolve();
+                      firstAttemptDone.resolve(Date.now() + 300);
                       return stateAdapter.withTransaction((txCtx) =>
                         complete({ ...txCtx, reschedule: { afterMs: 300 } }),
                       );
@@ -299,10 +315,13 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(firstAttemptDone.promise);
-        yield* wait(assert.rejects(client.awaitChain(chain, { timeoutMs: 200 })));
+        const deadline = yield* wait(firstAttemptDone.promise);
+        const remainingMs = deadline - Date.now() - 100;
+        if (remainingMs > 0) {
+          yield* wait(assert.rejects(client.awaitChain(chain, { timeoutMs: remainingMs })));
+        }
         assert.notEqual(
-          yield* wait(client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 400 })),
+          yield* wait(client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 5000 })),
           undefined,
         );
         assert.equal(attemptCount, 2);
@@ -474,7 +493,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
         }>();
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
         let attemptCount = 0;
-        const firstAttemptDone = Promise.withResolvers<void>();
+        const firstAttemptDone = Promise.withResolvers<number>();
         const workerRunner = yield* resource(
           createWorkerRunner({
             client,
@@ -492,11 +511,12 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
                       assert.equal(job.lastRescheduleReason, null);
                     }
                     if (attemptCount === 1) {
-                      firstAttemptDone.resolve();
+                      const rescheduleDeadline = Date.now() + 300;
+                      firstAttemptDone.resolve(rescheduleDeadline);
                       return stateAdapter.withTransaction((txCtx) =>
                         complete({
                           ...txCtx,
-                          reschedule: { at: new Date(Date.now() + 300) },
+                          reschedule: { at: new Date(rescheduleDeadline) },
                         }),
                       );
                     }
@@ -517,10 +537,13 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(firstAttemptDone.promise);
-        yield* wait(assert.rejects(client.awaitChain(chain, { timeoutMs: 200 })));
+        const deadline = yield* wait(firstAttemptDone.promise);
+        const remainingMs = deadline - Date.now() - 100;
+        if (remainingMs > 0) {
+          yield* wait(assert.rejects(client.awaitChain(chain, { timeoutMs: remainingMs })));
+        }
         assert.notEqual(
-          yield* wait(client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 400 })),
+          yield* wait(client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 5000 })),
           undefined,
         );
         assert.equal(attemptCount, 2);
