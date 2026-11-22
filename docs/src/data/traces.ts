@@ -170,7 +170,7 @@ export const approveRefundTrace: TraceSpan[] = [
   {
     id: "job-complete",
     parentId: "job",
-    name: "complete job.approve-refund",
+    name: "start job-attempt.approve-refund",
     kind: "CONSUMER",
     start: 180_000,
   },

@@ -433,7 +433,9 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
             }),
           ),
         );
-        const completed = yield* wait(client.awaitChain(nextChain, completionOptions));
+        const completed = yield* wait(
+          client.awaitChain({ chain: nextChain, ...completionOptions }),
+        );
         assert.equal(completed.status, "completed");
         yield* wait(workerRunner.close());
         assert.equal(logs.entriesOfType("job_attempt_failed").length, 0);
@@ -1105,7 +1107,7 @@ export const deletionNotifyConcurrentTransactionsGroup: ConformanceGroup<StateAd
           release.resolve();
           await transaction;
 
-          await client.awaitChain(chain, completionOptions);
+          await client.awaitChain({ chain, ...completionOptions });
         },
       },
       {
@@ -1189,7 +1191,7 @@ export const deletionNotifyConcurrentTransactionsGroup: ConformanceGroup<StateAd
           release.resolve();
           await transaction;
 
-          await client.awaitChain(blockerChain, completionOptions);
+          await client.awaitChain({ chain: blockerChain, ...completionOptions });
         },
       },
       {
@@ -1278,7 +1280,7 @@ export const deletionNotifyConcurrentTransactionsGroup: ConformanceGroup<StateAd
           release.resolve();
           await transaction;
 
-          await client.awaitChain(blockerChain, completionOptions);
+          await client.awaitChain({ chain: blockerChain, ...completionOptions });
         },
       },
     ],

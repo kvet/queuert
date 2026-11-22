@@ -156,7 +156,7 @@ const paymentChain = await stateAdapter.withTransaction(async (txCtx) =>
     input: { orderId: "order-2", amountCents: 150_000 },
   }),
 );
-const payment = await client.awaitChain(paymentChain, { timeoutMs: 5000 });
+const payment = await client.awaitChain({ chain: paymentChain, timeoutMs: 5000 });
 const paymentStatus = payment.output.success
   ? `paid with ${payment.output.transactionId}`
   : `declined: ${payment.output.error}`;
@@ -170,7 +170,7 @@ const acceptedPaymentChain = await stateAdapter.withTransaction(async (txCtx) =>
     input: { orderId: "order-1", amountCents: 50_000 },
   }),
 );
-const acceptedPayment = await client.awaitChain(acceptedPaymentChain, { timeoutMs: 5000 });
+const acceptedPayment = await client.awaitChain({ chain: acceptedPaymentChain, timeoutMs: 5000 });
 assert.deepEqual(acceptedPayment.output, { success: true, transactionId: "txn-order-1" });
 
 const [shippedOrder, refundedOrder] = await stateAdapter.withTransaction(async (txCtx) =>
@@ -182,15 +182,15 @@ const [shippedOrder, refundedOrder] = await stateAdapter.withTransaction(async (
     ],
   }),
 );
-const shipped = await client.awaitChain(shippedOrder, { timeoutMs: 5000 });
+const shipped = await client.awaitChain({ chain: shippedOrder, timeoutMs: 5000 });
 assert.deepEqual(shipped.output, { shipped: true });
-const refunded = await client.awaitChain(refundedOrder, { timeoutMs: 5000 });
+const refunded = await client.awaitChain({ chain: refundedOrder, timeoutMs: 5000 });
 assert.deepEqual(refunded.output, { refunded: true, refundId: "rf-ch-order-4" });
 
 const rateChain = await stateAdapter.withTransaction(async (txCtx) =>
   client.createChain({ ...txCtx, typeName: "fetch-exchange-rate", input: { currency: "EUR" } }),
 );
-const rate = await client.awaitChain(rateChain, { timeoutMs: 5000 });
+const rate = await client.awaitChain({ chain: rateChain, timeoutMs: 5000 });
 assert.equal(rate.output.rate, 1.08);
 assert.equal(previousErrors.length, 2);
 assert.match(previousErrors[0], /^Error: rate provider unavailable\n\s+at /);

@@ -88,7 +88,7 @@ const chain = stateAdapter.withTransaction((ctx) =>
   }),
 );
 
-const result = await client.awaitChain(chain, { timeoutMs: 5000 });
+const result = await client.awaitChain({ chain, timeoutMs: 5000 });
 console.log(`\npublishedAt is a ${result.output.publishedAt.constructor.name}`);
 console.log(`total is a ${typeof result.output.total}: ${result.output.total}`);
 

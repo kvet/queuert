@@ -1080,7 +1080,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chainA, completionOptions));
+        yield* wait(client.awaitChain({ chain: chainA, ...completionOptions }));
         yield* wait(workerRunner.close());
 
         const counts = yield* step(
@@ -1228,7 +1228,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(toComplete, completionOptions));
+        yield* wait(client.awaitChain({ chain: toComplete, ...completionOptions }));
         yield* wait(workerRunner.close());
 
         const counts = yield* step(client.countJobsByTypeName({ typeNames: ["task_a", "task_b"] }));
@@ -1611,8 +1611,8 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chainA, completionOptions));
-        yield* wait(client.awaitChain(chainB, completionOptions));
+        yield* wait(client.awaitChain({ chain: chainA, ...completionOptions }));
+        yield* wait(client.awaitChain({ chain: chainB, ...completionOptions }));
 
         const byCreatedAt = yield* step(
           client.listChains({
@@ -2021,8 +2021,8 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chainA, completionOptions));
-        yield* wait(client.awaitChain(chainB, completionOptions));
+        yield* wait(client.awaitChain({ chain: chainA, ...completionOptions }));
+        yield* wait(client.awaitChain({ chain: chainB, ...completionOptions }));
 
         const byCreatedAt = yield* step(
           client.listJobs({
@@ -2217,7 +2217,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         const page = yield* step(client.listChainJobs({ chainId: chain.id }));
 
@@ -2299,7 +2299,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         const asc = yield* step(client.listChainJobs({ chainId: chain.id }));
         const desc = yield* step(
@@ -2375,7 +2375,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         const page1 = yield* step(client.listChainJobs({ chainId: chain.id, limit: 2 }));
         assert.equal(page1.items.length, 2);
@@ -2960,7 +2960,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         assert.notEqual(blockersBefore[0].status, "completed");
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(mainChain, completionOptions));
+        yield* wait(client.awaitChain({ chain: mainChain, ...completionOptions }));
 
         const blockersAfter = yield* step(client.getJobBlockers({ jobId: mainChain.id }));
         assert.equal(blockersAfter[0].status, "completed");
@@ -3321,7 +3321,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         });
 
         releaseAttempt.resolve();
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
       }),
     },
 
@@ -3378,7 +3378,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         yield* wait(attemptStarted.promise);
         const job = yield* step(client.getJob({ id: chain.id, typeName: "send_email" }));
         releaseAttempt.resolve();
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
         yield* wait(workerRunner.close());
 
         if (job?.status !== "running") {
@@ -3455,7 +3455,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         assert.deepEqual(yield* step(client.getWorkers({ ids: [] })), []);
 
         releaseAttempt.resolve();
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
       }),
     },
 
@@ -3524,7 +3524,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         );
 
         releaseAttempt.resolve();
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
       }),
     },
 
@@ -3596,7 +3596,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         });
 
         releaseAttempt.resolve();
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
       }),
     },
 
@@ -3680,9 +3680,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         );
 
         releaseAttempts.resolve();
-        yield* wait(
-          Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions))),
-        );
+        yield* wait(client.awaitChains({ chains, ...completionOptions }));
       }),
     },
 
@@ -3763,7 +3761,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         );
 
         releaseAttempt.resolve();
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
       }),
     },
 
@@ -3832,7 +3830,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         );
 
         releaseAttempt.resolve();
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         assert.deepEqual(yield* step(client.listWorkerJobs({ workerId: job.attemptBy })), {
           items: [],
@@ -3930,9 +3928,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         );
 
         releaseAttempts.resolve();
-        yield* wait(
-          Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions))),
-        );
+        yield* wait(client.awaitChains({ chains, ...completionOptions }));
       }),
     },
 
@@ -3997,7 +3993,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         const headJob = yield* step(client.getJob({ id: chain.id }));
         assert.notEqual(headJob, null);
@@ -4110,7 +4106,7 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
         assert.equal(blockers[0].id, depChain.id);
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(mainChain, completionOptions));
+        yield* wait(client.awaitChain({ chain: mainChain, ...completionOptions }));
 
         const completedMain = yield* step(client.getJob({ id: mainChain.id }));
         assert.equal(completedMain!.status, "completed");

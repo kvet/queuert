@@ -75,7 +75,8 @@ const priceChain = await stateAdapter.withTransaction(async (txCtx) =>
   client.createChain({ ...txCtx, typeName: "fetch-price", input: { productId: "widget" } }),
 );
 
-const completedChain = await client.awaitChain(priceChain, {
+const completedChain = await client.awaitChain({
+  chain: priceChain,
   timeoutMs: 30_000,
   pollIntervalMs: 5_000,
 });
@@ -94,9 +95,7 @@ const priceChains = await stateAdapter.withTransaction(async (txCtx) =>
   }),
 );
 
-const completedChains = await Promise.all(
-  priceChains.map(async (chain) => client.awaitChain(chain, { timeoutMs: 30_000 })),
-);
+const completedChains = await client.awaitChains({ chains: priceChains, timeoutMs: 30_000 });
 // #endregion
 
 assert.deepEqual(
@@ -113,7 +112,10 @@ const laterChain = await stateAdapter.withTransaction(async (txCtx) =>
   }),
 );
 
-await assert.rejects(client.awaitChain(laterChain, { timeoutMs: 100 }), WaitChainTimeoutError);
+await assert.rejects(
+  client.awaitChain({ chain: laterChain, timeoutMs: 100 }),
+  WaitChainTimeoutError,
+);
 
 // #region await-abort
 const request = new AbortController();
@@ -122,7 +124,7 @@ setTimeout(() => {
 }, 100);
 
 const laterPrice = await client
-  .awaitChain(laterChain, { timeoutMs: 30_000, signal: request.signal })
+  .awaitChain({ chain: laterChain, timeoutMs: 30_000, signal: request.signal })
   .then(
     (chain) => chain.output.finalPrice,
     (error: unknown) => {

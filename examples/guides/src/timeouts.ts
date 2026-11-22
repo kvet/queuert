@@ -92,10 +92,10 @@ const [fastReport, slowReport] = await stateAdapter.withTransaction(async (txCtx
     ],
   }),
 );
-assert.deepEqual((await client.awaitChain(fastReport, { timeoutMs: 5000 })).output, {
+assert.deepEqual((await client.awaitChain({ chain: fastReport, timeoutMs: 5000 })).output, {
   data: "report from /reports/fast",
 });
-assert.deepEqual((await client.awaitChain(slowReport, { timeoutMs: 5000 })).output, {
+assert.deepEqual((await client.awaitChain({ chain: slowReport, timeoutMs: 5000 })).output, {
   timedOut: true,
 });
 
@@ -106,5 +106,5 @@ const rebuild = await stateAdapter.withTransaction(async (txCtx) =>
     input: { indexName: "products", durationMs: 3000 },
   }),
 );
-const rebuilt = await client.awaitChain(rebuild, { timeoutMs: 10_000 });
+const rebuilt = await client.awaitChain({ chain: rebuild, timeoutMs: 10_000 });
 assert.equal(rebuilt.output.rebuiltOnAttempt, 1);

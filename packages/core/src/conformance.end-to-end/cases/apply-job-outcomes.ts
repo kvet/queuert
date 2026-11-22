@@ -9,7 +9,7 @@ import type { StateAdapterConformanceContext } from "../../conformance.state-ada
 import { runInModeOf } from "../../conformance/adapters.ts";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
 import {
-  BlockerLimitExceededError,
+  JobBlockerLimitExceededError,
   ChainTypeMismatchError,
   JobAlreadyCompletedError,
   JobNotFoundError,
@@ -18,9 +18,11 @@ import {
   JobsStatusMismatchError,
   JobTypeMismatchError,
   JobTypeValidationError,
+  JobsTypeValidationError,
   JobsAlreadyCompletedError,
   JobsNotFoundError,
   JobsTypeMismatchError,
+  JobsBlockerLimitExceededError,
 } from "../../errors.ts";
 import { createProcessors } from "../../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../../job-types/define-job-types.ts";
@@ -387,7 +389,7 @@ export const applyJobOutcomesGroup: ConformanceGroup<StateAdapterConformanceCont
                         },
                       }),
                     (error) => {
-                      assert.ok(error instanceof BlockerLimitExceededError);
+                      assert.ok(error instanceof JobBlockerLimitExceededError);
                       assert.equal(error.count, stateAdapter.config.maxBlockersPerJob + 1);
                       assert.equal(error.limit, stateAdapter.config.maxBlockersPerJob);
                       assert.equal(error.typeName, "next");
@@ -462,7 +464,7 @@ export const applyJobOutcomesGroup: ConformanceGroup<StateAdapterConformanceCont
         );
 
         yield* wait(workerRunner.start());
-        const succeededChain = yield* wait(client.awaitChain(chain, completionOptions));
+        const succeededChain = yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         assert.deepEqual(succeededChain.output, { done: true });
       }),
@@ -1242,7 +1244,15 @@ export const applyJobOutcomesGroup: ConformanceGroup<StateAdapterConformanceCont
                           },
                         ],
                       }),
-                    BlockerLimitExceededError,
+                    (error: unknown) => {
+                      assert.ok(error instanceof JobsBlockerLimitExceededError);
+                      assert.deepEqual(error.itemIndexes, [1]);
+                      assert.deepEqual(
+                        error.errors.map(({ typeName, count }) => [typeName, count]),
+                        [["archive", stateAdapter.config.maxBlockersPerJob + 1]],
+                      );
+                      return true;
+                    },
                   ),
                 );
               }),
@@ -1290,7 +1300,9 @@ export const applyJobOutcomesGroup: ConformanceGroup<StateAdapterConformanceCont
           },
           decodeOutput: (_, output) => output,
           validateContinueWith: () => {},
-          validateBlockers: () => {},
+          validateBlockers: (typeName) => {
+            if (typeName === "archive") throw new Error("archives are not taken yet");
+          },
         });
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
@@ -1328,7 +1340,31 @@ export const applyJobOutcomesGroup: ConformanceGroup<StateAdapterConformanceCont
                           },
                         ],
                       }),
-                    JobTypeValidationError,
+                    { name: "JobsTypeValidationError", itemIndexes: [1] },
+                  ),
+                );
+                yield* step(
+                  assertRejects(
+                    () =>
+                      client.applyJobOutcomes({
+                        ...txCtx,
+                        items: [
+                          {
+                            job: { id: rejectedChain.id, typeName: "review" },
+                            output: { approved: true },
+                          },
+                          {
+                            job: { id: continuedChain.id, typeName: "review" },
+                            continueWith: { typeName: "archive", input: null },
+                          },
+                        ],
+                      }),
+                    (error: unknown) => {
+                      assert.ok(error instanceof JobsTypeValidationError);
+                      assert.deepEqual(error.itemIndexes, [1]);
+                      assert.equal(error.errors[0].code, "invalid_blockers");
+                      return true;
+                    },
                   ),
                 );
               }),
@@ -1781,7 +1817,7 @@ export const applyJobOutcomesGroup: ConformanceGroup<StateAdapterConformanceCont
 
         yield* wait(workerRunner.start());
         const completed = yield* wait(
-          client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 100 }),
+          client.awaitChain({ chain, timeoutMs: 5000, pollIntervalMs: 100 }),
         );
 
         assert.equal(completed.status, "completed");
@@ -2077,7 +2113,7 @@ export const applyJobOutcomesGroup: ConformanceGroup<StateAdapterConformanceCont
 
         for (const chain of chains) {
           const completed = yield* wait(
-            client.awaitChain(chain, { timeoutMs: 3000, pollIntervalMs: 50 }),
+            client.awaitChain({ chain, timeoutMs: 3000, pollIntervalMs: 50 }),
           );
           assert.deepEqual(completed.output, { attempts: 2 });
         }
@@ -2578,7 +2614,7 @@ export const applyJobOutcomesNotifyConcurrentTransactionsGroup: ConformanceGroup
           release.resolve();
           await rolledBack;
 
-          await client.awaitChain(pendingChain, completionOptions);
+          await client.awaitChain({ chain: pendingChain, ...completionOptions });
         },
       },
       {
@@ -2657,7 +2693,7 @@ export const applyJobOutcomesNotifyConcurrentTransactionsGroup: ConformanceGroup
           release.resolve();
           await transaction;
 
-          await client.awaitChain(pendingChain, completionOptions);
+          await client.awaitChain({ chain: pendingChain, ...completionOptions });
         },
       },
       {
@@ -2729,7 +2765,7 @@ export const applyJobOutcomesNotifyConcurrentTransactionsGroup: ConformanceGroup
           release.resolve();
           await transaction;
 
-          await client.awaitChain(chain, completionOptions);
+          await client.awaitChain({ chain, ...completionOptions });
         },
       },
       {
@@ -2792,7 +2828,7 @@ export const applyJobOutcomesNotifyConcurrentTransactionsGroup: ConformanceGroup
           release.resolve();
           await transaction;
 
-          await client.awaitChain(chain, completionOptions);
+          await client.awaitChain({ chain, ...completionOptions });
         },
       },
       {
@@ -2860,7 +2896,7 @@ export const applyJobOutcomesNotifyConcurrentTransactionsGroup: ConformanceGroup
           release.resolve();
           await transaction;
 
-          await client.awaitChain(chain, completionOptions);
+          await client.awaitChain({ chain, ...completionOptions });
         },
       },
       {
@@ -2947,7 +2983,7 @@ export const applyJobOutcomesNotifyConcurrentTransactionsGroup: ConformanceGroup
           release.resolve();
           await transaction;
 
-          await client.awaitChain(chain, completionOptions);
+          await client.awaitChain({ chain, ...completionOptions });
         },
       },
       {
@@ -3015,7 +3051,7 @@ export const applyJobOutcomesNotifyConcurrentTransactionsGroup: ConformanceGroup
           release.resolve();
           await transaction;
 
-          await client.awaitChain(chain, completionOptions);
+          await client.awaitChain({ chain, ...completionOptions });
         },
       },
       {
@@ -3088,7 +3124,7 @@ export const applyJobOutcomesNotifyConcurrentTransactionsGroup: ConformanceGroup
           release.resolve();
           await transaction;
 
-          await client.awaitChain(chain, completionOptions);
+          await client.awaitChain({ chain, ...completionOptions });
         },
       },
     ],

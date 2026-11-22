@@ -105,9 +105,7 @@ const completesChainsOverFlakyStateAdapter = syncAsync(function* ({
   for (const workerRunner of flakyWorkerRunners) {
     yield* wait(workerRunner.start());
   }
-  const completedChains = yield* wait(
-    Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions))),
-  );
+  const completedChains = yield* wait(client.awaitChains({ chains, ...completionOptions }));
   assert.deepEqual(
     completedChains.map((chain) => chain.output),
     chains.map((_, i) => ({ result: i * 2 })),
@@ -249,10 +247,7 @@ export const stateResilienceGroup: ConformanceGroup<StateAdapterConformanceConte
 
         yield* wait(workerRunner.start());
         const completedFirstChain = yield* wait(
-          client.awaitChain(firstChain, {
-            pollIntervalMs: 100,
-            timeoutMs: 5000,
-          }),
+          client.awaitChain({ chain: firstChain, pollIntervalMs: 100, timeoutMs: 5000 }),
         );
         assert.equal(completedFirstChain.status, "completed");
 
@@ -263,10 +258,7 @@ export const stateResilienceGroup: ConformanceGroup<StateAdapterConformanceConte
           ),
         );
         const completedSecondChain = yield* wait(
-          client.awaitChain(secondChain, {
-            pollIntervalMs: 100,
-            timeoutMs: 5000,
-          }),
+          client.awaitChain({ chain: secondChain, pollIntervalMs: 100, timeoutMs: 5000 }),
         );
         assert.equal(completedSecondChain.status, "completed");
       }),
@@ -343,9 +335,7 @@ export const stateResilienceGroup: ConformanceGroup<StateAdapterConformanceConte
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(
-          Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions))),
-        );
+        yield* wait(client.awaitChains({ chains, ...completionOptions }));
 
         const jobs = yield* step(client.getJobs({ ids: chains.map((chain) => chain.id) }));
         assert.deepEqual(

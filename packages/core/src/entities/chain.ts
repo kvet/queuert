@@ -29,23 +29,26 @@ export const mapStateChainToChain = (
 
 export const assertChainsTypeName = (
   stateChains: (StateChainInfo | undefined)[],
-  { chainIds, typeName }: { chainIds: string[]; typeName: string | undefined },
+  { chainIds, typeNames }: { chainIds: string[]; typeNames: (string | undefined)[] },
 ): void => {
-  if (!typeName) return;
   const mismatched = chainIds.flatMap((chainId, index) => {
     const stateChain = stateChains[index];
-    return stateChain !== undefined && stateChain.typeName !== typeName
-      ? [{ chainId, actualTypeName: stateChain.typeName }]
+    const typeName = typeNames[index];
+    return typeName && stateChain !== undefined && stateChain.typeName !== typeName
+      ? [{ chainId, expectedTypeName: typeName, actualTypeName: stateChain.typeName }]
       : [];
   });
   if (mismatched.length === 0) return;
   throw new ChainsTypeMismatchError(
-    `Expected chains to have type "${typeName}": ${mismatched
-      .map(({ chainId, actualTypeName }) => `${chainId} (found "${actualTypeName}")`)
+    `Chains have a different type than expected: ${mismatched
+      .map(
+        ({ chainId, expectedTypeName, actualTypeName }) =>
+          `${chainId} (expected "${expectedTypeName}", found "${actualTypeName}")`,
+      )
       .join(", ")}`,
     {
       chainIds: mismatched.map(({ chainId }) => chainId),
-      expectedTypeNames: mismatched.map(() => typeName),
+      expectedTypeNames: mismatched.map(({ expectedTypeName }) => expectedTypeName),
       actualTypeNames: mismatched.map(({ actualTypeName }) => actualTypeName),
     },
   );

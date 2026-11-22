@@ -15,8 +15,11 @@ import {
   JobAlreadyCompletedError,
   JobNotFoundError,
   JobTakenByAnotherWorkerError,
+  toSingleChainError,
+  toSingleJobError,
 } from "../errors.ts";
 import type { JobAttemptSpanHandle } from "../observability-adapter/observability-adapter.ts";
+import { completedAttemptSpanResult } from "../observability-adapter/observability-helper.ts";
 import type { BaseTxContext, StateJob, StateJobInfo } from "../state-adapter/state-adapter.ts";
 import { requireTxCtx } from "../state-adapter/tx-context.ts";
 import type { AnyAttemptHandler, AnyCompleteOptions } from "./attempt-handler.types.ts";
@@ -107,6 +110,8 @@ const createAttemptWrites = (
         committed.trip(write);
       });
       return write.job;
+    } catch (error) {
+      throw toSingleChainError(toSingleJobError(error));
     } finally {
       inProgress.reset();
     }
@@ -293,21 +298,7 @@ export const runAttempt = async ({
     return;
   }
 
-  const { stateJob: finished } = committed;
-  span?.end({
-    status: "completed",
-    continuedWith: finished.continuation
-      ? { jobId: finished.continuation.id, jobTypeName: finished.continuation.typeName }
-      : undefined,
-    chainCompleted:
-      finished.completedAt !== null && finished.continuedToId === null
-        ? { output: finished.output }
-        : undefined,
-    rescheduled:
-      finished.completedAt === null
-        ? { reason: finished.lastRescheduleReason ?? undefined }
-        : undefined,
-  });
+  span?.end(completedAttemptSpanResult(committed.stateJob));
   if (handlerError !== undefined) {
     // oxlint-disable-next-line typescript/only-throw-error -- rethrow the handler's error
     throw handlerError;

@@ -99,7 +99,7 @@ const chain = stateAdapter.withTransaction((ctx) =>
   }),
 );
 
-const result = await client.awaitChain(chain, { timeoutMs: 5000 });
+const result = await client.awaitChain({ chain, timeoutMs: 5000 });
 console.log(`\nrenderedAt is a ${result.output.renderedAt.constructor.name}`);
 console.log(`rowCount: ${result.output.rowCount}`);
 

@@ -144,11 +144,7 @@ const transactionalChains = await stateAdapter.withTransaction(async (txCtx) =>
     })),
   }),
 );
-await Promise.all(
-  [...marketingChains, ...transactionalChains].map(async (chain) =>
-    client.awaitChain(chain, { timeoutMs: 5000 }),
-  ),
-);
+await client.awaitChains({ chains: [...marketingChains, ...transactionalChains], timeoutMs: 5000 });
 
 const workers = completions.map((completion) => completion.worker);
 const marketingPositions = workers.flatMap((worker, index) =>
@@ -160,7 +156,7 @@ completions.length = 0;
 const alertChain = await stateAdapter.withTransaction(async (txCtx) =>
   client.createChain({ ...txCtx, typeName: "alert.dispatch", input: { alertId: "alert-42" } }),
 );
-const alert = await client.awaitChain(alertChain, { timeoutMs: 5000 });
+const alert = await client.awaitChain({ chain: alertChain, timeoutMs: 5000 });
 
 assert.equal(typeof alert.output.archivedAt, "number");
 assert.deepEqual(completions, [

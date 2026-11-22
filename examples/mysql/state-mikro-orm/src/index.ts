@@ -87,7 +87,7 @@ const chain = await orm.em.transactional(async (em) => {
 });
 // #endregion
 
-const result = await client.awaitChain(chain, { timeoutMs: 5000 });
+const result = await client.awaitChain({ chain, timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 
 // #region savepoint

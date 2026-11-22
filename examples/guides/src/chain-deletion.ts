@@ -59,7 +59,7 @@ await workerRunner.start();
 const chain = await stateAdapter.withTransaction(async (txCtx) =>
   client.createChain({ ...txCtx, typeName: "fetch-data", input: { source: "/users" } }),
 );
-await client.awaitChain(chain, { timeoutMs: 5000 });
+await client.awaitChain({ chain, timeoutMs: 5000 });
 
 // #region delete
 const deletedChains = await stateAdapter.withTransaction(async (txCtx) =>
@@ -96,7 +96,7 @@ const { fetchChains, reportChain } = await stateAdapter.withTransaction(async (t
   });
   return { fetchChains, reportChain };
 });
-await client.awaitChain(reportChain, { timeoutMs: 5000 });
+await client.awaitChain({ chain: reportChain, timeoutMs: 5000 });
 
 // #region blocker-safety
 const deleteBlockerOnly = stateAdapter.withTransaction(async (txCtx) =>

@@ -20,9 +20,27 @@ import type {
 import type {
   BlockerSpanHandle,
   JobAttemptSpanHandle,
+  JobAttemptSpanResult,
   JobSpanHandle,
   ObservabilityAdapter,
 } from "./observability-adapter.ts";
+
+export const completedAttemptSpanResult = (
+  written: StateJob & { continuation?: StateJobInfo },
+): JobAttemptSpanResult => ({
+  status: "completed",
+  continuedWith: written.continuation
+    ? { jobId: written.continuation.id, jobTypeName: written.continuation.typeName }
+    : undefined,
+  chainCompleted:
+    written.completedAt !== null && written.continuedToId === null
+      ? { output: written.output }
+      : undefined,
+  rescheduled:
+    written.completedAt === null
+      ? { reason: written.lastRescheduleReason ?? undefined }
+      : undefined,
+});
 
 const mapStateJobToJobBasicData = (stateJob: StateJob): JobBasicData => ({
   id: stateJob.id,
@@ -137,12 +155,8 @@ export type ObservabilityHelper = {
   startJobSpan: (typeName: string, fromJob: StateJob | null) => JobSpanHandle | undefined;
   startAttemptSpan: (
     stateJob: StateJob,
-    options: { workerId: string },
+    options: { workerId: string | null },
   ) => JobAttemptSpanHandle | undefined;
-  completeJobSpan: (
-    stateJob: StateJob,
-    options: { continuedWith?: StateJobInfo; chainCompleted: boolean },
-  ) => void;
   startBlockerSpan: (
     stateJob: StateJob,
     options: { jobTraceContext: string; blockerChain: StateChainInfo; blockerIndex: number },
@@ -488,21 +502,5 @@ export const createObservabilityHelper = ({
     } catch {
       return undefined;
     }
-  },
-  completeJobSpan: (stateJob, options) => {
-    try {
-      adapter.completeJobSpan({
-        chainTraceContext: stateJob.chain.traceContext,
-        traceContext: stateJob.traceContext,
-        chainId: stateJob.chain.id,
-        chainTypeName: stateJob.chain.typeName,
-        jobId: stateJob.id,
-        jobTypeName: stateJob.typeName,
-        continuedWith: options.continuedWith
-          ? { jobId: options.continuedWith.id, jobTypeName: options.continuedWith.typeName }
-          : undefined,
-        chainCompleted: options.chainCompleted,
-      });
-    } catch {}
   },
 });

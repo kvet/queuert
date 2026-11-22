@@ -816,7 +816,7 @@ export const createPgStateAdapter = <
   validateWorkerId?: (id: TWorkerId) => boolean;
   /**
    * Most blocker chains a single job may declare. Declaring more throws
-   * `BlockerLimitExceededError` before any state is written.
+   * `JobBlockerLimitExceededError` before any state is written.
    *
    * @defaultValue `100`
    */

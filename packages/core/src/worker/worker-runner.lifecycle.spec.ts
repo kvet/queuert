@@ -33,7 +33,7 @@ describe("createWorkerRunner lifecycle", () => {
       const chain = await stateAdapter.withTransaction(async (txCtx) =>
         client.createChain({ ...txCtx, typeName: "foo", input: null }),
       );
-      await client.awaitChain(chain, { timeoutMs: 5000 });
+      await client.awaitChain({ chain, timeoutMs: 5000 });
     };
 
     await workerRunner.stop();

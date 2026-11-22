@@ -368,7 +368,7 @@ describe("Metrics", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     const workerIdMatcher = expect.stringMatching(/^[0-9a-f-]{36}$/);
@@ -447,7 +447,7 @@ describe("Metrics", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     await expectMetrics([
@@ -518,7 +518,7 @@ describe("Metrics", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     await expectMetrics([
@@ -621,7 +621,7 @@ describe("Metrics", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     await expectMetrics([
@@ -743,7 +743,7 @@ describe("Metrics", () => {
     });
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     await expectMetrics([
@@ -889,7 +889,7 @@ describe("Metrics", () => {
     await leaseLosingWorkerRunner.start();
     await jobStarted.promise;
     await reclaimingWorkerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await reclaimingWorkerRunner.close();
     handlerReleased.resolve();
     await leaseLosingWorkerRunner.close();
@@ -1133,7 +1133,7 @@ describe("Metrics", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     const metricNames = await getMetricNames();
@@ -1189,10 +1189,7 @@ describe("Metrics", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, {
-      pollIntervalMs: 100,
-      timeoutMs: 5000,
-    });
+    await client.awaitChain({ chain, pollIntervalMs: 100, timeoutMs: 5000 });
     await workerRunner.close();
 
     const metricNames = await getMetricNames();
@@ -1367,7 +1364,7 @@ describe("Spans", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     await expectSpans([
@@ -1439,7 +1436,7 @@ describe("Spans", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     await expectSpans([
@@ -1521,7 +1518,7 @@ describe("Spans", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     await expectSpans([
@@ -1635,7 +1632,7 @@ describe("Spans", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     await expectSpans([
@@ -1745,7 +1742,7 @@ describe("Spans", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     const { items } = await stateAdapter.listChainJobs({
@@ -1855,7 +1852,7 @@ describe("Spans", () => {
     });
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     await expectSpans([
@@ -1965,7 +1962,7 @@ describe("Spans", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(dependencyChain, completionOptions);
+    await client.awaitChain({ chain: dependencyChain, ...completionOptions });
     await workerRunner.stop();
 
     const chain = await withTransaction(async (txCtx) =>
@@ -1978,7 +1975,7 @@ describe("Spans", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     await expectSpans([
@@ -2073,8 +2070,8 @@ describe("Spans", () => {
       { name: "create job.completed", kind: "PRODUCER", parentName: "create chain.completed" },
       { name: "create chain.running", kind: "PRODUCER" },
       { name: "create job.running", kind: "PRODUCER", parentName: "create chain.running" },
-      { name: "complete chain.completed", parentName: "complete job.completed" },
-      { name: "complete job.completed", kind: "CONSUMER", parentName: "create job.completed" },
+      { name: "complete chain.completed", parentName: "start job-attempt.completed" },
+      { name: "start job-attempt.completed", kind: "CONSUMER", parentName: "create job.completed" },
       {
         name: "await chain.completed",
         kind: "PRODUCER",
@@ -2273,8 +2270,69 @@ describe("Spans", () => {
     await expectSpans([
       { name: "create chain.test", kind: "PRODUCER" },
       { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
-      { name: "complete chain.test", kind: "CONSUMER", parentName: "complete job.test", links: 1 },
-      { name: "complete job.test", kind: "CONSUMER", parentName: "create job.test" },
+      {
+        name: "complete chain.test",
+        kind: "CONSUMER",
+        parentName: "start job-attempt.test",
+        links: 1,
+      },
+      {
+        name: "start job-attempt.test",
+        kind: "CONSUMER",
+        parentName: "create job.test",
+        attributes: {
+          "queuert.job.id": chain.id,
+          "queuert.job.attempt": 0,
+        },
+      },
+    ]);
+  });
+
+  it("tracks workerless reschedule spans", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expectSpans,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    const client = createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+
+    const chain = await withTransaction(async (txCtx) =>
+      client.createChain({ ...txCtx, typeName: "test", input: null }),
+    );
+
+    await withTransaction(async (txCtx) =>
+      client.applyJobOutcome({
+        ...txCtx,
+        job: { id: chain.id },
+        reschedule: { afterMs: 60_000 },
+        reason: "waiting for approval",
+      }),
+    );
+
+    await expectSpans([
+      { name: "create chain.test", kind: "PRODUCER" },
+      { name: "create job.test", kind: "PRODUCER", parentName: "create chain.test" },
+      {
+        name: "start job-attempt.test",
+        kind: "CONSUMER",
+        parentName: "create job.test",
+        attributes: {
+          "queuert.job.id": chain.id,
+          "queuert.reschedule.reason": "waiting for approval",
+        },
+      },
     ]);
   });
 
@@ -2344,18 +2402,18 @@ describe("Spans", () => {
         links: 1,
       },
       {
-        name: "complete job.awaiting-approval",
+        name: "start job-attempt.awaiting-approval",
         kind: "CONSUMER",
         parentName: "create job.awaiting-approval",
       },
       {
         name: "complete chain.awaiting-approval",
         kind: "CONSUMER",
-        parentName: "complete job.process-approved",
+        parentName: "start job-attempt.process-approved",
         links: 1,
       },
       {
-        name: "complete job.process-approved",
+        name: "start job-attempt.process-approved",
         kind: "CONSUMER",
         parentName: "create job.process-approved",
       },
@@ -2418,7 +2476,7 @@ describe("Gauges", () => {
       jobTypeProcessingChange: [],
     });
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
 
     await sleep(100);
     await expectGauges({
@@ -2506,8 +2564,8 @@ describe("Gauges", () => {
 
     await workerRunner.start();
     await Promise.all([
-      client.awaitChain(emailChain, completionOptions),
-      client.awaitChain(smsChain, completionOptions),
+      client.awaitChain({ chain: emailChain, ...completionOptions }),
+      client.awaitChain({ chain: smsChain, ...completionOptions }),
     ]);
 
     expect(processedTypes).toContain("email");
@@ -2751,7 +2809,7 @@ describe("Rollback", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     await expectMetrics([
@@ -2836,7 +2894,7 @@ describe("Rollback", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     await expectMetrics([
@@ -2921,7 +2979,7 @@ describe("Rollback", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     await expectMetrics([
@@ -3020,7 +3078,7 @@ describe("Rollback", () => {
     });
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     await expectMetrics([
@@ -3211,7 +3269,7 @@ describe("Rollback", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     await expectMetrics([
@@ -3335,7 +3393,7 @@ describe("Rollback", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     await expectSpans([
@@ -3439,7 +3497,7 @@ describe("Rollback", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     await expectSpans([

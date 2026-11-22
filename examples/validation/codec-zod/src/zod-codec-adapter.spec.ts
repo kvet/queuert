@@ -81,7 +81,7 @@ test("round-trips a Date through the worker and back out of a client read", asyn
   );
 
   await workerRunner.start();
-  const result = await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 10 });
+  const result = await client.awaitChain({ chain, timeoutMs: 5000, pollIntervalMs: 10 });
 
   expect(result.output.sentAt).toEqual(sentAt);
 

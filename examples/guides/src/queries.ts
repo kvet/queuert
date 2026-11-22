@@ -81,8 +81,8 @@ const createOrder = async (orderId: string) =>
   });
 const { stockChain, orderChain } = await createOrder("order-1");
 const { orderChain: secondOrderChain } = await createOrder("order-2");
-await client.awaitChain(orderChain, { timeoutMs: 5000 });
-await client.awaitChain(secondOrderChain, { timeoutMs: 5000 });
+await client.awaitChain({ chain: orderChain, timeoutMs: 5000 });
+await client.awaitChain({ chain: secondOrderChain, timeoutMs: 5000 });
 
 // #region lookups
 const chain = await client.getChain({ id: orderChain.id, typeName: "process-order" });

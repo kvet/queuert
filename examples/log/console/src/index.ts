@@ -90,7 +90,7 @@ const successChain = stateAdapter.withTransaction((ctx) =>
     input: { name: "World" },
   }),
 );
-await client.awaitChain(successChain, { timeoutMs: 5000 });
+await client.awaitChain({ chain: successChain, timeoutMs: 5000 });
 
 // Run job that fails then succeeds (demonstrates error logging)
 console.log("\n--- Running job that fails first attempt ---\n");
@@ -101,4 +101,4 @@ const failThenSucceedChain = stateAdapter.withTransaction((ctx) =>
     input: { shouldFail: true },
   }),
 );
-await client.awaitChain(failThenSucceedChain, { timeoutMs: 5000 });
+await client.awaitChain({ chain: failThenSucceedChain, timeoutMs: 5000 });

@@ -130,7 +130,7 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        const finishedChain = yield* wait(client.awaitChain(chain, completionOptions));
+        const finishedChain = yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         assert.deepEqual(finishedChain.output, { result: 3 });
       }),
@@ -228,8 +228,8 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         yield* wait(workerRunner.start());
         const [succeededJobEven, succeededJobOdd] = yield* wait(
           Promise.all([
-            client.awaitChain(evenChain, completionOptions),
-            client.awaitChain(oddChain, completionOptions),
+            client.awaitChain({ chain: evenChain, ...completionOptions }),
+            client.awaitChain({ chain: oddChain, ...completionOptions }),
           ]),
         );
 
@@ -340,8 +340,8 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         yield* wait(workerRunner.start());
         const [succeededJobEven, succeededJobOdd] = yield* wait(
           Promise.all([
-            client.awaitChain(evenChain, completionOptions),
-            client.awaitChain(oddChain, completionOptions),
+            client.awaitChain({ chain: evenChain, ...completionOptions }),
+            client.awaitChain({ chain: oddChain, ...completionOptions }),
           ]),
         );
 
@@ -406,7 +406,7 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        const succeededChain = yield* wait(client.awaitChain(chain, completionOptions));
+        const succeededChain = yield* wait(client.awaitChain({ chain, ...completionOptions }));
         assert.deepEqual(succeededChain.output, { done: true });
       }),
     },
@@ -483,7 +483,7 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        const succeededChain = yield* wait(client.awaitChain(chain, completionOptions));
+        const succeededChain = yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         assert.deepEqual(succeededChain.output, { finalResult: 3 });
       }),
@@ -567,8 +567,8 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         yield* wait(workerRunner.start());
         const [resultA, resultB] = yield* wait(
           Promise.all([
-            client.awaitChain(chainA, { pollIntervalMs: 100, timeoutMs: 5000 }),
-            client.awaitChain(chainB, { pollIntervalMs: 100, timeoutMs: 5000 }),
+            client.awaitChain({ chain: chainA, pollIntervalMs: 100, timeoutMs: 5000 }),
+            client.awaitChain({ chain: chainB, pollIntervalMs: 100, timeoutMs: 5000 }),
           ]),
         );
         assert.deepEqual(resultA.output, { done: true });
@@ -657,12 +657,12 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         yield* wait(workerRunner.start());
         const [completedParent] = yield* wait(
           Promise.all([
-            client.awaitChain(parentChain, completionOptions),
+            client.awaitChain({ chain: parentChain, ...completionOptions }),
             (async () =>
-              client.awaitChain(
-                { id: await independentChainCreated.promise, typeName: "independent" },
-                completionOptions,
-              ))(),
+              client.awaitChain({
+                chain: { id: await independentChainCreated.promise, typeName: "independent" },
+                ...completionOptions,
+              }))(),
           ]),
         );
 
@@ -725,7 +725,7 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        const finished = yield* wait(client.awaitChain(chain, completionOptions));
+        const finished = yield* wait(client.awaitChain({ chain, ...completionOptions }));
         assert.deepEqual(finished.output, { id: userId });
       }),
     },
@@ -874,8 +874,8 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain1, completionOptions));
-        yield* wait(client.awaitChain(chain2, completionOptions));
+        yield* wait(client.awaitChain({ chain: chain1, ...completionOptions }));
+        yield* wait(client.awaitChain({ chain: chain2, ...completionOptions }));
 
         assert.equal(collisionOccurred, true);
       }),

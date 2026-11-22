@@ -2,14 +2,20 @@ import { truncate } from "@queuert/helpers/serialize-error";
 import { type SyncAsync, syncAsync, step } from "@queuert/sync-async";
 
 import type { AnyJobOutcome, AnyJobOutcomeFields } from "../attempt/attempt-handler.types.ts";
-import { type Chain, mapStateChainToChain } from "../entities/chain.ts";
+import { type Chain, assertChainsTypeName, mapStateChainToChain } from "../entities/chain.ts";
 import type { DeduplicationOptions } from "../entities/deduplication.ts";
 import type { ScheduleOptions } from "../entities/schedule.ts";
 import {
-  BlockerLimitExceededError,
-  ChainNotFoundError,
-  ChainTypeMismatchError,
+  ChainsNotFoundError,
+  InvalidJobIdError,
+  InvalidJobIdsError,
+  JobBlockerLimitExceededError,
   JobNotFoundError,
+  JobsBlockerLimitExceededError,
+  JobsTypeValidationError,
+  JobTypeValidationError,
+  UnknownJobTypeError,
+  UnknownJobTypesError,
 } from "../errors.ts";
 import type { AnyNewJob } from "../job-types/job-types.resolvers.ts";
 import { notifyAfterTransaction } from "../notify-adapter/tx-notifications.ts";
@@ -38,16 +44,6 @@ type CreatedJob = {
   blockerChains: StateChain[];
 };
 
-const assertBlockerLimit = (helpers: Helpers, typeName: string, blockerCount: number): void => {
-  const limit = helpers.stateAdapter.config.maxBlockersPerJob;
-  if (blockerCount > limit) {
-    throw new BlockerLimitExceededError(
-      `Job "${typeName}" declares ${blockerCount} blockers, exceeding the limit of ${limit}`,
-      { typeName, count: blockerCount, limit },
-    );
-  }
-};
-
 type PreparedJob = {
   entry: AnyNewJob & { deduplication?: DeduplicationOptions };
   id: string;
@@ -57,50 +53,105 @@ type PreparedJob = {
 
 type LockedJob = PreparedJob & { blockerChains: StateChain[] };
 
-const prepareJobs = (
-  helpers: Helpers,
-  entries: PreparedJob["entry"][],
-  fromJob: StateJob | null,
-): PreparedJob[] => {
-  const prepared = entries.map((entry): PreparedJob => {
-    assertBlockerLimit(helpers, entry.typeName, entry.blockers?.length ?? 0);
-    return {
-      entry,
-      id: resolveJobId(helpers.stateAdapter.config, entry.id),
-      encodedInput: helpers.jobTypes.encodeInput(entry.typeName, entry.input),
-      jobSpan: undefined,
-    };
-  });
+type ItemError =
+  | JobBlockerLimitExceededError
+  | InvalidJobIdError
+  | JobTypeValidationError
+  | UnknownJobTypeError;
 
-  for (const item of prepared) {
-    item.jobSpan = helpers.observabilityHelper.startJobSpan(item.entry.typeName, fromJob);
-  }
-  return prepared;
+const isItemError = (error: unknown): error is ItemError =>
+  error instanceof JobBlockerLimitExceededError ||
+  error instanceof InvalidJobIdError ||
+  error instanceof JobTypeValidationError ||
+  error instanceof UnknownJobTypeError;
+
+const failuresOf = <TError extends ItemError>(
+  failures: { itemIndex: number; error: ItemError }[],
+  errorClass: new (...args: any[]) => TError,
+) => {
+  const matching = failures.flatMap(({ itemIndex, error }) =>
+    error instanceof errorClass ? [{ itemIndex, error }] : [],
+  );
+  return {
+    description: matching
+      .map(({ itemIndex, error }) => `item ${itemIndex} (${error.message})`)
+      .join(", "),
+    options: {
+      itemIndexes: matching.map(({ itemIndex }) => itemIndex),
+      errors: matching.map(({ error }) => error),
+    },
+  };
 };
 
-const requireBlockerChain = (
-  blocker: { id: string; typeName?: string },
-  blockerChain: StateChain | undefined,
-): StateChain => {
-  if (!blockerChain) {
-    throw new ChainNotFoundError(`Chain with id ${blocker.id} not found`, {
-      chainId: blocker.id,
-    });
-  }
-  if (blocker.typeName !== undefined && blocker.typeName !== blockerChain.typeName) {
-    throw new ChainTypeMismatchError(
-      `Expected blocker chain ${blocker.id} to have type "${blocker.typeName}" but found "${blockerChain.typeName}"`,
-      { expectedTypeName: blocker.typeName, actualTypeName: blockerChain.typeName },
+const toItemsError = (failures: { itemIndex: number; error: ItemError }[]): Error => {
+  const first = failures[0].error;
+  if (first instanceof JobBlockerLimitExceededError) {
+    const { description, options } = failuresOf(failures, JobBlockerLimitExceededError);
+    return new JobsBlockerLimitExceededError(
+      `Jobs declare too many blockers: ${description}`,
+      options,
     );
   }
-  return blockerChain;
+  if (first instanceof InvalidJobIdError) {
+    const { description, options } = failuresOf(failures, InvalidJobIdError);
+    return new InvalidJobIdsError(`Invalid job IDs: ${description}`, options);
+  }
+  if (first instanceof UnknownJobTypeError) {
+    const { description, options } = failuresOf(failures, UnknownJobTypeError);
+    return new UnknownJobTypesError(`Unknown job types: ${description}`, options);
+  }
+  const { description, options } = failuresOf(failures, JobTypeValidationError);
+  return new JobsTypeValidationError(`Job type validation failed: ${description}`, options);
+};
+
+const mapItems = <TItem, TResult>(
+  items: readonly TItem[],
+  map: (item: TItem) => TResult,
+  itemIndexOf?: (index: number) => number,
+): TResult[] => {
+  let failures: { itemIndex: number; error: ItemError }[] | undefined;
+  const results = items.map((item, index) => {
+    try {
+      return map(item);
+    } catch (error) {
+      if (!isItemError(error)) throw error;
+      (failures ??= []).push({ itemIndex: itemIndexOf?.(index) ?? index, error });
+      return undefined as TResult;
+    }
+  });
+  if (failures !== undefined) throw toItemsError(failures);
+  return results;
+};
+
+const assertBlockerLimit = (helpers: Helpers, typeName: string, blockerCount: number): void => {
+  const limit = helpers.stateAdapter.config.maxBlockersPerJob;
+  if (blockerCount > limit) {
+    throw new JobBlockerLimitExceededError(
+      `Job "${typeName}" declares ${blockerCount} blockers, exceeding the limit of ${limit}`,
+      { typeName, count: blockerCount, limit },
+    );
+  }
+};
+
+const prepareJob = (helpers: Helpers, entry: PreparedJob["entry"]): PreparedJob => {
+  assertBlockerLimit(helpers, entry.typeName, entry.blockers?.length ?? 0);
+  return {
+    entry,
+    id: resolveJobId(helpers.stateAdapter.config, entry.id),
+    encodedInput: helpers.jobTypes.encodeInput(entry.typeName, entry.input),
+    jobSpan: undefined,
+  };
 };
 
 const noChains: (StateChain | undefined)[] = [];
 
 const lockBlockerChains = syncAsync(function* (
   helpers: Helpers,
-  { items, txCtx }: { items: PreparedJob[]; txCtx: BaseTxContext },
+  {
+    items,
+    itemIndexOf,
+    txCtx,
+  }: { items: PreparedJob[]; itemIndexOf?: (index: number) => number; txCtx: BaseTxContext },
 ) {
   const blockerChainIds: string[] = [];
   for (const item of items) {
@@ -122,20 +173,40 @@ const lockBlockerChains = syncAsync(function* (
     ),
   });
 
+  if (blockerChainIds.length > 0) {
+    const missingChainIds = [
+      ...new Set(blockerChainIds.filter((_, index) => lockedChains[index] === undefined)),
+    ];
+    if (missingChainIds.length > 0) {
+      throw new ChainsNotFoundError(`Chains not found: ${missingChainIds.join(", ")}`, {
+        chainIds: missingChainIds,
+      });
+    }
+    assertChainsTypeName(lockedChains, {
+      chainIds: blockerChainIds,
+      typeNames: items.flatMap((item) =>
+        (item.entry.blockers ?? []).map((blocker) => blocker.typeName),
+      ),
+    });
+  }
+
   const fetched = lockedChains.values();
-  return items.map((item): LockedJob => {
-    const jobBlockerChains = (item.entry.blockers ?? []).map((blocker) =>
-      requireBlockerChain(blocker, fetched.next().value),
-    );
-    helpers.jobTypes.validateBlockers(
-      item.entry.typeName,
-      jobBlockerChains.map((blockerChain) => ({
-        typeName: blockerChain.typeName,
-        input: helpers.jobTypes.decodeInput(blockerChain.head.typeName, blockerChain.head.input),
-      })),
-    );
-    return { ...item, blockerChains: jobBlockerChains };
-  });
+  const locked = mapItems(
+    items,
+    (item): LockedJob => {
+      const blockerChains = (item.entry.blockers ?? []).map(() => fetched.next().value!);
+      helpers.jobTypes.validateBlockers(
+        item.entry.typeName,
+        blockerChains.map((blockerChain) => ({
+          typeName: blockerChain.typeName,
+          input: helpers.jobTypes.decodeInput(blockerChain.head.typeName, blockerChain.head.input),
+        })),
+      );
+      return { ...item, blockerChains };
+    },
+    itemIndexOf,
+  );
+  return locked;
 });
 
 const addJobsBlockers = syncAsync(function* (
@@ -269,9 +340,6 @@ export const runCreateChains: SyncAsync<
   if (chains.length === 0) return [];
 
   for (const chain of chains) {
-    helpers.jobTypes.validateEntry(chain.typeName);
-  }
-  for (const chain of chains) {
     const scope: unknown = chain.deduplication?.scope;
     if (chain.deduplication != null && scope !== "running" && scope !== "any") {
       throw new TypeError(
@@ -280,7 +348,13 @@ export const runCreateChains: SyncAsync<
     }
   }
 
-  const prepared = prepareJobs(helpers, chains, null);
+  const prepared = mapItems(chains, (chain) => {
+    helpers.jobTypes.validateEntry(chain.typeName);
+    return prepareJob(helpers, chain);
+  });
+  for (const item of prepared) {
+    item.jobSpan = helpers.observabilityHelper.startJobSpan(item.entry.typeName, null);
+  }
   try {
     const locked = yield* lockBlockerChains.steps(helpers, { items: prepared, txCtx });
     const createdChains = yield* step(
@@ -437,18 +511,27 @@ const completeOutputItems = syncAsync(function* (
 
 const continueItems = syncAsync(function* (
   helpers: Helpers,
-  { items, txCtx }: { items: OutcomeItem[]; txCtx: BaseTxContext },
+  {
+    items,
+    prepared,
+    itemIndexOf,
+    txCtx,
+  }: {
+    items: OutcomeItem[];
+    prepared: PreparedJob[];
+    itemIndexOf?: (index: number) => number;
+    txCtx: BaseTxContext;
+  },
 ) {
-  const prepared = items.flatMap(({ job, outcome }) => {
-    const { continueWith } = outcome as { continueWith: AnyNewJob };
-    helpers.jobTypes.validateContinueWith(job.typeName, {
-      typeName: continueWith.typeName,
-      input: continueWith.input,
-    });
-    return prepareJobs(helpers, [continueWith], job);
+  prepared.forEach((item, index) => {
+    item.jobSpan = helpers.observabilityHelper.startJobSpan(item.entry.typeName, items[index].job);
   });
   try {
-    const locked = yield* lockBlockerChains.steps(helpers, { items: prepared, txCtx });
+    const locked = yield* lockBlockerChains.steps(helpers, {
+      items: prepared,
+      itemIndexOf,
+      txCtx,
+    });
     const continuedJobs = yield* step(
       helpers.stateAdapter.continueJobs({
         txCtx,
@@ -540,16 +623,39 @@ export const runApplyJobOutcomes: SyncAsync<
   helpers: Helpers,
   { items, txCtx }: { items: OutcomeItem[]; txCtx: BaseTxContext },
 ) {
+  const prepared = mapItems(items, ({ job, outcome }) => {
+    if ("output" in outcome) return helpers.jobTypes.encodeOutput(job.typeName, outcome.output);
+    if (!("continueWith" in outcome)) return undefined;
+    const { continueWith } = outcome;
+    helpers.jobTypes.validateContinueWith(job.typeName, {
+      typeName: continueWith.typeName,
+      input: continueWith.input,
+    });
+    return prepareJob(helpers, continueWith);
+  });
   const outputItems = items.filter(({ outcome }) => "output" in outcome);
   const continueWithItems = items.filter(({ outcome }) => "continueWith" in outcome);
   const reschedulesItems = items.filter(({ outcome }) => "reschedule" in outcome);
-  const encodedOutputs = outputItems.map(({ job, outcome }) =>
-    helpers.jobTypes.encodeOutput(job.typeName, (outcome as { output: unknown }).output),
-  );
+  const encodedOutputs =
+    outputItems.length === items.length
+      ? prepared
+      : prepared.filter((_, index) => "output" in items[index].outcome);
 
   const written: (OutcomeJob | undefined)[] = [
     ...(continueWithItems.length > 0
-      ? yield* continueItems.steps(helpers, { items: continueWithItems, txCtx })
+      ? yield* continueItems.steps(helpers, {
+          items: continueWithItems,
+          prepared: (continueWithItems.length === items.length
+            ? prepared
+            : prepared.filter(
+                (_, index) => "continueWith" in items[index].outcome,
+              )) as PreparedJob[],
+          itemIndexOf:
+            continueWithItems.length === items.length
+              ? undefined
+              : (index) => items.indexOf(continueWithItems[index]),
+          txCtx,
+        })
       : []),
     ...(outputItems.length > 0
       ? yield* completeOutputItems.steps(helpers, { items: outputItems, encodedOutputs, txCtx })

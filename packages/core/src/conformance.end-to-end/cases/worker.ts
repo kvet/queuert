@@ -79,7 +79,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        const completedChain = yield* wait(client.awaitChain(chain, completionOptions));
+        const completedChain = yield* wait(client.awaitChain({ chain, ...completionOptions }));
         assert.deepEqual(completedChain.output, { result: true });
       }),
     },
@@ -149,8 +149,8 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         yield* wait(workerRunner.start());
         yield* wait(
           Promise.all([
-            client.awaitChain(emailChain, completionOptions),
-            client.awaitChain(smsChain, completionOptions),
+            client.awaitChain({ chain: emailChain, ...completionOptions }),
+            client.awaitChain({ chain: smsChain, ...completionOptions }),
           ]),
         );
 
@@ -272,7 +272,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(restWorkerRunner.start());
-        yield* wait(client.awaitChain(notifyChain, completionOptions));
+        yield* wait(client.awaitChain({ chain: notifyChain, ...completionOptions }));
         yield* wait(restWorkerRunner.close());
         assert.deepEqual(processed, ["images.notify:trace-1"]);
         assert.equal((yield* step(client.getChain({ id: resizeChain.id })))?.status, "running");
@@ -281,8 +281,8 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         yield* wait(dedicatedWorkerRunner.start());
         yield* wait(
           Promise.all([
-            client.awaitChain(resizeChain, completionOptions),
-            client.awaitChain(chargeChain, completionOptions),
+            client.awaitChain({ chain: resizeChain, ...completionOptions }),
+            client.awaitChain({ chain: chargeChain, ...completionOptions }),
           ]),
         );
         yield* wait(dedicatedWorkerRunner.close());
@@ -340,7 +340,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           ),
         );
 
-        const completedChain = yield* wait(client.awaitChain(chain, completionOptions));
+        const completedChain = yield* wait(client.awaitChain({ chain, ...completionOptions }));
         assert.deepEqual(completedChain.output, { result: true });
       }),
     },
@@ -401,9 +401,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         }
 
         yield* wait(workerRunner.start());
-        yield* wait(
-          Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions))),
-        );
+        yield* wait(client.awaitChains({ chains, ...completionOptions }));
         yield* wait(workerRunner.close());
 
         assert.deepEqual(processedJobs, [0, 1, 2, 3, 4]);
@@ -476,7 +474,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
         yield* wait(workerRunner.close());
 
         assert.deepEqual(order, ["mw1-before", "mw2-before", "process", "mw2-after", "mw1-after"]);
@@ -549,7 +547,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
         yield* wait(workerRunner.close());
 
         assert.deepEqual(order, [
@@ -622,7 +620,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         yield* wait(handlerStarted);
         yield* wait(workerRunner.stop());
 
-        const completedChain = yield* wait(client.awaitChain(chain, completionOptions));
+        const completedChain = yield* wait(client.awaitChain({ chain, ...completionOptions }));
         assert.equal(completedChain.status, "completed");
       }),
     },
@@ -707,7 +705,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         chainCompletedExternally.resolve();
         yield* wait(stopped);
 
-        const completedChain = yield* wait(client.awaitChain(chain, completionOptions));
+        const completedChain = yield* wait(client.awaitChain({ chain, ...completionOptions }));
         assert.deepEqual(completedChain.output, { source: "external" });
       }),
     },
@@ -769,9 +767,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(
-          Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions))),
-        );
+        yield* wait(client.awaitChains({ chains, ...completionOptions }));
         yield* wait(workerRunner.close());
 
         assert.ok(startAttemptDelayCalls <= 10);
@@ -838,9 +834,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           spyStateAdapter.calls.filter((call) => call.name === "startJobAttempts").length,
           1,
         );
-        yield* wait(
-          Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions))),
-        );
+        yield* wait(client.awaitChains({ chains, ...completionOptions }));
       }),
     },
     {
@@ -885,7 +879,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         assert.partialDeepStrictEqual(yield* step(client.getJob({ id: chain.id })), {
           status: "completed",
@@ -1167,7 +1161,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         assert.partialDeepStrictEqual(yield* step(client.getJob({ id: chain.id })), {
           status: "completed",
@@ -1246,7 +1240,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         yield* wait(leaseLosingWorkerRunner.start());
         yield* wait(jobStarted.promise);
         yield* wait(sameIdWorkerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
         yield* wait(sameIdWorkerRunner.close());
         handlerReleased.resolve();
         yield* wait(leaseLosingWorkerRunner.close());
@@ -1342,7 +1336,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         yield* wait(frozenWorkerRunner.start());
         yield* wait(jobStarted.promise);
         yield* wait(sameIdWorkerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
         yield* wait(frozenWorkerRunner.stop());
 
         assert.partialDeepStrictEqual(yield* step(client.getWorker({ id: workerId })), {
@@ -1409,7 +1403,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         assert.partialDeepStrictEqual(yield* step(client.getJob({ id: chain.id })), {
           status: "completed",
@@ -1473,7 +1467,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         assert.partialDeepStrictEqual(yield* step(client.getJob({ id: chain.id })), {
           status: "completed",
@@ -1613,11 +1607,11 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
             }),
           ),
         );
-        yield* wait(client.awaitChain(fastChain, completionOptions));
+        yield* wait(client.awaitChain({ chain: fastChain, ...completionOptions }));
         fastCompleted.abort();
         yield* wait(reclaimPassed.promise);
         releaseSlow.resolve();
-        yield* wait(client.awaitChain(slowChain, completionOptions));
+        yield* wait(client.awaitChain({ chain: slowChain, ...completionOptions }));
 
         assert.partialDeepStrictEqual(yield* step(client.getJob({ id: slowChain.id })), {
           status: "completed",
@@ -1719,7 +1713,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         releaseDeleted.resolve();
         yield* wait(reclaimPassed.promise);
         releaseRecreated.resolve();
-        yield* wait(client.awaitChain(recreatedChain, completionOptions));
+        yield* wait(client.awaitChain({ chain: recreatedChain, ...completionOptions }));
 
         assert.partialDeepStrictEqual(yield* step(client.getJob({ id: chainId })), {
           status: "completed",
@@ -1768,7 +1762,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         assert.partialDeepStrictEqual(yield* step(client.getJob({ id: chain.id })), {
           status: "completed",
@@ -1818,7 +1812,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         assert.partialDeepStrictEqual(yield* step(client.getJob({ id: chain.id })), {
           status: "completed",

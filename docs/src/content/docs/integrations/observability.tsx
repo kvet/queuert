@@ -94,13 +94,7 @@ const members = (): FieldItem[] => [
   {
     name: "Tracing",
     description: "Span starts return handles that manage each span's lifecycle.",
-    extra: [
-      "startJobSpan",
-      "startAttemptSpan",
-      "startBlockerSpan",
-      "completeBlockerSpan",
-      "completeJobSpan",
-    ],
+    extra: ["startJobSpan", "startAttemptSpan", "startBlockerSpan", "completeBlockerSpan"],
   },
 ];
 

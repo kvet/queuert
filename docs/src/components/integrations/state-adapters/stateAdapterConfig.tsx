@@ -10,7 +10,7 @@ export const stateAdapterConfigItems = (): FieldItem[] => [
     description: (
       <>
         The most blocker chains a single job may declare. Declaring more throws{" "}
-        <code>BlockerLimitExceededError</code>; see{" "}
+        <code>JobBlockerLimitExceededError</code>; see{" "}
         <A href="/guides/job-blockers/#blocker-limit">Job Blockers</A>.
       </>
     ),
@@ -41,7 +41,8 @@ export const stateAdapterConfigItems = (): FieldItem[] => [
     description: (
       <>
         Runs on every caller-supplied and generated ID before writing, throwing{" "}
-        <code>InvalidJobIdError</code> on failure.
+        <code>InvalidJobIdError</code> on failure, or <code>InvalidJobIdsError</code> listing every
+        offending item from <code>createChains</code> and <code>applyJobOutcomes</code>.
       </>
     ),
   },

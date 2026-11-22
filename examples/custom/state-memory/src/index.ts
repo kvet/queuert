@@ -76,5 +76,5 @@ const chain = await stateAdapter.withTransaction(async (txCtx) =>
 );
 // #endregion
 
-const result = await client.awaitChain(chain, { timeoutMs: 5000 });
+const result = await client.awaitChain({ chain, timeoutMs: 5000 });
 console.log(`Image published at ${result.output.url}`);

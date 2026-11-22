@@ -61,7 +61,8 @@ export type JobAttemptSpanInputData = {
   jobId: string;
   jobTypeName: string;
   attempt: number;
-  workerId: string;
+  /** The worker running the attempt, or `null` when the client applies the outcome. */
+  workerId: string | null;
 };
 
 /** Result of a job attempt span — completed or failed. */
@@ -71,7 +72,10 @@ export type JobAttemptSpanResult =
       continuedWith?: { jobId: string; jobTypeName: string };
       /** `output` is the encoded (stored) form — see {@link ObservabilityAdapter}. */
       chainCompleted?: { output: unknown };
-      /** Set when the attempt ended with `complete({ reschedule })`, with its `reason` if given. */
+      /**
+       * Set when the job was rescheduled, by `complete({ reschedule })` or the client's
+       * `applyJobOutcome({ reschedule })`, with its `reason` if given.
+       */
       rescheduled?: { reason?: string };
     }
   | {
@@ -82,18 +86,6 @@ export type JobAttemptSpanResult =
 /** Handle for managing a job attempt span. */
 export type JobAttemptSpanHandle = {
   end: (result: JobAttemptSpanResult) => void;
-};
-
-/** Input data for completing a job span after all attempts. */
-export type CompleteJobSpanInputData = {
-  chainTraceContext: string | null;
-  traceContext: string | null;
-  chainId: string;
-  chainTypeName: string;
-  jobId: string;
-  jobTypeName: string;
-  continuedWith?: { jobId: string; jobTypeName: string };
-  chainCompleted: boolean;
 };
 
 /** Input data for creating a blocker dependency span. */
@@ -189,5 +181,4 @@ export type ObservabilityAdapter = {
   startBlockerSpan: (data: BlockerSpanInputData) => BlockerSpanHandle | undefined;
   completeBlockerSpan: (data: CompleteBlockerSpanData) => void;
   startAttemptSpan: (data: JobAttemptSpanInputData) => JobAttemptSpanHandle | undefined;
-  completeJobSpan: (data: CompleteJobSpanInputData) => void;
 };

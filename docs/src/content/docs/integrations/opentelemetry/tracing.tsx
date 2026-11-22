@@ -101,9 +101,9 @@ const spans: FieldItem[] = [
     name: "start job-attempt.{type}",
     id: "start-job-attempt",
     kind: consumer,
-    created: <>worker claims job</>,
+    created: <>worker claims job, or the client applies an outcome</>,
     ended: "attempt completes/fails",
-    duration: "processing time",
+    duration: "processing time, ~0ms for the client",
     attributes: [
       ...chainIds,
       ...jobIds,
@@ -112,19 +112,6 @@ const spans: FieldItem[] = [
       ...continuedWith,
       "queuert.reschedule.reason",
     ],
-  }),
-  span({
-    name: "complete job.{type}",
-    id: "complete-job",
-    kind: consumer,
-    created: (
-      <>
-        <code>applyJobOutcome</code> completes the job
-      </>
-    ),
-    ended: "immediately",
-    duration: "~0ms",
-    attributes: [...chainIds, ...jobIds, ...continuedWith],
   }),
   span({
     name: "complete chain.{type}",
@@ -151,11 +138,16 @@ const attributes: FieldItem[] = [
   },
   { name: "queuert.job.id", chips: ["string"], description: "Job ID." },
   { name: "queuert.job.type", chips: ["string"], description: "Job type name." },
-  { name: "queuert.job.attempt", chips: ["number"], description: "Attempt number." },
+  {
+    name: "queuert.job.attempt",
+    chips: ["number"],
+    description:
+      "Attempt number; for an outcome the client applies, the job's last attempt number, 0 if no worker ran it.",
+  },
   {
     name: "queuert.worker.id",
     chips: ["string"],
-    description: "Worker ID processing the attempt.",
+    description: "Worker ID processing the attempt; absent when the client applies the outcome.",
   },
   {
     name: "queuert.continued_with.job_id",
@@ -172,7 +164,8 @@ const attributes: FieldItem[] = [
     chips: ["string"],
     description: (
       <>
-        Reason passed to <code>{"complete({ reschedule, reason })"}</code>; present when the attempt
+        Reason passed to <code>{"complete({ reschedule, reason })"}</code> or{" "}
+        <code>{"applyJobOutcome({ reschedule, reason })"}</code>; present when the job was
         rescheduled with one.
       </>
     ),
@@ -260,20 +253,22 @@ const Page = () => (
       <A href="/guides/workerless-outcomes/">
         <code>applyJobOutcome</code>
       </A>{" "}
-      completes a job, there is no job-attempt. Instead, a CONSUMER job span marks the completion,
-      and if the chain is fully completed, a CONSUMER chain span closes the trace:
+      or <code>applyJobOutcomes</code> completes a job, the job-attempt span marks the completion as
+      it does for a worker, without <code>queuert.worker.id</code>, and if the chain is fully
+      completed, a CONSUMER chain span closes the trace:
     </p>
     <TraceWaterfall
       title="trace"
       subtitle="chain approve-refund"
-      label="approve-refund is created, then completed three minutes later through applyJobOutcome: a complete job span and its complete chain child"
+      label="approve-refund is created, then completed three minutes later through applyJobOutcome: a job-attempt span and its complete chain child"
       spans={approveRefundTrace}
     />
     <p>
-      The CONSUMER job span is a child of the PRODUCER job span and carries the same chain/job
-      attributes. When <code>applyJobOutcome</code> continues the chain with{" "}
-      <code>continueWith</code>, the CONSUMER chain span is omitted. A <code>reschedule</code>{" "}
-      outcome emits no span.
+      The job-attempt span is a child of the PRODUCER job span and ends right away. When the client
+      continues the chain with <code>continueWith</code>, the CONSUMER chain span is omitted. A{" "}
+      <code>reschedule</code> outcome ends the job-attempt span with{" "}
+      <code>queuert.reschedule.reason</code> when a <code>reason</code> is given, like a worker's{" "}
+      <code>complete({"{ reschedule }"})</code>.
     </p>
 
     <h2>Chain completion link</h2>

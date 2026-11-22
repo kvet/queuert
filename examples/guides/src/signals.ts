@@ -101,7 +101,7 @@ await stateAdapter.withTransaction(async (txCtx) =>
   }),
 );
 // #endregion
-const confirmedPayment = await client.awaitChain(payment, { timeoutMs: 5000 });
+const confirmedPayment = await client.awaitChain({ chain: payment, timeoutMs: 5000 });
 assert.equal(confirmedPayment.output.confirmedBy, "webhook");
 
 const items = Array.from({ length: 1000 }, (_, index) => `item-${index}`);
@@ -112,5 +112,5 @@ await batchStarted;
 await delay(50);
 await workerRunner.stop();
 
-const batchResult = await client.awaitChain(batch, { timeoutMs: 5000 });
+const batchResult = await client.awaitChain({ chain: batch, timeoutMs: 5000 });
 assert.ok(batchResult.output.processed > 0 && batchResult.output.processed < items.length);

@@ -145,9 +145,7 @@ const emailChains = await stateAdapter.withTransaction(async (txCtx) =>
     ],
   }),
 );
-await Promise.all(
-  emailChains.slice(0, 3).map(async (chain) => client.awaitChain(chain, { timeoutMs: 5000 })),
-);
+await client.awaitChains({ chains: emailChains.slice(0, 3), timeoutMs: 5000 });
 
 // #region schedule-first-run
 const scheduleCleanup = async () =>
@@ -166,7 +164,7 @@ const duplicateCleanupChain = await scheduleCleanup();
 assert.equal(duplicateCleanupChain.deduplicated, true);
 assert.equal(duplicateCleanupChain.id, cleanupChain.id);
 
-await client.awaitChain(cleanupChain, { timeoutMs: 5000 });
+await client.awaitChain({ chain: cleanupChain, timeoutMs: 5000 });
 
 const remainingEmailChains = await client.listChains({ typeName: "send-welcome-email" });
 assert.deepEqual(

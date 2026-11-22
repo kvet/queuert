@@ -107,7 +107,7 @@ await using workerRunner = createWorkerRunner({
 });
 await workerRunner.start();
 
-await client.awaitChain(firstSync, { timeoutMs: 5000 });
+await client.awaitChain({ chain: firstSync, timeoutMs: 5000 });
 const syncAfterCompletion = await stateAdapter.withTransaction(async (txCtx) =>
   client.createChain({
     ...txCtx,
@@ -131,7 +131,7 @@ const sendWelcomeEmail = async (userId: string) =>
   );
 // #endregion
 const welcomeEmail = await sendWelcomeEmail("123");
-await client.awaitChain(welcomeEmail, { timeoutMs: 5000 });
+await client.awaitChain({ chain: welcomeEmail, timeoutMs: 5000 });
 const repeatedWelcomeEmail = await sendWelcomeEmail("123");
 assert.equal(repeatedWelcomeEmail.deduplicated, true);
 assert.equal(repeatedWelcomeEmail.id, welcomeEmail.id);
@@ -146,7 +146,7 @@ const startHealthCheck = async () =>
     }),
   );
 const firstHealthCheck = await startHealthCheck();
-await client.awaitChain(firstHealthCheck, { timeoutMs: 5000 });
+await client.awaitChain({ chain: firstHealthCheck, timeoutMs: 5000 });
 const nextHealthCheck = await startHealthCheck();
 assert.equal(nextHealthCheck.deduplicated, true);
 assert.notEqual(nextHealthCheck.id, firstHealthCheck.id);

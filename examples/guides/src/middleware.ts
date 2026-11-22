@@ -173,7 +173,7 @@ const invoiceChain = await stateAdapter.withTransaction(async (txCtx) =>
     input: { tenantId: "acme", amountCents: 9900 },
   }),
 );
-const { invoiceId } = (await client.awaitChain(invoiceChain, { timeoutMs: 5000 })).output;
+const { invoiceId } = (await client.awaitChain({ chain: invoiceChain, timeoutMs: 5000 })).output;
 assert.equal(invoiceId, `inv-${invoiceChain.id}`);
 
 const receiptChain = await stateAdapter.withTransaction(async (txCtx) =>
@@ -183,7 +183,7 @@ const receiptChain = await stateAdapter.withTransaction(async (txCtx) =>
     input: { tenantId: "acme", invoiceId },
   }),
 );
-const receipt = await client.awaitChain(receiptChain, { timeoutMs: 5000 });
+const receipt = await client.awaitChain({ chain: receiptChain, timeoutMs: 5000 });
 assert.deepEqual(receipt.output, { delivered: true });
 await workerRunner.stop();
 

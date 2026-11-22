@@ -1,6 +1,11 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 
-import { DuplicateJobTypeError, JobTypeValidationError, UnknownJobTypeError } from "../errors.ts";
+import {
+  DuplicateJobTypeError,
+  JobTypeValidationError,
+  UnknownJobTypeError,
+  UnknownJobTypesError,
+} from "../errors.ts";
 import { defineJobTypes } from "../job-types/define-job-types.ts";
 import type { BaseJobTypeDefinitions } from "../job-types/job-type.ts";
 import type {
@@ -10,6 +15,8 @@ import type {
 } from "../job-types/job-types.resolvers.ts";
 import { type JobTypeDefinitions, createJobTypes } from "../job-types/job-types.ts";
 import { mergeJobTypes } from "../job-types/merge-job-types.ts";
+import { createInProcessStateAdapter } from "../state-adapter.in-process/state-adapter.in-process.ts";
+import { createClient } from "./client.ts";
 
 const createValidatedRegistry = <T extends BaseJobTypeDefinitions>(typeNames: string[]) => {
   const knownTypes = new Set(typeNames);
@@ -285,6 +292,43 @@ describe("mergeJobTypes", () => {
         expect(unknownError.typeName).toBe("job-unknown");
         expect([...unknownError.registeredTypeNames].sort()).toEqual(["job-a", "job-b"]);
       }
+    });
+
+    it("createChains reports every item whose type no slice owns", () => {
+      type TypesA = { "job-a": { entry: true; input: string; output: string } };
+      type TypesB = { "job-b": { entry: true; input: number; output: number } };
+      using stateAdapter = createInProcessStateAdapter();
+      const client = createClient({
+        stateAdapter,
+        jobTypes: mergeJobTypes([
+          createValidatedRegistry<TypesA>(["job-a"]),
+          createValidatedRegistry<TypesB>(["job-b"]),
+        ]),
+      });
+
+      expect(() =>
+        stateAdapter.withTransaction((txCtx) =>
+          client.createChains({
+            ...txCtx,
+            items: [
+              // @ts-expect-error testing runtime validation
+              { typeName: "job-missing", input: "x" },
+              { typeName: "job-a", input: "x" },
+              // @ts-expect-error testing runtime validation
+              { typeName: "job-other", input: 1 },
+            ],
+          }),
+        ),
+      ).toThrow(
+        expect.objectContaining({
+          constructor: UnknownJobTypesError,
+          itemIndexes: [0, 2],
+          errors: [
+            expect.objectContaining({ typeName: "job-missing" }),
+            expect.objectContaining({ typeName: "job-other" }),
+          ],
+        }),
+      );
     });
 
     it("UnknownJobTypeError fires across every routed method", () => {

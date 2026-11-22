@@ -47,7 +47,7 @@ Often the blocker chain was created earlier and only its ID was saved. Think of 
 
 <ExampleCode example="guides" file="src/job-blockers.ts" region="by-id-create" />
 
-Only keep the ID while the chain is still running: a completed chain can be removed by [cleanup](/queuert/guides/cleanup/), and a missing blocker chain throws [`ChainNotFoundError`](/queuert/api/core/classes/chainnotfounderror/).
+Only keep the ID while the chain is still running: a completed chain can be removed by [cleanup](/queuert/guides/cleanup/), and a missing blocker chain throws [`ChainNotFoundError`](/queuert/api/core/classes/chainnotfounderror/), or [`ChainsNotFoundError`](/queuert/api/core/classes/chainsnotfounderror/) listing every missing chain from `createChains` and `applyJobOutcomes`.
 
 ## Blocker References
 
@@ -55,6 +55,6 @@ The first example uses **nominal references** — `{ typeName: "fetch-data" }`. 
 
 ## Blocker Limit
 
-A single job may declare at most **100** blocker chains by default. Declaring more throws [`BlockerLimitExceededError`](/queuert/api/core/classes/blockerlimitexceedederror/) before any state is written. The limit belongs to the state adapter — pass `maxBlockersPerJob` to the state adapter factory to raise or lower it. Keep it bounded: the blocker model is built for fan-in of a bounded set of dependencies, not millions per job.
+A single job may declare at most **100** blocker chains by default. Declaring more throws [`JobBlockerLimitExceededError`](/queuert/api/core/classes/jobblockerlimitexceedederror/) before any state is written, or [`JobsBlockerLimitExceededError`](/queuert/api/core/classes/jobsblockerlimitexceedederror/) from `createChains` and `applyJobOutcomes`, with the `itemIndexes` of every offending item. The limit belongs to the state adapter — pass `maxBlockersPerJob` to the state adapter factory to raise or lower it. Keep it bounded: the blocker model is built for fan-in of a bounded set of dependencies, not millions per job.
 
 See [examples/guides/src/job-blockers.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/job-blockers.ts) for the runnable code. See also [Tx Hooks](../tx-hooks/) and [Chain Patterns](../chain-patterns/).

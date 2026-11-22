@@ -165,7 +165,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
         yield* wait(workerRunner.close());
 
         const callComplete = yield* wait(completeAfterHandler.promise);
@@ -253,7 +253,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           ),
         );
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
         yield* wait(workerRunner.close());
 
         assert.deepEqual(attempts, [1, 2, 3]);
@@ -313,7 +313,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           ),
         );
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         const completedJob = yield* step(client.getJob({ id: chain.id }));
         assert.equal(completedJob?.status, "completed");
@@ -383,7 +383,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(job, completionOptions));
+        yield* wait(client.awaitChain({ chain: job, ...completionOptions }));
         yield* wait(workerRunner.close());
 
         assert.equal(errors.length, 3);
@@ -464,7 +464,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         assert.deepEqual(chain.input, { test: true });
 
         yield* wait(workerRunner.start());
-        const completedChain = yield* wait(client.awaitChain(chain, completionOptions));
+        const completedChain = yield* wait(client.awaitChain({ chain, ...completionOptions }));
         assert.equal(completedChain.status, "completed");
         assert.deepEqual(completedChain.output, { result: true });
 
@@ -579,8 +579,8 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(completedChain, completionOptions));
-        yield* wait(client.awaitChain(continuedChain, completionOptions));
+        yield* wait(client.awaitChain({ chain: completedChain, ...completionOptions }));
+        yield* wait(client.awaitChain({ chain: continuedChain, ...completionOptions }));
       }),
     },
     {
@@ -628,7 +628,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        const completed = yield* wait(client.awaitChain(chain, completionOptions));
+        const completed = yield* wait(client.awaitChain({ chain, ...completionOptions }));
         assert.deepEqual(completed.output, { done: true });
 
         const job = yield* step(client.getJob({ id: chain.id }));
@@ -692,7 +692,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         const jobs = yield* step(client.listChainJobs({ chainId: chain.id }));
         assert.deepEqual(
@@ -742,7 +742,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
         yield* wait(workerRunner.close());
 
         assert.ok(!spyStateAdapter.calls.map((call) => call.name).includes("rescheduleJobs"));
@@ -789,7 +789,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
         yield* wait(workerRunner.close());
 
         assert.ok(!spyStateAdapter.calls.map((call) => call.name).includes("rescheduleJobs"));
@@ -846,7 +846,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
         assert.equal(
           ((yield* wait(workerError.promise)) as Error).message,
           "after a committed complete",
@@ -917,7 +917,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           ),
         );
         takenOver.resolve();
-        const completed = yield* wait(client.awaitChain(chain, completionOptions));
+        const completed = yield* wait(client.awaitChain({ chain, ...completionOptions }));
         assert.deepEqual(completed.output, { by: "workerless" });
         yield* wait(handlerAsserted.promise);
       }),
@@ -972,7 +972,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
 
         yield* wait(workerRunner.start());
-        const completed = yield* wait(client.awaitChain(chain, completionOptions));
+        const completed = yield* wait(client.awaitChain({ chain, ...completionOptions }));
         assert.deepEqual(completed.output, { try: 2 });
         yield* wait(workerRunner.close());
 
@@ -1042,7 +1042,7 @@ export const processAsyncGroup: ConformanceGroup<StateAdapterConformanceContext>
         );
 
         await workerRunner.start();
-        await client.awaitChain(chain, completionOptions);
+        await client.awaitChain({ chain, ...completionOptions });
         await workerRunner.close();
 
         assert.ok(!spyStateAdapter.calls.map((call) => call.name).includes("rescheduleJobs"));
@@ -1094,7 +1094,7 @@ export const processAsyncGroup: ConformanceGroup<StateAdapterConformanceContext>
         );
 
         await workerRunner.start();
-        await client.awaitChain(chain, completionOptions);
+        await client.awaitChain({ chain, ...completionOptions });
         await retryUntilPasses(
           async () => {
             assert.equal(aborted, false);
@@ -1179,7 +1179,7 @@ export const processAsyncGroup: ConformanceGroup<StateAdapterConformanceContext>
 
         await workerRunner.start();
         await handlerAsserted.promise;
-        const completed = await client.awaitChain(chain, completionOptions);
+        const completed = await client.awaitChain({ chain, ...completionOptions });
         assert.deepEqual(completed.output, { by: "workerless" });
       },
     },
@@ -1303,7 +1303,7 @@ export const processNotifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         assert.equal((yield* step(client.getJob({ id: chain.id })))?.attempt, 2);
       }),
@@ -1475,7 +1475,7 @@ export const processSavepointGroup: ConformanceGroup<EndToEndSavepointContext> =
         );
 
         yield* wait(workerRunner.start());
-        const completed = yield* wait(client.awaitChain(chain, completionOptions));
+        const completed = yield* wait(client.awaitChain({ chain, ...completionOptions }));
         assert.deepEqual(completed.output, { from: "transaction" });
         yield* wait(workerRunner.close());
 

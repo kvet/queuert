@@ -123,13 +123,13 @@ describe("assertChainsTypeName", () => {
     expect(() => {
       assertChainsTypeName([{ ...stateChain, typeName: "other" }], {
         chainIds: ["chain-1"],
-        typeName: undefined,
+        typeNames: [undefined],
       });
     }).not.toThrow();
     expect(() => {
       assertChainsTypeName([undefined, stateChain], {
         chainIds: ["chain-1", "chain-2"],
-        typeName: "test",
+        typeNames: ["test", "test"],
       });
     }).not.toThrow();
   });
@@ -142,13 +142,13 @@ describe("assertChainsTypeName", () => {
           { ...stateChain, id: "chain-2" },
           { ...stateChain, id: "chain-3", typeName: "another" },
         ],
-        { chainIds: ["chain-1", "chain-2", "chain-3"], typeName: "test" },
+        { chainIds: ["chain-1", "chain-2", "chain-3"], typeNames: ["test", "test", "other"] },
       );
     }).toThrow(
       expect.objectContaining({
         constructor: ChainsTypeMismatchError,
         chainIds: ["chain-1", "chain-3"],
-        expectedTypeNames: ["test", "test"],
+        expectedTypeNames: ["test", "other"],
         actualTypeNames: ["other", "another"],
       }),
     );

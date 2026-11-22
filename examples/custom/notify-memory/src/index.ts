@@ -54,7 +54,7 @@ const chain = await stateAdapter.withTransaction(async (ctx) =>
   }),
 );
 
-const result = await client.awaitChain(chain, { timeoutMs: 5000 });
+const result = await client.awaitChain({ chain, timeoutMs: 5000 });
 console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.rowCount}`);
 
 console.log("Done!");

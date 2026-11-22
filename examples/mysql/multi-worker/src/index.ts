@@ -138,11 +138,7 @@ const chains = await stateProvider.withTransaction(async (txCtx) => {
   });
 });
 
-await Promise.all(
-  chains.map(async (chain) =>
-    client.awaitChain(chain, { timeoutMs: 30_000, pollIntervalMs: POLL_INTERVAL_MS }),
-  ),
-);
+await client.awaitChains({ chains, timeoutMs: 30_000, pollIntervalMs: POLL_INTERVAL_MS });
 
 console.log("\n" + "=".repeat(60));
 console.log("Processing Summary");

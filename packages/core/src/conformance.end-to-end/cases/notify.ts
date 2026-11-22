@@ -59,7 +59,7 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
         );
 
         const signal = AbortSignal.timeout(2000);
-        yield* wait(client.awaitChain(chain, { timeoutMs: 2000 }));
+        yield* wait(client.awaitChain({ chain, timeoutMs: 2000 }));
         if (signal.aborted) {
           throw new Error("Timed out waiting for chain completion");
         }
@@ -115,9 +115,7 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
         );
 
         const signal = AbortSignal.timeout(200);
-        yield* wait(
-          Promise.all(chains.map(async (chain) => client.awaitChain(chain, { timeoutMs: 200 }))),
-        );
+        yield* wait(client.awaitChains({ chains, timeoutMs: 200 }));
         if (signal.aborted) {
           throw new Error("Timed out waiting for chain completions");
         }
@@ -209,7 +207,7 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
         );
 
         const signal = AbortSignal.timeout(1000);
-        yield* wait(client.awaitChain(chain, { signal, timeoutMs: 2000 }));
+        yield* wait(client.awaitChain({ chain, signal, timeoutMs: 2000 }));
         if (signal.aborted) {
           throw new Error("Timed out waiting for chain completion");
         }
@@ -280,7 +278,7 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
         );
 
         const signal = AbortSignal.timeout(1000);
-        yield* wait(client.awaitChain(chain, { timeoutMs: 2000 }));
+        yield* wait(client.awaitChain({ chain, timeoutMs: 2000 }));
         if (signal.aborted) {
           throw new Error("Timed out waiting for chain completion");
         }
@@ -426,7 +424,7 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
         {
           const workerRunner = yield* resource(createTestWorkerRunner(client));
           yield* wait(workerRunner.start());
-          yield* wait(client.awaitChain(chain, { timeoutMs: 5000 }));
+          yield* wait(client.awaitChain({ chain, timeoutMs: 5000 }));
         }
 
         yield* wait(jobCompleted.promise);
@@ -499,10 +497,7 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
         yield* wait(stopping);
 
         const completedChain = yield* wait(
-          client.awaitChain(chain, {
-            timeoutMs: 2000,
-            pollIntervalMs: 50,
-          }),
+          client.awaitChain({ chain, timeoutMs: 2000, pollIntervalMs: 50 }),
         );
         assert.deepEqual(completedChain.output, { result: "retried" });
       }),
@@ -619,7 +614,7 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
             client.createChain({ ...txCtx, typeName: "test", input: null }),
           ),
         );
-        yield* wait(client.awaitChain(chain, { timeoutMs: 2000 }));
+        yield* wait(client.awaitChain({ chain, timeoutMs: 2000 }));
         yield* wait(
           retryUntilPasses(
             async () => {

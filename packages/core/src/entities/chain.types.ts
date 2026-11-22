@@ -48,3 +48,13 @@ export type CompletedChain<TChain extends AnyChain> = Extract<
     status: "completed";
   }
 >;
+
+/**
+ * A reference to a chain that `awaitChain` and `awaitChains` wait on or a job declares as a
+ * blocker: `{ id, typeName? }`, or a chain read or created earlier. A passed `typeName` must match
+ * the stored one.
+ */
+export type ChainRef<TJobId, TChainTypeName extends string> = {
+  id: TJobId;
+  typeName?: TChainTypeName;
+};

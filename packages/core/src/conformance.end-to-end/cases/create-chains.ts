@@ -8,7 +8,7 @@ import type { StateAdapterConformanceContext } from "../../conformance.state-ada
 import { runInModeOf } from "../../conformance/adapters.ts";
 import { retryUntilPasses } from "../../conformance/retry-until-passes.ts";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
-import { ChainNotFoundError } from "../../errors.ts";
+import { ChainNotFoundError, InvalidJobIdsError } from "../../errors.ts";
 import { createProcessors } from "../../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../../job-types/define-job-types.ts";
 import { createWorkerRunner } from "../../worker/worker-runner.ts";
@@ -235,6 +235,24 @@ export const createChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
           ),
         );
         assert.ok(staleBlockerError instanceof ChainNotFoundError);
+
+        const otherStaleBlocker = { ...dep, id: crypto.randomUUID() };
+        yield* step(
+          assertRejects(
+            () =>
+              stateAdapter.withTransaction((txCtx) =>
+                client.createChains({
+                  ...txCtx,
+                  items: [
+                    { typeName: "main", input: null, blockers: [staleBlocker, dep] },
+                    { typeName: "main", input: null, blockers: [dep] },
+                    { typeName: "main", input: null, blockers: [otherStaleBlocker, staleBlocker] },
+                  ],
+                }),
+              ),
+            { name: "ChainsNotFoundError", chainIds: [staleBlocker.id, otherStaleBlocker.id] },
+          ),
+        );
 
         const mainJobs = yield* step(
           stateAdapter.listJobs({
@@ -768,9 +786,7 @@ export const createChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
         );
 
         yield* wait(workerRunner.start());
-        const results = yield* wait(
-          Promise.all(chains.map(async (jc) => client.awaitChain(jc, completionOptions))),
-        );
+        const results = yield* wait(client.awaitChains({ chains, ...completionOptions }));
         for (const result of results) {
           assert.deepEqual(result.output, { finalResult: 42 });
         }
@@ -821,15 +837,22 @@ export const createChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
         );
 
         yield* wait(workerRunner.start());
-        assert.deepEqual((yield* wait(client.awaitChain(chains[0], completionOptions))).output, {
-          result: 20,
-        });
-        assert.deepEqual((yield* wait(client.awaitChain(chains[1], completionOptions))).output, {
-          result: 40,
-        });
-        assert.deepEqual((yield* wait(client.awaitChain(chains[2], completionOptions))).output, {
-          result: 60,
-        });
+        assert.deepEqual(
+          (yield* wait(client.awaitChain({ chain: chains[0], ...completionOptions }))).output,
+          { result: 20 },
+        );
+        assert.deepEqual(
+          (yield* wait(client.awaitChain({ chain: chains[1], ...completionOptions }))).output,
+          {
+            result: 40,
+          },
+        );
+        assert.deepEqual(
+          (yield* wait(client.awaitChain({ chain: chains[2], ...completionOptions }))).output,
+          {
+            result: 60,
+          },
+        );
       }),
     },
     {
@@ -946,6 +969,59 @@ export const createChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
                 }),
               ),
             /Invalid job ID "bad-id" from caller/,
+          ),
+        );
+
+        yield* step(
+          assertRejects(
+            () =>
+              stateAdapter.withTransaction((txCtx) =>
+                client.createChains({
+                  ...txCtx,
+                  items: [
+                    { typeName: "test", id: "bad-id", input: null },
+                    { typeName: "test", input: null },
+                    { typeName: "test", id: "bad-id", input: null },
+                  ],
+                }),
+              ),
+            (error: unknown) => {
+              assert.ok(error instanceof InvalidJobIdsError);
+              assert.deepEqual(error.itemIndexes, [0, 2]);
+              assert.deepEqual(
+                error.errors.map(({ id, source }) => [id, source]),
+                [
+                  ["bad-id", "caller"],
+                  ["bad-id", "caller"],
+                ],
+              );
+              return true;
+            },
+          ),
+        );
+
+        yield* step(
+          assertRejects(
+            () =>
+              stateAdapter.withTransaction((txCtx) =>
+                client.createChains({
+                  ...txCtx,
+                  items: [
+                    { typeName: "test", id: "bad-id", input: null },
+                    {
+                      typeName: "test",
+                      input: null,
+                      // @ts-expect-error testing runtime validation
+                      blockers: Array.from(
+                        { length: stateAdapter.config.maxBlockersPerJob + 1 },
+                        () => ({ id: crypto.randomUUID() }),
+                      ),
+                    },
+                    { typeName: "test", id: "bad-id", input: null },
+                  ],
+                }),
+              ),
+            { name: "InvalidJobIdsError", itemIndexes: [0, 2] },
           ),
         );
       }),

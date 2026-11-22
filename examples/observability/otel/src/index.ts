@@ -311,7 +311,7 @@ console.log("One chain, one job, one attempt. Simplest trace structure.\n");
 const greetChain = stateAdapter.withTransaction((ctx) =>
   client.createChain({ ...ctx, typeName: "greet", input: { name: "World" } }),
 );
-const greetResult = await client.awaitChain(greetChain, { timeoutMs: 5000 });
+const greetResult = await client.awaitChain({ chain: greetChain, timeoutMs: 5000 });
 console.log("Result:", greetResult.output);
 
 // Scenario 2: Continuations
@@ -324,7 +324,7 @@ const orderChain = stateAdapter.withTransaction((ctx) =>
     input: { orderId: "ORD-123" },
   }),
 );
-const orderResult = await client.awaitChain(orderChain, { timeoutMs: 10000 });
+const orderResult = await client.awaitChain({ chain: orderChain, timeoutMs: 10000 });
 console.log("Result:", orderResult.output);
 
 // Scenario 3: Blockers (fan-out)
@@ -348,7 +348,7 @@ const blockerChain = stateAdapter.withTransaction((ctx) => {
     blockers: [userBlocker, permBlocker],
   });
 });
-const blockerResult = await client.awaitChain(blockerChain, { timeoutMs: 10000 });
+const blockerResult = await client.awaitChain({ chain: blockerChain, timeoutMs: 10000 });
 console.log("Result:", blockerResult.output);
 
 // Scenario 4: Batched work
@@ -363,7 +363,7 @@ const batchChain = stateAdapter.withTransaction((ctx) =>
     input: { items: [10, 20] },
   }),
 );
-const batchResult = await client.awaitChain(batchChain, { timeoutMs: 5000 });
+const batchResult = await client.awaitChain({ chain: batchChain, timeoutMs: 5000 });
 console.log("Result:", batchResult.output);
 
 // Scenario 5: Retries
@@ -376,7 +376,7 @@ const retryChain = stateAdapter.withTransaction((ctx) =>
     input: { shouldFail: true },
   }),
 );
-const retryResult = await client.awaitChain(retryChain, { timeoutMs: 5000 });
+const retryResult = await client.awaitChain({ chain: retryChain, timeoutMs: 5000 });
 console.log("Result:", retryResult.output);
 
 // Scenario 6: Client Completion

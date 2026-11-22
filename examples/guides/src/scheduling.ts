@@ -188,7 +188,7 @@ await stateAdapter.withTransaction(async (txCtx) => {
   }
 });
 // #endregion
-await client.awaitChain(reminder, { timeoutMs: 5000 });
+await client.awaitChain({ chain: reminder, timeoutMs: 5000 });
 assert.deepEqual(sentEmails, ["Weekly standup"]);
 
 const trial = await stateAdapter.withTransaction(async (txCtx) =>
@@ -211,13 +211,13 @@ const apiCall = await stateAdapter.withTransaction(async (txCtx) =>
     input: { endpoint: "/reports" },
   }),
 );
-const apiResult = await client.awaitChain(apiCall, { timeoutMs: 5000 });
+const apiResult = await client.awaitChain({ chain: apiCall, timeoutMs: 5000 });
 assert.equal(apiResult.output.data, "response from /reports");
 
 const firstDigest = await stateAdapter.withTransaction(async (txCtx) =>
   client.createChain({ ...txCtx, typeName: "daily-digest", input: { userId: "user-1" } }),
 );
-await client.awaitChain(firstDigest, { timeoutMs: 5000 });
+await client.awaitChain({ chain: firstDigest, timeoutMs: 5000 });
 const runningDigests = async () =>
   (await client.listChains({ typeName: "daily-digest", status: "running" })).items;
 const [secondDigest] = await runningDigests();
@@ -231,6 +231,6 @@ await stateAdapter.withTransaction(async (txCtx) => {
     reschedule: { afterMs: 0 },
   });
 });
-await client.awaitChain(secondDigest, { timeoutMs: 5000 });
+await client.awaitChain({ chain: secondDigest, timeoutMs: 5000 });
 assert.deepEqual(await runningDigests(), []);
 assert.deepEqual(sentEmails, ["Weekly standup", "digest for user-1", "digest for user-1"]);

@@ -167,7 +167,7 @@ const paidChain = await subscribe("subscription-1", {
   cancelRequested: false,
   cyclesCharged: 0,
 });
-const paid = await client.awaitChain(paidChain, { timeoutMs: 5000 });
+const paid = await client.awaitChain({ chain: paidChain, timeoutMs: 5000 });
 assert.deepEqual(paid.output, { cyclesCharged: 3 });
 assert.equal(subscriptions.get("subscription-1")!.status, "ended");
 
@@ -177,7 +177,7 @@ const expiredChain = await subscribe("subscription-2", {
   cancelRequested: false,
   cyclesCharged: 0,
 });
-const expired = await client.awaitChain(expiredChain, { timeoutMs: 5000 });
+const expired = await client.awaitChain({ chain: expiredChain, timeoutMs: 5000 });
 assert.deepEqual(expired.output, { expired: true });
 assert.equal(subscriptions.get("subscription-2")!.status, "expired");
 
@@ -187,6 +187,6 @@ const cancelledChain = await subscribe("subscription-3", {
   cancelRequested: true,
   cyclesCharged: 0,
 });
-const cancelled = await client.awaitChain(cancelledChain, { timeoutMs: 5000 });
+const cancelled = await client.awaitChain({ chain: cancelledChain, timeoutMs: 5000 });
 assert.deepEqual(cancelled.output, { cancelledAfterCycles: 0 });
 assert.equal(subscriptions.get("subscription-3")!.status, "cancelled");

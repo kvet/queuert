@@ -347,7 +347,7 @@ export const createOtelObservabilityAdapter = ({
             "queuert.job.id": data.jobId,
             "queuert.job.type": data.jobTypeName,
             "queuert.job.attempt": data.attempt,
-            "queuert.worker.id": data.workerId,
+            ...(data.workerId !== null && { "queuert.worker.id": data.workerId }),
           },
         },
         ctx,
@@ -449,51 +449,6 @@ export const createOtelObservabilityAdapter = ({
         producerCtx,
       );
       consumerSpan.end();
-    },
-
-    completeJobSpan(data) {
-      if (!tracer) return;
-      // Both must be valid: a job always belongs to a chain
-      if (!isValidTraceparent(data.traceContext) || !isValidTraceparent(data.chainTraceContext))
-        return;
-
-      const jobParentCtx = trace.setSpanContext(
-        context.active(),
-        deserializeSpanContext(data.traceContext),
-      );
-
-      const jobSpan = tracer.startSpan(
-        `complete job.${data.jobTypeName}`,
-        {
-          kind: SpanKind.CONSUMER,
-          attributes: {
-            "queuert.chain.id": data.chainId,
-            "queuert.chain.type": data.chainTypeName,
-            "queuert.job.id": data.jobId,
-            "queuert.job.type": data.jobTypeName,
-          },
-        },
-        jobParentCtx,
-      );
-
-      if (data.continuedWith) {
-        jobSpan.setAttribute("queuert.continued_with.job_id", data.continuedWith.jobId);
-        jobSpan.setAttribute("queuert.continued_with.job_type", data.continuedWith.jobTypeName);
-      }
-
-      const jobConsumerCtx = trace.setSpan(context.active(), jobSpan);
-
-      if (data.chainCompleted) {
-        createChainConsumerSpan(
-          tracer,
-          data.chainTraceContext,
-          data.chainTypeName,
-          data.chainId,
-          jobConsumerCtx,
-        );
-      }
-
-      jobSpan.end();
     },
   };
 };

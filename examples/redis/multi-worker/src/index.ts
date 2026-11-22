@@ -132,7 +132,7 @@ const chains = await stateAdapter.withTransaction(async (txCtx) =>
   }),
 );
 
-await Promise.all(chains.map(async (chain) => client.awaitChain(chain, { timeoutMs: 30_000 })));
+await client.awaitChains({ chains, timeoutMs: 30_000 });
 
 console.log("\n" + "=".repeat(60));
 console.log("Processing Summary");

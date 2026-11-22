@@ -78,7 +78,7 @@ describe("attempt handler job", () => {
       expectTypeOf<(typeof chain)["input"]>().toEqualTypeOf<{ test: boolean }>();
       expectTypeOf<(typeof chain)["typeName"]>().toEqualTypeOf<"test">();
 
-      const completedChain = await client.awaitChain(chain, { timeoutMs: 0 });
+      const completedChain = await client.awaitChain({ chain, timeoutMs: 0 });
       expectTypeOf(completedChain.status).toEqualTypeOf<"completed">();
       expectTypeOf(completedChain.output).toEqualTypeOf<{ result: boolean }>();
     }).toBeFunction();
@@ -302,7 +302,7 @@ describe("continueWith", () => {
         "linear" | undefined
       >();
 
-      const finishedChain = await client.awaitChain(chain, { timeoutMs: 0 });
+      const finishedChain = await client.awaitChain({ chain, timeoutMs: 0 });
       expectTypeOf(finishedChain.output).toEqualTypeOf<{
         result: number;
       }>();
@@ -370,8 +370,8 @@ describe("continueWith", () => {
       >();
 
       const succeededChains = await Promise.all([
-        client.awaitChain(evenChain, { timeoutMs: 0 }),
-        client.awaitChain(oddChain, { timeoutMs: 0 }),
+        client.awaitChain({ chain: evenChain, timeoutMs: 0 }),
+        client.awaitChain({ chain: oddChain, timeoutMs: 0 }),
       ]);
       expectTypeOf(succeededChains[0].output).toEqualTypeOf<
         { result1: number } | { result2: number }
@@ -450,8 +450,8 @@ describe("continueWith", () => {
       }>();
 
       const succeededChains = await Promise.all([
-        client.awaitChain(evenChain, { timeoutMs: 0 }),
-        client.awaitChain(oddChain, { timeoutMs: 0 }),
+        client.awaitChain({ chain: evenChain, timeoutMs: 0 }),
+        client.awaitChain({ chain: oddChain, timeoutMs: 0 }),
       ]);
       expectTypeOf(succeededChains[0].output).toEqualTypeOf<{ result: number }>();
       expectTypeOf(succeededChains[1].output).toEqualTypeOf<{ result: number }>();
@@ -562,7 +562,7 @@ describe("continueWith", () => {
         finalResult: number;
       }>();
 
-      const succeededChain = await client.awaitChain(chain, { timeoutMs: 0 });
+      const succeededChain = await client.awaitChain({ chain, timeoutMs: 0 });
       expectTypeOf(succeededChain.output).toEqualTypeOf<{
         finalResult: number;
       }>();

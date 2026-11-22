@@ -39,5 +39,4 @@ export const createNoopObservabilityAdapter = (): ObservabilityAdapter => ({
   startBlockerSpan: noop,
   completeBlockerSpan: noop,
   startAttemptSpan: noop,
-  completeJobSpan: noop,
 });

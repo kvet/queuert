@@ -1,6 +1,6 @@
 ---
 title: Awaiting Chains
-description: Wait for chains to complete with polling and notifications.
+description: Wait for a chain or several to complete with polling and notifications.
 sidebar:
   order: 11
 ---
@@ -34,15 +34,15 @@ A chain's output is the output of its final job. Here `fetch-price` continues wi
 
 <ExampleCode example="guides" file="src/chain-awaiting.ts" region="types" />
 
-Create the chain, then await it once the transaction has committed. `awaitChain` takes the chain (or any `{ id }`) and options: `timeoutMs` is required, and `pollIntervalMs` sets how often the database is polled between notifications (default 15 seconds). The completed chain carries the typed `output` of `apply-discount`:
+Create the chain, then await it once the transaction has committed. `awaitChain` takes one options object: `chain` is the chain (or any `{ id, typeName? }`), `timeoutMs` is required, and `pollIntervalMs` sets how often the database is polled between notifications (default 15 seconds). The completed chain carries the typed `output` of `apply-discount`:
 
 <ExampleCode example="guides" file="src/chain-awaiting.ts" region="await-one" />
 
-`awaitChain` runs outside any transaction, so several chains can be awaited concurrently:
+`awaitChains` takes `chains` in place of `chain`, with the same options, reads the chains still running in one query per poll, and returns the completed chains in input order:
 
 <ExampleCode example="guides" file="src/chain-awaiting.ts" region="await-many" />
 
-`signal` accepts an `AbortSignal`, such as the signal of the incoming request that is waiting for the result. Both a timeout and an abort throw `WaitChainTimeoutError`, and the chain keeps running. Here `laterChain` is a `fetch-price` chain created with a one-minute [deferred start](../scheduling/), so the worker has not reached it yet and the request gives up on it:
+`signal` accepts an `AbortSignal`, such as the signal of the incoming request that is waiting for the result. Both a timeout and an abort throw `WaitChainTimeoutError`, or `WaitChainsTimeoutError` listing the chains still running from `awaitChains`, and the chains keep running. Here `laterChain` is a `fetch-price` chain created with a one-minute [deferred start](../scheduling/), so the worker has not reached it yet and the request gives up on it:
 
 <ExampleCode example="guides" file="src/chain-awaiting.ts" region="await-abort" />
 

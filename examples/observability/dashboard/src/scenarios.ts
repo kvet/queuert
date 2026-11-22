@@ -332,13 +332,13 @@ export const populateScenarios = async ({
   const greetChain = transaction((ctx) =>
     client.createChain({ ...ctx, typeName: "greet", input: { name: "World" } }),
   );
-  await client.awaitChain(greetChain, { timeoutMs: 5000 });
+  await client.awaitChain({ chain: greetChain, timeoutMs: 5000 });
 
   // Scenario 2: Continuations
   const orderChain = transaction((ctx) =>
     client.createChain({ ...ctx, typeName: "order:validate", input: { orderId: "ORD-123" } }),
   );
-  await client.awaitChain(orderChain, { timeoutMs: 5000 });
+  await client.awaitChain({ chain: orderChain, timeoutMs: 5000 });
 
   // Scenario 3: Blockers (fan-out)
   const blockerChain = transaction((ctx) =>
@@ -355,13 +355,13 @@ export const populateScenarios = async ({
       }),
     }),
   );
-  await client.awaitChain(blockerChain, { timeoutMs: 5000 });
+  await client.awaitChain({ chain: blockerChain, timeoutMs: 5000 });
 
   // Scenario 4: Retries
   const retryChain = transaction((ctx) =>
     client.createChain({ ...ctx, typeName: "might-fail", input: { shouldFail: true } }),
   );
-  await client.awaitChain(retryChain, { timeoutMs: 5000 });
+  await client.awaitChain({ chain: retryChain, timeoutMs: 5000 });
 
   // Scenario 5: Scheduled Job (1 hour in the future — trigger it from the dashboard)
   transaction((ctx) =>
@@ -381,7 +381,7 @@ export const populateScenarios = async ({
       input: { n: 1, total: DASHBOARD_PAGE_SIZE * 2 + 1 },
     }),
   );
-  await client.awaitChain(longChain, { timeoutMs: 5000 });
+  await client.awaitChain({ chain: longChain, timeoutMs: 5000 });
 
   // Scenario 7: Blocker fan-in — one pending chain blocking many jobs (chain-detail "Blocked jobs" pagination)
   const hub = transaction((ctx) =>

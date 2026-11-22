@@ -167,7 +167,7 @@ const chain = stateAdapter.withTransaction((ctx) =>
   }),
 );
 
-const result = await client.awaitChain(chain, { timeoutMs: 5000 });
+const result = await client.awaitChain({ chain, timeoutMs: 5000 });
 console.log("Chain completed:", result.output);
 
 console.log("\n=== Done ===");

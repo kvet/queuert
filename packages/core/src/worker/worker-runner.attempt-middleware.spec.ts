@@ -60,7 +60,7 @@ describe("middleware ctx cannot shadow built-in handler keys", () => {
       client.createChain({ ...txCtx, typeName: "foo", input: { v: 1 } }),
     );
     await workerRunner.start();
-    await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 50 });
+    await client.awaitChain({ chain, timeoutMs: 5000, pollIntervalMs: 50 });
     await workerRunner.close();
 
     expect(observedSignalIsAbortSignal).toBe(true);
@@ -122,7 +122,7 @@ describe("middleware ctx flows into the handler through wrapHandler", () => {
       client.createChain({ ...txCtx, typeName: "foo", input: { v: 1 } }),
     );
     await workerRunner.start();
-    await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 50 });
+    await client.awaitChain({ chain, timeoutMs: 5000, pollIntervalMs: 50 });
     await workerRunner.close();
 
     expect(events).toEqual([
@@ -204,8 +204,8 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
       abClient.createChain({ ...txCtx, typeName: "b", input: {} }),
     );
     await workerRunner.start();
-    await abClient.awaitChain(chainA, { timeoutMs: 5000, pollIntervalMs: 100 });
-    await abClient.awaitChain(chainB, { timeoutMs: 5000, pollIntervalMs: 100 });
+    await abClient.awaitChain({ chain: chainA, timeoutMs: 5000, pollIntervalMs: 100 });
+    await abClient.awaitChain({ chain: chainB, timeoutMs: 5000, pollIntervalMs: 100 });
     await workerRunner.close();
 
     expect(sliceACalls).toEqual(["a"]);

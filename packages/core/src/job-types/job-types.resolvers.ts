@@ -17,6 +17,7 @@
 import type {
   Chain,
   ChainFields,
+  ChainRef,
   CompletedChainFields,
   RunningChainFields,
 } from "../entities/chain.types.ts";
@@ -415,10 +416,7 @@ type MapBlockersToChainsInput<
   TBlockers extends readonly unknown[],
 > = {
   readonly [K in keyof TBlockers]: TBlockers[K] extends JobTypeReference
-    ? {
-        id: TJobId;
-        typeName?: ResolveReferenceDistributive<TJobTypeDefinitions, TBlockers[K]> & string;
-      }
+    ? ChainRef<TJobId, ResolveReferenceDistributive<TJobTypeDefinitions, TBlockers[K]> & string>
     : never;
 };
 
@@ -473,7 +471,7 @@ export type AnyNewJob = {
   id?: string;
   input: unknown;
   schedule?: ScheduleOptions;
-  blockers?: readonly { id: string; typeName?: string }[];
+  blockers?: readonly ChainRef<string, string>[];
 };
 
 type BlockerRefNames<

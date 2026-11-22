@@ -100,7 +100,7 @@ await new Promise((resolve) => setTimeout(resolve, 100));
 
 // Now wait for the report to be ready
 console.log("Waiting for report...");
-const result = await client.awaitChain(chain, { timeoutMs: 5000 });
+const result = await client.awaitChain({ chain, timeoutMs: 5000 });
 console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.rowCount}`);
 
 console.log("Done!");

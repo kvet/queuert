@@ -21,6 +21,34 @@ export class InvalidJobIdError extends Error {
   }
 }
 
+/**
+ * Thrown when {@link Client.createChains | createChains} or
+ * {@link Client.applyJobOutcomes | applyJobOutcomes} resolves job IDs that fail the state adapter's
+ * `validateJobId` check. Batch variant of {@link InvalidJobIdError}, listing every offending item.
+ * When items fail with different kinds of errors, it lists the items that failed with the
+ * first kind.
+ */
+export class InvalidJobIdsError extends Error {
+  /** The position of each offending item in the `items` the call was passed. */
+  readonly itemIndexes: readonly number[];
+  /** The error of each item in `itemIndexes`, in the same order. */
+  readonly errors: readonly InvalidJobIdError[];
+
+  constructor(
+    message: string,
+    options: {
+      itemIndexes: readonly number[];
+      errors: readonly InvalidJobIdError[];
+      cause?: unknown;
+    },
+  ) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "InvalidJobIdsError";
+    this.itemIndexes = options.itemIndexes;
+    this.errors = options.errors;
+  }
+}
+
 /** Thrown when a worker ID fails the state adapter's `validateWorkerId` check. */
 export class InvalidWorkerIdError extends Error {
   /** The ID that failed validation. */
@@ -90,6 +118,22 @@ export class ChainNotFoundError extends Error {
     super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "ChainNotFoundError";
     this.chainId = options.chainId;
+  }
+}
+
+/**
+ * Thrown when {@link Client.awaitChains | awaitChains} waits on chains that do not exist, or when a
+ * batch call declares blocker chains that do not exist. Batch variant of {@link ChainNotFoundError},
+ * listing every missing chain id.
+ */
+export class ChainsNotFoundError extends Error {
+  /** The chain ids that had no matching chain. */
+  readonly chainIds: readonly string[];
+
+  constructor(message: string, options: { chainIds: readonly string[]; cause?: unknown }) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "ChainsNotFoundError";
+    this.chainIds = options.chainIds;
   }
 }
 
@@ -179,7 +223,10 @@ export class JobsAlreadyCompletedError extends Error {
   }
 }
 
-/** Thrown when {@link Client.awaitChain | awaitChain} exceeds its timeout or is aborted. */
+/**
+ * Thrown when {@link Client.awaitChain | awaitChain} exceeds its timeout or is aborted. When aborted,
+ * `cause` is the signal's reason.
+ */
 export class WaitChainTimeoutError extends Error {
   /** The chain that timed out. */
   readonly chainId: string;
@@ -190,6 +237,28 @@ export class WaitChainTimeoutError extends Error {
     super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "WaitChainTimeoutError";
     this.chainId = options.chainId;
+    this.timeoutMs = options.timeoutMs;
+  }
+}
+
+/**
+ * Thrown when {@link Client.awaitChains | awaitChains} exceeds its timeout or is aborted before every
+ * chain completed. Batch variant of {@link WaitChainTimeoutError}, listing every chain still running.
+ * When aborted, `cause` is the signal's reason.
+ */
+export class WaitChainsTimeoutError extends Error {
+  /** The chains that had not completed. */
+  readonly chainIds: readonly string[];
+  /** The timeout duration in milliseconds. */
+  readonly timeoutMs: number;
+
+  constructor(
+    message: string,
+    options: { chainIds: readonly string[]; timeoutMs: number; cause?: unknown },
+  ) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "WaitChainsTimeoutError";
+    this.chainIds = options.chainIds;
     this.timeoutMs = options.timeoutMs;
   }
 }
@@ -318,7 +387,10 @@ export class ChainTypeMismatchError extends Error {
 /**
  * Thrown when {@link Client.getChains | getChains} or
  * {@link Client.getChainTailJobs | getChainTailJobs} narrows by a `typeName` that any found chain
- * does not have. Batch variant of {@link ChainTypeMismatchError}, listing every offending input id.
+ * does not have, or when {@link Client.awaitChains | awaitChains},
+ * {@link Client.createChains | createChains} or {@link Client.applyJobOutcomes | applyJobOutcomes}
+ * is passed a chain or blocker whose `typeName` differs from the stored chain's. Batch variant of
+ * {@link ChainTypeMismatchError}, listing every offending chain id.
  */
 export class ChainsTypeMismatchError extends Error {
   /** The input ids whose chain type differs. */
@@ -371,7 +443,7 @@ export class BlockerReferenceError extends Error {
  * `maxBlockersPerJob` allows. The limit is configurable but always bounded: the
  * `job_blocker` model is not designed to scale to an unbounded number of blockers per job.
  */
-export class BlockerLimitExceededError extends Error {
+export class JobBlockerLimitExceededError extends Error {
   /** The job type that declared too many blockers. */
   readonly typeName: string;
   /** The number of blocker chains the job declared. */
@@ -384,10 +456,39 @@ export class BlockerLimitExceededError extends Error {
     options: { typeName: string; count: number; limit: number; cause?: unknown },
   ) {
     super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
-    this.name = "BlockerLimitExceededError";
+    this.name = "JobBlockerLimitExceededError";
     this.typeName = options.typeName;
     this.count = options.count;
     this.limit = options.limit;
+  }
+}
+
+/**
+ * Thrown when {@link Client.createChains | createChains} or
+ * {@link Client.applyJobOutcomes | applyJobOutcomes} declares more blocker chains for any job than
+ * the state adapter's `maxBlockersPerJob` allows. Batch variant of
+ * {@link JobBlockerLimitExceededError}, listing every offending item.
+ * When items fail with different kinds of errors, it lists the items that failed with the
+ * first kind.
+ */
+export class JobsBlockerLimitExceededError extends Error {
+  /** The position of each offending item in the `items` the call was passed. */
+  readonly itemIndexes: readonly number[];
+  /** The error of each item in `itemIndexes`, in the same order. */
+  readonly errors: readonly JobBlockerLimitExceededError[];
+
+  constructor(
+    message: string,
+    options: {
+      itemIndexes: readonly number[];
+      errors: readonly JobBlockerLimitExceededError[];
+      cause?: unknown;
+    },
+  ) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "JobsBlockerLimitExceededError";
+    this.itemIndexes = options.itemIndexes;
+    this.errors = options.errors;
   }
 }
 
@@ -429,6 +530,35 @@ export class UnknownJobTypeError extends Error {
   }
 }
 
+/**
+ * Thrown when {@link Client.createChains | createChains} or
+ * {@link Client.applyJobOutcomes | applyJobOutcomes} references type names that no slice of a
+ * merged {@link JobTypes} owns. Batch variant of {@link UnknownJobTypeError}, listing every
+ * offending item.
+ * When items fail with different kinds of errors, it lists the items that failed with the
+ * first kind.
+ */
+export class UnknownJobTypesError extends Error {
+  /** The position of each offending item in the `items` the call was passed. */
+  readonly itemIndexes: readonly number[];
+  /** The error of each item in `itemIndexes`, in the same order. */
+  readonly errors: readonly UnknownJobTypeError[];
+
+  constructor(
+    message: string,
+    options: {
+      itemIndexes: readonly number[];
+      errors: readonly UnknownJobTypeError[];
+      cause?: unknown;
+    },
+  ) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "UnknownJobTypesError";
+    this.itemIndexes = options.itemIndexes;
+    this.errors = options.errors;
+  }
+}
+
 /** Error codes for job type validation failures. */
 export type JobTypeValidationErrorCode =
   | "not_entry_point"
@@ -463,17 +593,48 @@ export class JobTypeValidationError extends Error {
   }
 }
 
-export const toSingleJobError = (error: unknown, jobId: string): unknown => {
+/**
+ * Thrown when {@link Client.createChains | createChains} or
+ * {@link Client.applyJobOutcomes | applyJobOutcomes} fails runtime job type validation for any item.
+ * Batch variant of {@link JobTypeValidationError}, listing every offending item.
+ * When items fail with different kinds of errors, it lists the items that failed with the
+ * first kind.
+ */
+export class JobsTypeValidationError extends Error {
+  /** The position of each offending item in the `items` the call was passed. */
+  readonly itemIndexes: readonly number[];
+  /** The error of each item in `itemIndexes`, in the same order. */
+  readonly errors: readonly JobTypeValidationError[];
+
+  constructor(
+    message: string,
+    options: {
+      itemIndexes: readonly number[];
+      errors: readonly JobTypeValidationError[];
+      cause?: unknown;
+    },
+  ) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "JobsTypeValidationError";
+    this.itemIndexes = options.itemIndexes;
+    this.errors = options.errors;
+  }
+}
+
+export const toSingleJobError = (error: unknown): unknown => {
   if (error instanceof JobsNotFoundError) {
+    const jobId = error.jobIds[0];
     return new JobNotFoundError(`Job with id ${jobId} not found`, { jobId, cause: error });
   }
   if (error instanceof JobsAlreadyCompletedError) {
+    const jobId = error.jobIds[0];
     return new JobAlreadyCompletedError(
       `Cannot apply an outcome to job ${jobId}: job is already completed`,
       { jobId, cause: error },
     );
   }
   if (error instanceof JobsStatusMismatchError) {
+    const jobId = error.jobIds[0];
     return new JobStatusMismatchError(
       `Expected job ${jobId} to have status "${error.expectedStatuses[0]}" but found "${error.actualStatuses[0]}"`,
       {
@@ -486,7 +647,7 @@ export const toSingleJobError = (error: unknown, jobId: string): unknown => {
   }
   if (error instanceof JobsTypeMismatchError) {
     return new JobTypeMismatchError(
-      `Expected job ${jobId} to have type "${error.expectedTypeNames[0]}" but found "${error.actualTypeNames[0]}"`,
+      `Expected job ${error.jobIds[0]} to have type "${error.expectedTypeNames[0]}" but found "${error.actualTypeNames[0]}"`,
       {
         expectedTypeName: error.expectedTypeNames[0],
         actualTypeName: error.actualTypeNames[0],
@@ -494,18 +655,39 @@ export const toSingleJobError = (error: unknown, jobId: string): unknown => {
       },
     );
   }
+  if (
+    error instanceof InvalidJobIdsError ||
+    error instanceof JobsBlockerLimitExceededError ||
+    error instanceof JobsTypeValidationError ||
+    error instanceof UnknownJobTypesError
+  ) {
+    return error.errors[0];
+  }
   return error;
 };
 
-export const toSingleChainError = (error: unknown, chainId: string): unknown => {
+export const toSingleChainError = (error: unknown): unknown => {
+  if (error instanceof ChainsNotFoundError) {
+    const chainId = error.chainIds[0];
+    return new ChainNotFoundError(`Chain with id ${chainId} not found`, { chainId, cause: error });
+  }
   if (error instanceof ChainsTypeMismatchError) {
     return new ChainTypeMismatchError(
-      `Expected chain ${chainId} to have type "${error.expectedTypeNames[0]}" but found "${error.actualTypeNames[0]}"`,
+      `Expected chain ${error.chainIds[0]} to have type "${error.expectedTypeNames[0]}" but found "${error.actualTypeNames[0]}"`,
       {
         expectedTypeName: error.expectedTypeNames[0],
         actualTypeName: error.actualTypeNames[0],
         cause: error,
       },
+    );
+  }
+  if (error instanceof WaitChainsTimeoutError) {
+    const chainId = error.chainIds[0];
+    return new WaitChainTimeoutError(
+      error.cause !== undefined
+        ? `Wait for chain ${chainId} was aborted`
+        : `Timeout waiting for chain ${chainId} to complete after ${error.timeoutMs}ms`,
+      { chainId, timeoutMs: error.timeoutMs, cause: error.cause },
     );
   }
   return error;

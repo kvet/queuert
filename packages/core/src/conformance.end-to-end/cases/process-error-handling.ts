@@ -76,7 +76,7 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
         );
 
         yield* wait(workerRunner.start());
-        const completed = yield* wait(client.awaitChain(chain, completionOptions));
+        const completed = yield* wait(client.awaitChain({ chain, ...completionOptions }));
         assert.deepEqual(completed.output, { result: 20 });
 
         assert.equal((yield* step(client.getJob({ id: chain.id })))?.attempt, 2);
@@ -140,7 +140,7 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
         );
 
         yield* wait(workerRunner.start());
-        const completed = yield* wait(client.awaitChain(chain, completionOptions));
+        const completed = yield* wait(client.awaitChain({ chain, ...completionOptions }));
         assert.deepEqual(completed.output, { result: 20 });
 
         assert.equal((yield* step(client.getJob({ id: chain.id })))?.attempt, 2);
@@ -212,7 +212,7 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
         );
 
         yield* wait(workerRunner.start());
-        const completed = yield* wait(client.awaitChain(chain, completionOptions));
+        const completed = yield* wait(client.awaitChain({ chain, ...completionOptions }));
         assert.deepEqual(completed.output, { result: 20 });
 
         assert.equal((yield* step(client.getJob({ id: chain.id })))?.attempt, 2);
@@ -272,7 +272,7 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         assert.equal((yield* step(client.getJob({ id: chain.id })))?.attempt, 2);
       }),
@@ -351,7 +351,7 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
         );
 
         yield* wait(workerRunner.start());
-        const completed = yield* wait(client.awaitChain(chain, completionOptions));
+        const completed = yield* wait(client.awaitChain({ chain, ...completionOptions }));
         assert.deepEqual(completed.output, { result: 20 });
 
         assert.equal((yield* step(client.getJob({ id: chain.id })))?.attempt, 2);
@@ -448,7 +448,9 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
         );
 
         yield* wait(workerRunner.start());
-        const completed = yield* wait(client.awaitChain(dependentChain, completionOptions));
+        const completed = yield* wait(
+          client.awaitChain({ chain: dependentChain, ...completionOptions }),
+        );
         assert.deepEqual(completed.output, { result: "ok" });
       }),
     },
@@ -520,7 +522,7 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
       }),
     },
     {
@@ -579,7 +581,7 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
       }),
     },
     {
@@ -633,7 +635,7 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
         );
 
         yield* wait(workerRunner.start());
-        const completed = yield* wait(client.awaitChain(chain, completionOptions));
+        const completed = yield* wait(client.awaitChain({ chain, ...completionOptions }));
         assert.deepEqual(completed.output, { result: 20 });
       }),
     },
@@ -702,7 +704,7 @@ export const processErrorHandlingPoisonTransactionGroup: ConformanceGroup<EndToE
           );
 
           yield* wait(workerRunner.start());
-          const completed = yield* wait(client.awaitChain(chain, completionOptions));
+          const completed = yield* wait(client.awaitChain({ chain, ...completionOptions }));
           assert.deepEqual(completed.output, { result: 20 });
 
           assert.equal((yield* step(client.getJob({ id: chain.id })))?.attempt, 2);
@@ -766,7 +768,7 @@ export const processErrorHandlingPoisonTransactionGroup: ConformanceGroup<EndToE
           );
 
           yield* wait(workerRunner.start());
-          const completed = yield* wait(client.awaitChain(chain, completionOptions));
+          const completed = yield* wait(client.awaitChain({ chain, ...completionOptions }));
           assert.deepEqual(completed.output, { result: 20 });
         }),
       },

@@ -22,5 +22,5 @@ const orderChain = await stateAdapter.withTransaction(async (txCtx) =>
   }),
 );
 
-const order = await client.awaitChain(orderChain, { timeoutMs: 5000 });
+const order = await client.awaitChain({ chain: orderChain, timeoutMs: 5000 });
 assert.ok(order.output.confirmedAt);

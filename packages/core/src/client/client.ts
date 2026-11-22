@@ -10,17 +10,18 @@ import type {
   JobRescheduleOutcome,
 } from "../attempt/attempt-handler.types.ts";
 import { assertChainsTypeName, mapStateChainToChain } from "../entities/chain.ts";
+import type { AnyChain, ChainRef } from "../entities/chain.types.ts";
 import { assertJobsTypeName, mapStateJobToJob } from "../entities/job.ts";
 import type { JobRef } from "../entities/job.types.ts";
 import type { OrderDirection, Page } from "../entities/pagination.ts";
 import { type Worker, mapStateWorkerToWorker } from "../entities/worker.ts";
 import {
   BlockerReferenceError,
-  ChainNotFoundError,
+  ChainsNotFoundError,
   JobsAlreadyCompletedError,
   JobsStatusMismatchError,
   JobsNotFoundError,
-  WaitChainTimeoutError,
+  WaitChainsTimeoutError,
   toSingleChainError,
   toSingleJobError,
 } from "../errors.ts";
@@ -46,6 +47,7 @@ import type { NotifyAdapter } from "../notify-adapter/notify-adapter.ts";
 import { notifyAfterTransaction } from "../notify-adapter/tx-notifications.ts";
 import type { Log } from "../observability-adapter/log.ts";
 import type { ObservabilityAdapter } from "../observability-adapter/observability-adapter.ts";
+import { completedAttemptSpanResult } from "../observability-adapter/observability-helper.ts";
 import type {
   GetStateAdapterJobId,
   GetStateAdapterTxContext,
@@ -171,7 +173,7 @@ type CreateChainsResult<
  * Methods are split into three categories:
  * - **Mutating** — `createChain`, `createChains`, `applyJobOutcome`, `applyJobOutcomes`, `deleteChain`, `deleteChains`. Require a transaction context; they throw `Error` if called without a transaction context, or with one the state adapter's `getTransaction` reports as outside an open transaction. With an adapter that fences writes (PostgreSQL, SQLite, Redis), all but the deletions throw {@link SchemaFencedError} once a breaking migration fenced this code version, and change nothing.
  * - **Read-only** — `getChain`, `getChains`, `getJob`, `getJobs`, `getChainTypeNames`, `getJobTypeNames`, `countChainsByTypeName`, `countJobsByTypeName`, `listChains`, `listJobs`, `listChainJobs`, `getChainTailJob`, `getChainTailJobs`, `getJobBlockers`, `listBlockedJobs`, `getWorker`, `getWorkers`, `countWorkers`, `countWorkersByTypeName`, `countRunningJobsByWorkerId`, `listWorkers`, `listWorkerJobs`. Accept an optional transaction context; `getChain`, `getChains`, `getJob`, `getJobs`, `getChainTailJob` and `getChainTailJobs` require one with `lock: "exclusive"`.
- * - **Waiting** — `awaitChain`. Takes no transaction context: it polls outside any transaction and listens for notify adapter events.
+ * - **Waiting** — `awaitChain`, `awaitChains`. Take no transaction context: they poll outside any transaction and listen for notify adapter events.
  */
 export type Client<
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
@@ -197,20 +199,38 @@ export type Client<
   awaitChain: <
     TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
       JobTypeEntryNames<TJobTypeDefinitions>,
-  >(
-    chain: {
-      typeName?: TChainTypeName;
-      id: TJobId;
-    },
-    options: {
-      timeoutMs: number;
-      pollIntervalMs?: number;
-      signal?: AbortSignal;
-    },
-  ) => Promise<
+  >(options: {
+    chain: ChainRef<TJobId, TChainTypeName>;
+    timeoutMs: number;
+    pollIntervalMs?: number;
+    signal?: AbortSignal;
+  }) => Promise<
     ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
       status: "completed";
     }
+  >;
+
+  /**
+   * Wait for every chain to complete, with one notify adapter listener per chain and one read of
+   * the chains still running per poll. Returns the completed chains in input order; empty `chains`
+   * returns `[]`.
+   *
+   * @throws {@link WaitChainsTimeoutError} on timeout or abort, listing the chains still running.
+   * @throws {@link ChainsNotFoundError} if any chain disappears or never existed.
+   * @throws {@link ChainsTypeMismatchError} if any chain's `typeName` is provided and does not match.
+   */
+  awaitChains: <
+    TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
+      JobTypeEntryNames<TJobTypeDefinitions>,
+  >(options: {
+    chains: readonly ChainRef<TJobId, TChainTypeName>[];
+    timeoutMs: number;
+    pollIntervalMs?: number;
+    signal?: AbortSignal;
+  }) => Promise<
+    (ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
+      status: "completed";
+    })[]
   >;
 
   /**
@@ -220,10 +240,11 @@ export type Client<
    * caller's.
    *
    * @throws {@link InvalidJobIdError} if `id` fails the state adapter's `validateJobId` check.
-   * @throws {@link BlockerLimitExceededError} if the root job declares more blockers than the per-job limit.
+   * @throws {@link JobBlockerLimitExceededError} if the root job declares more blockers than the per-job limit.
    * @throws {@link ChainNotFoundError} if a blocker chain does not exist.
    * @throws {@link ChainTypeMismatchError} if a blocker's `typeName` differs from the stored chain's.
    * @throws {@link JobTypeValidationError} if the job type rejects the entry, input, or blockers.
+   * @throws {@link UnknownJobTypeError} if a merged registry owns no slice for the job type.
    * @throws TypeError if `deduplication.scope` is missing or not `"running"` / `"any"`.
    * @throws The state adapter's own error (e.g. a unique-constraint violation) if a caller-supplied `id` is already taken.
    */
@@ -242,11 +263,12 @@ export type Client<
    * with `deduplicated` flags, in the same order as input. Each item may carry
    * an optional `id`; dedup wins over a caller-supplied id when applicable.
    *
-   * @throws {@link InvalidJobIdError} if any `id` fails the state adapter's `validateJobId` check.
-   * @throws {@link BlockerLimitExceededError} if any root job declares more blockers than the per-job limit.
-   * @throws {@link ChainNotFoundError} if any blocker chain does not exist.
-   * @throws {@link ChainTypeMismatchError} if a blocker's `typeName` differs from the stored chain's.
-   * @throws {@link JobTypeValidationError} if a job type rejects an item's entry, input, or blockers.
+   * @throws {@link InvalidJobIdsError} (listing every offending item) if any `id` fails the state adapter's `validateJobId` check.
+   * @throws {@link JobsBlockerLimitExceededError} (listing every offending item) if any root job declares more blockers than the per-job limit.
+   * @throws {@link ChainsNotFoundError} (listing every missing id) if any blocker chain does not exist.
+   * @throws {@link ChainsTypeMismatchError} (listing every offending id) if any blocker's `typeName` differs from the stored chain's.
+   * @throws {@link JobsTypeValidationError} (listing every offending item) if a job type rejects an item's entry, input, or blockers.
+   * @throws {@link UnknownJobTypesError} (listing every offending item) if a merged registry owns no slice for an item's type.
    * @throws TypeError if `deduplication.scope` is missing or not `"running"` / `"any"`.
    * @throws The state adapter's own error (e.g. a unique-constraint violation) if a caller-supplied `id` is already taken.
    */
@@ -307,10 +329,11 @@ export type Client<
    * @throws {@link JobAlreadyCompletedError} if the job is already completed.
    * @throws {@link JobStatusMismatchError} if `job.status` differs from the stored job's.
    * @throws {@link JobTypeMismatchError} if `job.typeName` differs from the stored job's.
-   * @throws {@link BlockerLimitExceededError} if a `continueWith` outcome declares more blockers than the per-job limit.
+   * @throws {@link JobBlockerLimitExceededError} if a `continueWith` outcome declares more blockers than the per-job limit.
    * @throws {@link ChainNotFoundError} if a `continueWith` blocker chain does not exist.
    * @throws {@link ChainTypeMismatchError} if a `continueWith` blocker's `typeName` differs from the stored chain's.
    * @throws {@link JobTypeValidationError} if the job type rejects the `output`, or the continuation job type rejects the `continueWith` target, input or blockers.
+   * @throws {@link UnknownJobTypeError} if a merged registry owns no slice for the job type.
    * @throws {@link InvalidJobIdError} if a `continueWith` `id` fails the state adapter's `validateJobId` check.
    */
   applyJobOutcome: <
@@ -336,11 +359,12 @@ export type Client<
    * @throws {@link JobsAlreadyCompletedError} (listing every offending id) if any job is already completed.
    * @throws {@link JobsStatusMismatchError} (listing every offending id) if any `job.status` differs from the stored job's.
    * @throws {@link JobsTypeMismatchError} (listing every offending id) if any `job.typeName` differs from the stored job's.
-   * @throws {@link BlockerLimitExceededError} if a `continueWith` outcome declares more blockers than the per-job limit.
-   * @throws {@link ChainNotFoundError} if a `continueWith` blocker chain does not exist.
-   * @throws {@link ChainTypeMismatchError} if a `continueWith` blocker's `typeName` differs from the stored chain's.
-   * @throws {@link JobTypeValidationError} if a job type rejects an `output`, or a continuation job type rejects a `continueWith` target, input or blockers.
-   * @throws {@link InvalidJobIdError} if a `continueWith` `id` fails the state adapter's `validateJobId` check.
+   * @throws {@link JobsBlockerLimitExceededError} (listing every offending item) if any `continueWith` outcome declares more blockers than the per-job limit.
+   * @throws {@link ChainsNotFoundError} (listing every missing id) if any `continueWith` blocker chain does not exist.
+   * @throws {@link ChainsTypeMismatchError} (listing every offending id) if any `continueWith` blocker's `typeName` differs from the stored chain's.
+   * @throws {@link JobsTypeValidationError} (listing every offending item) if a job type rejects an `output`, or a continuation job type rejects a `continueWith` target, input or blockers.
+   * @throws {@link UnknownJobTypesError} (listing every offending item) if a merged registry owns no slice for an item's type.
+   * @throws {@link InvalidJobIdsError} (listing every offending item) if any `continueWith` `id` fails the state adapter's `validateJobId` check.
    * @throws Error if `items` names the same job more than once.
    */
   applyJobOutcomes: <
@@ -704,7 +728,7 @@ export type Client<
  * state-touching methods return promises. Over a `"sync"` one (better-sqlite3, node:sqlite,
  * bun:sqlite) they return their results directly and throw synchronously, so Queuert's writes join
  * the driver's own transaction, such as `db.transaction(() => …)()`, and a failure rolls it back.
- * `awaitChain` returns a promise in both modes: it waits on notifications and polls.
+ * `awaitChain` and `awaitChains` return a promise in both modes: they wait on notifications and poll.
  *
  * @param options - Client configuration.
  */
@@ -777,13 +801,17 @@ export const createClient = <
         syncAsync(function* () {
           const { input, id, typeName, deduplication, schedule, blockers, ...rest } = options;
           const txCtx = requireTxCtx(helpers.stateAdapter, rest, "createChain");
-          const [result] = yield* runCreateChains.steps(helpers, {
-            chains: [{ typeName, id, input, deduplication, schedule, blockers }],
-            txCtx,
-          });
-          return result as ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
-            deduplicated: boolean;
-          };
+          try {
+            const [result] = yield* runCreateChains.steps(helpers, {
+              chains: [{ typeName, id, input, deduplication, schedule, blockers }],
+              txCtx,
+            });
+            return result as ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
+              deduplicated: boolean;
+            };
+          } catch (error) {
+            throw toSingleChainError(toSingleJobError(error));
+          }
         }),
       ),
 
@@ -948,7 +976,7 @@ export const createClient = <
             );
             return applied;
           } catch (error) {
-            throw toSingleJobError(error, job.id);
+            throw toSingleChainError(toSingleJobError(error));
           }
         }),
       ),
@@ -1044,15 +1072,11 @@ export const createClient = <
             if (written === undefined) {
               throw new Error(`Job ${jobIds[index]} changed under its lock`);
             }
-            if (written.status === "completed") {
-              const { continuation, ...finishedJob } = written;
-              helpers.stateAdapter.onTransactionCommit(txCtx, () => {
-                helpers.observabilityHelper.completeJobSpan(finishedJob, {
-                  continuedWith: continuation,
-                  chainCompleted: continuation === undefined,
-                });
-              });
-            }
+            helpers.stateAdapter.onTransactionCommit(txCtx, () => {
+              helpers.observabilityHelper
+                .startAttemptSpan(written, { workerId: null })
+                ?.end(completedAttemptSpanResult(written));
+            });
             return mapStateJobToJob(written, helpers.jobTypes);
           }) as unknown as ApplyJobOutcomesResult<TStateAdapter, TJobTypeDefinitions, TItems>;
         }),
@@ -1061,43 +1085,69 @@ export const createClient = <
     awaitChain: async <
       TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
         JobTypeEntryNames<TJobTypeDefinitions>,
-    >(
-      chain: { typeName?: TChainTypeName; id: TJobId },
-      options: { timeoutMs: number; pollIntervalMs?: number; signal?: AbortSignal },
-    ): Promise<
+    >(options: {
+      chain: ChainRef<TJobId, TChainTypeName>;
+      timeoutMs: number;
+      pollIntervalMs?: number;
+      signal?: AbortSignal;
+    }): Promise<
       ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & { status: "completed" }
     > => {
-      const { id, typeName } = chain;
-      const { timeoutMs, pollIntervalMs = 15_000, signal } = options;
+      const { chain, ...waitOptions } = options;
+      try {
+        const [completedChain] = await client.awaitChains<TChainTypeName>({
+          chains: [chain],
+          ...waitOptions,
+        });
+        return completedChain;
+      } catch (error) {
+        throw toSingleChainError(error);
+      }
+    },
 
-      const checkChain = async () => {
-        const [stateChain] = await helpers.stateAdapter.getChains({ chainIds: [id] });
-        if (!stateChain) {
-          throw new ChainNotFoundError(`Chain with id ${id} not found`, { chainId: id });
+    awaitChains: async <
+      TChainTypeName extends JobTypeEntryNames<TJobTypeDefinitions> =
+        JobTypeEntryNames<TJobTypeDefinitions>,
+    >(options: {
+      chains: readonly ChainRef<TJobId, TChainTypeName>[];
+      timeoutMs: number;
+      pollIntervalMs?: number;
+      signal?: AbortSignal;
+    }): Promise<
+      (ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & { status: "completed" })[]
+    > => {
+      const { chains, timeoutMs, pollIntervalMs = 15_000, signal } = options;
+      if (chains.length === 0) return [];
+      const chainIds = chains.map(({ id }) => id);
+      const typeNames = chains.map(({ typeName }) => typeName);
+
+      const uniqueChainIds = [...new Set(chainIds)];
+      const completedChains = new Map<string, AnyChain>();
+
+      const readChains = async (ids: TJobId[]) => {
+        const stateChains = await helpers.stateAdapter.getChains({ chainIds: ids });
+        const missingChainIds = [
+          ...new Set(ids.filter((_, index) => stateChains[index] === undefined)),
+        ];
+        if (missingChainIds.length > 0) {
+          throw new ChainsNotFoundError(`Chains not found: ${missingChainIds.join(", ")}`, {
+            chainIds: missingChainIds,
+          });
         }
-
-        try {
-          assertChainsTypeName([stateChain], { chainIds: [id], typeName });
-        } catch (error) {
-          throw toSingleChainError(error, id);
-        }
-
-        const mapped = mapStateChainToChain(stateChain, helpers.jobTypes);
-        return mapped.status === "completed"
-          ? (mapped as ResolvedChain<TJobId, TJobTypeDefinitions, TChainTypeName> & {
-              status: "completed";
-            })
-          : null;
+        return stateChains.filter((stateChain) => stateChain !== undefined);
       };
+      const recordCompleted = (stateChains: StateChain[]): void => {
+        for (const stateChain of stateChains) {
+          if (stateChain.status === "completed") {
+            completedChains.set(stateChain.id, mapStateChainToChain(stateChain, helpers.jobTypes));
+          }
+        }
+      };
+      const runningChainIds = () => uniqueChainIds.filter((id) => !completedChains.has(id));
 
       const timeoutController = new AbortController();
       const clearTimeoutTimer = setLongTimeout(() => {
-        timeoutController.abort(
-          new WaitChainTimeoutError(
-            `Timeout waiting for chain ${id} to complete after ${timeoutMs}ms`,
-            { chainId: id, timeoutMs },
-          ),
-        );
+        timeoutController.abort();
       }, timeoutMs);
       const timeoutSignal = timeoutController.signal;
       const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
@@ -1112,33 +1162,39 @@ export const createClient = <
       resetNotificationPromise();
 
       try {
-        const dispose = await helpers.notifyHelper.listenChainCompleted(id, () => {
-          resolveNotification?.();
-        });
+        const disposes = await Promise.all(
+          uniqueChainIds.map(async (chainId) =>
+            helpers.notifyHelper.listenChainCompleted(chainId, () => {
+              resolveNotification?.();
+            }),
+          ),
+        );
         try {
-          const completedChain = await checkChain();
-          if (completedChain) return completedChain;
-
-          while (!combinedSignal.aborted) {
-            await raceWithSleep(notificationPromise, pollIntervalMs, {
-              signal: combinedSignal,
-            });
+          const firstChains = await readChains(chainIds);
+          assertChainsTypeName(firstChains, { chainIds, typeNames });
+          recordCompleted(firstChains);
+          while (runningChainIds().length > 0 && !combinedSignal.aborted) {
+            await raceWithSleep(notificationPromise, pollIntervalMs, { signal: combinedSignal });
             resetNotificationPromise();
-
-            const chainResult = await checkChain();
-            if (chainResult) return chainResult;
-
-            if (combinedSignal.aborted) break;
+            recordCompleted(await readChains(runningChainIds()));
           }
 
-          throw new WaitChainTimeoutError(
+          const stillRunningChainIds = runningChainIds();
+          if (stillRunningChainIds.length === 0) {
+            return chainIds.map((id) => completedChains.get(id)) as (ResolvedChain<
+              TJobId,
+              TJobTypeDefinitions,
+              TChainTypeName
+            > & { status: "completed" })[];
+          }
+          throw new WaitChainsTimeoutError(
             signal?.aborted
-              ? `Wait for chain ${id} was aborted`
-              : `Timeout waiting for chain ${id} to complete after ${timeoutMs}ms`,
-            { chainId: id, timeoutMs, cause: signal?.reason },
+              ? `Wait for chains ${stillRunningChainIds.join(", ")} was aborted`
+              : `Timeout waiting for chains ${stillRunningChainIds.join(", ")} to complete after ${timeoutMs}ms`,
+            { chainIds: stillRunningChainIds, timeoutMs, cause: signal?.reason },
           );
         } finally {
-          await dispose();
+          await Promise.all(disposes.map(async (dispose) => dispose()));
         }
       } finally {
         clearTimeoutTimer();
@@ -1169,7 +1225,7 @@ export const createClient = <
             );
             return chain;
           } catch (error) {
-            throw toSingleChainError(error, id);
+            throw toSingleChainError(error);
           }
         }),
       ),
@@ -1213,7 +1269,12 @@ export const createClient = <
               ),
             });
           }
-          assertChainsTypeName(stateChains, { chainIds: ids, typeName });
+          if (typeName !== undefined) {
+            assertChainsTypeName(stateChains, {
+              chainIds: ids,
+              typeNames: ids.map(() => typeName),
+            });
+          }
 
           return stateChains.map((stateChain) => {
             if (!stateChain) return undefined;
@@ -1250,7 +1311,7 @@ export const createClient = <
             );
             return job;
           } catch (error) {
-            throw toSingleJobError(error, id);
+            throw toSingleJobError(error);
           }
         }),
       ),
@@ -1333,7 +1394,7 @@ export const createClient = <
             );
             return tailJob;
           } catch (error) {
-            throw toSingleChainError(error, chainId);
+            throw toSingleChainError(error);
           }
         }),
       ),
@@ -1380,10 +1441,12 @@ export const createClient = <
               ),
             });
           }
-          assertChainsTypeName(
-            tailJobs.map((tailJob) => tailJob?.chain),
-            { chainIds, typeName: chainTypeName },
-          );
+          if (chainTypeName !== undefined) {
+            assertChainsTypeName(
+              tailJobs.map((tailJob) => tailJob?.chain),
+              { chainIds, typeNames: chainIds.map(() => chainTypeName) },
+            );
+          }
 
           return tailJobs.map((tailJob) => {
             if (!tailJob) return undefined;
@@ -1686,9 +1749,12 @@ export const createClient = <
               }),
             );
             try {
-              assertChainsTypeName([stateChain], { chainIds: [chainId], typeName: chainTypeName });
+              assertChainsTypeName([stateChain], {
+                chainIds: [chainId],
+                typeNames: [chainTypeName],
+              });
             } catch (error) {
-              throw toSingleChainError(error, chainId);
+              throw toSingleChainError(error);
             }
           }
           const result = yield* step(
@@ -1743,7 +1809,7 @@ export const createClient = <
             try {
               assertJobsTypeName([stateJob], { jobIds: [jobId], typeNames: [typeName] });
             } catch (error) {
-              throw toSingleJobError(error, jobId);
+              throw toSingleJobError(error);
             }
           }
           const blockers = yield* step(
@@ -1798,9 +1864,9 @@ export const createClient = <
               }),
             );
             try {
-              assertChainsTypeName([stateChain], { chainIds: [chainId], typeName });
+              assertChainsTypeName([stateChain], { chainIds: [chainId], typeNames: [typeName] });
             } catch (error) {
-              throw toSingleChainError(error, chainId);
+              throw toSingleChainError(error);
             }
           }
           const stateJobPage = yield* step(

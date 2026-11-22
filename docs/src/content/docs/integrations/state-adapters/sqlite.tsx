@@ -249,8 +249,8 @@ const Page = () => (
       <A href="/guides/tx-hooks/#synchronous-transactions">
         <code>TxHooks</code>
       </A>{" "}
-      in its context. <code>awaitChain</code>, the attempt handler and the worker runner stay async.
-      When you pass no notify adapter, the client uses an in-process one.
+      in its context. <code>awaitChain</code>, <code>awaitChains</code>, the attempt handler and the
+      worker runner stay async. When you pass no notify adapter, the client uses an in-process one.
     </p>
     <p>
       A synchronous transaction cannot interleave with anything else on the thread, so a synchronous

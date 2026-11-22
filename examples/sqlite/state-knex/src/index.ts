@@ -121,5 +121,5 @@ const chain = await withTxHooks(async (txHooks) =>
 // #endregion
 
 // Wait for the chain to complete
-const result = await client.awaitChain(chain, { timeoutMs: 5000 });
+const result = await client.awaitChain({ chain, timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);

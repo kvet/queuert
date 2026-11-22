@@ -90,7 +90,7 @@ test("round-trips a Date and a bigint through the worker and back out of a clien
   );
 
   await workerRunner.start();
-  const result = await client.awaitChain(chain, { timeoutMs: 5000, pollIntervalMs: 10 });
+  const result = await client.awaitChain({ chain, timeoutMs: 5000, pollIntervalMs: 10 });
 
   expect(result.output).toEqual({ sentAt, attempts: 3n });
 });

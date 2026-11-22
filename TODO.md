@@ -1,9 +1,6 @@
 # Short term
 
-- [TASK] Batch variants for the remaining client errors — a batch call reports only the first offending item for `JobTypeValidationError`, `ChainNotFoundError` (blockers), `BlockerLimitExceededError`, `InvalidJobIdError` and the like, while not-found, already-completed, status and type mismatches list every id. Add `Jobs*` / `Chains*` variants and map them back in the single-item methods with `toSingleJobError` / `toSingleChainError`. Attempt-side errors (`JobAttemptReclaimedError`, `JobTakenByAnotherWorkerError`) get batch variants with batched processors.
-- [TASK] `awaitChain` takes one options object like `applyJobOutcome` — `awaitChain({ chain, timeoutMs, pollIntervalMs?, signal? })` with an exported `ChainRef = { id, typeName? }` mirroring `JobRef`, instead of `awaitChain(chain, options)`. About 330 call sites across tests, examples and docs; TypeScript 7 has no JS compiler API, so a codemod needs `oxc-parser`.
-- [TASK] `client.awaitChains` — batch variant of `awaitChain` that waits for several chains with one listener and one poll per tick, returning the completed chains in input order, instead of apps running `Promise.all` over `awaitChain`.
-- [TASK] Unify workerless and worker tracing — client completion (`applyJobOutcome` with `output` or `continueWith`) should create an attempt span like the worker path, eliminating the asymmetric `completeJobSpan` adapter method
+- [TASK] Batched chain-completion subscriptions — `NotifyAdapter.listenChainCompleted` takes one chain id, so `awaitChains` subscribes once per chain; a `listenChainsCompleted(chainIds, onNotification)` lets each notify adapter wait on many chains with one subscription.
 - [TASK] Failing and overdue. See `design/failing-and-overdue.md`.
 - [TASK] State gauges. See `design/state-gauges.md`.
 - [EPIC] Row locks. See `design/row-locks.md`.

@@ -166,7 +166,7 @@ await workerRunner.start();
 const paymentChain = await stateAdapter.withTransaction(async (txCtx) =>
   client.createChain({ ...txCtx, typeName: "charge-payment", input: { orderId: "order-1" } }),
 );
-const payment = await client.awaitChain(paymentChain, { timeoutMs: 5000 });
+const payment = await client.awaitChain({ chain: paymentChain, timeoutMs: 5000 });
 assert.equal(payment.output.paymentId, "pay-1");
 assert.deepEqual([...paymentCharges.values()], [4200]);
 assert.equal(orders.get("order-1")!.paymentId, "pay-1");
@@ -185,19 +185,19 @@ assert.deepEqual(Object.fromEntries(accounts), { alice: 10_000, bob: 5000 });
 await stateAdapter.withTransaction(async (txCtx) => {
   updateBalance(txCtx, "bob", 25_000);
 });
-await client.awaitChain(transferChain, { timeoutMs: 5000 });
+await client.awaitChain({ chain: transferChain, timeoutMs: 5000 });
 assert.deepEqual(Object.fromEntries(accounts), { alice: 30_000, bob: 10_000 });
 assert.ok((await client.getJob({ id: transferChain.id }))!.attempt > 1);
 
 const syncChain = await stateAdapter.withTransaction(async (txCtx) =>
   client.createChain({ ...txCtx, typeName: "sync-item", input: { itemId: "item-1" } }),
 );
-await client.awaitChain(syncChain, { timeoutMs: 5000 });
+await client.awaitChain({ chain: syncChain, timeoutMs: 5000 });
 assert.deepEqual(items.get("item-1"), { syncStarts: 2, externalId: "ext-item-1" });
 
 const notifyChain = await stateAdapter.withTransaction(async (txCtx) =>
   client.createChain({ ...txCtx, typeName: "notify-account", input: { accountId: "alice" } }),
 );
-const notification = await client.awaitChain(notifyChain, { timeoutMs: 5000 });
+const notification = await client.awaitChain({ chain: notifyChain, timeoutMs: 5000 });
 assert.deepEqual(notification.output, { notified: true });
 assert.equal((await client.getJob({ id: notifyChain.id }))!.attempt, 1);

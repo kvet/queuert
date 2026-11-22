@@ -100,7 +100,7 @@ const decideApproval = async (chainId: string, approved: boolean) =>
 
 const approvedChain = await requestApproval("request-1");
 await decideApproval(approvedChain.id, true);
-const approved = await client.awaitChain(approvedChain, { timeoutMs: 5000 });
+const approved = await client.awaitChain({ chain: approvedChain, timeoutMs: 5000 });
 assert.deepEqual(approved.output, { processed: true });
 assert.deepEqual(processedRequests, ["request-1"]);
 
@@ -109,7 +109,7 @@ assert.deepEqual(processedRequests, ["request-1"]);
 
 const rejectedChain = await requestApproval("request-2");
 await decideApproval(rejectedChain.id, false);
-const rejected = await client.awaitChain(rejectedChain, { timeoutMs: 5000 });
+const rejected = await client.awaitChain({ chain: rejectedChain, timeoutMs: 5000 });
 assert.deepEqual(rejected.output, { rejected: true, reason: "manager denied" });
 
 const timedOutChain = await stateAdapter.withTransaction(async (txCtx) =>
@@ -120,5 +120,5 @@ const timedOutChain = await stateAdapter.withTransaction(async (txCtx) =>
     schedule: { afterMs: 50 },
   }),
 );
-const timedOut = await client.awaitChain(timedOutChain, { timeoutMs: 5000 });
+const timedOut = await client.awaitChain({ chain: timedOutChain, timeoutMs: 5000 });
 assert.deepEqual(timedOut.output, { rejected: true, reason: "timeout" });

@@ -9,7 +9,11 @@ import type { StateAdapterConformanceContext } from "../../conformance.state-ada
 import { runInModeOf } from "../../conformance/adapters.ts";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
 import type { Chain } from "../../entities/chain.ts";
-import { BlockerLimitExceededError, ChainTypeMismatchError } from "../../errors.ts";
+import {
+  JobBlockerLimitExceededError,
+  ChainTypeMismatchError,
+  JobsBlockerLimitExceededError,
+} from "../../errors.ts";
 import { createProcessors } from "../../job-type-processors/create-job-type-processors.ts";
 import { defineJobTypes } from "../../job-types/define-job-types.ts";
 import { createWorkerRunner } from "../../worker/worker-runner.ts";
@@ -134,7 +138,7 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
         );
 
         yield* wait(workerRunner.start());
-        const succeededChain = yield* wait(client.awaitChain(chain, completionOptions));
+        const succeededChain = yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         assert.deepEqual(succeededChain.output, { finalResult: 2 });
       }),
@@ -225,7 +229,7 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
         );
 
         yield* wait(workerRunner.start());
-        const succeededChain = yield* wait(client.awaitChain(chain, completionOptions));
+        const succeededChain = yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         assert.deepEqual(succeededChain.output, {
           finalResult: completedBlockerJob.output.result,
@@ -283,10 +287,42 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
         } catch (caught) {
           error = caught;
         }
-        assert.ok(error instanceof BlockerLimitExceededError);
+        assert.ok(error instanceof JobBlockerLimitExceededError);
         assert.equal(error.count, stateAdapter.config.maxBlockersPerJob + 1);
         assert.equal(error.limit, stateAdapter.config.maxBlockersPerJob);
         assert.equal(error.typeName, "main");
+
+        const overLimitBlockers = Array.from(
+          { length: stateAdapter.config.maxBlockersPerJob + 1 },
+          () => blockerChain,
+        );
+        yield* step(
+          assertRejects(
+            () =>
+              stateAdapter.withTransaction((txCtx) =>
+                client.createChains({
+                  ...txCtx,
+                  items: [
+                    { typeName: "main", input: null, blockers: overLimitBlockers },
+                    { typeName: "main", input: null, blockers: [blockerChain] },
+                    { typeName: "main", input: null, blockers: overLimitBlockers },
+                  ],
+                }),
+              ),
+            (error: unknown) => {
+              assert.ok(error instanceof JobsBlockerLimitExceededError);
+              assert.deepEqual(error.itemIndexes, [0, 2]);
+              assert.deepEqual(
+                error.errors.map(({ typeName, count, limit }) => [typeName, count, limit]),
+                [
+                  ["main", overLimitBlockers.length, stateAdapter.config.maxBlockersPerJob],
+                  ["main", overLimitBlockers.length, stateAdapter.config.maxBlockersPerJob],
+                ],
+              );
+              return true;
+            },
+          ),
+        );
       }),
     },
     {
@@ -360,7 +396,7 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
 
                     assert.ok(typeof job?.lastAttemptError === "string");
 
-                    assert.ok(job.lastAttemptError.includes("BlockerLimitExceededError"));
+                    assert.ok(job.lastAttemptError.includes("JobBlockerLimitExceededError"));
                     assert.ok(typeof job?.lastAttemptError === "string");
                     assert.ok(
                       job.lastAttemptError.includes(
@@ -392,7 +428,7 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
       }),
     },
     {
@@ -485,12 +521,10 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
         );
 
         yield* wait(workerRunner.start());
-        yield* wait(client.awaitChain(chain, completionOptions));
+        yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         const succeededChildChains = yield* wait(
-          Promise.all(
-            childChains.map(async (chain) => client.awaitChain(chain, completionOptions)),
-          ),
+          client.awaitChains({ chains: childChains, ...completionOptions }),
         );
 
         assert.equal(succeededChildChains.length, 2);
@@ -576,7 +610,7 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
 
         yield* wait(workerRunner1.start());
         yield* wait(workerRunner2.start());
-        const finishedChain = yield* wait(client.awaitChain(chain, completionOptions));
+        const finishedChain = yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         assert.deepEqual(finishedChain.output, { result: 3 });
       }),
@@ -661,7 +695,7 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
         );
 
         yield* wait(workerRunner.start());
-        const succeededChain = yield* wait(client.awaitChain(chain, completionOptions));
+        const succeededChain = yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         assert.deepEqual(succeededChain.output, {
           finalResult: Array.from({ length: 5 }, (_, i) => i + 1),
@@ -762,7 +796,7 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
         );
 
         yield* wait(workerRunner.start());
-        const succeededChain = yield* wait(client.awaitChain(chain, completionOptions));
+        const succeededChain = yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         assert.deepEqual(succeededChain.output, { finalResult: 50 });
       }),
@@ -913,7 +947,7 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
         );
 
         yield* wait(workerRunner.start());
-        const succeededChain = yield* wait(client.awaitChain(chain, completionOptions));
+        const succeededChain = yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         assert.deepEqual(succeededChain.output, { sum: 11 });
       }),
@@ -1054,8 +1088,38 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
           ),
         );
 
+        yield* step(
+          assertRejects(
+            () =>
+              stateAdapter.withTransaction((txCtx) =>
+                client.createChains({
+                  ...txCtx,
+                  items: [
+                    {
+                      typeName: "main",
+                      input: null,
+                      blockers: [{ id: otherChain.id, typeName: "blocker" }],
+                    },
+                    { typeName: "main", input: null, blockers: [blockerChain] },
+                    {
+                      typeName: "main",
+                      input: null,
+                      blockers: [blockerChain, { id: blockerChain.id, typeName: "other" }],
+                    },
+                  ],
+                }),
+              ),
+            {
+              name: "ChainsTypeMismatchError",
+              chainIds: [otherChain.id, blockerChain.id],
+              expectedTypeNames: ["blocker", "other"],
+              actualTypeNames: ["other", "blocker"],
+            },
+          ),
+        );
+
         yield* wait(workerRunner.start());
-        const succeededChain = yield* wait(client.awaitChain(chain, completionOptions));
+        const succeededChain = yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         assert.deepEqual(succeededChain.output, { sum: 12 });
       }),
@@ -1158,7 +1222,7 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
         );
 
         yield* wait(workerRunner.start());
-        const succeededChain = yield* wait(client.awaitChain(chain, completionOptions));
+        const succeededChain = yield* wait(client.awaitChain({ chain, ...completionOptions }));
 
         assert.deepEqual(succeededChain.output, {
           finalResult: Array.from({ length: 5 }, (_, i) => i + 1),
@@ -1250,8 +1314,8 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
         yield* wait(workerRunner.start());
         const [resultA, resultB] = yield* wait(
           Promise.all([
-            client.awaitChain(mainA, completionOptions),
-            client.awaitChain(mainB, completionOptions),
+            client.awaitChain({ chain: mainA, ...completionOptions }),
+            client.awaitChain({ chain: mainB, ...completionOptions }),
           ]),
         );
 
@@ -1331,7 +1395,7 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
         assert.equal(mainJob!.status, "blocked");
 
         yield* wait(workerRunner.start());
-        const result = yield* wait(client.awaitChain(mainChain, completionOptions));
+        const result = yield* wait(client.awaitChain({ chain: mainChain, ...completionOptions }));
         assert.deepEqual(result.output, { done: true });
       }),
     },
@@ -1416,8 +1480,8 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
         yield* wait(workerRunner.start());
         const [resultA, resultB] = yield* wait(
           Promise.all([
-            client.awaitChain(mainA, completionOptions),
-            client.awaitChain(mainB, completionOptions),
+            client.awaitChain({ chain: mainA, ...completionOptions }),
+            client.awaitChain({ chain: mainB, ...completionOptions }),
           ]),
         );
         assert.deepEqual(resultA.output, { results: [1, 2] });
@@ -1509,7 +1573,7 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
         yield* wait(blockerHeld.promise);
         yield* wait(sleep(10));
         releaseBlocker.resolve();
-        yield* wait(client.awaitChain(mainChain, completionOptions));
+        yield* wait(client.awaitChain({ chain: mainChain, ...completionOptions }));
 
         const unblockedMain = yield* step(client.getJob({ id: mainChain.id }));
         assert.notEqual(unblockedMain, undefined);
@@ -1616,9 +1680,7 @@ export const blockerChainsConcurrentTransactionsGroup: ConformanceGroup<StateAda
           await allBlockersReady.promise;
           releaseBlockers.resolve();
 
-          const results = await Promise.all(
-            mainChains.map(async (chain) => client.awaitChain(chain, completionOptions)),
-          );
+          const results = await client.awaitChains({ chains: mainChains, ...completionOptions });
 
           for (let i = 0; i < results.length; i++) {
             assert.deepEqual(results[i].output, { result: i });
@@ -1713,8 +1775,8 @@ export const blockerChainsNotifyConcurrentTransactionsGroup: ConformanceGroup<St
           release.resolve();
           const mainChain = await mainChainPromise;
 
-          await client.awaitChain(blockerChain, completionOptions);
-          await client.awaitChain(mainChain, completionOptions);
+          await client.awaitChain({ chain: blockerChain, ...completionOptions });
+          await client.awaitChain({ chain: mainChain, ...completionOptions });
         },
       },
       {
@@ -1802,7 +1864,7 @@ export const blockerChainsNotifyConcurrentTransactionsGroup: ConformanceGroup<St
           release.resolve();
           await rolledBack;
 
-          await client.awaitChain(blockerChain, completionOptions);
+          await client.awaitChain({ chain: blockerChain, ...completionOptions });
         },
       },
       {
@@ -1900,7 +1962,7 @@ export const blockerChainsNotifyConcurrentTransactionsGroup: ConformanceGroup<St
           await blockerWorkerIdle.promise;
           release.resolve();
 
-          await client.awaitChain(blockerChain, completionOptions);
+          await client.awaitChain({ chain: blockerChain, ...completionOptions });
         },
       },
       {
@@ -1998,7 +2060,7 @@ export const blockerChainsNotifyConcurrentTransactionsGroup: ConformanceGroup<St
           await blockerWorkerIdle.promise;
           release.resolve();
 
-          await client.awaitChain(blockerChain, completionOptions);
+          await client.awaitChain({ chain: blockerChain, ...completionOptions });
         },
       },
     ],

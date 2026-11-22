@@ -112,7 +112,7 @@ const reportChain = await stateAdapter.withTransaction(async (txCtx) => {
 });
 // #endregion
 
-const report = await client.awaitChain(reportChain, { timeoutMs: 5000 });
+const report = await client.awaitChain({ chain: reportChain, timeoutMs: 5000 });
 assert.deepEqual(report.output.results, [
   "data from /users",
   "data from /orders",
@@ -143,6 +143,6 @@ const shipChain = await stateAdapter.withTransaction(async (txCtx) => {
 });
 // #endregion
 
-const shipment = await client.awaitChain(shipChain, { timeoutMs: 5000 });
+const shipment = await client.awaitChain({ chain: shipChain, timeoutMs: 5000 });
 assert.equal(shipment.output.trackingNumber, "track-order-1");
 assert.equal(orders.get("order-1")!.status, "shipped");

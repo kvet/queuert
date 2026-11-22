@@ -120,14 +120,14 @@ const Page = () => (
     <h2 id="default">Without a notify adapter</h2>
     <p>
       A client created without <code>notifyAdapter</code> delivers notifications in memory to
-      itself: the worker runners created from it and its <code>awaitChain</code> calls wake the
-      moment a transaction commits. Nothing crosses the process, or even the client: a worker runner
-      in another process, or one built from a second client in the same process, polls the database
-      every <code>pollIntervalMs</code>. No additional packages or infrastructure are required. To
-      let several clients in one process wake each other, pass them one shared{" "}
-      <code>createInProcessNotifyAdapter()</code> from <code>queuert</code>. Its default{" "}
-      <code>"sync"</code> mode works over either kind of state adapter;{" "}
-      <code>{'mode: "async"'}</code> is optional.
+      itself: the worker runners created from it and its <code>awaitChain</code> and{" "}
+      <code>awaitChains</code> calls wake the moment a transaction commits. Nothing crosses the
+      process, or even the client: a worker runner in another process, or one built from a second
+      client in the same process, polls the database every <code>pollIntervalMs</code>. No
+      additional packages or infrastructure are required. To let several clients in one process wake
+      each other, pass them one shared <code>createInProcessNotifyAdapter()</code> from{" "}
+      <code>queuert</code>. Its default <code>"sync"</code> mode works over either kind of state
+      adapter; <code>{'mode: "async"'}</code> is optional.
     </p>
     <Aside type="tip">
       A single process with one client needs no notify adapter. Once workers run in other processes,

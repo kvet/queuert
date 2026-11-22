@@ -66,13 +66,7 @@ export const notifyResilienceGroup: ConformanceGroup<EndToEndNotifyContext> = {
           ),
         );
 
-        yield* wait(
-          Promise.all(
-            chains.map(async (chain) =>
-              client.awaitChain(chain, { pollIntervalMs: 100, timeoutMs: 5000 }),
-            ),
-          ),
-        );
+        yield* wait(client.awaitChains({ chains, pollIntervalMs: 100, timeoutMs: 5000 }));
         yield* wait(workerRunner.close());
 
         if (flaky.counts.calls > 5) {

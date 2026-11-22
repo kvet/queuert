@@ -40,7 +40,7 @@ const runChain = async (
     client.createChain({ ...txCtx, typeName: "send-welcome-email", input: null }),
   );
   return await client
-    .awaitChain(chain, { timeoutMs: 1000, pollIntervalMs: 60_000 })
+    .awaitChain({ chain, timeoutMs: 1000, pollIntervalMs: 60_000 })
     .then(() => "completed" as const)
     .catch(() => "timed out" as const);
 };

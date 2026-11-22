@@ -150,13 +150,14 @@ export type AttemptCompleteResult<
  * @throws {@link JobAlreadyCompletedError} if the job was completed elsewhere, for example by
  * `client.applyJobOutcome`.
  * @throws {@link JobNotFoundError} if the job was deleted.
- * @throws {@link BlockerLimitExceededError} if a `continueWith` outcome declares more blockers
+ * @throws {@link JobBlockerLimitExceededError} if a `continueWith` outcome declares more blockers
  * than the per-job limit.
  * @throws {@link ChainNotFoundError} if a `continueWith` blocker chain does not exist.
  * @throws {@link ChainTypeMismatchError} if a `continueWith` blocker's `typeName` differs from the
  * stored chain's.
  * @throws {@link JobTypeValidationError} if the job type rejects the `output`, or the continuation
  * job type rejects the `continueWith` target, input or blockers.
+ * @throws {@link UnknownJobTypeError} if a merged registry owns no slice for the job type.
  * @throws {@link InvalidJobIdError} if a `continueWith` `id` fails the state adapter's
  * `validateJobId` check.
  */

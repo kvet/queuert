@@ -120,7 +120,7 @@ describe("Logging", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     const workerArgs = {
@@ -222,7 +222,7 @@ describe("Logging", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     expectLogs([
@@ -293,7 +293,7 @@ describe("Logging", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     expectLogs([
@@ -397,7 +397,7 @@ describe("Logging", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     expectLogs([
@@ -528,7 +528,7 @@ describe("Logging", () => {
     });
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     expectLogs([
@@ -802,7 +802,7 @@ describe("Logging", () => {
     await jobStarted.promise;
     attemptStartedAt = new Date();
     await reclaimingWorkerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await reclaimingWorkerRunner.close();
     handlerReleased.resolve();
     await leaseLosingWorkerRunner.close();
@@ -1063,7 +1063,7 @@ describe("Logging", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     const logTypes = new Set(log.mock.calls.map((call) => call[0].type));
@@ -1118,10 +1118,7 @@ describe("Logging", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, {
-      pollIntervalMs: 100,
-      timeoutMs: 5000,
-    });
+    await client.awaitChain({ chain, pollIntervalMs: 100, timeoutMs: 5000 });
     await workerRunner.close();
 
     const notifyErrorLogs = log.mock.calls
@@ -1314,7 +1311,7 @@ describe("Logging rollback", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     const logEntries = log.mock.calls.map((call) => call[0]);
@@ -1394,7 +1391,7 @@ describe("Logging rollback", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     const logEntries = log.mock.calls.map((call) => call[0]);
@@ -1466,7 +1463,7 @@ describe("Logging rollback", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     const logEntries = log.mock.calls.map((call) => call[0]);
@@ -1559,7 +1556,7 @@ describe("Logging rollback", () => {
     });
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     const logEntries = log.mock.calls.map((call) => call[0]);
@@ -1742,7 +1739,7 @@ describe("Logging rollback", () => {
     );
 
     await workerRunner.start();
-    await client.awaitChain(chain, completionOptions);
+    await client.awaitChain({ chain, ...completionOptions });
     await workerRunner.close();
 
     const logEntries = log.mock.calls.map((call) => call[0]);

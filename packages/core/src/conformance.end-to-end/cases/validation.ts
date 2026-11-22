@@ -8,7 +8,7 @@ import { createClient } from "../../client/client.ts";
 import type { StateAdapterConformanceContext } from "../../conformance.state-adapter/types.ts";
 import { runInModeOf } from "../../conformance/adapters.ts";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
-import { JobTypeValidationError } from "../../errors.ts";
+import { JobTypeValidationError, JobsTypeValidationError } from "../../errors.ts";
 import { createProcessors } from "../../job-type-processors/create-job-type-processors.ts";
 import type { BaseJobTypeDefinitions } from "../../job-types/job-type.ts";
 import { createJobTypes } from "../../job-types/job-types.ts";
@@ -301,6 +301,33 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
             JobTypeValidationError,
           ),
         );
+
+        yield* step(
+          assertRejects(
+            () =>
+              stateAdapter.withTransaction((txCtx) =>
+                client.createChains({
+                  ...txCtx,
+                  items: [
+                    // @ts-expect-error testing runtime validation
+                    { typeName: "main", input: { value: "not-a-number" } },
+                    { typeName: "main", input: { value: 1 } },
+                    // @ts-expect-error testing runtime validation
+                    { typeName: "main", input: { value: "also-not-a-number" } },
+                  ],
+                }),
+              ),
+            (error: unknown) => {
+              assert.ok(error instanceof JobsTypeValidationError);
+              assert.deepEqual(error.itemIndexes, [0, 2]);
+              assert.deepEqual(
+                error.errors.map(({ code }) => code),
+                ["invalid_input", "invalid_input"],
+              );
+              return true;
+            },
+          ),
+        );
       }),
     },
     {
@@ -436,7 +463,7 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
         );
 
         yield* wait(workerRunner.start());
-        const completed = yield* wait(client.awaitChain(chain, completionOptions));
+        const completed = yield* wait(client.awaitChain({ chain, ...completionOptions }));
         assert.deepEqual(completed.output, { result: 84 });
       }),
     },
@@ -542,7 +569,7 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
         );
 
         yield* wait(workerRunner.start());
-        const completed = yield* wait(client.awaitChain(chain, completionOptions));
+        const completed = yield* wait(client.awaitChain({ chain, ...completionOptions }));
         assert.deepEqual(completed.output, { result: 42 });
       }),
     },
@@ -734,7 +761,7 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
         assert.equal(continuedJob.continuedTo.status, "pending");
 
         yield* wait(workerRunner.start());
-        const completed = yield* wait(client.awaitChain(chain, completionOptions));
+        const completed = yield* wait(client.awaitChain({ chain, ...completionOptions }));
         assert.deepEqual(completed.output, { result: 42 });
       }),
     },
@@ -884,9 +911,7 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
           ),
         );
         yield* wait(workerRunner.start());
-        yield* wait(
-          Promise.all(chains.map(async (chain) => client.awaitChain(chain, completionOptions))),
-        );
+        yield* wait(client.awaitChains({ chains, ...completionOptions }));
         yield* wait(workerRunner.close());
         yield* step(
           stateAdapter.withTransaction((txCtx) =>
@@ -1013,7 +1038,7 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
         );
 
         yield* wait(workerRunner.start());
-        const completed = yield* wait(client.awaitChain(chain, completionOptions));
+        const completed = yield* wait(client.awaitChain({ chain, ...completionOptions }));
         assert.deepEqual(completed.output, { doneAt });
         assert.partialDeepStrictEqual(
           yield* step(client.getJob({ id: chain.id, typeName: "timed" })),

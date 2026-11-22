@@ -106,7 +106,7 @@ export type CompletedJob<TJob extends AnyJob> = Extract<
 >;
 
 /**
- * The job `applyJobOutcome` acts on: `{ id, typeName? }`, or a job read earlier. A passed `status`
+ * The job `applyJobOutcome` and `applyJobOutcomes` act on: `{ id, typeName? }`, or a job read earlier. A passed `status`
  * must match the stored one.
  */
 export type JobRef<TJobId, TJobTypeName extends string> = {

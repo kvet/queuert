@@ -70,6 +70,8 @@ createProcessors({
 
 **`complete` keeps its name.** The handler takes the same outcomes as `client.applyJobOutcomes` (`design/apply-job-outcomes.md`), and for a handler every outcome means the attempt ends, so `complete` still fits.
 
+**Attempt-side errors list every job.** A batch that finds some of its jobs held by another attempt throws `JobsTakenByAnotherWorkerError`, listing each job id with the worker that holds it, the way the client's batch methods report every offending item rather than the first. The single-job path maps it back to `JobTakenByAnotherWorkerError` with `toSingleJobError`, so a handler of a single job sees `JobTakenByAnotherWorkerError`.
+
 **Single-job is batched-of-1.** Internally there is one path. That keeps the two shapes from drifting and makes the array vocabulary the same at `batchLimit` 1 and 50.
 
 ## Open questions
@@ -81,3 +83,5 @@ createProcessors({
 3. **Group reclamation.** A running job is live while its worker's lease is, and reclaiming an expired worker releases all of its running jobs at once, so a batch held by one worker already shares its fate. A worker that is still live but no longer runs some of its jobs releases them one by one, with no notion of a batch.
 
 4. **OTel.** Direction is the standard messaging-batch convention: a batch span parenting per-job spans, producer contexts attached as links rather than parents, per-job errors on per-job spans with a failed count on the batch. Not finalized.
+
+5. **Reclaimed batches.** `JobAttemptReclaimedError` is recorded as each job's `lastAttemptError`, not thrown, so a reclaimed batch already reports every job. Whether a `JobsAttemptReclaimedError` adds anything, such as one record naming the batch the jobs were reclaimed from, is undecided.

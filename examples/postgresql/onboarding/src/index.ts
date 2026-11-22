@@ -147,5 +147,5 @@ const chain = await withTxHooks(async (txHooks) =>
 );
 // #endregion
 
-const result = await client.awaitChain(chain, { timeoutMs: 10_000 });
+const result = await client.awaitChain({ chain, timeoutMs: 10_000 });
 console.log(`Onboarding finished, synced to the CRM at ${result.output.syncedAt}`);

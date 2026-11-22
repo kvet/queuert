@@ -1,5 +1,10 @@
 export { createClient, type Client } from "./client/client.ts";
-export { type Chain, type ChainStatus, type CompletedChain } from "./entities/chain.ts";
+export {
+  type Chain,
+  type ChainRef,
+  type ChainStatus,
+  type CompletedChain,
+} from "./entities/chain.ts";
 export { type DeduplicationOptions } from "./entities/deduplication.ts";
 export { defineJobTypes } from "./job-types/define-job-types.ts";
 export {
@@ -13,7 +18,7 @@ export {
 } from "./job-types/job-type.validation.ts";
 export { createJobTypes, type JobTypeDefinitions, type JobTypes } from "./job-types/job-types.ts";
 export { type JobTypeEntryNames, type JobTypeNames } from "./job-types/job-types.resolvers.ts";
-export { type CompletedJob, type Job, type JobStatus } from "./entities/job.ts";
+export { type CompletedJob, type Job, type JobRef, type JobStatus } from "./entities/job.ts";
 export { type Worker } from "./entities/worker.ts";
 export {
   isJsonSerializable,
@@ -24,13 +29,16 @@ export {
 export { type JobTypesDefinitions } from "./job-types/merge-job-types.ts";
 export { type ScheduleOptions } from "./entities/schedule.ts";
 export {
-  BlockerLimitExceededError,
+  JobBlockerLimitExceededError,
+  JobsBlockerLimitExceededError,
   BlockerReferenceError,
   ChainNotFoundError,
+  ChainsNotFoundError,
   ChainTypeMismatchError,
   ChainsTypeMismatchError,
   DuplicateJobTypeError,
   InvalidJobIdError,
+  InvalidJobIdsError,
   InvalidWorkerIdError,
   JobAlreadyCompletedError,
   JobAttemptReclaimedError,
@@ -43,9 +51,12 @@ export {
   JobTypeMismatchError,
   JobsTypeMismatchError,
   JobTypeValidationError,
+  JobsTypeValidationError,
   SchemaFencedError,
   UnknownJobTypeError,
+  UnknownJobTypesError,
   WaitChainTimeoutError,
+  WaitChainsTimeoutError,
   WorkerAlreadyLiveError,
   WorkerLeaseLostError,
   type JobTypeValidationErrorCode,

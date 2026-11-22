@@ -28,7 +28,6 @@ export const createNoopObservabilityHelper = (): ObservabilityHelper => ({
   jobTypeProcessingChange: noop,
   startJobSpan: noop,
   startAttemptSpan: noop,
-  completeJobSpan: noop,
   startBlockerSpan: noop,
   completeBlockerSpan: noop,
 });

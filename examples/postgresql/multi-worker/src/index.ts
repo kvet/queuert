@@ -151,7 +151,7 @@ const chains = await withTxHooks(async (txHooks) =>
   }),
 );
 
-await Promise.all(chains.map(async (chain) => client.awaitChain(chain, { timeoutMs: 30000 })));
+await client.awaitChains({ chains, timeoutMs: 30000 });
 
 console.log("\n" + "=".repeat(60));
 console.log("Processing Summary");
