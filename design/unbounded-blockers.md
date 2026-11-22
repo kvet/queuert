@@ -271,7 +271,7 @@ The eagerly preloaded `job.blockers` is **removed** from the attempt handler and
 }
 ```
 
-`getBlockers()` keeps the current behavior under the hood (single `getJobBlockers` query, all rows, bounded by `MAX_BLOCKERS_PER_JOB`) — just moved from an implicit `job.blockers` preload to an explicit call.
+`getBlockers()` keeps the current behavior under the hood (single `getJobsBlockers` query, all rows, bounded by `MAX_BLOCKERS_PER_JOB`) — just moved from an implicit `job.blockers` preload to an explicit call.
 
 `listBlockers()` is a cursor paginator over `job_blocker WHERE job_id = $1 ORDER BY index` (the PK supports it), usable as an async iterator with an explicit `listBlockers({ cursor, limit }) → { items, nextCursor }` escape hatch. Every item is guaranteed `completed` (the job only runs once sealed and all blockers resolved). Paging runs outside any queuert-owned transaction, and the attempt stays live while its worker holds its lease, so a long scan needs nothing extra. Page size is an internal tuning knob, not user-facing.
 

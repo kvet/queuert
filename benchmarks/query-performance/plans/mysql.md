@@ -281,7 +281,7 @@ Plans of every statement each query-performance case runs, at scale 100, without
     -> Single-row index lookup on h using PRIMARY (id = j.chain_id)
 ```
 
-## getJobBlockers/default
+## getJobsBlockers/default
 
 1. `getJobBlockers`
 

@@ -41,7 +41,7 @@ export const wrapStateAdapterWithLogging = <
     startJobAttempts: wrap("startJobAttempts", stateAdapter.startJobAttempts),
     getStartAttemptDelayMs: wrap("getStartAttemptDelayMs", stateAdapter.getStartAttemptDelayMs),
     addJobsBlockers: wrap("addJobsBlockers", stateAdapter.addJobsBlockers),
-    getJobBlockers: wrap("getJobBlockers", stateAdapter.getJobBlockers),
+    getJobsBlockers: wrap("getJobsBlockers", stateAdapter.getJobsBlockers),
     unblockJobs: wrap("unblockJobs", stateAdapter.unblockJobs),
     startWorker: wrap("startWorker", stateAdapter.startWorker),
     extendWorkerLease: wrap("extendWorkerLease", stateAdapter.extendWorkerLease),

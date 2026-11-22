@@ -82,10 +82,12 @@ export const readStateRows = (
       }
 
       const blockers: StateRows["blockers"] = [];
-      for (const job of jobs) {
-        const blockerChains = yield* step(stateAdapter.getJobBlockers({ jobId: job.id }));
+      const jobsBlockerChains = yield* step(
+        stateAdapter.getJobsBlockers({ jobIds: jobs.map((job) => job.id) }),
+      );
+      for (const [jobIndex, job] of jobs.entries()) {
         blockers.push(
-          ...blockerChains.map((chain, index) => ({
+          ...jobsBlockerChains[jobIndex].map((chain, index) => ({
             jobId: job.id,
             blockedByChainId: chain.id,
             index,

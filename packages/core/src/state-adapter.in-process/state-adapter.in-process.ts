@@ -170,7 +170,7 @@ export const createInProcessStateAdapterWithState = (
           startJobAttempts: locked(methods.startJobAttempts),
           getStartAttemptDelayMs: locked(methods.getStartAttemptDelayMs),
           addJobsBlockers: locked(methods.addJobsBlockers),
-          getJobBlockers: locked(methods.getJobBlockers),
+          getJobsBlockers: locked(methods.getJobsBlockers),
           unblockJobs: locked(methods.unblockJobs),
           startWorker: locked(methods.startWorker),
           extendWorkerLease: locked(methods.extendWorkerLease),

@@ -161,8 +161,8 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceContext> =
           before,
         );
         assert.deepEqual(
-          yield* step(stateAdapter.getJobBlockers({ jobId: mainChain.head.id })),
-          [],
+          yield* step(stateAdapter.getJobsBlockers({ jobIds: [mainChain.head.id] })),
+          [[]],
         );
       }),
     },

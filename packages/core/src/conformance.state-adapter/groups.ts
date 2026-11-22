@@ -37,11 +37,11 @@ import {
   getChainsHeldTransactionLockWaitGroup,
   getChainsConcurrentTransactionsGroup,
 } from "./cases/get-chains.ts";
-import {
-  getJobBlockersGroup,
-  getJobBlockersConcurrentTransactionsGroup,
-} from "./cases/get-job-blockers.ts";
 import { getJobTypeNamesGroup } from "./cases/get-job-type-names.ts";
+import {
+  getJobsBlockersGroup,
+  getJobsBlockersConcurrentTransactionsGroup,
+} from "./cases/get-jobs-blockers.ts";
 import {
   getJobsGroup,
   getJobsHeldTransactionLockWaitGroup,
@@ -112,7 +112,7 @@ export const stateAdapterBaseGroups: ConformanceGroup<StateAdapterConformanceCon
   createJobsGroup,
   continueJobsGroup,
   addJobsBlockersGroup,
-  getJobBlockersGroup,
+  getJobsBlockersGroup,
   unblockJobsGroup,
   startWorkerGroup,
   extendWorkerLeaseGroup,
@@ -160,7 +160,7 @@ export const stateAdapterConcurrentTransactionGroups: ConformanceGroup<StateAdap
     getChainsConcurrentTransactionsGroup,
     getJobsConcurrentTransactionsGroup,
     addJobsBlockersConcurrentTransactionsGroup,
-    getJobBlockersConcurrentTransactionsGroup,
+    getJobsBlockersConcurrentTransactionsGroup,
     unblockJobsConcurrentTransactionsGroup,
     extendWorkerLeaseConcurrentTransactionsGroup,
     startJobAttemptConcurrentTransactionsGroup,

@@ -121,11 +121,11 @@ const members = (): FieldItem[] => [
     name: "Blockers",
     description: (
       <>
-        Add blocker chains to jobs, read a job's blockers, and move a completed chain's dependents
-        to pending once all their blockers completed.
+        Add blocker chains to jobs, read jobs' blockers, and move a completed chain's dependents to
+        pending once all their blockers completed.
       </>
     ),
-    extra: ["addJobsBlockers", "getJobBlockers", "unblockJobs"],
+    extra: ["addJobsBlockers", "getJobsBlockers", "unblockJobs"],
   },
   {
     name: "Worker leases",

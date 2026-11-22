@@ -78,7 +78,7 @@ export type IndexCoverageCaseKey =
   | "createJobs/deduplication"
   | "continueJobs/default"
   | "addJobsBlockers/default"
-  | "getJobBlockers/default"
+  | "getJobsBlockers/default"
   | "unblockJobs/default"
   | "startWorker/default"
   | "extendWorkerLease/default"
@@ -1551,16 +1551,16 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
   },
 
   {
-    name: "getJobBlockers",
+    name: "getJobsBlockers",
     cases: [
       {
-        key: "getJobBlockers/default",
+        key: "getJobsBlockers/default",
         label: "default",
         run: () => (stateAdapter, sentinels) =>
           runInModeOf(
             stateAdapter,
             syncAsync(function* () {
-              yield* step(stateAdapter.getJobBlockers({ jobId: sentinels.fanIn.blockedJobId }));
+              yield* step(stateAdapter.getJobsBlockers({ jobIds: [sentinels.fanIn.blockedJobId] }));
             }),
           ),
       },

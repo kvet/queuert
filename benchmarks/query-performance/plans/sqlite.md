@@ -246,7 +246,7 @@ CORRELATED SCALAR SUBQUERY 12
 SEARCH h USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
 ```
 
-## getJobBlockers/default
+## getJobsBlockers/default
 
 1. `getJobBlockers`
 

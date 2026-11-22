@@ -1314,15 +1314,17 @@ export const createRedisStateAdapter = ({
         }));
       }),
 
-    getJobBlockers: async ({ txCtx, jobId }) =>
+    getJobsBlockers: async ({ txCtx, jobIds }) =>
       withRead(txCtx, async (tx) => {
-        const job = await loadJob(tx, jobId);
-        if (!job) return [];
-        const heads = await loadPresentJobs(
-          tx,
-          job.blockers.toSorted((a, b) => a.index - b.index).map((b) => b.blockedByChainId),
+        const jobs = await loadJobs(tx, jobIds);
+        const blockerChainIds = jobs.map((job) =>
+          (job?.blockers ?? [])
+            .toSorted((a, b) => a.index - b.index)
+            .map((blocker) => blocker.blockedByChainId),
         );
-        return chainViews(tx, heads);
+        const heads = await loadPresentJobs(tx, [...new Set(blockerChainIds.flat())]);
+        const chainsById = new Map((await chainViews(tx, heads)).map((chain) => [chain.id, chain]));
+        return blockerChainIds.map((ids) => ids.flatMap((id) => chainsById.get(id) ?? []));
       }),
 
     unblockJobs: async ({ txCtx, blockedByChainId }) =>

@@ -16,7 +16,7 @@ const flakyMethods = [
   "startJobAttempts",
   "getStartAttemptDelayMs",
   "addJobsBlockers",
-  "getJobBlockers",
+  "getJobsBlockers",
   "unblockJobs",
   "startWorker",
   "extendWorkerLease",

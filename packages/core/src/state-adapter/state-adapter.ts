@@ -359,10 +359,13 @@ export type StateAdapter<
     }[];
   }) => ModeResult<TMode, (StateJob & { blockers: (StateChainInfo | undefined)[] })[]>;
 
-  /** Gets a job's blocker chains, one per blocker row in index order. */
-  getJobBlockers: (
-    params: { jobId: TJobId } & AutocommitTxContextParam<TTxContext>,
-  ) => ModeResult<TMode, StateChain[]>;
+  /**
+   * Gets each job's blocker chains, one per blocker row in index order, in the order of `jobIds`;
+   * an unknown job has none.
+   */
+  getJobsBlockers: (
+    params: { jobIds: TJobId[] } & AutocommitTxContextParam<TTxContext>,
+  ) => ModeResult<TMode, StateChain[][]>;
 
   /**
    * Moves a completed chain's dependents to pending once all their blockers completed; one entry

@@ -1815,23 +1815,29 @@ WHERE j.status IN ('pending', 'blocked') AND {{fence_guard}}`,
       }));
     },
 
-    getJobBlockers: async ({ txCtx, jobId }) => {
+    getJobsBlockers: async ({ txCtx, jobIds }) => {
+      if (jobIds.length === 0) return [];
       const rows = await execute(
         txCtx,
         prepared(
-          "getJobBlockers",
+          "getJobsBlockers",
           `
-SELECT ${selectJob("h", "h_")}, ${selectJob("t", "t_")}
-FROM {{prefix}}job_blocker b
+SELECT b.job_id AS b_job_id, ${selectJob("h", "h_")}, ${selectJob("t", "t_")}
+FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d
+STRAIGHT_JOIN {{prefix}}job_blocker b ON b.job_id = d.id
 JOIN {{prefix}}job h ON h.id = b.blocked_by_chain_id
 ${tailJoin("h", "t")}
-WHERE b.job_id = ?
-ORDER BY b.\`index\``,
-          { params: [jobIdDataType], columns: dbChainRowColumns, readOnly: true },
+ORDER BY b.job_id, b.\`index\``,
+          {
+            params: [t.string()],
+            columns: { b_job_id: jobIdDataType, ...dbChainRowColumns },
+            readOnly: true,
+          },
         ),
-        [jobId],
+        [sortedIdsParam(jobIds)],
       );
-      return rows.map(mapDbChainRowToStateChain);
+      const rowsByJobId = Map.groupBy(rows, (row) => row.b_job_id as string);
+      return jobIds.map((jobId) => (rowsByJobId.get(jobId) ?? []).map(mapDbChainRowToStateChain));
     },
 
     unblockJobs: async ({ txCtx, blockedByChainId }) => {

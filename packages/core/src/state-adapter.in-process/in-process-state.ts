@@ -1036,16 +1036,16 @@ export const createInProcessState = (
         return attached.map(({ slot, blockers }) => ({ ...jobView(slot), blockers }));
       }),
 
-    getJobBlockers: ({ txCtx, jobId }) =>
-      read(txCtx, () => {
-        const slot = jobs.get(jobId);
-        if (slot === undefined) return [];
-        const result: StateChain[] = [];
-        for (const row of slot.blockers) {
-          if (row.chain.state !== undefined) result.push(chainView(row.chain));
-        }
-        return result;
-      }),
+    getJobsBlockers: ({ txCtx, jobIds }) =>
+      read(txCtx, () =>
+        jobIds.map((jobId) => {
+          const result: StateChain[] = [];
+          for (const row of jobs.get(jobId)?.blockers ?? []) {
+            if (row.chain.state !== undefined) result.push(chainView(row.chain));
+          }
+          return result;
+        }),
+      ),
 
     unblockJobs: ({ txCtx, blockedByChainId }) =>
       write(txCtx, (journal) => {

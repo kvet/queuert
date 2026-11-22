@@ -2032,27 +2032,34 @@ LEFT JOIN locked_blocker_heads h ON h.id = d.blocked_by_chain_id
       }));
     },
 
-    getJobBlockers: async ({ txCtx, jobId }) => {
-      const chains = await execute(
+    getJobsBlockers: async ({ txCtx, jobIds }) => {
+      if (jobIds.length === 0) return [];
+      const rows = await execute(
         txCtx,
         prepared(
-          "getJobBlockers",
+          "getJobsBlockers",
           `
 SELECT
+  b.job_id,
   row_to_json(head_job) AS head_job,
   row_to_json(tail_job) AS tail_job
 FROM {{schema}}.{{table_prefix}}job_blocker AS b
 JOIN {{schema}}.{{table_prefix}}job AS head_job
   ON head_job.id = b.blocked_by_chain_id${tailLateral("head_job")}
-WHERE b.job_id = $1
-ORDER BY b.index ASC
+WHERE b.job_id = ANY($1::{{job_id_type}}[])
+ORDER BY b.job_id, b.index ASC
 `,
-          { params: [idDataType], columns: rowToJsonJobColumns, readOnly: true },
+          {
+            params: [t.array()],
+            columns: { job_id: idDataType, ...rowToJsonJobColumns },
+            readOnly: true,
+          },
         ),
-        [jobId],
+        [jobIds as string[]],
       );
 
-      return chains.map(mapDbChainRowToStateChain);
+      const rowsByJobId = Map.groupBy(rows, (row) => row.job_id);
+      return jobIds.map((jobId) => (rowsByJobId.get(jobId) ?? []).map(mapDbChainRowToStateChain));
     },
 
     unblockJobs: async ({ txCtx, blockedByChainId }) => {

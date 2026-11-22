@@ -5,8 +5,8 @@ import { dynamicSyncAsync, resource, step } from "@queuert/sync-async";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
 import type { StateAdapterConformanceContext } from "../types.ts";
 
-export const getJobBlockersGroup: ConformanceGroup<StateAdapterConformanceContext> = {
-  name: "getJobBlockers",
+export const getJobsBlockersGroup: ConformanceGroup<StateAdapterConformanceContext> = {
+  name: "getJobsBlockers",
   cases: [
     {
       name: "returns blocker chain views for a job",
@@ -54,7 +54,9 @@ export const getJobBlockersGroup: ConformanceGroup<StateAdapterConformanceContex
           ),
         );
 
-        const blockers = yield* step(stateAdapter.getJobBlockers({ jobId: mainChain.head.id }));
+        const [blockers] = yield* step(
+          stateAdapter.getJobsBlockers({ jobIds: [mainChain.head.id] }),
+        );
         assert.equal(blockers.length, 2);
 
         const blockerHeadIds = blockers.map(({ head }) => head.id);
@@ -119,7 +121,9 @@ export const getJobBlockersGroup: ConformanceGroup<StateAdapterConformanceContex
           ),
         );
 
-        const blockers = yield* step(stateAdapter.getJobBlockers({ jobId: mainChain.head.id }));
+        const [blockers] = yield* step(
+          stateAdapter.getJobsBlockers({ jobIds: [mainChain.head.id] }),
+        );
         assert.equal(blockers.length, 1);
 
         const { head: headJob, tail: tailJob } = blockers[0];
@@ -159,7 +163,9 @@ export const getJobBlockersGroup: ConformanceGroup<StateAdapterConformanceContex
           ),
         );
 
-        const blockers = yield* step(stateAdapter.getJobBlockers({ jobId: mainChain.head.id }));
+        const [blockers] = yield* step(
+          stateAdapter.getJobsBlockers({ jobIds: [mainChain.head.id] }),
+        );
         assert.deepEqual(
           blockers.map(({ id }) => id),
           [blockerChain.id, blockerChain.id],
@@ -182,19 +188,106 @@ export const getJobBlockersGroup: ConformanceGroup<StateAdapterConformanceContex
           ),
         );
 
-        const blockers = yield* step(stateAdapter.getJobBlockers({ jobId: stateChain.head.id }));
+        const [blockers] = yield* step(
+          stateAdapter.getJobsBlockers({ jobIds: [stateChain.head.id] }),
+        );
         assert.equal(blockers.length, 0);
+      }),
+    },
+    {
+      name: "returns each job's blockers in the order of jobIds, none for an unknown job",
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
+
+        const [blockerChainA, blockerChainB, firstChain, secondChain, unblockedChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: ["blocker", "blocker", "first", "second", "unblocked"].map((typeName) => ({
+                id: stateAdapter.config.generateJobId(),
+                typeName,
+                input: null,
+              })),
+            }),
+          ),
+        );
+
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [
+                { jobId: firstChain.head.id, blockedByChainIds: [blockerChainA.id] },
+                {
+                  jobId: secondChain.head.id,
+                  blockedByChainIds: [blockerChainB.id, blockerChainA.id],
+                },
+              ],
+            }),
+          ),
+        );
+
+        const jobsBlockers = yield* step(
+          stateAdapter.getJobsBlockers({
+            jobIds: [
+              secondChain.head.id,
+              stateAdapter.config.generateJobId(),
+              unblockedChain.head.id,
+              firstChain.head.id,
+            ],
+          }),
+        );
+        assert.deepEqual(
+          jobsBlockers.map((blockers) => blockers.map(({ id }) => id)),
+          [[blockerChainB.id, blockerChainA.id], [], [], [blockerChainA.id]],
+        );
+      }),
+    },
+    {
+      name: "returns nothing for no jobIds and the same blockers for a repeated id",
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
+
+        const [blockerChain, blockedChain] = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: ["blocker", "blocked"].map((typeName) => ({
+                id: stateAdapter.config.generateJobId(),
+                typeName,
+                input: null,
+              })),
+            }),
+          ),
+        );
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [{ jobId: blockedChain.head.id, blockedByChainIds: [blockerChain.id] }],
+            }),
+          ),
+        );
+
+        assert.deepEqual(yield* step(stateAdapter.getJobsBlockers({ jobIds: [] })), []);
+        const jobsBlockers = yield* step(
+          stateAdapter.getJobsBlockers({ jobIds: [blockedChain.head.id, blockedChain.head.id] }),
+        );
+        assert.deepEqual(
+          jobsBlockers.map((blockers) => blockers.map(({ id }) => id)),
+          [[blockerChain.id], [blockerChain.id]],
+        );
       }),
     },
   ],
 };
 
-export const getJobBlockersConcurrentTransactionsGroup: ConformanceGroup<StateAdapterConformanceContext> =
+export const getJobsBlockersConcurrentTransactionsGroup: ConformanceGroup<StateAdapterConformanceContext> =
   {
-    name: "getJobBlockers",
+    name: "getJobsBlockers",
     cases: [
       {
-        name: "non-transactional getJobBlockers does not observe an uncommitted blocker insert",
+        name: "non-transactional getJobsBlockers does not observe an uncommitted blocker insert",
         run: async ({ createStateAdapter }) => {
           await using stateAdapter = await createStateAdapter();
 
@@ -241,12 +334,12 @@ export const getJobBlockersConcurrentTransactionsGroup: ConformanceGroup<StateAd
             .catch(() => {});
 
           await txReady;
-          const blockersPromise = stateAdapter.getJobBlockers({ jobId: targetChain.head.id });
+          const blockersPromise = stateAdapter.getJobsBlockers({ jobIds: [targetChain.head.id] });
           const targetReadPromise = stateAdapter.getJobs({ jobIds: [targetChain.head.id] });
           release();
           await txPromise;
 
-          const observedBlockers = await blockersPromise;
+          const [observedBlockers] = await blockersPromise;
           const [observedTarget] = await targetReadPromise;
           assert.equal(observedBlockers.length, 0);
           assert.equal(observedTarget?.completedAt, null);

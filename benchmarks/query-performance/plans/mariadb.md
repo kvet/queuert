@@ -203,7 +203,7 @@ id=1  select_type=SIMPLE  table=j  type=eq_ref  possible_keys=PRIMARY  key=PRIMA
 id=1  select_type=SIMPLE  table=h  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=queuert_bench.j.chain_id  Extra=
 ```
 
-## getJobBlockers/default
+## getJobsBlockers/default
 
 1. `getJobBlockers`
 

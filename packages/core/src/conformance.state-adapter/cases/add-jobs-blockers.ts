@@ -151,7 +151,7 @@ export const addJobsBlockersGroup: ConformanceGroup<StateAdapterConformanceConte
         const [unchanged] = yield* step(stateAdapter.getJobs({ jobIds: [mainChain.head.id] }));
         assert.equal(unchanged!.status, "pending");
         assert.equal(
-          (yield* step(stateAdapter.getJobBlockers({ jobId: mainChain.head.id }))).length,
+          (yield* step(stateAdapter.getJobsBlockers({ jobIds: [mainChain.head.id] })))[0].length,
           0,
         );
       }),
@@ -476,7 +476,7 @@ export const addJobsBlockersGroup: ConformanceGroup<StateAdapterConformanceConte
         const [after] = yield* step(stateAdapter.getJobs({ jobIds: [mainChain.head.id] }));
         assert.equal(after!.status, "pending");
         assert.equal(
-          (yield* step(stateAdapter.getJobBlockers({ jobId: mainChain.head.id }))).length,
+          (yield* step(stateAdapter.getJobsBlockers({ jobIds: [mainChain.head.id] })))[0].length,
           0,
         );
       }),

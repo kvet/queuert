@@ -263,7 +263,9 @@ export const withTransactionGroup: ConformanceGroup<StateAdapterConformanceConte
         assert.equal(after?.completedAt, null);
         assert.equal(after?.attemptAt, null);
 
-        const blockers = yield* step(stateAdapter.getJobBlockers({ jobId: targetChain.head.id }));
+        const [blockers] = yield* step(
+          stateAdapter.getJobsBlockers({ jobIds: [targetChain.head.id] }),
+        );
         assert.equal(blockers.length, 0);
 
         const blocked = yield* step(

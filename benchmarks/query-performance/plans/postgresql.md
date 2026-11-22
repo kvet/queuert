@@ -381,7 +381,7 @@ Nested Loop Left Join
   ->  CTE Scan on locked_blocker_heads h
 ```
 
-## getJobBlockers/default
+## getJobsBlockers/default
 
 1. `getJobBlockers`
 

@@ -1167,7 +1167,7 @@ export const unblockJobsConcurrentTransactionsLockWaitGroup: ConformanceGroup<St
 
           const [pendingDependent] = await stateAdapter.getJobs({ jobIds: [dependent.id] });
           assert.equal(pendingDependent!.status, "pending");
-          const blockers = await stateAdapter.getJobBlockers({ jobId: dependent.id });
+          const [blockers] = await stateAdapter.getJobsBlockers({ jobIds: [dependent.id] });
           assert.deepEqual(
             blockers.map((blocker) => blocker.id),
             [chainId],

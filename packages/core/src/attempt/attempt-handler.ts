@@ -161,9 +161,9 @@ const runAttemptHandler = async ({
   complete: AttemptWrites["complete"];
   fence: AttemptWrites["fence"];
 }): Promise<void> => {
-  const blockerChains = stateJob.hasBlockers
-    ? await helpers.stateAdapter.getJobBlockers({ jobId: stateJob.id })
-    : [];
+  const [blockerChains] = stateJob.hasBlockers
+    ? await helpers.stateAdapter.getJobsBlockers({ jobIds: [stateJob.id] })
+    : [[]];
   const runningJob = Object.assign(mapStateJobToJob(stateJob, helpers.jobTypes), {
     blockers: blockerChains.map((blockerChain) =>
       mapStateChainToChain(blockerChain, helpers.jobTypes),

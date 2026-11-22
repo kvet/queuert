@@ -28,7 +28,7 @@ const spiedMethods = [
   "startJobAttempts",
   "getStartAttemptDelayMs",
   "addJobsBlockers",
-  "getJobBlockers",
+  "getJobsBlockers",
   "unblockJobs",
   "startWorker",
   "extendWorkerLease",

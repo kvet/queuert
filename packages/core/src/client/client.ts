@@ -1808,10 +1808,10 @@ export const createClient = <
               throw toSingleJobError(error);
             }
           }
-          const blockers = yield* step(
-            helpers.stateAdapter.getJobBlockers({
+          const [blockers] = yield* step(
+            helpers.stateAdapter.getJobsBlockers({
               txCtx,
-              jobId,
+              jobIds: [jobId],
             }),
           );
           return blockers.map((stateChain) =>

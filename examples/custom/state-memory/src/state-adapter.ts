@@ -470,10 +470,12 @@ export const createMemoryStateAdapter = (
         }),
       ),
 
-    getJobBlockers: async ({ txCtx, jobId }) =>
+    getJobsBlockers: async ({ txCtx, jobIds }) =>
       read(txCtx, (state) =>
-        blockersOf(state, jobId).map((blocker) =>
-          toChain(state, state.chains.get(blocker.blockedByChainId)!),
+        jobIds.map((jobId) =>
+          blockersOf(state, jobId).map((blocker) =>
+            toChain(state, state.chains.get(blocker.blockedByChainId)!),
+          ),
         ),
       ),
 

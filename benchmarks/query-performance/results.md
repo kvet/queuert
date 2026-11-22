@@ -18,7 +18,7 @@ Last run 2026-11-21 · commit ae6ebc02 · load average 5.05 · In-process at sca
 | createJobs/deduplication       |       0.54 |   0.07 |  0.93 |    0.65 |  0.41 |       0.00 |
 | continueJobs/default           |       0.91 |   0.06 |  1.50 |    1.81 |  0.38 |       0.01 |
 | addJobsBlockers/default        |       1.06 |   0.05 |  1.44 |    1.56 |  0.50 |       0.00 |
-| getJobBlockers/default         |       0.26 |   0.05 |  0.19 |    0.22 |  0.41 |       0.00 |
+| getJobsBlockers/default        |       0.26 |   0.05 |  0.19 |    0.22 |  0.41 |       0.00 |
 | unblockJobs/default            |       0.84 |   0.08 |  1.39 |    1.48 |  0.47 |       0.00 |
 | startWorker/default            |       0.31 |   0.01 |  0.68 |    0.70 |  0.29 |       0.00 |
 | extendWorkerLease/default      |       0.30 |   0.01 |  1.18 |    1.22 |  0.29 |       0.00 |
@@ -123,7 +123,7 @@ Last run 2026-11-21 · commit ae6ebc02 · load average 5.05 · In-process at sca
 | createJobs/deduplication       |       0.67 |   0.19 |  1.35 |    0.86 |  0.57 |       0.03 |
 | continueJobs/default           |       1.05 |   0.07 |  1.80 |    4.64 |  0.43 |       0.04 |
 | addJobsBlockers/default        |       1.21 |   0.06 |  1.64 |    1.68 |  0.55 |       0.03 |
-| getJobBlockers/default         |       0.34 |   0.05 |  0.22 |    1.47 |  0.49 |       0.03 |
+| getJobsBlockers/default        |       0.34 |   0.05 |  0.22 |    1.47 |  0.49 |       0.03 |
 | unblockJobs/default            |       0.92 |   0.12 |  2.85 |    1.89 |  0.81 |       0.02 |
 | startWorker/default            |       0.33 |   0.01 |  0.81 |    1.90 |  0.38 |       0.01 |
 | extendWorkerLease/default      |       0.41 |   0.01 |  1.72 |    1.39 |  0.35 |       0.01 |
