@@ -764,15 +764,15 @@ export const createChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value } }),
                     ),
                 },
                 main: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         output: {
                           finalResult: job.blockers[0].output.result,
@@ -826,9 +826,9 @@ export const createChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value * 2 } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value * 2 } }),
                     ),
                 },
               },

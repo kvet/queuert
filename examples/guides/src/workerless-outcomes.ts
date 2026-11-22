@@ -41,16 +41,16 @@ await using workerRunner = createWorkerRunner({
     processors: {
       // #region processors
       "await-approval": {
-        attemptHandler: async ({ complete }) =>
+        attemptHandler: async ({ applyOutcome }) =>
           stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, output: { rejected: true, reason: "timeout" } }),
+            applyOutcome({ ...txCtx, output: { rejected: true, reason: "timeout" } }),
           ),
       },
       "process-request": {
-        attemptHandler: async ({ job, complete }) =>
+        attemptHandler: async ({ job, applyOutcome }) =>
           stateAdapter.withTransaction(async (txCtx) => {
             processedRequests.push(job.input.requestId);
-            return complete({ ...txCtx, output: { processed: true } });
+            return applyOutcome({ ...txCtx, output: { processed: true } });
           }),
       },
       // #endregion

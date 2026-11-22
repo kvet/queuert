@@ -339,8 +339,8 @@ const Page = () => (
         <code>40P01</code>), which can happen at any level.
       </li>
       <li>
-        The transactions you pass to <code>complete</code>, <code>fence</code> and client methods
-        raise it to you. Retry them with fresh <code>txHooks</code> for each try, or inside{" "}
+        The transactions you pass to <code>applyOutcome</code>, <code>fence</code> and client
+        methods raise it to you. Retry them with fresh <code>txHooks</code> for each try, or inside{" "}
         <a href={siteHref("/guides/tx-hooks/#drivers-that-rerun-the-callback")}>
           <code>txHooks.retryBoundary</code>
         </a>

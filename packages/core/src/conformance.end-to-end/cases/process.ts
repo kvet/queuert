@@ -44,7 +44,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
   name: "process",
   cases: [
     {
-      name: "throws error when complete or fence is called incorrectly",
+      name: "throws error when applyOutcome or fence is called incorrectly",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, ...context }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -60,7 +60,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
-        const completeAfterHandler = Promise.withResolvers<() => unknown>();
+        const applyOutcomeAfterHandler = Promise.withResolvers<() => unknown>();
         const fenceAfterHandler = Promise.withResolvers<() => unknown>();
         const workerRunner = yield* resource(
           createWorkerRunner({
@@ -71,15 +71,15 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ complete, fence }) => {
+                  attemptHandler: async ({ applyOutcome, fence }) => {
                     await context.withNonTransactionContext(async (nonTransactionCtx) => {
                       try {
-                        await complete({ ...nonTransactionCtx, output: null });
+                        await applyOutcome({ ...nonTransactionCtx, output: null });
                       } catch (error) {
                         assert.match((error as Error).message, /not in a transaction/);
                         return;
                       }
-                      assert.fail("Expected complete to throw outside a transaction");
+                      assert.fail("Expected applyOutcome to throw outside a transaction");
                     });
                     await context.withNonTransactionContext(async (nonTransactionCtx) => {
                       try {
@@ -100,41 +100,43 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                           yield* step(
                             assertRejects(
                               () =>
-                                complete({
+                                applyOutcome({
                                   ...txCtx,
                                   output: null,
                                   ...({ reschedule: { afterMs: 1 } } as object),
                                 }),
-                              /complete requires exactly one of output, continueWith or reschedule/,
+                              /applyOutcome requires exactly one of output, continueWith or reschedule/,
                             ),
                           );
                           yield* step(
                             assertRejects(
                               () =>
-                                complete({
+                                applyOutcome({
                                   ...txCtx,
                                   output: null,
                                   ...({ reason: "why" } as object),
                                 }),
-                              /complete accepts reason only together with reschedule/,
+                              /applyOutcome accepts reason only together with reschedule/,
                             ),
                           );
                           yield* step(
                             assertRejects(
                               () =>
                                 // @ts-expect-error the caller's transaction context is required
-                                complete({ output: null }),
-                              /complete requires a transaction context from the caller's transaction/,
+                                applyOutcome({ output: null }),
+                              /applyOutcome requires a transaction context from the caller's transaction/,
                             ),
                           );
 
                           yield* step(fence({ ...txCtx }));
-                          return complete({ ...txCtx, output: null });
+                          return applyOutcome({ ...txCtx, output: null });
                         }),
                       ),
                     );
-                    completeAfterHandler.resolve(() =>
-                      stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                    applyOutcomeAfterHandler.resolve(() =>
+                      stateAdapter.withTransaction((txCtx) =>
+                        applyOutcome({ ...txCtx, output: null }),
+                      ),
                     );
                     fenceAfterHandler.resolve(() =>
                       stateAdapter.withTransaction((txCtx) =>
@@ -168,11 +170,11 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         yield* wait(client.awaitChain({ chain, ...completionOptions }));
         yield* wait(workerRunner.close());
 
-        const callComplete = yield* wait(completeAfterHandler.promise);
+        const callApplyOutcome = yield* wait(applyOutcomeAfterHandler.promise);
         yield* step(
           assertRejects(
-            () => callComplete(),
-            /complete cannot be called after the attempt handler has ended/,
+            () => callApplyOutcome(),
+            /applyOutcome cannot be called after the attempt handler has ended/,
           ),
         );
         const callFence = yield* wait(fenceAfterHandler.promise);
@@ -216,7 +218,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               },
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     attempts.push(job.attempt);
 
                     assert.ok(job.attempt > 0);
@@ -234,7 +236,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                     }
 
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: null }),
+                      applyOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
@@ -289,12 +291,12 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               },
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     if (job.attempt < 2) {
                       throw new Error("Simulated failure");
                     }
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: null }),
+                      applyOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
@@ -353,7 +355,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               },
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     if (job.lastAttemptError !== null) {
                       errors.push(job.lastAttemptError);
                     }
@@ -363,7 +365,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                     }
 
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: null }),
+                      applyOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
@@ -419,7 +421,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     assert.equal(job.typeName, "test");
                     assert.deepEqual(job.input, { test: true });
                     assert.equal(job.status, "running");
@@ -431,7 +433,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                         stateAdapter,
                         syncAsync(function* () {
                           const completedJob = yield* step(
-                            complete({
+                            applyOutcome({
                               ...txCtx,
                               output: { result: true },
                             }),
@@ -476,7 +478,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
       }),
     },
     {
-      name: "complete should be visible to reads later in the same transaction",
+      name: "applyOutcome should be visible to reads later in the same transaction",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -510,13 +512,13 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 "output-then-read": {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
                       runInModeOf(
                         stateAdapter,
                         syncAsync(function* () {
                           const completedJob = yield* step(
-                            complete({
+                            applyOutcome({
                               ...txCtx,
                               output: { done: true },
                             }),
@@ -535,13 +537,13 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                     ),
                 },
                 "continue-then-read": {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
                       runInModeOf(
                         stateAdapter,
                         syncAsync(function* () {
                           const completedJob = yield* step(
-                            complete({
+                            applyOutcome({
                               ...txCtx,
                               continueWith: { typeName: "tail", input: null },
                             }),
@@ -556,9 +558,9 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                     ),
                 },
                 tail: {
-                  attemptHandler: async ({ complete }) =>
+                  attemptHandler: async ({ applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { done: true } }),
+                      applyOutcome({ ...txCtx, output: { done: true } }),
                     ),
                 },
               },
@@ -584,7 +586,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
       }),
     },
     {
-      name: "keeps a committed `complete` call when the handler throws afterwards",
+      name: "keeps a committed `applyOutcome` call when the handler throws afterwards",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -603,15 +605,15 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               backoffConfig: { initialDelayMs: 60_000, multiplier: 1, maxDelayMs: 60_000 },
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     if (job.attempt === 1) {
                       await stateAdapter.withTransaction((txCtx) =>
-                        complete({ ...txCtx, reschedule: { afterMs: 1 } }),
+                        applyOutcome({ ...txCtx, reschedule: { afterMs: 1 } }),
                       );
                       throw new Error("after a committed reschedule");
                     }
                     await stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { done: true } }),
+                      applyOutcome({ ...txCtx, output: { done: true } }),
                     );
                     throw new Error("after a committed output");
                   },
@@ -636,7 +638,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
       }),
     },
     {
-      name: "writes nothing when complete fails validation, so the caller may catch and complete again",
+      name: "writes nothing when applyOutcome fails validation, so the caller may catch and apply an outcome again",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -656,7 +658,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ complete }) =>
+                  attemptHandler: async ({ applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
                       runInModeOf(
                         stateAdapter,
@@ -664,7 +666,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                           yield* step(
                             assertRejects(
                               () =>
-                                complete({
+                                applyOutcome({
                                   ...txCtx,
                                   continueWith: {
                                     typeName: "next",
@@ -675,7 +677,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                               ChainNotFoundError,
                             ),
                           );
-                          return complete({ ...txCtx, output: null });
+                          return applyOutcome({ ...txCtx, output: null });
                         }),
                       ),
                     ),
@@ -702,7 +704,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
       }),
     },
     {
-      name: "trusts a committed `complete` result returned by the handler without rescheduling",
+      name: "trusts a committed `applyOutcome` result returned by the handler without rescheduling",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -727,8 +729,10 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),
@@ -750,7 +754,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
       }),
     },
     {
-      name: "completes the attempt on a committed `complete` call when the handler returns another object",
+      name: "completes the attempt on a committed `applyOutcome` call when the handler returns another object",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -770,9 +774,9 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               backoffConfig: { initialDelayMs: 60_000, multiplier: 1, maxDelayMs: 60_000 },
               processors: {
                 test: {
-                  attemptHandler: async ({ complete }) => {
+                  attemptHandler: async ({ applyOutcome }) => {
                     const completed = await stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: null }),
+                      applyOutcome({ ...txCtx, output: null }),
                     );
                     return { ...completed };
                   },
@@ -796,7 +800,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
       }),
     },
     {
-      name: "completes the attempt and reports a worker error when the handler throws after a committed `complete` call",
+      name: "completes the attempt and reports a worker error when the handler throws after a committed `applyOutcome` call",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -827,11 +831,11 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               backoffConfig: { initialDelayMs: 60_000, multiplier: 1, maxDelayMs: 60_000 },
               processors: {
                 test: {
-                  attemptHandler: async ({ complete }) => {
+                  attemptHandler: async ({ applyOutcome }) => {
                     await stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: null }),
+                      applyOutcome({ ...txCtx, output: null }),
                     );
-                    throw new Error("after a committed complete");
+                    throw new Error("after a committed applyOutcome");
                   },
                 },
               },
@@ -849,7 +853,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         yield* wait(client.awaitChain({ chain, ...completionOptions }));
         assert.equal(
           ((yield* wait(workerError.promise)) as Error).message,
-          "after a committed complete",
+          "after a committed applyOutcome",
         );
         yield* wait(workerRunner.close());
 
@@ -858,7 +862,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
       }),
     },
     {
-      name: "fails complete and aborts the signal after a workerless takeover",
+      name: "fails applyOutcome and aborts the signal after a workerless takeover",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -879,13 +883,13 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ signal, complete }) => {
+                  attemptHandler: async ({ signal, applyOutcome }) => {
                     started.resolve();
                     await takenOver.promise;
                     await assertRejects(
                       () =>
                         stateAdapter.withTransaction((txCtx) =>
-                          complete({ ...txCtx, output: { by: "worker" } }),
+                          applyOutcome({ ...txCtx, output: { by: "worker" } }),
                         ),
                       JobAlreadyCompletedError,
                     );
@@ -923,7 +927,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
       }),
     },
     {
-      name: "completes the attempt in a new transaction after the transaction of its first `complete` rolls back",
+      name: "completes the attempt in a new transaction after the transaction of its first `applyOutcome` rolls back",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -942,13 +946,13 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ signal, complete }) => {
+                  attemptHandler: async ({ signal, applyOutcome }) => {
                     try {
                       await stateAdapter.withTransaction((txCtx) =>
                         runInModeOf(
                           stateAdapter,
                           syncAsync(function* () {
-                            yield* step(complete({ ...txCtx, output: { try: 1 } }));
+                            yield* step(applyOutcome({ ...txCtx, output: { try: 1 } }));
                             throw new Error("rolled back");
                           }),
                         ),
@@ -956,7 +960,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                     } catch {}
                     assert.equal(signal.aborted, false);
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { try: 2 } }),
+                      applyOutcome({ ...txCtx, output: { try: 2 } }),
                     );
                   },
                 },
@@ -987,7 +991,7 @@ export const processAsyncGroup: ConformanceGroup<StateAdapterConformanceContext>
   name: "process",
   cases: [
     {
-      name: "rejects a second `complete` of the attempt in the same transaction without losing the attempt",
+      name: "rejects a second `applyOutcome` of the attempt in the same transaction without losing the attempt",
       run: async ({ createStateAdapter, createNotifyAdapter }) => {
         await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
         await using notifyAdapter = await createCaseNotifyAdapter(
@@ -1006,16 +1010,16 @@ export const processAsyncGroup: ConformanceGroup<StateAdapterConformanceContext>
             jobTypes,
             processors: {
               test: {
-                attemptHandler: async ({ signal, complete }) =>
+                attemptHandler: async ({ signal, applyOutcome }) =>
                   stateAdapter.withTransaction((txCtx) =>
                     runInModeOf(
                       stateAdapter,
                       syncAsync(function* () {
-                        const completed = complete({ ...txCtx, output: null });
+                        const completed = applyOutcome({ ...txCtx, output: null });
                         yield* step(
                           assertRejects(
-                            () => complete({ ...txCtx, output: null }),
-                            /complete is already in progress for this attempt/,
+                            () => applyOutcome({ ...txCtx, output: null }),
+                            /applyOutcome is already in progress for this attempt/,
                           ),
                         );
                         assert.partialDeepStrictEqual(yield* step(completed), {
@@ -1023,8 +1027,8 @@ export const processAsyncGroup: ConformanceGroup<StateAdapterConformanceContext>
                         });
                         yield* step(
                           assertRejects(
-                            () => complete({ ...txCtx, output: null }),
-                            /complete already succeeded for this attempt/,
+                            () => applyOutcome({ ...txCtx, output: null }),
+                            /applyOutcome already succeeded for this attempt/,
                           ),
                         );
                         assert.equal(signal.aborted, false);
@@ -1049,7 +1053,7 @@ export const processAsyncGroup: ConformanceGroup<StateAdapterConformanceContext>
       },
     },
     {
-      name: "keeps the attempt alive when an extension lands after its own committed `complete` call",
+      name: "keeps the attempt alive when an extension lands after its own committed `applyOutcome` call",
       run: async ({ createStateAdapter, createNotifyAdapter }) => {
         await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
         await using notifyAdapter = await createCaseNotifyAdapter(
@@ -1069,12 +1073,12 @@ export const processAsyncGroup: ConformanceGroup<StateAdapterConformanceContext>
             jobTypes,
             processors: {
               test: {
-                attemptHandler: async ({ signal, complete }) => {
+                attemptHandler: async ({ signal, applyOutcome }) => {
                   const result = await stateAdapter.withTransaction((txCtx) =>
                     runInModeOf(
                       stateAdapter,
                       syncAsync(function* () {
-                        const finished = yield* step(complete({ ...txCtx, output: null }));
+                        const finished = yield* step(applyOutcome({ ...txCtx, output: null }));
                         yield* step(sleep(60));
                         return finished;
                       }),
@@ -1128,7 +1132,7 @@ export const processAsyncGroup: ConformanceGroup<StateAdapterConformanceContext>
             jobTypes,
             processors: {
               test: {
-                attemptHandler: async ({ job, signal, fence, complete }) => {
+                attemptHandler: async ({ job, signal, fence, applyOutcome }) => {
                   const { takeover } = await stateAdapter.withTransaction((txCtx) =>
                     runInModeOf(
                       stateAdapter,
@@ -1161,7 +1165,7 @@ export const processAsyncGroup: ConformanceGroup<StateAdapterConformanceContext>
                   await assertRejects(
                     () =>
                       stateAdapter.withTransaction((txCtx) =>
-                        complete({ ...txCtx, output: { by: "worker" } }),
+                        applyOutcome({ ...txCtx, output: { by: "worker" } }),
                       ),
                     JobAlreadyCompletedError,
                   );
@@ -1190,7 +1194,7 @@ export const processNotifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
   name: "process",
   cases: [
     {
-      name: "aborts the signal when the attempt is lost after its `complete` call rolled back",
+      name: "aborts the signal when the attempt is lost after its `applyOutcome` call rolled back",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, mode }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter, mode));
         const notifyAdapter = yield* resource(
@@ -1209,14 +1213,14 @@ export const processNotifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ signal, complete }) => {
+                  attemptHandler: async ({ signal, applyOutcome }) => {
                     await assertRejects(
                       () =>
                         stateAdapter.withTransaction((txCtx) =>
                           runInModeOf(
                             stateAdapter,
                             syncAsync(function* () {
-                              yield* step(complete({ ...txCtx, output: { by: "worker" } }));
+                              yield* step(applyOutcome({ ...txCtx, output: { by: "worker" } }));
                               throw new Error("rollback");
                             }),
                           ),
@@ -1284,10 +1288,10 @@ export const processNotifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     if (job.attempt === 1) throw new Error("first attempt fails");
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: null }),
+                      applyOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
@@ -1315,7 +1319,7 @@ export const processSavepointGroup: ConformanceGroup<EndToEndSavepointContext> =
   name: "process",
   cases: [
     {
-      name: "reschedules the attempt when complete rolls back in a savepoint",
+      name: "reschedules the attempt when applyOutcome rolls back in a savepoint",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, ...context }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -1335,19 +1339,19 @@ export const processSavepointGroup: ConformanceGroup<EndToEndSavepointContext> =
               backoffConfig: { initialDelayMs: 60_000, multiplier: 1, maxDelayMs: 60_000 },
               processors: {
                 test: {
-                  attemptHandler: async ({ complete }) =>
+                  attemptHandler: async ({ applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
                       runInModeOf(
                         stateAdapter,
                         syncAsync(function* () {
-                          let receipt: Awaited<ReturnType<typeof complete>> | undefined;
+                          let receipt: Awaited<ReturnType<typeof applyOutcome>> | undefined;
                           try {
                             yield* step(
                               context.withSavepoint(txCtx, (txCtx) =>
                                 runInModeOf(
                                   stateAdapter,
                                   syncAsync(function* () {
-                                    receipt = yield* step(complete({ ...txCtx, output: null }));
+                                    receipt = yield* step(applyOutcome({ ...txCtx, output: null }));
                                     throw new Error("rollback to savepoint");
                                   }),
                                 ),
@@ -1392,14 +1396,14 @@ export const processSavepointGroup: ConformanceGroup<EndToEndSavepointContext> =
         assert.ok(typeof job?.lastAttemptError === "string");
         assert.ok(
           job.lastAttemptError.includes(
-            "Attempt handler returned without a committed `complete` call",
+            "Attempt handler returned without a committed `applyOutcome` call",
           ),
         );
         assert.equal(logs.entriesOfType("job_completed").length, 0);
       }),
     },
     {
-      name: "commits the `complete` call made after one rolled back in a savepoint",
+      name: "commits the `applyOutcome` call made after one rolled back in a savepoint",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, ...context }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -1424,7 +1428,7 @@ export const processSavepointGroup: ConformanceGroup<EndToEndSavepointContext> =
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ complete }) =>
+                  attemptHandler: async ({ applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
                       runInModeOf(
                         stateAdapter,
@@ -1432,7 +1436,7 @@ export const processSavepointGroup: ConformanceGroup<EndToEndSavepointContext> =
                           yield* step(
                             assertRejects(
                               () =>
-                                complete({
+                                applyOutcome({
                                   ...txCtx,
                                   continueWith: {
                                     typeName: "test",
@@ -1450,7 +1454,7 @@ export const processSavepointGroup: ConformanceGroup<EndToEndSavepointContext> =
                                   stateAdapter,
                                   syncAsync(function* () {
                                     yield* step(
-                                      complete({ ...txCtx, output: { from: "savepoint" } }),
+                                      applyOutcome({ ...txCtx, output: { from: "savepoint" } }),
                                     );
                                     throw new Error("rollback to savepoint");
                                   }),
@@ -1458,7 +1462,7 @@ export const processSavepointGroup: ConformanceGroup<EndToEndSavepointContext> =
                               ),
                             );
                           } catch {}
-                          return complete({ ...txCtx, output: { from: "transaction" } });
+                          return applyOutcome({ ...txCtx, output: { from: "transaction" } });
                         }),
                       ),
                     ),

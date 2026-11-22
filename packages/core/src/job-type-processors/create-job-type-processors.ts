@@ -37,7 +37,7 @@ type MergedDefs<
  * registry unless that processor overrides it.
  *
  * Handlers follow the client's mode: over a client of a `"sync"` {@link StateAdapter}, their
- * `complete` and `fence` return their results directly and throw synchronously.
+ * `applyOutcome` and `fence` return their results directly and throw synchronously.
  *
  * @example
  * const orderProcessors = createProcessors({
@@ -46,9 +46,9 @@ type MergedDefs<
  *   attemptMiddleware: [tracingMiddleware, loggerMiddleware],
  *   processors: {
  *     "orders.create": {
- *       attemptHandler: async ({ complete, traceId, log }) =>
+ *       attemptHandler: async ({ applyOutcome, traceId, log }) =>
  *         stateAdapter.withTransaction(async (txCtx) =>
- *           complete({ ...txCtx, output: { orderId: "1" } }),
+ *           applyOutcome({ ...txCtx, output: { orderId: "1" } }),
  *         ),
  *     },
  *   },

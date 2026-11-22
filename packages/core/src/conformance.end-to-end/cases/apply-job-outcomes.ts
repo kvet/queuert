@@ -433,9 +433,9 @@ export const applyJobOutcomesGroup: ConformanceGroup<StateAdapterConformanceCont
               jobTypes,
               processors: {
                 "process-approved": {
-                  attemptHandler: async ({ complete }) =>
+                  attemptHandler: async ({ applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { done: true } }),
+                      applyOutcome({ ...txCtx, output: { done: true } }),
                     ),
                 },
               },
@@ -885,7 +885,7 @@ export const applyJobOutcomesGroup: ConformanceGroup<StateAdapterConformanceCont
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ signal, complete }) => {
+                  attemptHandler: async ({ signal, applyOutcome }) => {
                     jobStarted.resolve();
 
                     await jobCompleted.promise;
@@ -894,7 +894,7 @@ export const applyJobOutcomesGroup: ConformanceGroup<StateAdapterConformanceCont
                       await assertRejects(
                         () =>
                           stateAdapter.withTransaction((txCtx) =>
-                            complete({ ...txCtx, output: { result: "from-worker" } }),
+                            applyOutcome({ ...txCtx, output: { result: "from-worker" } }),
                           ),
                         JobAlreadyCompletedError,
                       );
@@ -1788,9 +1788,9 @@ export const applyJobOutcomesGroup: ConformanceGroup<StateAdapterConformanceCont
               jobTypes,
               processors: {
                 task: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value * 2 } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value * 2 } }),
                     ),
                 },
               },
@@ -1964,7 +1964,7 @@ export const applyJobOutcomesGroup: ConformanceGroup<StateAdapterConformanceCont
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
         const attemptStarted = Promise.withResolvers<void>();
         const attemptGate = Promise.withResolvers<void>();
-        const completeFailed = Promise.withResolvers<unknown>();
+        const applyOutcomeFailed = Promise.withResolvers<unknown>();
         const workerRunner = yield* resource(
           createWorkerRunner({
             client,
@@ -1974,15 +1974,15 @@ export const applyJobOutcomesGroup: ConformanceGroup<StateAdapterConformanceCont
               jobTypes,
               processors: {
                 task: {
-                  attemptHandler: async ({ complete }) => {
+                  attemptHandler: async ({ applyOutcome }) => {
                     attemptStarted.resolve();
                     await attemptGate.promise;
                     try {
                       return await stateAdapter.withTransaction((txCtx) =>
-                        complete({ ...txCtx, output: null }),
+                        applyOutcome({ ...txCtx, output: null }),
                       );
                     } catch (error) {
-                      completeFailed.resolve(error);
+                      applyOutcomeFailed.resolve(error);
                       throw error;
                     }
                   },
@@ -2016,7 +2016,9 @@ export const applyJobOutcomesGroup: ConformanceGroup<StateAdapterConformanceCont
         assert.ok(rescheduled.scheduledAt.getTime() > Date.now() + 30 * 60 * 1000);
 
         attemptGate.resolve();
-        assert.ok((yield* wait(completeFailed.promise)) instanceof JobTakenByAnotherWorkerError);
+        assert.ok(
+          (yield* wait(applyOutcomeFailed.promise)) instanceof JobTakenByAnotherWorkerError,
+        );
 
         const job = yield* step(client.getJob({ id: chain.id }));
         assert.equal(job!.status, "pending");
@@ -2048,14 +2050,18 @@ export const applyJobOutcomesGroup: ConformanceGroup<StateAdapterConformanceCont
               jobTypes,
               processors: {
                 poll: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     if (job.attempt > 1) {
                       return stateAdapter.withTransaction((txCtx) =>
-                        complete({ ...txCtx, output: { attempts: job.attempt } }),
+                        applyOutcome({ ...txCtx, output: { attempts: job.attempt } }),
                       );
                     }
                     const rescheduled = await stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, reschedule: { afterMs: 60_000 }, reason: "polling" }),
+                      applyOutcome({
+                        ...txCtx,
+                        reschedule: { afterMs: 60_000 },
+                        reason: "polling",
+                      }),
                     );
                     polled++;
                     if (polled === chainCount) allPolled.resolve();
@@ -2568,8 +2574,10 @@ export const applyJobOutcomesNotifyConcurrentTransactionsGroup: ConformanceGroup
               jobTypes,
               processors: {
                 task: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),
@@ -2652,8 +2660,10 @@ export const applyJobOutcomesNotifyConcurrentTransactionsGroup: ConformanceGroup
               jobTypes,
               processors: {
                 task: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),
@@ -2731,8 +2741,10 @@ export const applyJobOutcomesNotifyConcurrentTransactionsGroup: ConformanceGroup
               jobTypes,
               processors: {
                 task: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),
@@ -2803,8 +2815,10 @@ export const applyJobOutcomesNotifyConcurrentTransactionsGroup: ConformanceGroup
               jobTypes,
               processors: {
                 task: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),
@@ -2866,8 +2880,10 @@ export const applyJobOutcomesNotifyConcurrentTransactionsGroup: ConformanceGroup
               jobTypes,
               processors: {
                 task: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),
@@ -2948,9 +2964,9 @@ export const applyJobOutcomesNotifyConcurrentTransactionsGroup: ConformanceGroup
               jobTypes,
               processors: {
                 review: {
-                  attemptHandler: async ({ complete }) =>
+                  attemptHandler: async ({ applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { approved: true } }),
+                      applyOutcome({ ...txCtx, output: { approved: true } }),
                     ),
                 },
               },
@@ -3022,8 +3038,10 @@ export const applyJobOutcomesNotifyConcurrentTransactionsGroup: ConformanceGroup
               jobTypes,
               processors: {
                 task: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),
@@ -3090,8 +3108,10 @@ export const applyJobOutcomesNotifyConcurrentTransactionsGroup: ConformanceGroup
               jobTypes,
               processors: {
                 task: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),

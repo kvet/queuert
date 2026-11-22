@@ -35,7 +35,7 @@ const workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       process_order: {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           const [rows] = await db.query<({ items: string[]; total: number } & RowDataPacket)[]>(
             "SELECT items, total FROM orders WHERE id = ?",
             [job.input.orderId],
@@ -53,7 +53,7 @@ const workerRunner = createWorkerRunner({
           await new Promise((resolve) => setTimeout(resolve, 100 + Math.random() * 200));
 
           return stateProvider.withTransaction(async (txCtx) =>
-            complete({
+            applyOutcome({
               ...txCtx,
               output: { processedAt: new Date().toISOString(), processName },
             }),

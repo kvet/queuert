@@ -21,9 +21,9 @@ describe("registry-level backoffConfig cascade", () => {
       backoffConfig: { initialDelayMs: 111, multiplier: 2, maxDelayMs: 500 },
       processors: {
         foo: {
-          attemptHandler: async ({ complete }) =>
+          attemptHandler: async ({ applyOutcome }) =>
             stateAdapter.withTransaction(async (txCtx) =>
-              complete({ ...txCtx, output: { ok: true as const } }),
+              applyOutcome({ ...txCtx, output: { ok: true as const } }),
             ),
         },
       },
@@ -44,9 +44,9 @@ describe("registry-level backoffConfig cascade", () => {
       backoffConfig: { initialDelayMs: 111, multiplier: 2, maxDelayMs: 500 },
       processors: {
         foo: {
-          attemptHandler: async ({ complete }) =>
+          attemptHandler: async ({ applyOutcome }) =>
             stateAdapter.withTransaction(async (txCtx) =>
-              complete({ ...txCtx, output: { ok: true as const } }),
+              applyOutcome({ ...txCtx, output: { ok: true as const } }),
             ),
           backoffConfig: { initialDelayMs: 999, multiplier: 3, maxDelayMs: 9999 },
         },
@@ -67,9 +67,9 @@ describe("registry-level backoffConfig cascade", () => {
       jobTypes,
       processors: {
         foo: {
-          attemptHandler: async ({ complete }) =>
+          attemptHandler: async ({ applyOutcome }) =>
             stateAdapter.withTransaction(async (txCtx) =>
-              complete({ ...txCtx, output: { ok: true as const } }),
+              applyOutcome({ ...txCtx, output: { ok: true as const } }),
             ),
         },
       },

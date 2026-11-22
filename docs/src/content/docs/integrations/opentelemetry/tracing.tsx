@@ -61,7 +61,7 @@ const spans = (): FieldItem[] => [
     kind: producer,
     created: (
       <>
-        <code>createChain()</code>, <code>{"complete({ continueWith: ... })"}</code>
+        <code>createChain()</code>, <code>{"applyOutcome({ continueWith: ... })"}</code>
       </>
     ),
     ended: "on commit",
@@ -164,7 +164,7 @@ const attributes = (): FieldItem[] => [
     chips: ["string"],
     description: (
       <>
-        Reason passed to <code>{"complete({ reschedule, reason })"}</code> or{" "}
+        Reason passed to <code>{"applyOutcome({ reschedule, reason })"}</code> or{" "}
         <code>{"applyJobOutcome({ reschedule, reason })"}</code>; present when the job was
         rescheduled with one.
       </>
@@ -268,7 +268,7 @@ const Page = () => (
       continues the chain with <code>continueWith</code>, the CONSUMER chain span is omitted. A{" "}
       <code>reschedule</code> outcome ends the job-attempt span with{" "}
       <code>queuert.reschedule.reason</code> when a <code>reason</code> is given, like a worker's{" "}
-      <code>complete({"{ reschedule }"})</code>.
+      <code>applyOutcome({"{ reschedule }"})</code>.
     </p>
 
     <h2>Chain completion link</h2>

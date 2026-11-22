@@ -250,9 +250,9 @@ const Page = () => (
     <p>
       The transaction context (<code>TTxContext</code>) represents an active transaction: the one
       your own database client opened and passed to <code>client.createChain</code> or a handler's{" "}
-      <code>complete</code>, or one opened by <code>withTransaction</code>. Besides the transaction
-      handle, it may carry the <code>txHooks</code> a provider registers commit and rollback
-      callbacks on; mutating calls, <code>complete</code> and reads with{" "}
+      <code>applyOutcome</code>, or one opened by <code>withTransaction</code>. Besides the
+      transaction handle, it may carry the <code>txHooks</code> a provider registers commit and
+      rollback callbacks on; mutating calls, <code>applyOutcome</code> and reads with{" "}
       <code>lock: "exclusive"</code> require every field of the context, and other reads take any
       part of it. Queuert itself opens transactions only for migrations, for the worker's
       registration, reclaims and stop, and in test helpers, never around job processing.

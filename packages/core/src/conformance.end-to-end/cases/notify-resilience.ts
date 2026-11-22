@@ -43,9 +43,9 @@ export const notifyResilienceGroup: ConformanceGroup<EndToEndNotifyContext> = {
               backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value * 2 } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value * 2 } }),
                     ),
                 },
               },

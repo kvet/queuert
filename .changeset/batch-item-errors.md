@@ -2,7 +2,7 @@
 "queuert": major
 ---
 
-`createChains` and `applyJobOutcomes` check every item before throwing, and their errors list every offending item instead of the first: a new job by its position in `items`, a blocker by its chain id. When items fail with different kinds of errors, the error lists the items of the first kind. `createChain`, `applyJobOutcome` and an attempt handler's `complete` still throw the single-item errors.
+`createChains` and `applyJobOutcomes` check every item before throwing, and their errors list every offending item instead of the first: a new job by its position in `items`, a blocker by its chain id. When items fail with different kinds of errors, the error lists the items of the first kind. `createChain`, `applyJobOutcome` and an attempt handler's `applyOutcome` still throw the single-item errors.
 
 - Renamed `BlockerLimitExceededError` to `JobBlockerLimitExceededError`, pairing it with the batch `JobsBlockerLimitExceededError`.
 - Added `InvalidJobIdsError`, `JobsBlockerLimitExceededError`, `JobsTypeValidationError` and `UnknownJobTypesError`, each with the `itemIndexes` of the offending items and their single-item `errors` in the same order.

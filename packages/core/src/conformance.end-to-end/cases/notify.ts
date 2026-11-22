@@ -39,10 +39,10 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     await sleep(50);
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value } }),
                     );
                   },
                 },
@@ -85,10 +85,10 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     await sleep(50);
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value } }),
                     );
                   },
                 },
@@ -147,10 +147,10 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ complete }) => {
+                  attemptHandler: async ({ applyOutcome }) => {
                     await sleep(25);
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { allowed: true } }),
+                      applyOutcome({ ...txCtx, output: { allowed: true } }),
                     );
                   },
                 },
@@ -167,10 +167,10 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               jobTypes,
               processors: {
                 main: {
-                  attemptHandler: async ({ complete }) => {
+                  attemptHandler: async ({ applyOutcome }) => {
                     await sleep(25);
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { done: true } }),
+                      applyOutcome({ ...txCtx, output: { done: true } }),
                     );
                   },
                 },
@@ -234,10 +234,10 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               jobTypes,
               processors: {
                 step1: {
-                  attemptHandler: async ({ complete }) => {
+                  attemptHandler: async ({ applyOutcome }) => {
                     await sleep(25);
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         continueWith: { typeName: "step2", input: null },
                       }),
@@ -257,10 +257,10 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               jobTypes,
               processors: {
                 step2: {
-                  attemptHandler: async ({ complete }) => {
+                  attemptHandler: async ({ applyOutcome }) => {
                     await sleep(25);
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { finished: true } }),
+                      applyOutcome({ ...txCtx, output: { finished: true } }),
                     );
                   },
                 },
@@ -387,13 +387,13 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ signal, job, complete }) => {
+                  attemptHandler: async ({ signal, job, applyOutcome }) => {
                     if (job.attempt > 1) {
                       await jobCompleted.promise;
                       await sleep(10);
 
                       return stateAdapter.withTransaction((txCtx) =>
-                        complete({ ...txCtx, output: { result: "recovered" } }),
+                        applyOutcome({ ...txCtx, output: { result: "recovered" } }),
                       );
                     }
 
@@ -450,7 +450,7 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
           jobTypes,
           processors: {
             test: {
-              attemptHandler: async ({ job, complete }) => {
+              attemptHandler: async ({ job, applyOutcome }) => {
                 if (job.attempt === 1) {
                   firstAttemptStarted.resolve();
                   await gate.promise;
@@ -458,7 +458,7 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
                 }
 
                 return stateAdapter.withTransaction((txCtx) =>
-                  complete({ ...txCtx, output: { result: "retried" } }),
+                  applyOutcome({ ...txCtx, output: { result: "retried" } }),
                 );
               },
               backoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
@@ -589,8 +589,10 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),

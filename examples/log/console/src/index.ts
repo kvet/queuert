@@ -50,11 +50,11 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       greet: {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           console.log(`[app] Processing greeting for ${job.input.name}`);
 
           return stateAdapter.withTransaction((ctx) =>
-            complete({
+            applyOutcome({
               ...ctx,
               output: { greeting: `Hello, ${job.input.name}!` },
             }),
@@ -62,7 +62,7 @@ await using workerRunner = createWorkerRunner({
         },
       },
       "might-fail": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           console.log("[app] Processing might-fail job");
 
           if (job.input.shouldFail && job.attempt < 2) {
@@ -70,7 +70,7 @@ await using workerRunner = createWorkerRunner({
           }
 
           return stateAdapter.withTransaction((ctx) =>
-            complete({ ...ctx, output: { success: true as const } }),
+            applyOutcome({ ...ctx, output: { success: true as const } }),
           );
         },
         backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },

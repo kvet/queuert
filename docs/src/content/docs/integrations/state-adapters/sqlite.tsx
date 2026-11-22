@@ -240,7 +240,7 @@ const Page = () => (
     </p>
     <p>
       That client's state-touching methods, such as <code>applyJobOutcome</code>, and the attempt
-      handler's <code>complete</code> and <code>fence</code> return plain values and throw
+      handler's <code>applyOutcome</code> and <code>fence</code> return plain values and throw
       synchronously, so they run inside the driver's own transaction, such as{" "}
       <code>db.transaction(() =&gt; …)()</code>, and an error rolls it back. The provider's{" "}
       <code>onTransactionCommit</code> and <code>onTransactionRollback</code> are synchronous too; a
@@ -363,10 +363,10 @@ const Page = () => (
 
     <h2>Your transactions</h2>
     <p>
-      With a synchronous provider, call the client and <code>complete</code> inside the driver's own
-      transaction, wrapped in <code>withTxHooks</code>, and pass its <code>txHooks</code> in the
-      context. With an async provider, transactions you pass to <code>complete</code> or to client
-      methods must be serialized with the worker's own statements the way the provider's{" "}
+      With a synchronous provider, call the client and <code>applyOutcome</code> inside the driver's
+      own transaction, wrapped in <code>withTxHooks</code>, and pass its <code>txHooks</code> in the
+      context. With an async provider, transactions you pass to <code>applyOutcome</code> or to
+      client methods must be serialized with the worker's own statements the way the provider's{" "}
       <code>withTransaction</code> is, for example by holding its{" "}
       <a href="#asyncrwlock">AsyncRwLock</a> write lock. They also supply the <code>txHooks</code>{" "}
       field the provider's context requires, created with <code>withTxHooks</code> around the

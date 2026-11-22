@@ -442,9 +442,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
               jobTypes: simpleJobTypes,
               processors: {
                 main: {
-                  attemptHandler: async ({ complete }) =>
+                  attemptHandler: async ({ applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: 84 } }),
+                      applyOutcome({ ...txCtx, output: { result: 84 } }),
                     ),
                 },
               },
@@ -486,11 +486,11 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
               jobTypes: simpleJobTypes,
               processors: {
                 main: {
-                  attemptHandler: async ({ complete }) => {
+                  attemptHandler: async ({ applyOutcome }) => {
                     try {
                       return await stateAdapter.withTransaction((txCtx) =>
                         // @ts-expect-error testing runtime validation
-                        complete({ ...txCtx, output: { result: "not-a-number" } }),
+                        applyOutcome({ ...txCtx, output: { result: "not-a-number" } }),
                       );
                     } catch (error) {
                       validationFailed.resolve(error);
@@ -539,18 +539,18 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
               jobTypes: continuationJobTypes,
               processors: {
                 step1: {
-                  attemptHandler: async ({ complete }) =>
+                  attemptHandler: async ({ applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         continueWith: { typeName: "step2", input: { data: 1 } },
                       }),
                     ),
                 },
                 step2: {
-                  attemptHandler: async ({ complete }) =>
+                  attemptHandler: async ({ applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: 42 } }),
+                      applyOutcome({ ...txCtx, output: { result: 42 } }),
                     ),
                 },
               },
@@ -596,10 +596,10 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
               jobTypes: continuationNoFollowUpJobTypes,
               processors: {
                 step1: {
-                  attemptHandler: async ({ complete }) => {
+                  attemptHandler: async ({ applyOutcome }) => {
                     try {
                       return await stateAdapter.withTransaction((txCtx) =>
-                        complete({
+                        applyOutcome({
                           ...txCtx,
                           continueWith: { typeName: "step2", input: { data: 1 } },
                         }),
@@ -611,9 +611,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
                   },
                 },
                 step2: {
-                  attemptHandler: async ({ complete }) =>
+                  attemptHandler: async ({ applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: 1 } }),
+                      applyOutcome({ ...txCtx, output: { result: 1 } }),
                     ),
                 },
               },
@@ -727,9 +727,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
               jobTypes: continuationJobTypes,
               processors: {
                 step2: {
-                  attemptHandler: async ({ complete }) =>
+                  attemptHandler: async ({ applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: 42 } }),
+                      applyOutcome({ ...txCtx, output: { result: 42 } }),
                     ),
                 },
               },
@@ -886,9 +886,9 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
               jobTypes: codecJobTypes,
               processors: {
                 timed: {
-                  attemptHandler: async ({ complete }) =>
+                  attemptHandler: async ({ applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { doneAt } }),
+                      applyOutcome({ ...txCtx, output: { doneAt } }),
                     ),
                 },
               },
@@ -1019,10 +1019,10 @@ export const validationGroup: ConformanceGroup<StateAdapterConformanceContext> =
               jobTypes: codecJobTypes,
               processors: {
                 timed: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     assert.deepEqual(job.input, { at });
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { doneAt } }),
+                      applyOutcome({ ...txCtx, output: { doneAt } }),
                     );
                   },
                 },

@@ -67,7 +67,7 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           let user: { id: number; name: string; email: string } | undefined;
           {
             using _h = await lock.acquireRead();
@@ -83,7 +83,7 @@ await using workerRunner = createWorkerRunner({
             // autocommit statements on this connection cannot run inside it.
             using _h = await lock.acquireWrite();
             return await sql.begin(async (txSql) =>
-              complete({ txSql, txHooks, output: { sentAt: new Date().toISOString() } }),
+              applyOutcome({ txSql, txHooks, output: { sentAt: new Date().toISOString() } }),
             );
           });
         },

@@ -9,7 +9,7 @@ import type {
 import type { InProcessStateAdapter } from "../state-adapter.in-process/state-adapter.in-process.ts";
 import type { GetStateAdapterTxContext, StateAdapter } from "../state-adapter/state-adapter.ts";
 import type { TxHooks } from "../tx-hooks/tx-hooks.ts";
-import type { AttemptComplete, AttemptFence, AttemptHandler } from "./attempt-handler.types.ts";
+import type { AttemptApplyOutcome, AttemptFence, AttemptHandler } from "./attempt-handler.types.ts";
 
 type LinearDefs = {
   entry: {
@@ -87,10 +87,20 @@ declare const tx: ClientContext & { txHooks: TxHooks };
 declare const inProcessTx: GetStateAdapterTxContext<InProcessStateAdapter<"async">>;
 type Tx = typeof tx;
 
-declare const linearCommit: AttemptComplete<ClientStateAdapter, LinearDefs, "entry", "entry">;
-declare const branchingCommit: AttemptComplete<ClientStateAdapter, BranchingDefs, "root", "root">;
-declare const sharedCommit: AttemptComplete<ClientStateAdapter, SharedInputDefs, "root", "root">;
-declare const terminalCommit: AttemptComplete<
+declare const linearCommit: AttemptApplyOutcome<ClientStateAdapter, LinearDefs, "entry", "entry">;
+declare const branchingCommit: AttemptApplyOutcome<
+  ClientStateAdapter,
+  BranchingDefs,
+  "root",
+  "root"
+>;
+declare const sharedCommit: AttemptApplyOutcome<
+  ClientStateAdapter,
+  SharedInputDefs,
+  "root",
+  "root"
+>;
+declare const terminalCommit: AttemptApplyOutcome<
   ClientStateAdapter,
   TerminalDefs,
   "terminal",
@@ -108,7 +118,7 @@ const commitContinue = async () =>
 
 declare const branchBInput: { b: string };
 
-describe("AttemptComplete", () => {
+describe("AttemptApplyOutcome", () => {
   describe("outcome parameter", () => {
     it("is a single parameter offering both discriminants", () => {
       expectTypeOf<{ output: { result: string } } & Tx>().toExtend<LinearOutcome>();
@@ -145,7 +155,7 @@ describe("AttemptComplete", () => {
 
     it("rejects a call without the transaction context", () => {
       expectTypeOf(async () =>
-        // @ts-expect-error complete must run inside the caller's transaction
+        // @ts-expect-error applyOutcome must run inside the caller's transaction
         terminalCommit({ txHooks, output: { y: "done" } }),
       ).toBeFunction();
     });
@@ -357,9 +367,9 @@ describe("AttemptHandler", () => {
     expectTypeOf<Options["job"]["input"]>().toEqualTypeOf<{ value: number }>();
   });
 
-  it("exposes complete", () => {
-    expectTypeOf<Options["complete"]>().toEqualTypeOf<
-      AttemptComplete<InProcessStateAdapter<"async">, LinearDefs, "entry", "entry">
+  it("exposes applyOutcome", () => {
+    expectTypeOf<Options["applyOutcome"]>().toEqualTypeOf<
+      AttemptApplyOutcome<InProcessStateAdapter<"async">, LinearDefs, "entry", "entry">
     >();
   });
 
@@ -370,9 +380,11 @@ describe("AttemptHandler", () => {
     >();
   });
 
-  it("exposes only signal, job, complete and fence", () => {
-    expectTypeOf<keyof Options>().toEqualTypeOf<"signal" | "job" | "complete" | "fence">();
-    expectTypeOf<keyof BlockedOptions>().toEqualTypeOf<"signal" | "job" | "complete" | "fence">();
+  it("exposes only signal, job, applyOutcome and fence", () => {
+    expectTypeOf<keyof Options>().toEqualTypeOf<"signal" | "job" | "applyOutcome" | "fence">();
+    expectTypeOf<keyof BlockedOptions>().toEqualTypeOf<
+      "signal" | "job" | "applyOutcome" | "fence"
+    >();
   });
 
   it("resolves job.blockers to the completed blocker chains in declaration order", () => {
@@ -384,7 +396,7 @@ describe("AttemptHandler", () => {
     expectTypeOf<Options["job"]["blockers"]>().toEqualTypeOf<[]>();
   });
 
-  it("resolves to what complete returned", () => {
+  it("resolves to what applyOutcome returned", () => {
     expectTypeOf<Awaited<ReturnType<typeof commitContinue>>>().toExtend<
       Awaited<ReturnType<Handler>>
     >();
@@ -396,10 +408,10 @@ describe("AttemptHandler", () => {
     >();
   });
 
-  it("rejects a handler that does not return the `complete` result", () => {
-    // @ts-expect-error the handler must return what complete returned
-    const missing: Handler = async ({ complete }) => {
-      await complete({ ...inProcessTx, output: { result: "x" } });
+  it("rejects a handler that does not return the `applyOutcome` result", () => {
+    // @ts-expect-error the handler must return what applyOutcome returned
+    const missing: Handler = async ({ applyOutcome }) => {
+      await applyOutcome({ ...inProcessTx, output: { result: "x" } });
     };
     expectTypeOf(missing).toBeFunction();
   });
@@ -419,14 +431,17 @@ describe("AttemptHandler", () => {
     expectTypeOf(handBuilt).toBeFunction();
   });
 
-  it("accepts a handler that returns what complete returned", () => {
-    const handler: Handler = async ({ complete }) =>
-      complete({ ...inProcessTx, continueWith: { typeName: "step", input: { stepValue: true } } });
+  it("accepts a handler that returns what applyOutcome returned", () => {
+    const handler: Handler = async ({ applyOutcome }) =>
+      applyOutcome({
+        ...inProcessTx,
+        continueWith: { typeName: "step", input: { stepValue: true } },
+      });
     expectTypeOf(handler).toBeFunction();
   });
 
-  it("types complete and fence as asynchronous", () => {
-    expectTypeOf<ReturnType<Options["complete"]>>().toExtend<Promise<unknown>>();
+  it("types applyOutcome and fence as asynchronous", () => {
+    expectTypeOf<ReturnType<Options["applyOutcome"]>>().toExtend<Promise<unknown>>();
     expectTypeOf<ReturnType<Options["fence"]>>().toEqualTypeOf<Promise<void>>();
   });
 
@@ -442,28 +457,30 @@ describe("AttemptHandler", () => {
   });
 });
 
-describe("AttemptComplete variance", () => {
+describe("AttemptApplyOutcome variance", () => {
   it("is invariant in the definitions and job type name", () => {
     expectTypeOf<
-      AttemptComplete<InProcessStateAdapter<"async">, LinearDefs, "entry", "entry">
+      AttemptApplyOutcome<InProcessStateAdapter<"async">, LinearDefs, "entry", "entry">
     >().not.toExtend<
-      AttemptComplete<InProcessStateAdapter<"async">, LinearDefs, "step", "entry">
+      AttemptApplyOutcome<InProcessStateAdapter<"async">, LinearDefs, "step", "entry">
     >();
     expectTypeOf<
-      AttemptComplete<InProcessStateAdapter<"async">, LinearDefs, "entry", "entry">
+      AttemptApplyOutcome<InProcessStateAdapter<"async">, LinearDefs, "entry", "entry">
     >().not.toExtend<
-      AttemptComplete<InProcessStateAdapter<"async">, BranchingDefs, "root", "entry">
+      AttemptApplyOutcome<InProcessStateAdapter<"async">, BranchingDefs, "root", "entry">
     >();
   });
 
   it("is covariant in the chain type name", () => {
     expectTypeOf<
-      AttemptComplete<InProcessStateAdapter<"async">, LinearDefs, "entry", "entry">
-    >().toExtend<AttemptComplete<InProcessStateAdapter<"async">, LinearDefs, "entry", string>>();
+      AttemptApplyOutcome<InProcessStateAdapter<"async">, LinearDefs, "entry", "entry">
+    >().toExtend<
+      AttemptApplyOutcome<InProcessStateAdapter<"async">, LinearDefs, "entry", string>
+    >();
     expectTypeOf<
-      AttemptComplete<InProcessStateAdapter<"async">, LinearDefs, "entry", string>
+      AttemptApplyOutcome<InProcessStateAdapter<"async">, LinearDefs, "entry", string>
     >().not.toExtend<
-      AttemptComplete<InProcessStateAdapter<"async">, LinearDefs, "entry", "entry">
+      AttemptApplyOutcome<InProcessStateAdapter<"async">, LinearDefs, "entry", "entry">
     >();
   });
 });
@@ -473,21 +490,22 @@ describe("AttemptHandler over a sync state adapter", () => {
   type SyncHandler = AttemptHandler<InProcessStateAdapter, SyncDefs, "entry", "entry", unknown>;
   const syncTx = {} as GetStateAdapterTxContext<InProcessStateAdapter>;
 
-  it("accepts an async handler that returns what complete returned", () => {
-    const handler: SyncHandler = async ({ complete }) =>
-      complete({ ...syncTx, output: { result: "x" } });
+  it("accepts an async handler that returns what applyOutcome returned", () => {
+    const handler: SyncHandler = async ({ applyOutcome }) =>
+      applyOutcome({ ...syncTx, output: { result: "x" } });
     expectTypeOf(handler).toBeFunction();
   });
 
-  it("types complete and fence as synchronous", () => {
+  it("types applyOutcome and fence as synchronous", () => {
     type Options = Parameters<SyncHandler>[0];
-    expectTypeOf<ReturnType<Options["complete"]>>().not.toExtend<Promise<unknown>>();
+    expectTypeOf<ReturnType<Options["applyOutcome"]>>().not.toExtend<Promise<unknown>>();
     expectTypeOf<ReturnType<Options["fence"]>>().toEqualTypeOf<void>();
   });
 
   it("rejects a synchronous handler", () => {
-    // @ts-expect-error the handler returns a promise
-    const handler: SyncHandler = ({ complete }) => complete({ ...syncTx, output: { result: "x" } });
+    const handler: SyncHandler = ({ applyOutcome }) =>
+      // @ts-expect-error the handler must return a promise
+      applyOutcome({ ...syncTx, output: { result: "x" } });
     expectTypeOf(handler).toBeFunction();
   });
 });

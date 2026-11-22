@@ -49,7 +49,7 @@ await using workerRunner = createWorkerRunner({
       // #hide
       // #region cooperative-timeout
       "fetch-report": {
-        attemptHandler: async ({ signal, job, complete }) => {
+        attemptHandler: async ({ signal, job, applyOutcome }) => {
           const timeoutSignal = AbortSignal.timeout(job.input.timeoutMs);
 
           try {
@@ -57,12 +57,12 @@ await using workerRunner = createWorkerRunner({
               signal: AbortSignal.any([signal, timeoutSignal]),
             });
             return await stateAdapter.withTransaction(async (txCtx) =>
-              complete({ ...txCtx, output: { data } }),
+              applyOutcome({ ...txCtx, output: { data } }),
             );
           } catch (error) {
             if (!timeoutSignal.aborted) throw error;
             return stateAdapter.withTransaction(async (txCtx) =>
-              complete({ ...txCtx, output: { timedOut: true } }),
+              applyOutcome({ ...txCtx, output: { timedOut: true } }),
             );
           }
         },
@@ -70,10 +70,10 @@ await using workerRunner = createWorkerRunner({
       // #endregion
       // #endhide
       "rebuild-search-index": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           await delay(job.input.durationMs);
           return stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, output: { rebuiltOnAttempt: job.attempt } }),
+            applyOutcome({ ...txCtx, output: { rebuiltOnAttempt: job.attempt } }),
           );
         },
       },

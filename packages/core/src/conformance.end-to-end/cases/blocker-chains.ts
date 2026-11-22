@@ -62,7 +62,7 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     assert.deepEqual(job.chainId, blockerChainId);
 
                     return stateAdapter.withTransaction((txCtx) =>
@@ -71,7 +71,7 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
                         syncAsync(function* () {
                           if (job.input.value < 1) {
                             return yield* step(
-                              complete({
+                              applyOutcome({
                                 ...txCtx,
                                 continueWith: {
                                   typeName: "blocker",
@@ -80,7 +80,7 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
                               }),
                             );
                           }
-                          return yield* step(complete({ ...txCtx, output: { done: true } }));
+                          return yield* step(applyOutcome({ ...txCtx, output: { done: true } }));
                         }),
                       ),
                     );
@@ -92,10 +92,10 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
                       input,
                       blockers: [blocker],
                     },
-                    complete,
+                    applyOutcome,
                   }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         output: {
                           finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
@@ -174,17 +174,17 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value } }),
                     ),
                 },
                 main: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     const [blocker] = job.blockers;
 
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         output: {
                           finalResult: blocker.output.result,
@@ -372,15 +372,17 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
                 starter: {
                   backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     if (job.attempt === 1) {
                       return stateAdapter.withTransaction((txCtx) =>
-                        complete({
+                        applyOutcome({
                           ...txCtx,
                           continueWith: {
                             typeName: "next",
@@ -404,13 +406,15 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
                       ),
                     );
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: null }),
+                      applyOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
                 next: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),
@@ -463,11 +467,13 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 inner: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
                 outer: {
-                  attemptHandler: async ({ complete }) => {
+                  attemptHandler: async ({ applyOutcome }) => {
                     await stateAdapter.withTransaction((txCtx) =>
                       runInModeOf(
                         stateAdapter,
@@ -499,7 +505,7 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
                             ),
                           );
 
-                          return yield* step(complete({ ...txCtx, output: null }));
+                          return yield* step(applyOutcome({ ...txCtx, output: null }));
                         }),
                       ),
                     );
@@ -560,9 +566,9 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         continueWith: {
                           typeName: "finish",
@@ -585,9 +591,9 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 finish: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         output: { result: job.input.valueNext + 1 },
                       }),
@@ -646,15 +652,15 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value } }),
                     ),
                 },
                 main: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         output: {
                           finalResult: job.blockers.map((blocker) => blocker.output.result),
@@ -737,13 +743,13 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value * 10 } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value * 10 } }),
                     ),
                 },
                 first: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
                       runInModeOf(
                         stateAdapter,
@@ -756,7 +762,7 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
                             }),
                           );
                           return yield* step(
-                            complete({
+                            applyOutcome({
                               ...txCtx,
                               continueWith: {
                                 typeName: "second",
@@ -770,10 +776,10 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
                     ),
                 },
                 second: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     const [blocker] = job.blockers;
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         output: { finalResult: blocker.output.result },
                       }),
@@ -841,21 +847,21 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value } }),
                     ),
                 },
                 other: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value } }),
                     ),
                 },
                 first: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         continueWith: {
                           typeName: "second",
@@ -866,9 +872,9 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
                     ),
                 },
                 second: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         output: {
                           sum: job.blockers.reduce(
@@ -988,21 +994,21 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value } }),
                     ),
                 },
                 other: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value } }),
                     ),
                 },
                 main: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         output: {
                           sum: job.blockers.reduce(
@@ -1155,15 +1161,15 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value } }),
                     ),
                 },
                 main: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         output: {
                           finalResult: job.blockers.map((blocker) => blocker.output.result),
@@ -1260,15 +1266,15 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value } }),
                     ),
                 },
                 main: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         output: {
                           finalResult: job.blockers[0].output.result,
@@ -1355,13 +1361,15 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
                 main: {
-                  attemptHandler: async ({ complete }) =>
+                  attemptHandler: async ({ applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { done: true as const } }),
+                      applyOutcome({ ...txCtx, output: { done: true as const } }),
                     ),
                 },
               },
@@ -1431,15 +1439,15 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value } }),
                     ),
                 },
                 main: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         output: { results: job.blockers.map((blocker) => blocker.output.result) },
                       }),
@@ -1552,17 +1560,19 @@ export const blockerChainsGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ complete }) => {
+                  attemptHandler: async ({ applyOutcome }) => {
                     blockerHeld.resolve();
                     await releaseBlocker.promise;
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: null }),
+                      applyOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
                 main: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),
@@ -1626,7 +1636,7 @@ export const blockerChainsConcurrentTransactionsGroup: ConformanceGroup<StateAda
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ complete }) =>
+                  attemptHandler: async ({ applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
                       runInModeOf(
                         stateAdapter,
@@ -1634,15 +1644,15 @@ export const blockerChainsConcurrentTransactionsGroup: ConformanceGroup<StateAda
                           readyBlockers++;
                           if (readyBlockers === blockerCount) allBlockersReady.resolve();
                           yield* step(releaseBlockers.promise);
-                          return complete({ ...txCtx, output: null });
+                          return applyOutcome({ ...txCtx, output: null });
                         }),
                       ),
                     ),
                 },
                 main: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.index } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.index } }),
                     ),
                 },
               },
@@ -1740,12 +1750,16 @@ export const blockerChainsNotifyConcurrentTransactionsGroup: ConformanceGroup<St
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
                 main: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),
@@ -1825,12 +1839,16 @@ export const blockerChainsNotifyConcurrentTransactionsGroup: ConformanceGroup<St
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
                 main: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),
@@ -1909,9 +1927,9 @@ export const blockerChainsNotifyConcurrentTransactionsGroup: ConformanceGroup<St
               jobTypes,
               processors: {
                 first: {
-                  attemptHandler: async ({ complete }) =>
+                  attemptHandler: async ({ applyOutcome }) =>
                     stateAdapter.withTransaction(async (txCtx) => {
-                      const continued = await complete({
+                      const continued = await applyOutcome({
                         ...txCtx,
                         continueWith: { typeName: "main", input: null, blockers: [blockerChain] },
                       });
@@ -1946,8 +1964,10 @@ export const blockerChainsNotifyConcurrentTransactionsGroup: ConformanceGroup<St
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),
@@ -2007,9 +2027,9 @@ export const blockerChainsNotifyConcurrentTransactionsGroup: ConformanceGroup<St
               jobTypes,
               processors: {
                 first: {
-                  attemptHandler: async ({ complete }) =>
+                  attemptHandler: async ({ applyOutcome }) =>
                     stateAdapter.withTransaction(async (txCtx) => {
-                      await complete({
+                      await applyOutcome({
                         ...txCtx,
                         continueWith: { typeName: "main", input: null, blockers: [blockerChain] },
                       });
@@ -2044,8 +2064,10 @@ export const blockerChainsNotifyConcurrentTransactionsGroup: ConformanceGroup<St
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),

@@ -102,8 +102,8 @@ const jobCounters = (): FieldItem[] => [
     description: (
       <>
         Job rescheduled: a client reschedule of a pending or blocked job,{" "}
-        <code>{"complete({ reschedule })"}</code>, retry after a failed attempt, or reclaim from a
-        worker that lost its lease, stopped or no longer runs it. A client reschedule of a running
+        <code>{"applyOutcome({ reschedule })"}</code>, retry after a failed attempt, or reclaim from
+        a worker that lost its lease, stopped or no longer runs it. A client reschedule of a running
         job is counted when its attempt applies it.
       </>
     ),
@@ -123,7 +123,7 @@ const attemptCounters = (): FieldItem[] => [
     chips: [counter],
     description: (
       <>
-        Attempt completed successfully (including <code>{"complete({ reschedule })"}</code>).
+        Attempt completed successfully (including <code>{"applyOutcome({ reschedule })"}</code>).
       </>
     ),
     extra: jobAttributes,

@@ -19,20 +19,20 @@ const stateAdapter = createInProcessStateAdapter({ mode: "async" });
 const client = createClient({ stateAdapter, jobTypes });
 
 describe("middleware ctx cannot shadow built-in handler keys", () => {
-  it("handler built-ins (signal, job, complete) win over middleware-injected ctx", async () => {
+  it("handler built-ins (signal, job, applyOutcome) win over middleware-injected ctx", async () => {
     const sentinel = { tampered: true };
     const tampering: AttemptMiddleware<InProcessStateAdapter<"async">> = {
       wrapHandler: async ({ next }) =>
         next({
           signal: sentinel,
           job: sentinel,
-          complete: sentinel,
+          applyOutcome: sentinel,
         }),
     };
 
     let observedSignalIsAbortSignal = false;
     let observedJobHasId = false;
-    let observedCompleteIsFn = false;
+    let observedApplyOutcomeIsFn = false;
 
     const registry = createProcessors({
       client,
@@ -40,12 +40,12 @@ describe("middleware ctx cannot shadow built-in handler keys", () => {
       attemptMiddleware: [tampering],
       processors: {
         foo: {
-          attemptHandler: async ({ signal, job, complete }) => {
+          attemptHandler: async ({ signal, job, applyOutcome }) => {
             observedSignalIsAbortSignal = typeof signal?.aborted === "boolean";
             observedJobHasId = typeof job?.id === "string";
-            observedCompleteIsFn = typeof complete === "function";
+            observedApplyOutcomeIsFn = typeof applyOutcome === "function";
             return stateAdapter.withTransaction(async (txCtx) =>
-              complete({ ...txCtx, output: { ok: true as const } }),
+              applyOutcome({ ...txCtx, output: { ok: true as const } }),
             );
           },
         },
@@ -65,12 +65,12 @@ describe("middleware ctx cannot shadow built-in handler keys", () => {
 
     expect(observedSignalIsAbortSignal).toBe(true);
     expect(observedJobHasId).toBe(true);
-    expect(observedCompleteIsFn).toBe(true);
+    expect(observedApplyOutcomeIsFn).toBe(true);
   });
 });
 
 describe("middleware ctx flows into the handler through wrapHandler", () => {
-  it("merges ctx across middleware, runs them as an onion and passes the `complete` result back out", async () => {
+  it("merges ctx across middleware, runs them as an onion and passes the `applyOutcome` result back out", async () => {
     const events: string[] = [];
     let outerResult: unknown;
 
@@ -103,11 +103,11 @@ describe("middleware ctx flows into the handler through wrapHandler", () => {
       attemptMiddleware: [outer, inner],
       processors: {
         foo: {
-          attemptHandler: async ({ tenant, source, complete }) => {
+          attemptHandler: async ({ tenant, source, applyOutcome }) => {
             events.push("handler");
             observedCtx = { tenant, source };
             return stateAdapter.withTransaction(async (txCtx) =>
-              complete({ ...txCtx, output: { ok: true as const } }),
+              applyOutcome({ ...txCtx, output: { ok: true as const } }),
             );
           },
         },
@@ -175,8 +175,8 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
       attemptMiddleware: [wrapA],
       processors: {
         a: {
-          attemptHandler: async ({ complete }) =>
-            sa.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
+          attemptHandler: async ({ applyOutcome }) =>
+            sa.withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null })),
         },
       },
     });
@@ -186,8 +186,8 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
       attemptMiddleware: [wrapB],
       processors: {
         b: {
-          attemptHandler: async ({ complete }) =>
-            sa.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
+          attemptHandler: async ({ applyOutcome }) =>
+            sa.withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null })),
         },
       },
     });

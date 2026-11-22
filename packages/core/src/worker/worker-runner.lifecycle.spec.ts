@@ -23,8 +23,10 @@ describe("createWorkerRunner lifecycle", () => {
         jobTypes,
         processors: {
           foo: {
-            attemptHandler: async ({ complete }) =>
-              stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
+            attemptHandler: async ({ applyOutcome }) =>
+              stateAdapter.withTransaction(async (txCtx) =>
+                applyOutcome({ ...txCtx, output: null }),
+              ),
           },
         },
       }),
@@ -65,11 +67,11 @@ describe("createWorkerRunner lifecycle", () => {
         jobTypes,
         processors: {
           foo: {
-            attemptHandler: async ({ complete }) => {
+            attemptHandler: async ({ applyOutcome }) => {
               attemptStarted.resolve();
               await attemptReleased.promise;
               return stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, output: null }),
+                applyOutcome({ ...txCtx, output: null }),
               );
             },
           },
@@ -114,11 +116,11 @@ describe("createWorkerRunner lifecycle", () => {
         jobTypes,
         processors: {
           foo: {
-            attemptHandler: async ({ complete }) => {
+            attemptHandler: async ({ applyOutcome }) => {
               attemptStarted.resolve();
               await attemptReleased.promise;
               return stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, output: null }),
+                applyOutcome({ ...txCtx, output: null }),
               );
             },
           },

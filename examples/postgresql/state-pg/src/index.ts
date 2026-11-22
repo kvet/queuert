@@ -68,7 +68,7 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           const { rows } = await db.query<{ id: number; name: string; email: string }>(
             "SELECT id, name, email FROM users WHERE id = $1",
             [job.input.userId],
@@ -83,7 +83,7 @@ await using workerRunner = createWorkerRunner({
             const poolClient = await db.connect();
             try {
               await poolClient.query("BEGIN");
-              const result = await complete({
+              const result = await applyOutcome({
                 poolClient,
                 txHooks,
                 output: { sentAt: new Date().toISOString() },

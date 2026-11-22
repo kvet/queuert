@@ -55,7 +55,7 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 linear: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     assert.deepEqual(job.id, chain.id);
                     assert.deepEqual(job.chainId, chain.id);
 
@@ -64,7 +64,7 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                         stateAdapter,
                         syncAsync(function* () {
                           const completedJob = yield* step(
-                            complete({
+                            applyOutcome({
                               ...txCtx,
                               continueWith: {
                                 typeName: "linear_next",
@@ -84,12 +84,12 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                   },
                 },
                 linear_next: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     assert.notDeepEqual(job.id, chain.id);
                     assert.deepEqual(job.chainId, chain.id);
 
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         continueWith: {
                           typeName: "linear_next_next",
@@ -100,12 +100,12 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                   },
                 },
                 linear_next_next: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     assert.notDeepEqual(job.id, chain.id);
                     assert.deepEqual(job.chainId, chain.id);
 
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         output: {
                           result: job.input.valueNextNext,
@@ -168,9 +168,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 main: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         continueWith: {
                           typeName: job.input.value % 2 === 0 ? "branch1" : "branch2",
@@ -180,9 +180,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                     ),
                 },
                 branch1: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         output: {
                           result1: job.input.valueBranched,
@@ -191,9 +191,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                     ),
                 },
                 branch2: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         output: {
                           result2: job.input.valueBranched,
@@ -270,10 +270,10 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 main: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     job.input.value % 2 === 0
                       ? stateAdapter.withTransaction((txCtx) =>
-                          complete({
+                          applyOutcome({
                             ...txCtx,
                             continueWith: {
                               typeName: "branch1",
@@ -282,7 +282,7 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                           }),
                         )
                       : stateAdapter.withTransaction((txCtx) =>
-                          complete({
+                          applyOutcome({
                             ...txCtx,
                             continueWith: {
                               typeName: "branch2",
@@ -292,9 +292,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                         ),
                 },
                 branch1: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         output: {
                           result: job.input.valueBranched1,
@@ -303,9 +303,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                     ),
                 },
                 branch2: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         output: {
                           result: job.input.valueBranched2,
@@ -375,10 +375,10 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 loop: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     job.input.counter < 3
                       ? stateAdapter.withTransaction((txCtx) =>
-                          complete({
+                          applyOutcome({
                             ...txCtx,
                             continueWith: {
                               typeName: "loop",
@@ -387,7 +387,7 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                           }),
                         )
                       : stateAdapter.withTransaction((txCtx) =>
-                          complete({ ...txCtx, output: { done: true } }),
+                          applyOutcome({ ...txCtx, output: { done: true } }),
                         ),
                 },
               },
@@ -440,9 +440,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 start: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         continueWith: {
                           typeName: "end",
@@ -452,10 +452,10 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                     ),
                 },
                 end: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     job.input.result < 3
                       ? stateAdapter.withTransaction((txCtx) =>
-                          complete({
+                          applyOutcome({
                             ...txCtx,
                             continueWith: {
                               typeName: "start",
@@ -464,7 +464,7 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                           }),
                         )
                       : stateAdapter.withTransaction((txCtx) =>
-                          complete({ ...txCtx, output: { finalResult: job.input.result } }),
+                          applyOutcome({ ...txCtx, output: { finalResult: job.input.result } }),
                         ),
                 },
               },
@@ -511,10 +511,10 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 entryA: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     assert.equal(job.chainTypeName, "entryA");
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         continueWith: { typeName: "shared", input: { data: 1 } },
                       }),
@@ -522,10 +522,10 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                   },
                 },
                 entryB: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     assert.equal(job.chainTypeName, "entryB");
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         continueWith: { typeName: "shared", input: { data: 2 } },
                       }),
@@ -533,10 +533,10 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                   },
                 },
                 shared: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     assert.ok(["entryA", "entryB"].includes(job.chainTypeName));
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { done: true } }),
+                      applyOutcome({ ...txCtx, output: { done: true } }),
                     );
                   },
                 },
@@ -607,7 +607,7 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 parent: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     const independentChain = await stateAdapter.withTransaction((txCtx) =>
                       client.createChain({
                         ...txCtx,
@@ -619,7 +619,7 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                     independentChainCreated.resolve(independentChain.id);
 
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         output: {
                           childChainId: independentChain.id,
@@ -629,9 +629,9 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                   },
                 },
                 independent: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         output: {
                           result: job.input.fromParent * 2,
@@ -697,19 +697,19 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 step1: {
-                  attemptHandler: async ({ complete }) =>
+                  attemptHandler: async ({ applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         continueWith: { typeName: "step2", id: userId, input: null },
                       }),
                     ),
                 },
                 step2: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     assert.equal(job.id, userId);
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { id: job.id } }),
+                      applyOutcome({ ...txCtx, output: { id: job.id } }),
                     );
                   },
                 },
@@ -760,14 +760,14 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 step1: {
-                  attemptHandler: async ({ complete }) =>
+                  attemptHandler: async ({ applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
                       runInModeOf(
                         stateAdapter,
                         syncAsync(function* () {
                           try {
                             return yield* step(
-                              complete({
+                              applyOutcome({
                                 ...txCtx,
                                 continueWith: { typeName: "step2", id: "bad-id", input: null },
                               }),
@@ -781,8 +781,10 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                     ),
                 },
                 step2: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),
@@ -837,24 +839,26 @@ export const chainsGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 step1: {
                   backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) => {
                       if (job.attempt > 1) {
                         collisionOccurred = true;
-                        return complete({
+                        return applyOutcome({
                           ...txCtx,
                           continueWith: { typeName: "step2", input: null },
                         });
                       }
-                      return complete({
+                      return applyOutcome({
                         ...txCtx,
                         continueWith: { typeName: "step2", id: sharedId, input: null },
                       });
                     }),
                 },
                 step2: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),

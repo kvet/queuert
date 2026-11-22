@@ -8,9 +8,9 @@ export const notificationProcessors = createProcessors({
   jobTypes: notificationJobTypes,
   processors: {
     "notifications.send-notification": {
-      attemptHandler: async ({ complete }) =>
+      attemptHandler: async ({ applyOutcome }) =>
         stateAdapter.withTransaction(async (txCtx) =>
-          complete({ ...txCtx, output: { sentAt: new Date().toISOString() } }),
+          applyOutcome({ ...txCtx, output: { sentAt: new Date().toISOString() } }),
         ),
     },
   },

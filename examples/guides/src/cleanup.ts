@@ -45,7 +45,7 @@ const cleanupProcessors = createProcessors({
   jobTypes: cleanupJobTypes,
   processors: {
     "queuert.cleanup": {
-      attemptHandler: async ({ job, signal, complete, fence }) => {
+      attemptHandler: async ({ job, signal, applyOutcome, fence }) => {
         const cutoffDate = new Date(Date.now() - CLEANUP_RETENTION_MS);
         const typeNames = await client.getChainTypeNames();
         let roundDeletedCount: number;
@@ -59,7 +59,7 @@ const cleanupProcessors = createProcessors({
             do {
               if (signal.aborted) {
                 return stateAdapter.withTransaction(async (txCtx) =>
-                  complete({ ...txCtx, reschedule: { afterMs: 0 } }),
+                  applyOutcome({ ...txCtx, reschedule: { afterMs: 0 } }),
                 );
               }
 
@@ -95,7 +95,7 @@ const cleanupProcessors = createProcessors({
         } while (!signal.aborted && roundDeletedCount > 0);
 
         return stateAdapter.withTransaction(async (txCtx) => {
-          const completedJob = await complete({ ...txCtx, output: null });
+          const completedJob = await applyOutcome({ ...txCtx, output: null });
 
           await client.createChain({
             ...txCtx,
@@ -118,9 +118,9 @@ const userProcessors = createProcessors({
   jobTypes: userJobTypes,
   processors: {
     "send-welcome-email": {
-      attemptHandler: async ({ complete }) =>
+      attemptHandler: async ({ applyOutcome }) =>
         stateAdapter.withTransaction(async (txCtx) =>
-          complete({ ...txCtx, output: { sentAt: new Date().toISOString() } }),
+          applyOutcome({ ...txCtx, output: { sentAt: new Date().toISOString() } }),
         ),
     },
   },

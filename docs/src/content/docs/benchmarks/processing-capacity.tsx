@@ -74,8 +74,8 @@ const Page = () => (
     <h2 id="completion">Completion, no-op handler</h2>
     <p>
       One worker drains the seeded queue. Each handler only opens its own transaction and calls{" "}
-      <code>complete</code> in it. With one slot, every job's full round trip (acquire, then{" "}
-      <code>complete</code> and commit) runs back to back; 4 and 16 slots show how far parallel
+      <code>applyOutcome</code> in it. With one slot, every job's full round trip (acquire, then{" "}
+      <code>applyOutcome</code> and commit) runs back to back; 4 and 16 slots show how far parallel
       slots scale it.
     </p>
     <For each={["1 slot", "4 slots", "16 slots"]}>

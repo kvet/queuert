@@ -49,14 +49,14 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
               processors: {
                 test: {
                   backoffConfig: fastBackoff,
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     if (job.attempt === 1) {
                       throw new Error("Simulated handler error");
                     }
                     assert.ok(typeof job?.lastAttemptError === "string");
                     assert.ok(job.lastAttemptError.includes("Error: Simulated handler error"));
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value * 2 } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value * 2 } }),
                     );
                   },
                 },
@@ -83,7 +83,7 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
       }),
     },
     {
-      name: "reschedules when handler throws inside its transaction before complete",
+      name: "reschedules when handler throws inside its transaction before applyOutcome",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -108,7 +108,7 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
               processors: {
                 test: {
                   backoffConfig: fastBackoff,
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     if (job.attempt > 1) {
                       assert.ok(typeof job?.lastAttemptError === "string");
                       assert.ok(job.lastAttemptError.includes("Error: Simulated handler error"));
@@ -117,7 +117,7 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
                       if (job.attempt === 1) {
                         throw new Error("Simulated handler error");
                       }
-                      return complete({
+                      return applyOutcome({
                         ...txCtx,
                         output: { result: job.input.value * 2 },
                       });
@@ -147,7 +147,7 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
       }),
     },
     {
-      name: "reschedules when handler throws inside its transaction after complete",
+      name: "reschedules when handler throws inside its transaction after applyOutcome",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -172,23 +172,23 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
               processors: {
                 test: {
                   backoffConfig: fastBackoff,
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     if (job.attempt > 1) {
                       assert.ok(typeof job?.lastAttemptError === "string");
-                      assert.ok(job.lastAttemptError.includes("Error: Error after complete"));
+                      assert.ok(job.lastAttemptError.includes("Error: Error after applyOutcome"));
                     }
                     return stateAdapter.withTransaction((txCtx) =>
                       runInModeOf(
                         stateAdapter,
                         syncAsync(function* () {
                           const result = yield* step(
-                            complete({
+                            applyOutcome({
                               ...txCtx,
                               output: { result: job.input.value * 2 },
                             }),
                           );
                           if (job.attempt === 1) {
-                            throw new Error("Error after complete");
+                            throw new Error("Error after applyOutcome");
                           }
                           return result;
                         }),
@@ -219,7 +219,7 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
       }),
     },
     {
-      name: "reschedules when handler returns without calling complete",
+      name: "reschedules when handler returns without calling applyOutcome",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -244,19 +244,19 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
               backoffConfig: fastBackoff,
               processors: {
                 test: {
-                  // @ts-expect-error the handler must return what complete returned
-                  attemptHandler: async ({ job, complete }) => {
+                  // @ts-expect-error the handler must return what applyOutcome returned
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     if (job.attempt === 1) {
                       return;
                     }
                     assert.ok(typeof job?.lastAttemptError === "string");
                     assert.ok(
                       job.lastAttemptError.includes(
-                        "Attempt handler returned without a committed `complete` call",
+                        "Attempt handler returned without a committed `applyOutcome` call",
                       ),
                     );
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { done: true } }),
+                      applyOutcome({ ...txCtx, output: { done: true } }),
                     );
                   },
                 },
@@ -278,7 +278,7 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
       }),
     },
     {
-      name: "rolls back the continuation when handler throws after complete with continueWith inside its transaction",
+      name: "rolls back the continuation when handler throws after applyOutcome with continueWith inside its transaction",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -307,13 +307,13 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
               processors: {
                 step1: {
                   backoffConfig: fastBackoff,
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
                       runInModeOf(
                         stateAdapter,
                         syncAsync(function* () {
                           const result = yield* step(
-                            complete({
+                            applyOutcome({
                               ...txCtx,
                               continueWith: {
                                 typeName: "step2",
@@ -322,7 +322,7 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
                             }),
                           );
                           if (job.attempt === 1) {
-                            throw new Error("Error after complete with continueWith");
+                            throw new Error("Error after applyOutcome with continueWith");
                           }
                           return result;
                         }),
@@ -330,9 +330,9 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
                     ),
                 },
                 step2: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value } }),
                     ),
                 },
               },
@@ -363,7 +363,7 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
       }),
     },
     {
-      name: "keeps the dependent blocked when the blocker handler throws after complete inside its transaction",
+      name: "keeps the dependent blocked when the blocker handler throws after applyOutcome inside its transaction",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -394,19 +394,19 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
               processors: {
                 blocker: {
                   backoffConfig: fastBackoff,
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
                       runInModeOf(
                         stateAdapter,
                         syncAsync(function* () {
                           const result = yield* step(
-                            complete({
+                            applyOutcome({
                               ...txCtx,
                               output: { done: true },
                             }),
                           );
                           if (job.attempt === 1) {
-                            throw new Error("Error after blocker complete");
+                            throw new Error("Error after blocker applyOutcome");
                           }
                           return result;
                         }),
@@ -414,11 +414,11 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
                     ),
                 },
                 dependent: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     const [blocker] = job.blockers;
                     assert.equal((await client.getJob({ id: blocker.id }))?.attempt, 2);
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: "ok" } }),
+                      applyOutcome({ ...txCtx, output: { result: "ok" } }),
                     );
                   },
                 },
@@ -480,7 +480,7 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
               processors: {
                 test: {
                   backoffConfig: fastBackoff,
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     switch (job.attempt) {
                       case 1:
                         throw new Error("plain error");
@@ -499,7 +499,7 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
                       case 4:
                         assert.equal(job.lastAttemptError, "string error");
                         return stateAdapter.withTransaction((txCtx) =>
-                          complete({ ...txCtx, output: null }),
+                          applyOutcome({ ...txCtx, output: null }),
                         );
                       default:
                         throw new Error(`unexpected attempt ${job.attempt}`);
@@ -551,7 +551,7 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
               processors: {
                 test: {
                   backoffConfig: fastBackoff,
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     assert.equal(job.attempt, 1);
                     await assertRejects(
                       () =>
@@ -561,7 +561,7 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
                       /transaction boom/,
                     );
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: null }),
+                      applyOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
@@ -610,12 +610,12 @@ export const processErrorHandlingGroup: ConformanceGroup<StateAdapterConformance
               processors: {
                 test: {
                   backoffConfig: { initialDelayMs: 1.5, multiplier: 1.5, maxDelayMs: 10 },
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     if (job.attempt < 3) {
                       throw new Error(`Simulated error on attempt ${job.attempt}`);
                     }
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value * 2 } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value * 2 } }),
                     );
                   },
                 },
@@ -647,7 +647,7 @@ export const processErrorHandlingPoisonTransactionGroup: ConformanceGroup<EndToE
     name: "process-error-handling",
     cases: [
       {
-        name: "recovers when user code poisons its transaction before complete",
+        name: "recovers when user code poisons its transaction before applyOutcome",
         run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, ...context }) {
           const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
           const notifyAdapter = yield* resource(
@@ -672,7 +672,7 @@ export const processErrorHandlingPoisonTransactionGroup: ConformanceGroup<EndToE
                 processors: {
                   test: {
                     backoffConfig: fastBackoff,
-                    attemptHandler: async ({ job, complete }) =>
+                    attemptHandler: async ({ job, applyOutcome }) =>
                       stateAdapter.withTransaction((txCtx) =>
                         runInModeOf(
                           stateAdapter,
@@ -680,7 +680,7 @@ export const processErrorHandlingPoisonTransactionGroup: ConformanceGroup<EndToE
                             if (job.attempt === 1) {
                               yield* step(context.poisonTransaction(txCtx));
                             }
-                            return complete({
+                            return applyOutcome({
                               ...txCtx,
                               output: { result: job.input.value * 2 },
                             });
@@ -711,7 +711,7 @@ export const processErrorHandlingPoisonTransactionGroup: ConformanceGroup<EndToE
         }),
       },
       {
-        name: "recovers when user code poisons a separate transaction before complete",
+        name: "recovers when user code poisons a separate transaction before applyOutcome",
         run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, ...context }) {
           const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
           const notifyAdapter = yield* resource(
@@ -736,7 +736,7 @@ export const processErrorHandlingPoisonTransactionGroup: ConformanceGroup<EndToE
                 processors: {
                   test: {
                     backoffConfig: fastBackoff,
-                    attemptHandler: async ({ job, complete }) => {
+                    attemptHandler: async ({ job, applyOutcome }) => {
                       if (job.attempt === 1) {
                         await stateAdapter.withTransaction((txCtx) =>
                           runInModeOf(
@@ -748,7 +748,7 @@ export const processErrorHandlingPoisonTransactionGroup: ConformanceGroup<EndToE
                         );
                       }
                       return stateAdapter.withTransaction((txCtx) =>
-                        complete({ ...txCtx, output: { result: job.input.value * 2 } }),
+                        applyOutcome({ ...txCtx, output: { result: job.input.value * 2 } }),
                       );
                     },
                   },

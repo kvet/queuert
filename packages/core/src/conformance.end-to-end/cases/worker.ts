@@ -58,9 +58,9 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.test } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.test } }),
                     ),
                 },
               },
@@ -107,18 +107,18 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 email: {
-                  attemptHandler: async ({ complete }) => {
+                  attemptHandler: async ({ applyOutcome }) => {
                     processedTypes.push("email");
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { sent: true } }),
+                      applyOutcome({ ...txCtx, output: { sent: true } }),
                     );
                   },
                 },
                 sms: {
-                  attemptHandler: async ({ complete }) => {
+                  attemptHandler: async ({ applyOutcome }) => {
                     processedTypes.push("sms");
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { sent: true } }),
+                      applyOutcome({ ...txCtx, output: { sent: true } }),
                     );
                   },
                 },
@@ -191,18 +191,18 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           attemptMiddleware: [traceMiddleware],
           processors: {
             "images.resize": {
-              attemptHandler: async ({ job, trace, complete }) => {
+              attemptHandler: async ({ job, trace, applyOutcome }) => {
                 processed.push(`${job.typeName}:${trace}`);
                 return stateAdapter.withTransaction((txCtx) =>
-                  complete({ ...txCtx, output: null }),
+                  applyOutcome({ ...txCtx, output: null }),
                 );
               },
             },
             "images.notify": {
-              attemptHandler: async ({ job, trace, complete }) => {
+              attemptHandler: async ({ job, trace, applyOutcome }) => {
                 processed.push(`${job.typeName}:${trace}`);
                 return stateAdapter.withTransaction((txCtx) =>
-                  complete({ ...txCtx, output: null }),
+                  applyOutcome({ ...txCtx, output: null }),
                 );
               },
             },
@@ -213,10 +213,10 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           jobTypes: billingJobTypes,
           processors: {
             "billing.charge": {
-              attemptHandler: async ({ job, complete }) => {
+              attemptHandler: async ({ job, applyOutcome }) => {
                 processed.push(job.typeName);
                 return stateAdapter.withTransaction((txCtx) =>
-                  complete({ ...txCtx, output: null }),
+                  applyOutcome({ ...txCtx, output: null }),
                 );
               },
             },
@@ -319,9 +319,9 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.test } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.test } }),
                     ),
                 },
               },
@@ -371,12 +371,12 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     processedJobs.push(job.input.jobNumber);
                     await sleep(10);
 
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { success: true } }),
+                      applyOutcome({ ...txCtx, output: { success: true } }),
                     );
                   },
                 },
@@ -450,11 +450,11 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               attemptMiddleware: [traceMiddleware, auditMiddleware],
               processors: {
                 test: {
-                  attemptHandler: async ({ trace, audit, complete }) => {
+                  attemptHandler: async ({ trace, audit, applyOutcome }) => {
                     order.push("process");
                     observed.push({ trace, audit });
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: null }),
+                      applyOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
@@ -522,12 +522,12 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 test: {
                   backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     if (job.attempt === 1) throw new Error("handler-failure");
 
                     return stateAdapter.withTransaction((txCtx) => {
                       if (job.attempt === 2) throw new Error("transaction-failure");
-                      return complete({ ...txCtx, output: null });
+                      return applyOutcome({ ...txCtx, output: null });
                     });
                   },
                 },
@@ -558,7 +558,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
       }),
     },
     {
-      name: "aborts in-flight job signal when worker stops and still allows complete",
+      name: "aborts in-flight job signal when worker stops and still allows applyOutcome",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -581,7 +581,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ signal, complete }) => {
+                  attemptHandler: async ({ signal, applyOutcome }) => {
                     onHandlerStarted();
                     await new Promise<void>((resolve) => {
                       if (signal.aborted) {
@@ -597,7 +597,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                       );
                     });
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: null }),
+                      applyOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
@@ -625,7 +625,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
       }),
     },
     {
-      name: "throws from complete when the attempt is lost after the worker stops",
+      name: "throws from applyOutcome when the attempt is lost after the worker stops",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -649,7 +649,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ signal, complete }) => {
+                  attemptHandler: async ({ signal, applyOutcome }) => {
                     handlerStarted.resolve();
                     await new Promise<void>((resolve) => {
                       signal.addEventListener(
@@ -666,7 +666,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                     await assertRejects(
                       () =>
                         stateAdapter.withTransaction((txCtx) =>
-                          complete({ ...txCtx, output: { source: "worker" } }),
+                          applyOutcome({ ...txCtx, output: { source: "worker" } }),
                         ),
                       JobAlreadyCompletedError,
                     );
@@ -745,10 +745,10 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 slow: {
-                  attemptHandler: async ({ complete }) => {
+                  attemptHandler: async ({ applyOutcome }) => {
                     await sleep(200);
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: null }),
+                      applyOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
@@ -798,11 +798,11 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ complete }) => {
+                  attemptHandler: async ({ applyOutcome }) => {
                     if (++startedCount === concurrency) allStarted.resolve();
                     await allStarted.promise;
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: null }),
+                      applyOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
@@ -859,11 +859,11 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ signal, complete }) => {
+                  attemptHandler: async ({ signal, applyOutcome }) => {
                     await sleep(leaseConfig.durationMs * 2);
                     assert.equal(signal.aborted, false);
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: null }),
+                      applyOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
@@ -996,7 +996,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
       }),
     },
     {
-      name: "reclaims the job of an expired worker with a worker of another type and rejects its late `fence` and `complete`",
+      name: "reclaims the job of an expired worker with a worker of another type and rejects its late `fence` and `applyOutcome`",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -1016,7 +1016,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         const jobStarted = Promise.withResolvers<void>();
         const handlerReleased = Promise.withResolvers<void>();
-        const lateComplete = Promise.withResolvers<unknown>();
+        const lateApplyOutcome = Promise.withResolvers<unknown>();
 
         const leaseLosingWorkerRunner = yield* resource(
           createWorkerRunner({
@@ -1027,7 +1027,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ complete, fence }) => {
+                  attemptHandler: async ({ applyOutcome, fence }) => {
                     jobStarted.resolve();
                     await handlerReleased.promise;
                     await assertRejects(async () => {
@@ -1042,10 +1042,10 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                     }, JobTakenByAnotherWorkerError);
                     try {
                       return await stateAdapter.withTransaction((txCtx) =>
-                        complete({ ...txCtx, output: null }),
+                        applyOutcome({ ...txCtx, output: null }),
                       );
                     } catch (error) {
-                      lateComplete.resolve(error);
+                      lateApplyOutcome.resolve(error);
                       throw error;
                     }
                   },
@@ -1097,7 +1097,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         );
         yield* wait(otherTypeWorkerRunner.close());
         handlerReleased.resolve();
-        assert.ok((yield* wait(lateComplete.promise)) instanceof JobTakenByAnotherWorkerError);
+        assert.ok((yield* wait(lateApplyOutcome.promise)) instanceof JobTakenByAnotherWorkerError);
       }),
     },
     {
@@ -1137,7 +1137,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, signal, complete }) => {
+                  attemptHandler: async ({ job, signal, applyOutcome }) => {
                     if (job.attempt === 1) {
                       await new Promise((resolve) => {
                         signal.addEventListener("abort", resolve, { once: true });
@@ -1145,7 +1145,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                       throw new Error("aborted by the lost lease");
                     }
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: null }),
+                      applyOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
@@ -1223,8 +1223,10 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),
@@ -1319,8 +1321,10 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),
@@ -1384,10 +1388,10 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     if (job.attempt === 1) throw new Error("fails before completing");
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: null }),
+                      applyOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
@@ -1452,8 +1456,10 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),
@@ -1575,13 +1581,13 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     if (job.input.slow) {
                       slowStarted.resolve();
                       await releaseSlow.promise;
                     }
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: null }),
+                      applyOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
@@ -1663,7 +1669,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     if (job.input.run === "deleted") {
                       deletedStarted.resolve();
                       await releaseDeleted.promise;
@@ -1673,7 +1679,7 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                     recreatedStarted.resolve();
                     await releaseRecreated.promise;
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: null }),
+                      applyOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
@@ -1743,10 +1749,10 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     if (job.attempt < 3) throw new Error("retry");
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: null }),
+                      applyOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
@@ -1793,10 +1799,10 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 test: {
                   backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     if (job.attempt < 2) throw new Error("retry");
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: null }),
+                      applyOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },

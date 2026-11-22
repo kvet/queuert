@@ -25,9 +25,9 @@ const runChain = async (
       jobTypes,
       processors: {
         "send-welcome-email": {
-          attemptHandler: async ({ complete }) =>
+          attemptHandler: async ({ applyOutcome }) =>
             stateAdapter.withTransaction(async (txCtx) =>
-              complete({ ...txCtx, output: { sent: true } }),
+              applyOutcome({ ...txCtx, output: { sent: true } }),
             ),
         },
       },

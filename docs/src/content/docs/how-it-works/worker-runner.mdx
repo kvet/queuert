@@ -91,7 +91,7 @@ Calling `stop()` triggers graceful shutdown. It does nothing when the worker run
 3. In one transaction, delete the row this registration created with `stopWorker` and, if it was still there, reschedule any job still running under it
 4. Emit the `workerStopped` observability event
 
-Stopping is cooperative: the attempt is still held, so handlers that check `signal.aborted` can wrap up and still commit a `complete` (with partial output or `{ reschedule }`) instead of abandoning work.
+Stopping is cooperative: the attempt is still held, so handlers that check `signal.aborted` can wrap up and still commit an `applyOutcome` (with partial output or `{ reschedule }`) instead of abandoning work.
 
 `stop()` never rejects. If deleting the row throws, the worker runner emits `workerStopped` and `workerError`, and the row expires and is reclaimed like a crashed worker's. If the row is gone or another registration took the id in the meantime, the worker runner emits `workerLeaseLost` and reports `WorkerLeaseLostError` through `workerError`, leaving the other registration's row alone.
 
@@ -101,7 +101,7 @@ A stopped worker runner can be started again under the same `workerId`. `close()
 
 When a worker loses its lease, the worker runner registers it again under the same id. The worker runner emits `workerLeaseLost`, aborts every attempt's `signal`, and stops claiming and renewing. Once every attempt ended it emits `workerStopped`, reports `WorkerLeaseLostError` through `workerError`, and registers again after the recovery backoff, keeping its row in the meantime. While that row is still live, the registration fails with `WorkerAlreadyLiveError` and backs off again; once it expired, the registration reclaims it and starts. A lease loss reads `workerLeaseLost` → `workerStopped` → `workerError` → `workerStarted`, all with the same `workerId`.
 
-A handler that ignores its aborted `signal` holds the worker runner until it returns. Its job can be reclaimed in the meantime, and its `complete` then writes nothing and throws.
+A handler that ignores its aborted `signal` holds the worker runner until it returns. Its job can be reclaimed in the meantime, and its `applyOutcome` then writes nothing and throws.
 
 ## Worker Identity
 
@@ -140,7 +140,7 @@ One heartbeat per worker renews the lease every `heartbeatMs`, however many atte
 
 On SQLite a user transaction holds an async provider's write lock, or blocks the thread with a synchronous provider, so a renewal waits for it; with the defaults a user transaction can run for 45s before the worker runner counts its worker's lease as lost.
 
-A handler learns that its attempt was lost elsewhere (the job was taken over, completed externally or deleted) from the notify adapter's attempt-lost notification, which aborts its `signal`. When no notification reaches it, such as when the loss happened in another process and the client uses no shared notify adapter, it learns when its `complete` writes nothing and throws.
+A handler learns that its attempt was lost elsewhere (the job was taken over, completed externally or deleted) from the notify adapter's attempt-lost notification, which aborts its `signal`. When no notification reaches it, such as when the loss happened in another process and the client uses no shared notify adapter, it learns when its `applyOutcome` writes nothing and throws.
 
 ## Reclaim
 
@@ -162,13 +162,13 @@ A worker whose lease expired holds jobs no one runs. An idle worker runner recla
 
 ## Retry and Backoff
 
-When a job handler throws before a `complete` commits, or returns without a committed `complete`, the worker runner reschedules it with exponential backoff, in one atomic write under the attempt token:
+When a job handler throws before an `applyOutcome` commits, or returns without a committed `applyOutcome`, the worker runner reschedules it with exponential backoff, in one atomic write under the attempt token:
 
 ```
 delay = min(initialDelayMs * multiplier^(consecutiveFailures-1), maxDelayMs)
 ```
 
-`consecutiveFailures` counts the failed attempts in a row, including this one, so any other outcome — `complete({ reschedule })`, or a client `applyJobOutcome` with `reschedule` — starts the next failure at `initialDelayMs` again. Example with defaults: 10s → 20s → 40s → 80s → 160s → 300s → 300s...
+`consecutiveFailures` counts the failed attempts in a row, including this one, so any other outcome — `applyOutcome({ reschedule })`, or a client `applyJobOutcome` with `reschedule` — starts the next failure at `initialDelayMs` again. Example with defaults: 10s → 20s → 40s → 80s → 160s → 300s → 300s...
 
 See [Job Processing](../job-processing/) for details on error handling and abort signals.
 
@@ -205,7 +205,7 @@ The worker runner design emphasizes:
 
 ## See Also
 
-- [Job Processing](../job-processing/) — Attempt lifecycle, `complete`, abort signals
+- [Job Processing](../job-processing/) — Attempt lifecycle, `applyOutcome`, abort signals
 - [Notify Adapters](/queuert/integrations/notify-adapters/) — Notification delivery
 - State provider ([PostgreSQL](/queuert/integrations/state-adapters/postgres/#state-provider), [SQLite](/queuert/integrations/state-adapters/sqlite/#state-provider), [MySQL / MariaDB](/queuert/integrations/state-adapters/mysql/#state-provider), [Redis](/queuert/integrations/state-adapters/redis/#state-provider)) — How a state provider bridges your database client
 - [`guides/src/signals.ts`](https://github.com/kvet/queuert/blob/main/examples/guides/src/signals.ts) — Runnable example: graceful shutdown with partial results, external completion via `applyJobOutcome`

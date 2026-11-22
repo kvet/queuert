@@ -68,20 +68,20 @@ await using transactionalWorkerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       "email.transactional": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           await simulateWork("transactional", job.input.to, 20);
           return stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, output: { sentAt: Date.now() } }),
+            applyOutcome({ ...txCtx, output: { sentAt: Date.now() } }),
           );
         },
       },
       // #hide
       // #region handoff
       "alert.dispatch": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           await simulateWork("transactional", job.input.alertId, 20);
           return stateAdapter.withTransaction(async (txCtx) =>
-            complete({
+            applyOutcome({
               ...txCtx,
               continueWith: { typeName: "alert.archive", input: { alertId: job.input.alertId } },
             }),
@@ -102,19 +102,19 @@ await using marketingWorkerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       "email.marketing": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           await simulateWork("marketing", job.input.to, 200);
           return stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, output: { sentAt: Date.now() } }),
+            applyOutcome({ ...txCtx, output: { sentAt: Date.now() } }),
           );
         },
       },
       // #hide
       "alert.archive": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           await simulateWork("marketing", job.input.alertId, 200);
           return stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, output: { archivedAt: Date.now() } }),
+            applyOutcome({ ...txCtx, output: { archivedAt: Date.now() } }),
           );
         },
       },

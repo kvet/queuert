@@ -70,22 +70,22 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       "sync-user": {
-        attemptHandler: async ({ complete }) =>
+        attemptHandler: async ({ applyOutcome }) =>
           stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, output: { syncedAt: new Date().toISOString() } }),
+            applyOutcome({ ...txCtx, output: { syncedAt: new Date().toISOString() } }),
           ),
       },
       "send-welcome-email": {
-        attemptHandler: async ({ complete }) =>
+        attemptHandler: async ({ applyOutcome }) =>
           stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, output: { sentAt: new Date().toISOString() } }),
+            applyOutcome({ ...txCtx, output: { sentAt: new Date().toISOString() } }),
           ),
       },
       // #region self-scheduling
       "health-check": {
-        attemptHandler: async ({ job, complete }) =>
+        attemptHandler: async ({ job, applyOutcome }) =>
           stateAdapter.withTransaction(async (txCtx) => {
-            const completedJob = await complete({
+            const completedJob = await applyOutcome({
               ...txCtx,
               output: { checkedAt: new Date().toISOString() },
             });

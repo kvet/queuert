@@ -72,7 +72,7 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           const user = await knex<{ id: number; name: string; email: string }>("users")
             .where({ id: job.input.userId })
             .first();
@@ -86,7 +86,7 @@ await using workerRunner = createWorkerRunner({
           return withTxHooks(async (txHooks) =>
             knex.transaction(
               async (trx) =>
-                complete({ trx, txHooks, output: { sentAt: new Date().toISOString() } }),
+                applyOutcome({ trx, txHooks, output: { sentAt: new Date().toISOString() } }),
               { doNotRejectOnRollback: false },
             ),
           );

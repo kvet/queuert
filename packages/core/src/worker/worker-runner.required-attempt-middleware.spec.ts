@@ -45,8 +45,10 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
         attemptMiddleware: [authMiddleware, traceMiddleware],
         processors: {
           foo: {
-            attemptHandler: async ({ complete }) =>
-              stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
+            attemptHandler: async ({ applyOutcome }) =>
+              stateAdapter.withTransaction(async (txCtx) =>
+                applyOutcome({ ...txCtx, output: null }),
+              ),
           },
         },
       }),
@@ -69,8 +71,10 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
         attemptMiddleware: [metricsMiddleware, authMiddleware, traceMiddleware],
         processors: {
           foo: {
-            attemptHandler: async ({ complete }) =>
-              stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
+            attemptHandler: async ({ applyOutcome }) =>
+              stateAdapter.withTransaction(async (txCtx) =>
+                applyOutcome({ ...txCtx, output: null }),
+              ),
           },
         },
       }),
@@ -96,8 +100,10 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
           attemptMiddleware: [authMiddleware],
           processors: {
             foo: {
-              attemptHandler: async ({ complete }) =>
-                stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
+              attemptHandler: async ({ applyOutcome }) =>
+                stateAdapter.withTransaction(async (txCtx) =>
+                  applyOutcome({ ...txCtx, output: null }),
+                ),
             },
           },
         }),
@@ -122,8 +128,10 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
           attemptMiddleware: [traceMiddleware, authMiddleware],
           processors: {
             foo: {
-              attemptHandler: async ({ complete }) =>
-                stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
+              attemptHandler: async ({ applyOutcome }) =>
+                stateAdapter.withTransaction(async (txCtx) =>
+                  applyOutcome({ ...txCtx, output: null }),
+                ),
             },
           },
         }),
@@ -153,8 +161,10 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
           attemptMiddleware: [lookalike],
           processors: {
             foo: {
-              attemptHandler: async ({ complete }) =>
-                stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
+              attemptHandler: async ({ applyOutcome }) =>
+                stateAdapter.withTransaction(async (txCtx) =>
+                  applyOutcome({ ...txCtx, output: null }),
+                ),
             },
           },
         }),
@@ -177,8 +187,8 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
       attemptMiddleware: [authMiddleware],
       processors: {
         foo: {
-          attemptHandler: async ({ complete }) =>
-            stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
+          attemptHandler: async ({ applyOutcome }) =>
+            stateAdapter.withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null })),
         },
       },
     });
@@ -188,8 +198,8 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
       jobTypes: barJobTypes,
       processors: {
         bar: {
-          attemptHandler: async ({ complete }) =>
-            stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
+          attemptHandler: async ({ applyOutcome }) =>
+            stateAdapter.withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null })),
         },
       },
     });
@@ -222,8 +232,10 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
         attemptMiddleware: [mw],
         processors: {
           foo: {
-            attemptHandler: async ({ complete }) =>
-              stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
+            attemptHandler: async ({ applyOutcome }) =>
+              stateAdapter.withTransaction(async (txCtx) =>
+                applyOutcome({ ...txCtx, output: null }),
+              ),
           },
         },
       }),
@@ -257,8 +269,10 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
           attemptMiddleware: [other],
           processors: {
             foo: {
-              attemptHandler: async ({ complete }) =>
-                stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
+              attemptHandler: async ({ applyOutcome }) =>
+                stateAdapter.withTransaction(async (txCtx) =>
+                  applyOutcome({ ...txCtx, output: null }),
+                ),
             },
           },
         }),
@@ -278,8 +292,10 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
         jobTypes,
         processors: {
           foo: {
-            attemptHandler: async ({ complete }) =>
-              stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
+            attemptHandler: async ({ applyOutcome }) =>
+              stateAdapter.withTransaction(async (txCtx) =>
+                applyOutcome({ ...txCtx, output: null }),
+              ),
           },
         },
       }),

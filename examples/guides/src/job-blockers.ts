@@ -59,33 +59,39 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       "fetch-data": {
-        attemptHandler: async ({ job, complete }) =>
+        attemptHandler: async ({ job, applyOutcome }) =>
           stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, output: { data: `data from ${job.input.url}` } }),
+            applyOutcome({ ...txCtx, output: { data: `data from ${job.input.url}` } }),
           ),
       },
       // #region fan-out-process
       "process-all": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           const results = job.blockers.map((blocker) => blocker.output.data);
           return stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, output: { results } }),
+            applyOutcome({ ...txCtx, output: { results } }),
           );
         },
       },
       // #endregion
       "capture-payment": {
-        attemptHandler: async ({ job, complete }) =>
+        attemptHandler: async ({ job, applyOutcome }) =>
           stateAdapter.withTransaction(async (txCtx) => {
             orders.set(job.input.orderId, { status: "paid", paymentChainId: null });
-            return complete({ ...txCtx, output: { transactionId: `txn-${job.input.orderId}` } });
+            return applyOutcome({
+              ...txCtx,
+              output: { transactionId: `txn-${job.input.orderId}` },
+            });
           }),
       },
       "ship-order": {
-        attemptHandler: async ({ job, complete }) =>
+        attemptHandler: async ({ job, applyOutcome }) =>
           stateAdapter.withTransaction(async (txCtx) => {
             orders.set(job.input.orderId, { status: "shipped", paymentChainId: null });
-            return complete({ ...txCtx, output: { trackingNumber: `track-${job.input.orderId}` } });
+            return applyOutcome({
+              ...txCtx,
+              output: { trackingNumber: `track-${job.input.orderId}` },
+            });
           }),
       },
     },

@@ -192,20 +192,20 @@ const Page = () => (
     </p>
     <p>
       Queuert's worker has no other mode. The handler does its work, then opens its own transaction
-      with your database client and commits the outcome with <code>complete</code> inside it,
+      with your database client and commits the outcome with <code>applyOutcome</code> inside it,
       together with its domain writes. Your handler's domain writes, the chain's completion, and the
-      next step's <code>continueWith</code> all commit in one transaction; <code>complete</code>{" "}
+      next step's <code>continueWith</code> all commit in one transaction; <code>applyOutcome</code>{" "}
       writes only if this attempt still owns the job, so a stale worker's transaction rolls back
       instead of double-committing. The worker lease, retry, and backoff stay in the worker — long
       work runs outside any transaction while the worker's heartbeat renews its lease:
     </p>
     <Code lang="ts">{`
       "send-welcome-email": {
-        attemptHandler: async ({ job, complete }) =>
+        attemptHandler: async ({ job, applyOutcome }) =>
           withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) => {
               await txSql\`insert into email_log (user_id) values (\${job.input.userId})\`;
-              return complete({ txSql, txHooks, continueWith: { typeName: "log-sent", input: { ... } } });
+              return applyOutcome({ txSql, txHooks, continueWith: { typeName: "log-sent", input: { ... } } });
             }),
           ),
       },

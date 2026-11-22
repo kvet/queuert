@@ -5,9 +5,9 @@ sidebar:
   order: 19
 ---
 
-`AttemptMiddleware` wraps a **job attempt** — the attempt handler, from the moment the worker acquires the job until the handler returns its `complete` result. Middleware lets you add cross-cutting logic (tracing spans, contextual loggers, audit trails, shared resources) without touching each individual handler.
+`AttemptMiddleware` wraps a **job attempt** — the attempt handler, from the moment the worker acquires the job until the handler returns its `applyOutcome` result. Middleware lets you add cross-cutting logic (tracing spans, contextual loggers, audit trails, shared resources) without touching each individual handler.
 
-A middleware has a single hook, `wrapHandler`, which wraps the whole attempt handler. It receives a `next(ctx)` call that yields the inner layer; the object passed to `next` is merged into the `attemptHandler` options, and its type flows into the handler signature. `wrapHandler` returns `next`'s result — the handler's `complete` result — because its return type requires a finished job. The worker does not inspect the returned value; an attempt counts as completed once its `complete` commits.
+A middleware has a single hook, `wrapHandler`, which wraps the whole attempt handler. It receives a `next(ctx)` call that yields the inner layer; the object passed to `next` is merged into the `attemptHandler` options, and its type flows into the handler signature. `wrapHandler` returns `next`'s result — the handler's `applyOutcome` result — because its return type requires a finished job. The worker does not inspect the returned value; an attempt counts as completed once its `applyOutcome` commits.
 
 See the [`AttemptMiddleware` API reference](/queuert/api/core/type-aliases/attemptmiddleware/) for the full type definition.
 
@@ -19,7 +19,7 @@ Use for concerns that span the full attempt: tracing spans, contextual loggers, 
 
 <ExampleCode example="guides" file="src/middleware.ts" region="tracing" />
 
-A failing attempt propagates through `next()` — the middleware can observe, log, or enrich the error. After the middleware chain unwinds, the engine catches the error, reschedules the job, and returns normally. Always re-throw the error so the engine can handle it; swallowing the error without a committed `complete` still fails the attempt.
+A failing attempt propagates through `next()` — the middleware can observe, log, or enrich the error. After the middleware chain unwinds, the engine catches the error, reschedules the job, and returns normally. Always re-throw the error so the engine can handle it; swallowing the error without a committed `applyOutcome` still fails the attempt.
 
 ### Load Shared Data Before the Handler
 
@@ -31,15 +31,15 @@ Middleware is not tied to a job type, so `job.input` is `unknown` — narrow it 
 
 ### Inject Helpers Used in the Handler's Transaction
 
-Use to inject helpers that write alongside `complete` — audit recorders, usage meters. The handler owns the transaction, so the helper takes the transaction context from the handler. `audit` records an event for the current job through that transaction:
+Use to inject helpers that write alongside `applyOutcome` — audit recorders, usage meters. The handler owns the transaction, so the helper takes the transaction context from the handler. `audit` records an event for the current job through that transaction:
 
 <ExampleCode example="guides" file="src/middleware.ts" region="audit" />
 
-The handler receives every injected value typed: `traceId`, `tenant` and `audit` sit next to `job` and `complete`. It writes the audit event and the invoice in the transaction that calls `complete`:
+The handler receives every injected value typed: `traceId`, `tenant` and `audit` sit next to `job` and `applyOutcome`. It writes the audit event and the invoice in the transaction that calls `applyOutcome`:
 
 <ExampleCode example="guides" file="src/middleware.ts" region="issue-invoice" />
 
-Because the helper writes through the handler's transaction, its rows commit with the job — and roll back with it if `complete` throws or the transaction fails. In the example the first attempt fails to write the invoice, so its audit event rolls back too, and the next attempt records the event once.
+Because the helper writes through the handler's transaction, its rows commit with the job — and roll back with it if `applyOutcome` throws or the transaction fails. In the example the first attempt fails to write the invoice, so its audit event rolls back too, and the next attempt records the event once.
 
 ## Composition and Order
 

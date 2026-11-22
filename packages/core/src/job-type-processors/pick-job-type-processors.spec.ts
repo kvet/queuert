@@ -47,20 +47,20 @@ const imageProcessors = createProcessors({
   backoffConfig: { initialDelayMs: 10, multiplier: 2, maxDelayMs: 100 },
   processors: {
     "images.resize": {
-      attemptHandler: async ({ job, complete }) =>
+      attemptHandler: async ({ job, applyOutcome }) =>
         stateAdapter.withTransaction(async (txCtx) =>
-          complete({ ...txCtx, output: { url: job.input.url } }),
+          applyOutcome({ ...txCtx, output: { url: job.input.url } }),
         ),
     },
     "images.transcode": {
-      attemptHandler: async ({ job, complete }) =>
+      attemptHandler: async ({ job, applyOutcome }) =>
         stateAdapter.withTransaction(async (txCtx) =>
-          complete({ ...txCtx, output: { url: job.input.url } }),
+          applyOutcome({ ...txCtx, output: { url: job.input.url } }),
         ),
     },
     "images.notify": {
-      attemptHandler: async ({ complete }) =>
-        stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
+      attemptHandler: async ({ applyOutcome }) =>
+        stateAdapter.withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null })),
     },
   },
 });
@@ -70,8 +70,8 @@ const billingProcessors = createProcessors({
   jobTypes: billingJobTypes,
   processors: {
     "billing.charge": {
-      attemptHandler: async ({ complete }) =>
-        stateAdapter.withTransaction(async (txCtx) => complete({ ...txCtx, output: null })),
+      attemptHandler: async ({ applyOutcome }) =>
+        stateAdapter.withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null })),
     },
   },
 });

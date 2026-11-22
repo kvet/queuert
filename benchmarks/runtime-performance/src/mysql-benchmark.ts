@@ -98,9 +98,9 @@ export const runMysqlBenchmark = async ({
             jobTypes,
             processors: {
               "test-job": {
-                attemptHandler: async ({ complete }) => {
+                attemptHandler: async ({ applyOutcome }) => {
                   const result = await stateProvider.withTransaction(async (ctx) =>
-                    complete({ ...ctx, output: { processed: true } }),
+                    applyOutcome({ ...ctx, output: { processed: true } }),
                   );
                   completions.record();
                   return result;

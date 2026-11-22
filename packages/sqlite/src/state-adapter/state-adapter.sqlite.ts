@@ -592,10 +592,10 @@ type SqliteStateAdapterOptions<TStateProvider, TJobId extends string, TWorkerId 
  * method for schema migrations. The adapter follows the provider's mode.
  *
  * - Over a {@link SqliteStateProvider} it returns a {@link SqliteStateAdapter}. Transactions you
- *   pass to `complete` or to client methods must be serialized with the provider's
+ *   pass to `applyOutcome` or to client methods must be serialized with the provider's
  *   `withTransaction`, for example by holding the same `AsyncRwLock` write lock.
  * - Over a {@link SqliteStateProvider} with `sync: true` it returns a `"sync"` {@link SqliteStateAdapter}, and every
- *   method, `migrateToLatest` included, returns its result directly. Pass `complete` and client
+ *   method, `migrateToLatest` included, returns its result directly. Pass `applyOutcome` and client
  *   methods the driver's own synchronous transaction; no lock is needed.
  *
  * The result's type follows the provider's type: type a synchronous provider as

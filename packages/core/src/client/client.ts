@@ -5,7 +5,7 @@ import { type Mode, type ModeResult, step, syncAsync } from "@queuert/sync-async
 import type { ModeOf } from "../adapter-mode.ts";
 import type {
   AnyJobOutcomeFields,
-  AttemptCompleteResult,
+  JobOutcomeResult,
   JobOutcome,
   JobRescheduleOutcome,
 } from "../attempt/attempt-handler.types.ts";
@@ -89,7 +89,7 @@ type ApplyJobOutcomeResult<
       >,
       { status: "running" | "completed" }
     >
-  : AttemptCompleteResult<
+  : JobOutcomeResult<
       TStateAdapter,
       TJobTypeDefinitions,
       TJobTypeName,
@@ -280,8 +280,8 @@ export type Client<
 
   /**
    * Delete a single chain by ID. Returns the deleted chain, or `undefined` if no
-   * chain with that ID exists. A running job's `complete` throws {@link JobNotFoundError}, and its
-   * attempt is notified as lost, so with a notify adapter its handler's `signal` aborts.
+   * chain with that ID exists. A running job's `applyOutcome` throws {@link JobNotFoundError}, and
+   * its attempt is notified as lost, so with a notify adapter its handler's `signal` aborts.
    *
    * @throws {@link BlockerReferenceError} if external jobs depend on it.
    */
@@ -295,7 +295,7 @@ export type Client<
   ) => ModeResult<TMode, ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName> | undefined>;
 
   /**
-   * Delete chains by ID. Missing IDs are silently skipped. A running job's `complete` throws
+   * Delete chains by ID. Missing IDs are silently skipped. A running job's `applyOutcome` throws
    * {@link JobNotFoundError}, and its attempt is notified as lost, so with a notify adapter its
    * handler's `signal` aborts.
    *
@@ -311,19 +311,19 @@ export type Client<
   ) => ModeResult<TMode, ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName>[]>;
 
   /**
-   * Apply one outcome to a job, the same outcomes an attempt handler's `complete` takes: `output`
-   * completes the job and its chain, `continueWith` completes the job and continues the chain, and
-   * `reschedule` brings the job back later. `job` is `{ id, typeName? }` or a job read earlier; with
-   * `output` or `continueWith` its `typeName` must name a single job type.
+   * Apply one outcome to a job, the same outcomes an attempt handler's `applyOutcome` takes:
+   * `output` completes the job and its chain, `continueWith` completes the job and continues the
+   * chain, and `reschedule` brings the job back later. `job` is `{ id, typeName? }` or a job read
+   * earlier; with `output` or `continueWith` its `typeName` must name a single job type.
    *
    * The job is locked and validated as stored; a passed `status` must match the stored one, so a job
    * read earlier without a lock that changed since throws instead of being overwritten. `output` and
    * `continueWith` complete a blocked, pending or running job. `reschedule` sets `scheduledAt` on a
    * pending job, moves it on a blocked one, which stays blocked, and returns a running one to
    * pending; `reason` is stored as `lastRescheduleReason`. A running job's attempt is lost either
-   * way: its `complete` throws {@link JobAlreadyCompletedError} after `output` or `continueWith`, and
-   * {@link JobTakenByAnotherWorkerError} after `reschedule`. To leave running jobs alone, read with
-   * `lock: "exclusive"` and check `status` first.
+   * way: its `applyOutcome` throws {@link JobAlreadyCompletedError} after `output` or
+   * `continueWith`, and {@link JobTakenByAnotherWorkerError} after `reschedule`. To leave running
+   * jobs alone, read with `lock: "exclusive"` and check `status` first.
    *
    * @throws {@link JobNotFoundError} if the job does not exist.
    * @throws {@link JobAlreadyCompletedError} if the job is already completed.

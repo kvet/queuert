@@ -121,7 +121,7 @@ const billingProcessors = createProcessors({
   processors: {
     // #region issue-invoice
     "issue-invoice": {
-      attemptHandler: async ({ job, traceId, tenant, audit, complete }) => {
+      attemptHandler: async ({ job, traceId, tenant, audit, applyOutcome }) => {
         const invoiceId = `inv-${job.id}`;
         return stateAdapter.withTransaction(async (txCtx) => {
           audit(txCtx, "invoice-issued");
@@ -131,7 +131,7 @@ const billingProcessors = createProcessors({
             amountCents: job.input.amountCents,
             traceId,
           });
-          return complete({ ...txCtx, output: { invoiceId } });
+          return applyOutcome({ ...txCtx, output: { invoiceId } });
         });
       },
     },
@@ -147,10 +147,10 @@ const notificationProcessors = createProcessors({
   // #hide
   processors: {
     "send-receipt": {
-      attemptHandler: async ({ job, tenant, complete }) =>
+      attemptHandler: async ({ job, tenant, applyOutcome }) =>
         stateAdapter.withTransaction(async (txCtx) => {
           receipts.push(`${job.input.invoiceId} to ${tenant.billingEmail}`);
-          return complete({ ...txCtx, output: { delivered: true } });
+          return applyOutcome({ ...txCtx, output: { delivered: true } });
         }),
     },
   },

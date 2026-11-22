@@ -79,7 +79,7 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           const user = db.select().from(users).where(eq(users.id, job.input.userId)).get();
           if (!user) throw new Error(`User ${job.input.userId} not found`);
 
@@ -88,7 +88,7 @@ await using workerRunner = createWorkerRunner({
 
           return withTxHooks((txHooks) =>
             db.transaction(() =>
-              complete({ db: sqlite, txHooks, output: { sentAt: new Date().toISOString() } }),
+              applyOutcome({ db: sqlite, txHooks, output: { sentAt: new Date().toISOString() } }),
             ),
           );
         },

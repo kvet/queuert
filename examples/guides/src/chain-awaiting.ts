@@ -42,9 +42,9 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       "fetch-price": {
-        attemptHandler: async ({ job, complete }) =>
+        attemptHandler: async ({ job, applyOutcome }) =>
           stateAdapter.withTransaction(async (txCtx) =>
-            complete({
+            applyOutcome({
               ...txCtx,
               continueWith: {
                 typeName: "apply-discount",
@@ -57,9 +57,9 @@ await using workerRunner = createWorkerRunner({
           ),
       },
       "apply-discount": {
-        attemptHandler: async ({ job, complete }) =>
+        attemptHandler: async ({ job, applyOutcome }) =>
           stateAdapter.withTransaction(async (txCtx) =>
-            complete({
+            applyOutcome({
               ...txCtx,
               output: { productId: job.input.productId, finalPrice: job.input.basePrice * 0.9 },
             }),

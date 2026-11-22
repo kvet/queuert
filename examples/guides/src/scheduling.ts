@@ -75,17 +75,17 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       "send-reminder": {
-        attemptHandler: async ({ job, complete }) =>
+        attemptHandler: async ({ job, applyOutcome }) =>
           stateAdapter.withTransaction(async (txCtx) => {
             sentEmails.push(job.input.message);
-            return complete({ ...txCtx, output: { sentAt: new Date().toISOString() } });
+            return applyOutcome({ ...txCtx, output: { sentAt: new Date().toISOString() } });
           }),
       },
       // #region continue-with-schedule
       "start-trial": {
-        attemptHandler: async ({ job, complete }) =>
+        attemptHandler: async ({ job, applyOutcome }) =>
           stateAdapter.withTransaction(async (txCtx) =>
-            complete({
+            applyOutcome({
               ...txCtx,
               continueWith: {
                 typeName: "send-trial-follow-up",
@@ -97,19 +97,19 @@ await using workerRunner = createWorkerRunner({
       },
       // #endregion
       "send-trial-follow-up": {
-        attemptHandler: async ({ complete }) =>
+        attemptHandler: async ({ applyOutcome }) =>
           stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, output: { sentAt: new Date().toISOString() } }),
+            applyOutcome({ ...txCtx, output: { sentAt: new Date().toISOString() } }),
           ),
       },
       // #region reschedule-from-handler
       "call-rate-limited-api": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           const response = await callApi(job.input.endpoint);
 
           if (response.status === 429) {
             return stateAdapter.withTransaction(async (txCtx) =>
-              complete({
+              applyOutcome({
                 ...txCtx,
                 reschedule: { afterMs: response.retryAfterMs },
                 reason: "rate limited",
@@ -118,18 +118,18 @@ await using workerRunner = createWorkerRunner({
           }
 
           return stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, output: { data: response.data } }),
+            applyOutcome({ ...txCtx, output: { data: response.data } }),
           );
         },
       },
       // #endregion
       // #region recurring
       "daily-digest": {
-        attemptHandler: async ({ job, complete }) =>
+        attemptHandler: async ({ job, applyOutcome }) =>
           stateAdapter.withTransaction(async (txCtx) => {
             sentEmails.push(`digest for ${job.input.userId}`);
 
-            const completedJob = await complete({
+            const completedJob = await applyOutcome({
               ...txCtx,
               output: { sentAt: new Date().toISOString() },
             });

@@ -58,7 +58,7 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           const [rows] = await db.query<
             ({ id: number; name: string; email: string } & RowDataPacket)[]
           >("SELECT id, name, email FROM users WHERE id = ?", [job.input.userId]);
@@ -69,7 +69,7 @@ await using workerRunner = createWorkerRunner({
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
           return stateProvider.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, output: { sentAt: new Date().toISOString() } }),
+            applyOutcome({ ...txCtx, output: { sentAt: new Date().toISOString() } }),
           );
         },
       },

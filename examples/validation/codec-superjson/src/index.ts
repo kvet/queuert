@@ -45,7 +45,7 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       "tally-votes": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           console.log(`closesAt is a ${job.input.closesAt.constructor.name}`);
 
           const votes = new Map([
@@ -53,7 +53,7 @@ await using workerRunner = createWorkerRunner({
             ["no", 987_112n],
           ]);
           return stateAdapter.withTransaction((ctx) =>
-            complete({
+            applyOutcome({
               ...ctx,
               continueWith: {
                 typeName: "publish-results",
@@ -64,13 +64,13 @@ await using workerRunner = createWorkerRunner({
         },
       },
       "publish-results": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           console.log(`votes is a ${job.input.votes.constructor.name}`);
 
           let total = 0n;
           for (const count of job.input.votes.values()) total += count;
           return stateAdapter.withTransaction((ctx) =>
-            complete({ ...ctx, output: { publishedAt: new Date(), total } }),
+            applyOutcome({ ...ctx, output: { publishedAt: new Date(), total } }),
           );
         },
       },

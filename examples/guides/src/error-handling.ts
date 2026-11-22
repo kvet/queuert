@@ -79,11 +79,14 @@ await using workerRunner = createWorkerRunner({
     processors: {
       // #region union-process
       "process-payment": {
-        attemptHandler: async ({ job, complete }) =>
+        attemptHandler: async ({ job, applyOutcome }) =>
           stateAdapter.withTransaction(async (txCtx) =>
             job.input.amountCents > 100_000
-              ? complete({ ...txCtx, output: { success: false, error: "Amount exceeds limit" } })
-              : complete({
+              ? applyOutcome({
+                  ...txCtx,
+                  output: { success: false, error: "Amount exceeds limit" },
+                })
+              : applyOutcome({
                   ...txCtx,
                   output: { success: true, transactionId: `txn-${job.input.orderId}` },
                 }),
@@ -91,9 +94,9 @@ await using workerRunner = createWorkerRunner({
       },
       // #endregion
       "charge-card": {
-        attemptHandler: async ({ job, complete }) =>
+        attemptHandler: async ({ job, applyOutcome }) =>
           stateAdapter.withTransaction(async (txCtx) =>
-            complete({
+            applyOutcome({
               ...txCtx,
               continueWith: {
                 typeName: "ship-order",
@@ -104,24 +107,24 @@ await using workerRunner = createWorkerRunner({
       },
       // #region compensation-process
       "ship-order": {
-        attemptHandler: async ({ job, complete }) =>
+        attemptHandler: async ({ job, applyOutcome }) =>
           stateAdapter.withTransaction(async (txCtx) =>
             carrierRejectedOrders.has(job.input.orderId)
-              ? complete({
+              ? applyOutcome({
                   ...txCtx,
                   continueWith: {
                     typeName: "refund-charge",
                     input: { chargeId: job.input.chargeId, reason: "carrier rejected the order" },
                   },
                 })
-              : complete({ ...txCtx, output: { shipped: true } }),
+              : applyOutcome({ ...txCtx, output: { shipped: true } }),
           ),
       },
       // #endregion
       "refund-charge": {
-        attemptHandler: async ({ job, complete }) =>
+        attemptHandler: async ({ job, applyOutcome }) =>
           stateAdapter.withTransaction(async (txCtx) =>
-            complete({
+            applyOutcome({
               ...txCtx,
               output: { refunded: true, refundId: `rf-${job.input.chargeId}` },
             }),
@@ -130,7 +133,7 @@ await using workerRunner = createWorkerRunner({
       // #region rescheduling
       "fetch-exchange-rate": {
         backoffConfig: { initialDelayMs: 10, maxDelayMs: 1000 },
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           if (job.lastAttemptError !== null) {
             previousErrors.push(job.lastAttemptError);
           }
@@ -138,7 +141,7 @@ await using workerRunner = createWorkerRunner({
           const rate = await fetchRate(job.input.currency);
 
           return stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, output: { rate } }),
+            applyOutcome({ ...txCtx, output: { rate } }),
           );
         },
       },

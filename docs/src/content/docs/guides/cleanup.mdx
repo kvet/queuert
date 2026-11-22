@@ -33,7 +33,7 @@ Key patterns used:
 - **Fenced batches** — `fence` at the start of each batch transaction keeps the attempt's ownership until that batch commits, so once the attempt is lost its next batch throws before deleting anything; see [`fence`](/queuert/how-it-works/job-processing/#fence)
 - **Graceful shutdown** — checks `signal.aborted` before each batch; when the worker is stopping, reschedules the job immediately so a fresh worker can resume cleanup
 - **`deduplication`** with `scope: "running"` — ensures only one cleanup chain is active at a time
-- **Complete before scheduling** — `complete({ output: null })` applies the completion inside the same transaction, so the next run is created against an already-completed chain and does not deduplicate against the one finishing
+- **Complete before scheduling** — `applyOutcome({ output: null })` applies the completion inside the same transaction, so the next run is created against an already-completed chain and does not deduplicate against the one finishing
 - **`schedule`** — defers the next run by `CLEANUP_INTERVAL_MS`
 
 ## Merge and Start

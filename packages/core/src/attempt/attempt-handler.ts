@@ -22,18 +22,18 @@ import type { JobAttemptSpanHandle } from "../observability-adapter/observabilit
 import { completedAttemptSpanResult } from "../observability-adapter/observability-helper.ts";
 import type { BaseTxContext, StateJob, StateJobInfo } from "../state-adapter/state-adapter.ts";
 import { requireTxCtx } from "../state-adapter/tx-context.ts";
-import type { AnyAttemptHandler, AnyCompleteOptions } from "./attempt-handler.types.ts";
+import type { AnyAttemptHandler, AnyJobOutcomeOptions } from "./attempt-handler.types.ts";
 import { type AttemptOwnership, startAttemptOwnership } from "./attempt-ownership.ts";
 
-type CompleteWrite = {
+type OutcomeWrite = {
   stateJob: StateJob & { continuation?: StateJobInfo };
   job: AnyJob & { continuedTo?: AnyJob };
 };
 
 type AttemptWrites = {
-  complete: (options: AnyCompleteOptions) => MaybePromise<AnyJob & { continuedTo?: AnyJob }>;
+  applyOutcome: (options: AnyJobOutcomeOptions) => MaybePromise<AnyJob & { continuedTo?: AnyJob }>;
   fence: (options: BaseTxContext) => MaybePromise<void>;
-  close: () => CompleteWrite | null;
+  close: () => OutcomeWrite | null;
 };
 
 const createAttemptWrites = (
@@ -51,11 +51,11 @@ const createAttemptWrites = (
   },
 ): AttemptWrites => {
   const closed = createLatch();
-  const inProgress = createResettableLatch("complete is already in progress for this attempt");
-  const written = createResettableLatch<CompleteWrite>(
-    "complete already succeeded for this attempt",
+  const inProgress = createResettableLatch("applyOutcome is already in progress for this attempt");
+  const written = createResettableLatch<OutcomeWrite>(
+    "applyOutcome already succeeded for this attempt",
   );
-  const committed = createLatch<CompleteWrite>();
+  const committed = createLatch<OutcomeWrite>();
 
   const readLossError = syncAsync(function* (txCtx: BaseTxContext) {
     const [job] = yield* step(helpers.stateAdapter.getJobs({ txCtx, jobIds: [stateJob.id] }));
@@ -73,11 +73,11 @@ const createAttemptWrites = (
     });
   });
 
-  const complete = syncAsync(function* (options: AnyCompleteOptions) {
-    closed.throwIfTripped("complete cannot be called after the attempt handler has ended");
+  const applyOutcome = syncAsync(function* (options: AnyJobOutcomeOptions) {
+    closed.throwIfTripped("applyOutcome cannot be called after the attempt handler has ended");
     const { output, continueWith, reschedule, reason, ...txCtxFields } = options;
-    const outcome = parseJobOutcome(options, "complete");
-    const txCtx = requireTxCtx(helpers.stateAdapter, txCtxFields, "complete");
+    const outcome = parseJobOutcome(options, "applyOutcome");
+    const txCtx = requireTxCtx(helpers.stateAdapter, txCtxFields, "applyOutcome");
     inProgress.throwIfTripped();
     written.throwIfTripped();
 
@@ -91,7 +91,7 @@ const createAttemptWrites = (
         throw yield* readLossError.steps(txCtx);
       }
 
-      const write: CompleteWrite = {
+      const write: OutcomeWrite = {
         stateJob: stateJobWritten,
         job: mapStateJobToJob(stateJobWritten, helpers.jobTypes),
       };
@@ -133,7 +133,7 @@ const createAttemptWrites = (
   });
 
   return {
-    complete: (options) => runInMode(helpers, complete, options),
+    applyOutcome: (options) => runInMode(helpers, applyOutcome, options),
     fence: (options) => runInMode(helpers, fence, options),
     close: () => {
       closed.trip();
@@ -149,7 +149,7 @@ const runAttemptHandler = async ({
   stateJob,
   workerId,
   signal,
-  complete,
+  applyOutcome,
   fence,
 }: {
   helpers: Helpers;
@@ -158,7 +158,7 @@ const runAttemptHandler = async ({
   stateJob: StateJob & { hasBlockers: boolean };
   workerId: string;
   signal: AbortSignal;
-  complete: AttemptWrites["complete"];
+  applyOutcome: AttemptWrites["applyOutcome"];
   fence: AttemptWrites["fence"];
 }): Promise<void> => {
   const [blockerChains] = stateJob.hasBlockers
@@ -177,7 +177,7 @@ const runAttemptHandler = async ({
         ...handlerCtx,
         signal,
         job: runningJob,
-        complete,
+        applyOutcome,
         fence,
       }),
   );
@@ -251,7 +251,7 @@ export const runAttempt = async ({
   helpers.observabilityHelper.jobAttemptStarted(stateJob, { workerId });
   const span = helpers.observabilityHelper.startAttemptSpan(stateJob, { workerId });
 
-  const { complete, fence, close } = createAttemptWrites(helpers, {
+  const { applyOutcome, fence, close } = createAttemptWrites(helpers, {
     stateJob,
     workerId,
     attemptToken: stateJob.attemptToken!,
@@ -265,7 +265,7 @@ export const runAttempt = async ({
     stateJob,
     workerId,
     signal: ownership.signal,
-    complete,
+    applyOutcome,
     fence,
   }).then(
     () => undefined,
@@ -282,7 +282,7 @@ export const runAttempt = async ({
 
   if (committed === null) {
     const failure =
-      handlerError ?? new Error("Attempt handler returned without a committed `complete` call");
+      handlerError ?? new Error("Attempt handler returned without a committed `applyOutcome` call");
     const rescheduled = await rescheduleFailedAttempt(helpers, {
       stateJob,
       workerId,

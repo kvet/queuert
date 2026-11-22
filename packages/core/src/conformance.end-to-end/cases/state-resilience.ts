@@ -79,9 +79,9 @@ const completesChainsOverFlakyStateAdapter = syncAsync(function* ({
           backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           processors: {
             test: {
-              attemptHandler: async ({ job, complete }) =>
+              attemptHandler: async ({ job, applyOutcome }) =>
                 flakyStateAdapter.withTransaction((txCtx) =>
-                  complete({ ...txCtx, output: { result: job.input.value * 2 } }),
+                  applyOutcome({ ...txCtx, output: { result: job.input.value * 2 } }),
                 ),
             },
           },
@@ -231,8 +231,10 @@ export const stateResilienceGroup: ConformanceGroup<StateAdapterConformanceConte
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),
@@ -307,13 +309,13 @@ export const stateResilienceGroup: ConformanceGroup<StateAdapterConformanceConte
               backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
               processors: {
                 test: {
-                  attemptHandler: async ({ job, signal, complete }) => {
+                  attemptHandler: async ({ job, signal, applyOutcome }) => {
                     if (job.attempt === 1) {
                       await sleep(Number.POSITIVE_INFINITY, { signal });
                       throw new Error("lease lost");
                     }
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: null }),
+                      applyOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },

@@ -75,11 +75,11 @@ describe("AttemptMiddleware ctx type inference", () => {
       attemptMiddleware: [w1, w2],
       processors: {
         foo: {
-          attemptHandler: async ({ traceId, log, complete }) => {
+          attemptHandler: async ({ traceId, log, applyOutcome }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
             expectTypeOf(log).toEqualTypeOf<(msg: string) => void>();
             return stateAdapter.withTransaction(async (txCtx) =>
-              complete({ ...txCtx, output: { ok: true as const } }),
+              applyOutcome({ ...txCtx, output: { ok: true as const } }),
             );
           },
         },
@@ -103,11 +103,11 @@ describe("tuple narrowing without `as const`", () => {
       attemptMiddleware: [traceMw, logMw],
       processors: {
         foo: {
-          attemptHandler: async ({ traceId, log, complete }) => {
+          attemptHandler: async ({ traceId, log, applyOutcome }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
             expectTypeOf(log).toEqualTypeOf<(msg: string) => void>();
             return stateAdapter.withTransaction(async (txCtx) =>
-              complete({ ...txCtx, output: { ok: true as const } }),
+              applyOutcome({ ...txCtx, output: { ok: true as const } }),
             );
           },
         },
@@ -147,12 +147,12 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
       attemptMiddleware: [traceMw, tenantMw],
       processors: {
         foo: {
-          attemptHandler: async ({ traceId, tenant, complete }) => {
+          attemptHandler: async ({ traceId, tenant, applyOutcome }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
             expectTypeOf(tenant).toEqualTypeOf<string>();
             return dbStateAdapter.withTransaction(async (txCtx) => {
               expectTypeOf(txCtx.db).toEqualTypeOf<Tx["db"]>();
-              return complete({ ...txCtx, output: { ok: true as const } });
+              return applyOutcome({ ...txCtx, output: { ok: true as const } });
             });
           },
         },
@@ -174,11 +174,11 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
       attemptMiddleware: [agnosticMw, concreteMw],
       processors: {
         foo: {
-          attemptHandler: async ({ traceId, log, complete }) => {
+          attemptHandler: async ({ traceId, log, applyOutcome }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
             expectTypeOf(log).toEqualTypeOf<(msg: string) => void>();
             return stateAdapter.withTransaction(async (txCtx) =>
-              complete({ ...txCtx, output: { ok: true as const } }),
+              applyOutcome({ ...txCtx, output: { ok: true as const } }),
             );
           },
         },
@@ -205,9 +205,9 @@ describe("middleware must match the client's state adapter", () => {
       attemptMiddleware: [foreignMw],
       processors: {
         foo: {
-          attemptHandler: async ({ complete }) =>
+          attemptHandler: async ({ applyOutcome }) =>
             stateAdapter.withTransaction(async (txCtx) =>
-              complete({ ...txCtx, output: { ok: true as const } }),
+              applyOutcome({ ...txCtx, output: { ok: true as const } }),
             ),
         },
       },
@@ -225,10 +225,10 @@ describe("middleware must match the client's state adapter", () => {
       attemptMiddleware: [agnosticMw],
       processors: {
         foo: {
-          attemptHandler: async ({ traceId, complete }) => {
+          attemptHandler: async ({ traceId, applyOutcome }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
             return stateAdapter.withTransaction(async (txCtx) =>
-              complete({ ...txCtx, output: { ok: true as const } }),
+              applyOutcome({ ...txCtx, output: { ok: true as const } }),
             );
           },
         },
@@ -238,7 +238,7 @@ describe("middleware must match the client's state adapter", () => {
 });
 
 describe("wrapHandler result", () => {
-  it("passes the handler's `complete` result through next", () => {
+  it("passes the handler's `applyOutcome` result through next", () => {
     type WrapHandler = NonNullable<AttemptMiddleware<any, { traceId: string }>["wrapHandler"]>;
     const wrapHandler = null as unknown as WrapHandler;
     type Instantiated = typeof wrapHandler<{ marker: 1 }>;
@@ -268,11 +268,11 @@ describe("handler ctx compile-time negatives", () => {
       processors: {
         foo: {
           // @ts-expect-error — 'otherKey' not provided by any middleware
-          attemptHandler: async ({ traceId, otherKey, complete }) => {
+          attemptHandler: async ({ traceId, otherKey, applyOutcome }) => {
             void traceId;
             void otherKey;
             return stateAdapter.withTransaction(async (txCtx) =>
-              complete({ ...txCtx, output: { ok: true as const } }),
+              applyOutcome({ ...txCtx, output: { ok: true as const } }),
             );
           },
         },

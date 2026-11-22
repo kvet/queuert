@@ -17,7 +17,7 @@ export type SqliteErrorClassification = { kind: "undefined_table"; tableName: st
  * and SQL execution. Users create their own implementation to integrate with their preferred
  * SQLite client (better-sqlite3, etc.).
  *
- * In the default `"async"` mode, every transaction you pass to `complete` or to client methods
+ * In the default `"async"` mode, every transaction you pass to `applyOutcome` or to client methods
  * must be serialized with the transactions `withTransaction` opens, for example by holding the
  * same `AsyncRwLock` write lock. An unserialized transaction can interleave its statements with
  * the worker's own writes on the same connection.

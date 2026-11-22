@@ -70,10 +70,10 @@ test("round-trips a Date and a bigint through the worker and back out of a clien
       jobTypes,
       processors: {
         remind: {
-          attemptHandler: async ({ job, complete }) => {
+          attemptHandler: async ({ job, applyOutcome }) => {
             expect(job.input.sendAt).toBeInstanceOf(Date);
             return stateAdapter.withTransaction((ctx) =>
-              complete({ ...ctx, output: { sentAt, attempts: 3n } }),
+              applyOutcome({ ...ctx, output: { sentAt, attempts: 3n } }),
             );
           },
         },

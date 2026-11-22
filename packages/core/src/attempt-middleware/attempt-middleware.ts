@@ -21,8 +21,8 @@ type RunningJob<TStateAdapter extends StateAdapter<any, any, any, Mode>> = Resol
  *
  * `wrapHandler` wraps the entire attempt handler. The `next(ctx)` callback injects typed
  * context that is merged into `attemptHandler`'s options. Pass `next`'s result through: it is
- * the handler's `complete` result. The attempt's outcome is decided by the `complete` call that
- * committed, not by the value `wrapHandler` returns.
+ * the handler's `applyOutcome` result. The attempt's outcome is decided by the `applyOutcome` call
+ * that committed, not by the value `wrapHandler` returns.
  *
  * Multiple middleware compose as an onion — the first middleware's "before" runs
  * outermost. Each `next(ctx)` accumulates ctx for inner layers.

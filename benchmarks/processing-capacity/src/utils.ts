@@ -110,11 +110,11 @@ const completeChainsForWindow =
         jobTypes,
         processors: {
           "test-job": {
-            attemptHandler: async ({ complete }) => {
+            attemptHandler: async ({ applyOutcome }) => {
               const startedAt = (begin ??= performance.now());
-              // oxlint-disable-next-line typescript/promise-function-async -- a sync client's complete returns a plain value
+              // oxlint-disable-next-line typescript/promise-function-async -- a sync client's applyOutcome returns a plain value
               const result = await transaction((txCtx, txHooks) =>
-                complete({ ...txCtx, txHooks, output: { done: true } }),
+                applyOutcome({ ...txCtx, txHooks, output: { done: true } }),
               );
               completed++;
               const now = performance.now();

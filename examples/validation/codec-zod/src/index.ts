@@ -54,14 +54,14 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       "schedule-report": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           console.log(
             `runAt is a ${job.input.runAt.constructor.name}: ${job.input.runAt.toISOString()}`,
           );
 
           const from = new Date(job.input.runAt.getTime() - 24 * 60 * 60 * 1000);
           return stateAdapter.withTransaction((ctx) =>
-            complete({
+            applyOutcome({
               ...ctx,
               continueWith: {
                 typeName: "render-report",
@@ -72,12 +72,12 @@ await using workerRunner = createWorkerRunner({
         },
       },
       "render-report": {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           const hours = (job.input.to.getTime() - job.input.from.getTime()) / 3_600_000;
           console.log(`Rendering ${job.input.reportId} over a ${hours}h window`);
 
           return stateAdapter.withTransaction((ctx) =>
-            complete({
+            applyOutcome({
               ...ctx,
               output: { renderedAt: new Date(), rowCount: 128 },
             }),

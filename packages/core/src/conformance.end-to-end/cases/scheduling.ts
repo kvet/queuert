@@ -36,9 +36,9 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value * 2 } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value * 2 } }),
                     ),
                 },
               },
@@ -90,9 +90,9 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) =>
+                  attemptHandler: async ({ job, applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value * 2 } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value * 2 } }),
                     ),
                 },
               },
@@ -146,11 +146,11 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
               jobTypes,
               processors: {
                 first: {
-                  attemptHandler: async ({ complete }) => {
+                  attemptHandler: async ({ applyOutcome }) => {
                     const continuationDeadline = Date.now() + 300;
                     try {
                       return await stateAdapter.withTransaction((txCtx) =>
-                        complete({
+                        applyOutcome({
                           ...txCtx,
                           continueWith: {
                             typeName: "second",
@@ -165,9 +165,9 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
                   },
                 },
                 second: {
-                  attemptHandler: async ({ complete }) =>
+                  attemptHandler: async ({ applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: "done" } }),
+                      applyOutcome({ ...txCtx, output: { result: "done" } }),
                     ),
                 },
               },
@@ -216,11 +216,11 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
               jobTypes,
               processors: {
                 first: {
-                  attemptHandler: async ({ complete }) => {
+                  attemptHandler: async ({ applyOutcome }) => {
                     const continuationDeadline = Date.now() + 300;
                     try {
                       return await stateAdapter.withTransaction((txCtx) =>
-                        complete({
+                        applyOutcome({
                           ...txCtx,
                           continueWith: {
                             typeName: "second",
@@ -235,9 +235,9 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
                   },
                 },
                 second: {
-                  attemptHandler: async ({ complete }) =>
+                  attemptHandler: async ({ applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: "done" } }),
+                      applyOutcome({ ...txCtx, output: { result: "done" } }),
                     ),
                 },
               },
@@ -286,7 +286,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     attemptCount++;
                     if (attemptCount > 1) {
                       assert.equal(job.lastAttemptError, null);
@@ -295,11 +295,11 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
                     if (attemptCount === 1) {
                       firstAttemptDone.resolve(Date.now() + 300);
                       return stateAdapter.withTransaction((txCtx) =>
-                        complete({ ...txCtx, reschedule: { afterMs: 300 } }),
+                        applyOutcome({ ...txCtx, reschedule: { afterMs: 300 } }),
                       );
                     }
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value * 2 } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value * 2 } }),
                     );
                   },
                 },
@@ -355,7 +355,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     seen.push({
                       consecutiveFailures: job.consecutiveFailures,
                       lastAttemptError: job.lastAttemptError,
@@ -368,11 +368,11 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
                     switch (seen.length) {
                       case 3:
                         return stateAdapter.withTransaction((txCtx) =>
-                          complete({ ...txCtx, reschedule: { afterMs: 0 }, reason: "waiting" }),
+                          applyOutcome({ ...txCtx, reschedule: { afterMs: 0 }, reason: "waiting" }),
                         );
                       case 5:
                         return stateAdapter.withTransaction((txCtx) =>
-                          complete({ ...txCtx, output: null }),
+                          applyOutcome({ ...txCtx, output: null }),
                         );
                       default:
                         throw new Error(`failure ${seen.length}`);
@@ -409,7 +409,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
       }),
     },
     {
-      name: "recurring job self-schedules after complete without matching its own chain",
+      name: "recurring job self-schedules after applyOutcome without matching its own chain",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -431,13 +431,15 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
               jobTypes,
               processors: {
                 recurring: {
-                  attemptHandler: async ({ complete }) =>
+                  attemptHandler: async ({ applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
                       runInModeOf(
                         stateAdapter,
                         syncAsync(function* () {
                           completionCount++;
-                          const completedJob = yield* step(complete({ ...txCtx, output: null }));
+                          const completedJob = yield* step(
+                            applyOutcome({ ...txCtx, output: null }),
+                          );
                           if (completionCount < 3) {
                             const next = yield* step(
                               client.createChain({
@@ -504,7 +506,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     attemptCount++;
                     if (attemptCount > 1) {
                       assert.equal(job.lastAttemptError, null);
@@ -514,14 +516,14 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
                       const rescheduleDeadline = Date.now() + 300;
                       firstAttemptDone.resolve(rescheduleDeadline);
                       return stateAdapter.withTransaction((txCtx) =>
-                        complete({
+                        applyOutcome({
                           ...txCtx,
                           reschedule: { at: new Date(rescheduleDeadline) },
                         }),
                       );
                     }
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: { result: job.input.value * 2 } }),
+                      applyOutcome({ ...txCtx, output: { result: job.input.value * 2 } }),
                     );
                   },
                 },
@@ -569,8 +571,10 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),
@@ -619,17 +623,19 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
               jobTypes,
               processors: {
                 first: {
-                  attemptHandler: async ({ complete }) =>
+                  attemptHandler: async ({ applyOutcome }) =>
                     stateAdapter.withTransaction((txCtx) =>
-                      complete({
+                      applyOutcome({
                         ...txCtx,
                         continueWith: { typeName: "second", input: null, schedule: { at: past } },
                       }),
                     ),
                 },
                 second: {
-                  attemptHandler: async ({ complete }) =>
-                    stateAdapter.withTransaction((txCtx) => complete({ ...txCtx, output: null })),
+                  attemptHandler: async ({ applyOutcome }) =>
+                    stateAdapter.withTransaction((txCtx) =>
+                      applyOutcome({ ...txCtx, output: null }),
+                    ),
                 },
               },
             }),
@@ -681,7 +687,7 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, complete }) => {
+                  attemptHandler: async ({ job, applyOutcome }) => {
                     attempts++;
                     if (attempts > 1) {
                       assert.equal(job.lastAttemptError, null);
@@ -690,11 +696,11 @@ export const schedulingGroup: ConformanceGroup<StateAdapterConformanceContext> =
                     if (attempts === 1) {
                       firstAttemptDone.resolve();
                       return stateAdapter.withTransaction((txCtx) =>
-                        complete({ ...txCtx, reschedule: { at: past } }),
+                        applyOutcome({ ...txCtx, reschedule: { at: past } }),
                       );
                     }
                     return stateAdapter.withTransaction((txCtx) =>
-                      complete({ ...txCtx, output: null }),
+                      applyOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },

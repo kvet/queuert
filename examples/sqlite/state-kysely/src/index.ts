@@ -78,7 +78,7 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           const user = await db
             .selectFrom("users")
             .selectAll()
@@ -92,7 +92,7 @@ await using workerRunner = createWorkerRunner({
           // worker's own statements cannot run inside it.
           return withTxHooks(async (txHooks) =>
             db.transaction().execute(async (txDb) =>
-              complete({
+              applyOutcome({
                 db: txDb,
                 txHooks,
                 output: { sentAt: new Date().toISOString() },

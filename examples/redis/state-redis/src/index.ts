@@ -40,10 +40,10 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           console.log(`Sending welcome email to ${job.input.email}`);
           return stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, output: { sentAt: new Date().toISOString() } }),
+            applyOutcome({ ...txCtx, output: { sentAt: new Date().toISOString() } }),
           );
         },
       },

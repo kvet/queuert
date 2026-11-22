@@ -75,7 +75,7 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           const user = await prisma.user.findUniqueOrThrow({ where: { id: job.input.userId } });
 
           // Simulate sending email (in real app, call email service here)
@@ -83,7 +83,7 @@ await using workerRunner = createWorkerRunner({
 
           return withTxHooks(async (txHooks) =>
             prisma.$transaction(async (prisma) =>
-              complete({ prisma, txHooks, output: { sentAt: new Date().toISOString() } }),
+              applyOutcome({ prisma, txHooks, output: { sentAt: new Date().toISOString() } }),
             ),
           );
         },

@@ -79,7 +79,7 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, complete }) => {
+        attemptHandler: async ({ job, applyOutcome }) => {
           let user: { id: number; name: string; email: string } | null;
           {
             using _h = await lock.acquireRead();
@@ -95,7 +95,7 @@ await using workerRunner = createWorkerRunner({
             // autocommit statements on this connection cannot run inside it.
             using _h = await lock.acquireWrite();
             return await prisma.$transaction(async (prisma) =>
-              complete({ prisma, txHooks, output: { sentAt: new Date().toISOString() } }),
+              applyOutcome({ prisma, txHooks, output: { sentAt: new Date().toISOString() } }),
             );
           });
         },

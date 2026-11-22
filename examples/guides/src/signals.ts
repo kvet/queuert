@@ -45,7 +45,7 @@ await using workerRunner = createWorkerRunner({
     processors: {
       // #region partial-results
       "process-batch": {
-        attemptHandler: async ({ signal, job, complete }) => {
+        attemptHandler: async ({ signal, job, applyOutcome }) => {
           // #hide
           onBatchStarted();
           // #endhide
@@ -56,21 +56,21 @@ await using workerRunner = createWorkerRunner({
             processed++;
           }
           return stateAdapter.withTransaction(async (txCtx) =>
-            complete({ ...txCtx, output: { processed } }),
+            applyOutcome({ ...txCtx, output: { processed } }),
           );
         },
       },
       // #endregion
       // #region polling-handler
       "await-payment-confirmation": {
-        attemptHandler: async ({ signal, job, complete }) => {
+        attemptHandler: async ({ signal, job, applyOutcome }) => {
           // #hide
           onPollingStarted();
           // #endhide
           while (!signal.aborted) {
             if (await pollPaymentProvider(job.input.paymentId)) {
               return stateAdapter.withTransaction(async (txCtx) =>
-                complete({ ...txCtx, output: { confirmedBy: "poll" } }),
+                applyOutcome({ ...txCtx, output: { confirmedBy: "poll" } }),
               );
             }
           }
