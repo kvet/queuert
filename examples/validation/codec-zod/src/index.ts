@@ -9,10 +9,12 @@
  * hop, into the completed output, and back out of a client read.
  */
 
-import { createSqliteStateAdapter } from "@queuert/sqlite";
-import Database from "better-sqlite3";
-import { createBetterSqlite3StateProvider } from "example-sqlite-state-better-sqlite3/provider";
-import { createClient, createWorkerRunner, createProcessors } from "queuert";
+import {
+  createClient,
+  createWorkerRunner,
+  createProcessors,
+  createInProcessStateAdapter,
+} from "queuert";
 import { z } from "zod";
 
 import { createZodCodecJobTypes } from "./zod-codec-adapter.ts";
@@ -36,14 +38,7 @@ const jobTypes = createZodCodecJobTypes({
   },
 });
 
-using drivers = new DisposableStack();
-const db = drivers.adopt(new Database(":memory:"), (db) => {
-  db.close();
-});
-using stateAdapter = createSqliteStateAdapter({
-  stateProvider: createBetterSqlite3StateProvider({ db }),
-});
-stateAdapter.migrateToLatest();
+using stateAdapter = createInProcessStateAdapter();
 
 const client = createClient({ stateAdapter, jobTypes });
 

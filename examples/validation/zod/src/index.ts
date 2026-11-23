@@ -8,10 +8,12 @@
  * 3. Structural reference validation (by input shape)
  */
 
-import { createSqliteStateAdapter } from "@queuert/sqlite";
-import Database from "better-sqlite3";
-import { createBetterSqlite3StateProvider } from "example-sqlite-state-better-sqlite3/provider";
-import { createClient, createWorkerRunner, createProcessors } from "queuert";
+import {
+  createClient,
+  createWorkerRunner,
+  createProcessors,
+  createInProcessStateAdapter,
+} from "queuert";
 import { z } from "zod";
 
 import { createZodJobTypes } from "./zod-adapter.ts";
@@ -77,14 +79,7 @@ const jobTypes = createZodJobTypes({
 // #endregion
 
 // #region in-process-adapters
-using drivers = new DisposableStack();
-const db = drivers.adopt(new Database(":memory:"), (db) => {
-  db.close();
-});
-using stateAdapter = createSqliteStateAdapter({
-  stateProvider: createBetterSqlite3StateProvider({ db }),
-});
-stateAdapter.migrateToLatest();
+using stateAdapter = createInProcessStateAdapter();
 // #endregion
 
 // Create queuert client with the jobTypes

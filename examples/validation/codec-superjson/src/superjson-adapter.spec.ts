@@ -1,6 +1,3 @@
-import { createSqliteStateAdapter } from "@queuert/sqlite";
-import Database from "better-sqlite3";
-import { createBetterSqlite3StateProvider } from "example-sqlite-state-better-sqlite3/provider";
 import {
   type JobTypeDefinitions,
   JobTypeValidationError,
@@ -8,6 +5,7 @@ import {
   defineJobTypes,
   createWorkerRunner,
   createProcessors,
+  createInProcessStateAdapter,
 } from "queuert";
 import { expect, expectTypeOf, test } from "vitest";
 
@@ -23,18 +21,8 @@ type ReminderJobTypes = {
 
 const buildJobTypes = () => createSuperjsonJobTypes<ReminderJobTypes>({ remind: true });
 
-const createStateAdapter = () => {
-  const stateAdapter = createSqliteStateAdapter({
-    stateProvider: createBetterSqlite3StateProvider({
-      db: new Database(":memory:"),
-    }),
-  });
-  stateAdapter.migrateToLatest();
-  return stateAdapter;
-};
-
 test("stores superjson's envelope and hands the runtime form to readers", async () => {
-  using stateAdapter = createStateAdapter();
+  using stateAdapter = createInProcessStateAdapter();
   const client = createClient({ stateAdapter, jobTypes: buildJobTypes() });
 
   const chain = stateAdapter.withTransaction((ctx) =>
@@ -58,7 +46,7 @@ test("stores superjson's envelope and hands the runtime form to readers", async 
 
 test("round-trips a Date and a bigint through the worker and back out of a client read", async () => {
   const jobTypes = buildJobTypes();
-  using stateAdapter = createStateAdapter();
+  using stateAdapter = createInProcessStateAdapter();
   const client = createClient({ stateAdapter, jobTypes });
 
   const sentAt = new Date("2024-07-04T12:00:00.000Z");
@@ -96,7 +84,7 @@ test("round-trips a Date and a bigint through the worker and back out of a clien
 });
 
 test("rejects a stored value that is not a superjson envelope", async () => {
-  using stateAdapter = createStateAdapter();
+  using stateAdapter = createInProcessStateAdapter();
   const writer = createClient({
     stateAdapter,
     jobTypes: defineJobTypes<{

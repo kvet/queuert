@@ -12,11 +12,7 @@
     "typecheck": "tsrs --noEmit"
   },
   "dependencies": {
-    "@queuert/sqlite": "workspace:*",
-    "@types/better-sqlite3": "9.6.0",
     "arktype": "2.2.10",
-    "better-sqlite3": "13.2.0",
-    "example-sqlite-state-better-sqlite3": "workspace:*",
     "queuert": "workspace:*"
   },
   "devDependencies": {

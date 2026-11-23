@@ -1791,21 +1791,9 @@ importers:
 
   examples/validation/arktype:
     dependencies:
-      '@queuert/sqlite':
-        specifier: workspace:*
-        version: link:../../../packages/sqlite
-      '@types/better-sqlite3':
-        specifier: 9.6.0
-        version: 9.6.0
       arktype:
         specifier: 2.2.10
         version: 2.2.10
-      better-sqlite3:
-        specifier: 13.2.0
-        version: 13.2.0
-      example-sqlite-state-better-sqlite3:
-        specifier: workspace:*
-        version: link:../../sqlite/state-better-sqlite3
       queuert:
         specifier: workspace:*
         version: link:../../../packages/core
@@ -1816,18 +1804,6 @@ importers:
 
   examples/validation/codec-superjson:
     dependencies:
-      '@queuert/sqlite':
-        specifier: workspace:*
-        version: link:../../../packages/sqlite
-      '@types/better-sqlite3':
-        specifier: 9.6.0
-        version: 9.6.0
-      better-sqlite3:
-        specifier: 13.2.0
-        version: 13.2.0
-      example-sqlite-state-better-sqlite3:
-        specifier: workspace:*
-        version: link:../../sqlite/state-better-sqlite3
       queuert:
         specifier: workspace:*
         version: link:../../../packages/core
@@ -1841,18 +1817,6 @@ importers:
 
   examples/validation/codec-zod:
     dependencies:
-      '@queuert/sqlite':
-        specifier: workspace:*
-        version: link:../../../packages/sqlite
-      '@types/better-sqlite3':
-        specifier: 9.6.0
-        version: 9.6.0
-      better-sqlite3:
-        specifier: 13.2.0
-        version: 13.2.0
-      example-sqlite-state-better-sqlite3:
-        specifier: workspace:*
-        version: link:../../sqlite/state-better-sqlite3
       queuert:
         specifier: workspace:*
         version: link:../../../packages/core
@@ -1866,21 +1830,9 @@ importers:
 
   examples/validation/typebox:
     dependencies:
-      '@queuert/sqlite':
-        specifier: workspace:*
-        version: link:../../../packages/sqlite
       '@sinclair/typebox':
         specifier: 0.34.52
         version: 0.34.52
-      '@types/better-sqlite3':
-        specifier: 9.6.0
-        version: 9.6.0
-      better-sqlite3:
-        specifier: 13.2.0
-        version: 13.2.0
-      example-sqlite-state-better-sqlite3:
-        specifier: workspace:*
-        version: link:../../sqlite/state-better-sqlite3
       queuert:
         specifier: workspace:*
         version: link:../../../packages/core
@@ -1891,18 +1843,6 @@ importers:
 
   examples/validation/valibot:
     dependencies:
-      '@queuert/sqlite':
-        specifier: workspace:*
-        version: link:../../../packages/sqlite
-      '@types/better-sqlite3':
-        specifier: 9.6.0
-        version: 9.6.0
-      better-sqlite3:
-        specifier: 13.2.0
-        version: 13.2.0
-      example-sqlite-state-better-sqlite3:
-        specifier: workspace:*
-        version: link:../../sqlite/state-better-sqlite3
       queuert:
         specifier: workspace:*
         version: link:../../../packages/core
@@ -1916,18 +1856,6 @@ importers:
 
   examples/validation/zod:
     dependencies:
-      '@queuert/sqlite':
-        specifier: workspace:*
-        version: link:../../../packages/sqlite
-      '@types/better-sqlite3':
-        specifier: 9.6.0
-        version: 9.6.0
-      better-sqlite3:
-        specifier: 13.2.0
-        version: 13.2.0
-      example-sqlite-state-better-sqlite3:
-        specifier: workspace:*
-        version: link:../../sqlite/state-better-sqlite3
       queuert:
         specifier: workspace:*
         version: link:../../../packages/core

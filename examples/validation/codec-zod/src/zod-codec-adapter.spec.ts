@@ -1,7 +1,9 @@
-import { createSqliteStateAdapter } from "@queuert/sqlite";
-import Database from "better-sqlite3";
-import { createBetterSqlite3StateProvider } from "example-sqlite-state-better-sqlite3/provider";
-import { createClient, createWorkerRunner, createProcessors } from "queuert";
+import {
+  createClient,
+  createWorkerRunner,
+  createProcessors,
+  createInProcessStateAdapter,
+} from "queuert";
 import { createValidationAdapterConformanceCases } from "queuert/conformance";
 import { describe, expect, test } from "vitest";
 import { z } from "zod";
@@ -22,19 +24,9 @@ const buildJobTypes = () =>
     },
   });
 
-const createStateAdapter = () => {
-  const stateAdapter = createSqliteStateAdapter({
-    stateProvider: createBetterSqlite3StateProvider({
-      db: new Database(":memory:"),
-    }),
-  });
-  stateAdapter.migrateToLatest();
-  return stateAdapter;
-};
-
 test("stores the encoded form and hands the runtime form to readers", () => {
   const jobTypes = buildJobTypes();
-  using stateAdapter = createStateAdapter();
+  using stateAdapter = createInProcessStateAdapter();
   const client = createClient({ stateAdapter, jobTypes });
 
   const sendAt = new Date("2024-06-01T09:00:00.000Z");
@@ -51,7 +43,7 @@ test("stores the encoded form and hands the runtime form to readers", () => {
 
 test("round-trips a Date through the worker and back out of a client read", async () => {
   const jobTypes = buildJobTypes();
-  using stateAdapter = createStateAdapter();
+  using stateAdapter = createInProcessStateAdapter();
   const client = createClient({ stateAdapter, jobTypes });
 
   const sentAt = new Date("2024-07-04T12:00:00.000Z");
@@ -116,7 +108,7 @@ test("validates structural blockers against the runtime form", () => {
       blockers: z.array(z.object({ input: z.object({ sendAt: z.date() }) })),
     },
   });
-  using stateAdapter = createStateAdapter();
+  using stateAdapter = createInProcessStateAdapter();
   const client = createClient({ stateAdapter, jobTypes });
 
   const digest = stateAdapter.withTransaction((ctx) => {

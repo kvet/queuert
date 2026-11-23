@@ -7,10 +7,12 @@
  * of a client read — with no per-type schema.
  */
 
-import { createSqliteStateAdapter } from "@queuert/sqlite";
-import Database from "better-sqlite3";
-import { createBetterSqlite3StateProvider } from "example-sqlite-state-better-sqlite3/provider";
-import { createClient, createWorkerRunner, createProcessors } from "queuert";
+import {
+  createClient,
+  createWorkerRunner,
+  createProcessors,
+  createInProcessStateAdapter,
+} from "queuert";
 
 import { createSuperjsonJobTypes } from "./superjson-adapter.ts";
 
@@ -27,14 +29,7 @@ const jobTypes = createSuperjsonJobTypes<{
   };
 }>({ "tally-votes": true, "publish-results": true });
 
-using drivers = new DisposableStack();
-const db = drivers.adopt(new Database(":memory:"), (db) => {
-  db.close();
-});
-using stateAdapter = createSqliteStateAdapter({
-  stateProvider: createBetterSqlite3StateProvider({ db }),
-});
-stateAdapter.migrateToLatest();
+using stateAdapter = createInProcessStateAdapter();
 
 const client = createClient({ stateAdapter, jobTypes });
 

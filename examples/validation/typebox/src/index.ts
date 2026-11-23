@@ -8,11 +8,13 @@
  * 3. Structural reference validation (by input shape)
  */
 
-import { createSqliteStateAdapter } from "@queuert/sqlite";
 import { Type } from "@sinclair/typebox";
-import Database from "better-sqlite3";
-import { createBetterSqlite3StateProvider } from "example-sqlite-state-better-sqlite3/provider";
-import { createClient, createWorkerRunner, createProcessors } from "queuert";
+import {
+  createClient,
+  createWorkerRunner,
+  createProcessors,
+  createInProcessStateAdapter,
+} from "queuert";
 
 import { createTypeBoxJobTypes } from "./typebox-adapter.ts";
 
@@ -77,14 +79,7 @@ const jobTypes = createTypeBoxJobTypes({
 // #endregion
 
 // Create queuert client with the jobTypes
-using drivers = new DisposableStack();
-const db = drivers.adopt(new Database(":memory:"), (db) => {
-  db.close();
-});
-using stateAdapter = createSqliteStateAdapter({
-  stateProvider: createBetterSqlite3StateProvider({ db }),
-});
-stateAdapter.migrateToLatest();
+using stateAdapter = createInProcessStateAdapter();
 
 const client = createClient({ stateAdapter, jobTypes });
 
