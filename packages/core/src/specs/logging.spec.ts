@@ -142,7 +142,7 @@ describe("Logging", () => {
       { type: "worker_started", data: { ...workerArgs, jobTypeNames: ["test"] } },
       {
         type: "job_attempt_started",
-        data: { ...jobArgs, status: "running", attempt: 1, ...workerArgs },
+        data: { ...jobArgs, status: "running", attempt: 1, ...workerArgs, workerSlot: 0 },
       },
       {
         type: "job_completed",
@@ -160,10 +160,82 @@ describe("Logging", () => {
           attempt: 1,
           output: { result: true },
           ...workerArgs,
+          workerSlot: 0,
         },
       },
       { type: "worker_stopped", data: { ...workerArgs } },
     ]);
+  });
+
+  it("logs the worker slot of each concurrent attempt", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { index: number };
+        output: null;
+      };
+    }>();
+
+    const client = createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    const { promise: bothStarted, resolve: onBothStarted } = Promise.withResolvers<void>();
+    const startedJobIds = new Set<string>();
+    await using workerRunner = createWorkerRunner({
+      client,
+      concurrency: 2,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ job, applyOutcome }) => {
+              startedJobIds.add(job.id);
+              if (startedJobIds.size === 2) onBothStarted();
+              await bothStarted;
+              return withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null }));
+            },
+          },
+        },
+      }),
+    });
+
+    const chains = await withTransaction(async (txCtx) =>
+      client.createChains({
+        ...txCtx,
+        items: [0, 1].map((index) => ({ typeName: "test" as const, input: { index } })),
+      }),
+    );
+
+    await workerRunner.start();
+    await Promise.all(
+      chains.map(async (chain) => client.awaitChain({ chain, ...completionOptions })),
+    );
+    await workerRunner.close();
+
+    const slotsByJobId = Object.fromEntries(
+      log.mock.calls
+        .map((call) => call[0])
+        .filter((entry) => entry.type === "job_attempt_started")
+        .map((entry) => [entry.data.id, entry.data.workerSlot]),
+    );
+    expect(Object.values(slotsByJobId).toSorted((a, b) => a - b)).toEqual([0, 1]);
+    expect(
+      log.mock.calls
+        .map((call) => call[0])
+        .filter((entry) => entry.type === "job_attempt_completed")
+        .map((entry) => [entry.data.id, entry.data.workerSlot]),
+    ).toEqual(expect.arrayContaining(Object.entries(slotsByJobId)));
   });
 
   it("logs retry failures with backoff", async ({
@@ -231,7 +303,7 @@ describe("Logging", () => {
       { type: "worker_started" },
       { type: "job_attempt_started", data: { typeName: "test", attempt: 1 } },
       { type: "job_rescheduled", data: { typeName: "test" } },
-      { type: "job_attempt_failed", error: expect.anything() },
+      { type: "job_attempt_failed", data: { workerSlot: 0 }, error: expect.anything() },
       { type: "job_attempt_started", data: { typeName: "test", attempt: 2 } },
       { type: "job_completed", data: { typeName: "test" } },
       { type: "chain_completed", data: { typeName: "test" } },
@@ -934,7 +1006,7 @@ describe("Logging", () => {
       { type: "job_attempt_started", data: { typeName: "test", attempt: 1 } },
       { type: "job_completed", data: { typeName: "test", output: { by: "workerless" } } },
       { type: "chain_completed", data: { typeName: "test" } },
-      { type: "job_attempt_lost", data: { typeName: "test", attempt: 1 } },
+      { type: "job_attempt_lost", data: { typeName: "test", attempt: 1, workerSlot: 0 } },
       { type: "worker_stopped" },
     ]);
   });
@@ -1000,7 +1072,7 @@ describe("Logging", () => {
       { type: "worker_started" },
       { type: "job_attempt_started", data: { typeName: "test", attempt: 1 } },
       { type: "chain_deleted", data: { id: chain.id } },
-      { type: "job_attempt_lost", data: { typeName: "test", attempt: 1 } },
+      { type: "job_attempt_lost", data: { typeName: "test", attempt: 1, workerSlot: 0 } },
       { type: "worker_stopped" },
     ]);
   });

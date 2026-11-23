@@ -391,7 +391,7 @@ export const runWorker = async ({
 
   const dispatchJob = (stateJob: StateJob & { hasBlockers: boolean }) => {
     runningAttemptTokens.add(stateJob.attemptToken!);
-    void executor.add(async () => {
+    void executor.add(async (workerSlot) => {
       observabilityHelper.jobTypeProcessingChange(1, stateJob, workerId);
       observabilityHelper.jobTypeIdleChange(-1, workerId, typeNames);
       try {
@@ -405,6 +405,7 @@ export const runWorker = async ({
           stateJob,
           backoffConfig: jobTypeProcessor.backoffConfig ?? defaultBackoffConfig,
           workerId,
+          workerSlot,
           attemptMiddleware: jobTypeProcessor[processorAttemptMiddlewareSymbol],
           abortSignal: signal,
         });

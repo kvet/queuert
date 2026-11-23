@@ -26,7 +26,7 @@ A **worker runner**, returned by `createWorkerRunner`, runs one **worker** at a 
 
 ## Concurrency Model
 
-A worker runner processes jobs in parallel using slots. See `createWorkerRunner` TSDoc for configuration options. Default: single slot (`concurrency: 1`).
+A worker runner processes jobs in parallel using slots. See `createWorkerRunner` TSDoc for configuration options. Default: single slot (`concurrency: 1`). Each slot has an index from 0 to `concurrency - 1`, which the attempt logs carry as `workerSlot` and the attempt span as `queuert.worker.slot`.
 
 ### Architecture
 
@@ -109,7 +109,7 @@ A worker runner registers under one id for its whole life, across restarts. It i
 
 Two worker runners configured with the same id never hold the worker at the same time: while one holds a live lease under it, the other reports `WorkerAlreadyLiveError` through `workerError` and backs off until that lease expires, then reclaims the row and starts. Each registration is identified by its row's `token`, and the worker runner's claims, renewals, own-jobs reclaim and stop match it. A process that froze past its lease and wakes up after another one registered its id claims nothing, loses its lease and leaves the new row alone. A process that crashed and restarts under a configured id therefore waits until its previous lease expires and its next registration retry runs; a generated id never waits.
 
-The id is stored in `attemptBy` of every attempt the worker starts. The worker runner tracks active jobs internally and routes abort signals by job ID—no per-slot identity is needed: every write is tied to the attempt token the job got when this slot acquired it, so a slot whose attempt was reclaimed and re-acquired by another slot of the same worker runner fails with `JobTakenByAnotherWorkerError`.
+The id is stored in `attemptBy` of every attempt the worker starts. The worker runner tracks active jobs internally and routes abort signals by job ID, not by slot: every write is tied to the attempt token the job got when this slot acquired it, so a slot whose attempt was reclaimed and re-acquired by another slot of the same worker runner fails with `JobTakenByAnotherWorkerError`.
 
 ## Worker Lease
 

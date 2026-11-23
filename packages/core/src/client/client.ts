@@ -1074,7 +1074,7 @@ export const createClient = <
             }
             helpers.stateAdapter.onTransactionCommit(txCtx, () => {
               helpers.observabilityHelper
-                .startAttemptSpan(written, { workerId: null })
+                .startAttemptSpan(written, { workerId: null, workerSlot: null })
                 ?.end(completedAttemptSpanResult(written));
             });
             return mapStateJobToJob(written, helpers.jobTypes);

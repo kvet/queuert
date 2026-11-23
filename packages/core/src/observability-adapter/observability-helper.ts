@@ -116,12 +116,23 @@ export type ObservabilityHelper = {
   jobUnblocked: (stateJob: StateJob, options: { unblockedByChain: StateChainInfo }) => void;
 
   // job attempt
-  jobAttemptStarted: (stateJob: StateJob, options: { workerId: string }) => void;
-  jobAttemptLost: (stateJob: StateJob, options: { workerId: string }) => void;
-  jobAttemptFailed: (stateJob: StateJob, options: { workerId: string; error: unknown }) => void;
+  jobAttemptStarted: (
+    stateJob: StateJob,
+    options: { workerId: string; workerSlot: number },
+  ) => void;
+  jobAttemptLost: (stateJob: StateJob, options: { workerId: string; workerSlot: number }) => void;
+  jobAttemptFailed: (
+    stateJob: StateJob,
+    options: { workerId: string; workerSlot: number; error: unknown },
+  ) => void;
   jobAttemptCompleted: (
     stateJob: StateJob,
-    options: { output?: unknown; continuedWith?: StateJobInfo; workerId: string },
+    options: {
+      output?: unknown;
+      continuedWith?: StateJobInfo;
+      workerId: string;
+      workerSlot: number;
+    },
   ) => void;
   jobAttemptReclaimed: (
     stateJob: StateJob,
@@ -155,7 +166,7 @@ export type ObservabilityHelper = {
   startJobSpan: (typeName: string, fromJob: StateJob | null) => JobSpanHandle | undefined;
   startAttemptSpan: (
     stateJob: StateJob,
-    options: { workerId: string | null },
+    options: { workerId: string; workerSlot: number } | { workerId: null; workerSlot: null },
   ) => JobAttemptSpanHandle | undefined;
   startBlockerSpan: (
     stateJob: StateJob,
@@ -322,7 +333,11 @@ export const createObservabilityHelper = ({
 
   // job attempt
   jobAttemptStarted(stateJob, options) {
-    const data = { ...mapStateJobToJobProcessingData(stateJob), workerId: options.workerId };
+    const data = {
+      ...mapStateJobToJobProcessingData(stateJob),
+      workerId: options.workerId,
+      workerSlot: options.workerSlot,
+    };
     log({
       type: "job_attempt_started",
       level: "info",
@@ -335,6 +350,7 @@ export const createObservabilityHelper = ({
     const data = {
       ...mapStateJobToJobAttemptData(stateJob),
       workerId: options.workerId,
+      workerSlot: options.workerSlot,
     };
     log({
       type: "job_attempt_lost",
@@ -362,6 +378,7 @@ export const createObservabilityHelper = ({
     const data = {
       ...mapStateJobToJobProcessingData(stateJob),
       workerId: options.workerId,
+      workerSlot: options.workerSlot,
     };
     log({
       type: "job_attempt_failed",
@@ -376,6 +393,7 @@ export const createObservabilityHelper = ({
     const data = {
       ...mapStateJobToJobCompletionData(stateJob, options),
       workerId: options.workerId,
+      workerSlot: options.workerSlot,
     };
     log({
       type: "job_attempt_completed",
@@ -487,7 +505,7 @@ export const createObservabilityHelper = ({
       adapter.completeBlockerSpan({ traceContext, blockerChainTypeName: blockerChain.typeName });
     } catch {}
   },
-  startAttemptSpan: (stateJob, { workerId }) => {
+  startAttemptSpan: (stateJob, { workerId, workerSlot }) => {
     try {
       return adapter.startAttemptSpan({
         chainId: stateJob.chain.id,
@@ -496,6 +514,7 @@ export const createObservabilityHelper = ({
         jobTypeName: stateJob.typeName,
         attempt: stateJob.attempt,
         workerId,
+        workerSlot,
         chainTraceContext: stateJob.chain.traceContext,
         traceContext: stateJob.traceContext,
       });

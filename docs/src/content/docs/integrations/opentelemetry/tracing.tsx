@@ -109,6 +109,7 @@ const spans = (): FieldItem[] => [
       ...jobIds,
       "queuert.job.attempt",
       "queuert.worker.id",
+      "queuert.worker.slot",
       ...continuedWith,
       "queuert.reschedule.reason",
     ],
@@ -148,6 +149,12 @@ const attributes = (): FieldItem[] => [
     name: "queuert.worker.id",
     chips: ["string"],
     description: "Worker ID processing the attempt; absent when the client applies the outcome.",
+  },
+  {
+    name: "queuert.worker.slot",
+    chips: ["number"],
+    description:
+      "Worker runner slot processing the attempt, from 0 to concurrency - 1; absent when the client applies the outcome.",
   },
   {
     name: "queuert.continued_with.job_id",

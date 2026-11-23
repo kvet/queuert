@@ -41,11 +41,13 @@ const createAttemptWrites = (
   {
     stateJob,
     workerId,
+    workerSlot,
     attemptToken,
     ownership,
   }: {
     stateJob: StateJob;
     workerId: string;
+    workerSlot: number;
     attemptToken: string;
     ownership: AttemptOwnership;
   },
@@ -104,6 +106,7 @@ const createAttemptWrites = (
           output: write.stateJob.output,
           continuedWith: write.stateJob.continuation,
           workerId,
+          workerSlot,
         });
       });
       helpers.stateAdapter.onTransactionCommit(txCtx, () => {
@@ -188,6 +191,7 @@ const rescheduleFailedAttempt = async (
   {
     stateJob,
     workerId,
+    workerSlot,
     span,
     attemptToken,
     backoffConfig,
@@ -195,6 +199,7 @@ const rescheduleFailedAttempt = async (
   }: {
     stateJob: StateJob;
     workerId: string;
+    workerSlot: number;
     span: JobAttemptSpanHandle | undefined;
     attemptToken: string;
     backoffConfig: BackoffConfig;
@@ -223,7 +228,7 @@ const rescheduleFailedAttempt = async (
 
   const notified = helpers.notifyHelper.notifyJobsScheduled([rescheduledJob.typeName]);
   helpers.observabilityHelper.jobRescheduled(rescheduledJob);
-  helpers.observabilityHelper.jobAttemptFailed(stateJob, { workerId, error: failure });
+  helpers.observabilityHelper.jobAttemptFailed(stateJob, { workerId, workerSlot, error: failure });
   span?.end({ status: "failed", error: failure });
   await notified;
   return true;
@@ -235,6 +240,7 @@ export const runAttempt = async ({
   stateJob,
   backoffConfig,
   workerId,
+  workerSlot,
   attemptMiddleware,
   abortSignal,
 }: {
@@ -243,17 +249,19 @@ export const runAttempt = async ({
   stateJob: StateJob & { hasBlockers: boolean };
   backoffConfig: BackoffConfig;
   workerId: string;
+  workerSlot: number;
   attemptMiddleware?: readonly AnyAttemptMiddleware[];
   abortSignal: AbortSignal;
 }): Promise<void> => {
   const ownership = await startAttemptOwnership(helpers, { stateJob, abortSignal });
   const startTime = Date.now();
-  helpers.observabilityHelper.jobAttemptStarted(stateJob, { workerId });
-  const span = helpers.observabilityHelper.startAttemptSpan(stateJob, { workerId });
+  helpers.observabilityHelper.jobAttemptStarted(stateJob, { workerId, workerSlot });
+  const span = helpers.observabilityHelper.startAttemptSpan(stateJob, { workerId, workerSlot });
 
   const { applyOutcome, fence, close } = createAttemptWrites(helpers, {
     stateJob,
     workerId,
+    workerSlot,
     attemptToken: stateJob.attemptToken!,
     ownership,
   });
@@ -286,13 +294,14 @@ export const runAttempt = async ({
     const rescheduled = await rescheduleFailedAttempt(helpers, {
       stateJob,
       workerId,
+      workerSlot,
       span,
       attemptToken: stateJob.attemptToken!,
       backoffConfig,
       failure,
     });
     if (!rescheduled) {
-      helpers.observabilityHelper.jobAttemptLost(stateJob, { workerId });
+      helpers.observabilityHelper.jobAttemptLost(stateJob, { workerId, workerSlot });
       span?.end({ status: "failed", error: failure });
     }
     return;

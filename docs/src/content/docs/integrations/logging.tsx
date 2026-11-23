@@ -47,15 +47,25 @@ const jobEntries = [
 ];
 
 const attemptEntries = [
-  entry("job_attempt_started", "info", "Job attempt started", [...processing, "workerId"]),
+  entry("job_attempt_started", "info", "Job attempt started", [
+    ...processing,
+    "workerId",
+    "workerSlot",
+  ]),
   entry("job_attempt_completed", "info", "Job attempt completed", [
     ...processing,
     "output?",
     "continuedWith?",
     "workerId",
+    "workerSlot",
   ]),
-  entry("job_attempt_failed", "error", "Job attempt failed", [...processing, "workerId", "error"]),
-  entry("job_attempt_lost", "warn", "Job attempt lost", [...attempt, "workerId"]),
+  entry("job_attempt_failed", "error", "Job attempt failed", [
+    ...processing,
+    "workerId",
+    "workerSlot",
+    "error",
+  ]),
+  entry("job_attempt_lost", "warn", "Job attempt lost", [...attempt, "workerId", "workerSlot"]),
   entry("job_attempt_reclaimed", "info", "Reclaimed job attempt", [
     ...attempt,
     "workerId",

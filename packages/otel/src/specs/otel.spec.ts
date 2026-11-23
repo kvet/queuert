@@ -1378,7 +1378,12 @@ describe("Spans", () => {
         parentName: "start job-attempt.test",
         links: 1,
       },
-      { name: "start job-attempt.test", kind: "CONSUMER", parentName: "create job.test" },
+      {
+        name: "start job-attempt.test",
+        kind: "CONSUMER",
+        parentName: "create job.test",
+        attributes: { "queuert.worker.slot": 0 },
+      },
     ]);
   });
 

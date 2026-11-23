@@ -348,6 +348,7 @@ export const createOtelObservabilityAdapter = ({
             "queuert.job.type": data.jobTypeName,
             "queuert.job.attempt": data.attempt,
             ...(data.workerId !== null && { "queuert.worker.id": data.workerId }),
+            ...(data.workerSlot !== null && { "queuert.worker.slot": data.workerSlot }),
           },
         },
         ctx,

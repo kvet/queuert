@@ -51,6 +51,36 @@ describe("createParallelExecutor", () => {
     expect(executor.idleSlots()).toBe(3);
   });
 
+  test("passes each task the index of a free slot", async () => {
+    const executor = createParallelExecutor(3);
+    const slots: number[] = [];
+
+    const { promise: promise1, resolve: resolve1 } = Promise.withResolvers<void>();
+    void executor.add(async (slot) => {
+      slots.push(slot);
+      return promise1;
+    });
+    const { promise: promise2, resolve: resolve2 } = Promise.withResolvers<void>();
+    const task2 = executor.add(async (slot) => {
+      slots.push(slot);
+      return promise2;
+    });
+    void executor.add(async (slot) => {
+      slots.push(slot);
+      return new Promise(() => {});
+    });
+    expect(slots).toEqual([0, 1, 2]);
+
+    resolve2();
+    await task2;
+    void executor.add(async (slot) => {
+      slots.push(slot);
+      return new Promise(() => {});
+    });
+    expect(slots).toEqual([0, 1, 2, 1]);
+    resolve1();
+  });
+
   test("throws when exceeding maxSlots", async () => {
     const executor = createParallelExecutor(2);
 

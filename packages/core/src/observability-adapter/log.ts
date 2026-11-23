@@ -20,6 +20,10 @@ type LogEntry<
 } & ([TError] extends [never] ? unknown : { error: TError });
 
 export type WorkerBasicData = { workerId: string };
+export type WorkerSlotData = WorkerBasicData & {
+  /** The worker runner concurrency slot running the attempt, from `0` to `concurrency - 1`. */
+  workerSlot: number;
+};
 type WorkerStartedLogEntry = LogEntry<
   "worker_started",
   "info",
@@ -93,7 +97,7 @@ type JobAttemptCompletedLogEntry = LogEntry<
   "job_attempt_completed",
   "info",
   "Job attempt completed",
-  JobCompletionData & WorkerBasicData
+  JobCompletionData & WorkerSlotData
 >;
 type JobCompletedLogEntry = LogEntry<"job_completed", "info", "Job completed", JobCompletionData>;
 export type JobRescheduleData = JobBasicData & {
@@ -126,13 +130,13 @@ type JobAttemptStartedLogEntry = LogEntry<
   "job_attempt_started",
   "info",
   "Job attempt started",
-  JobProcessingData & WorkerBasicData
+  JobProcessingData & WorkerSlotData
 >;
 type JobAttemptLostLogEntry = LogEntry<
   "job_attempt_lost",
   "warn",
   "Job attempt lost",
-  JobAttemptData & WorkerBasicData
+  JobAttemptData & WorkerSlotData
 >;
 export type JobReclaimData = { reclaimedFrom: string };
 type JobAttemptReclaimedLogEntry = LogEntry<
@@ -145,7 +149,7 @@ type JobAttemptFailedLogEntry = LogEntry<
   "job_attempt_failed",
   "error",
   "Job attempt failed",
-  JobProcessingData & WorkerBasicData,
+  JobProcessingData & WorkerSlotData,
   unknown
 >;
 

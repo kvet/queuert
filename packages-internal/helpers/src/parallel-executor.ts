@@ -1,4 +1,4 @@
-export const createParallelExecutor = <T extends (...args: any[]) => Promise<any>>(
+export const createParallelExecutor = <T extends (slot: number) => Promise<any>>(
   maxSlots: number,
 ): {
   maxSlots: number;
@@ -8,32 +8,32 @@ export const createParallelExecutor = <T extends (...args: any[]) => Promise<any
   onIdleSlot: (listener: () => void) => () => void;
   drain: () => Promise<void>;
 } => {
-  let activeSlots = 0;
+  const freeSlots = Array.from({ length: maxSlots }, (_, index) => maxSlots - 1 - index);
   let drained = false;
   let idleSlotListener: (() => void) | undefined;
   let drainListener: (() => void) | undefined;
 
   return {
     maxSlots,
-    activeSlots: () => activeSlots,
-    idleSlots: () => maxSlots - activeSlots,
+    activeSlots: () => maxSlots - freeSlots.length,
+    idleSlots: () => freeSlots.length,
     add: async (fn: T): Promise<ReturnType<T>> => {
       if (drained) {
         throw new Error("Executor has been drained and cannot accept new tasks.");
       }
-      if (activeSlots >= maxSlots) {
+      const slot = freeSlots.pop();
+      if (slot === undefined) {
         throw new Error(`Cannot add new task, maximum concurrency of ${maxSlots} reached.`);
       }
 
-      activeSlots++;
       try {
-        return await fn();
+        return await fn(slot);
       } finally {
-        activeSlots--;
+        freeSlots.push(slot);
         if (idleSlotListener) {
           idleSlotListener();
         }
-        if (activeSlots === 0 && drainListener) {
+        if (freeSlots.length === maxSlots && drainListener) {
           drainListener();
         }
       }
@@ -51,7 +51,7 @@ export const createParallelExecutor = <T extends (...args: any[]) => Promise<any
       if (drainListener) {
         throw new Error("A drain listener is already registered.");
       }
-      if (activeSlots > 0) {
+      if (freeSlots.length < maxSlots) {
         await new Promise<void>((resolve) => {
           drainListener = resolve;
         });
@@ -61,6 +61,6 @@ export const createParallelExecutor = <T extends (...args: any[]) => Promise<any
   };
 };
 
-export type ParallelExecutor<T extends (...args: any[]) => Promise<any>> = ReturnType<
+export type ParallelExecutor<T extends (slot: number) => Promise<any>> = ReturnType<
   typeof createParallelExecutor<T>
 >;

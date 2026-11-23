@@ -11,6 +11,7 @@ import type {
   JobReclaimData,
   JobRescheduleData,
   WorkerBasicData,
+  WorkerSlotData,
 } from "./log.ts";
 
 /** Input data for creating a job span. */
@@ -63,6 +64,11 @@ export type JobAttemptSpanInputData = {
   attempt: number;
   /** The worker running the attempt, or `null` when the client applies the outcome. */
   workerId: string | null;
+  /**
+   * The worker runner concurrency slot running the attempt, from `0` to `concurrency - 1`, or
+   * `null` when the client applies the outcome.
+   */
+  workerSlot: number | null;
 };
 
 /** Result of a job attempt span — completed or failed. */
@@ -152,10 +158,10 @@ export type ObservabilityAdapter = {
   jobUnblocked: (data: JobBasicData & { unblockedByChain: ChainBasicData }) => void;
 
   // job attempt
-  jobAttemptStarted: (data: JobProcessingData & WorkerBasicData) => void;
-  jobAttemptLost: (data: JobAttemptData & WorkerBasicData) => void;
-  jobAttemptFailed: (data: JobProcessingData & WorkerBasicData & { error: unknown }) => void;
-  jobAttemptCompleted: (data: JobCompletionData & WorkerBasicData) => void;
+  jobAttemptStarted: (data: JobProcessingData & WorkerSlotData) => void;
+  jobAttemptLost: (data: JobAttemptData & WorkerSlotData) => void;
+  jobAttemptFailed: (data: JobProcessingData & WorkerSlotData & { error: unknown }) => void;
+  jobAttemptCompleted: (data: JobCompletionData & WorkerSlotData) => void;
   jobAttemptReclaimed: (data: JobAttemptData & WorkerBasicData & JobReclaimData) => void;
 
   // notify adapter
