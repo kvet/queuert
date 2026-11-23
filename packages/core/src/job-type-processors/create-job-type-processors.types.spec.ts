@@ -176,6 +176,144 @@ describe("attempt handler job", () => {
   });
 });
 
+describe("batched attempt handler", () => {
+  it("gives a handler with a batchLimit the batch's jobs, applyJobOutcomes and fenceJobs", () => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: { userId: string }; output: { sent: boolean } };
+    }>();
+
+    expectTypeOf((client: InProcessClient<typeof jobTypes>) =>
+      createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            batchLimit: 50,
+            attemptHandler: async ({ jobs, applyJobOutcomes, fenceJobs }) => {
+              expectTypeOf(jobs[0].input).toEqualTypeOf<{ userId: string }>();
+              expectTypeOf(jobs[0].status).toEqualTypeOf<"running">();
+              expectTypeOf(jobs[0].signal).toEqualTypeOf<AbortSignal>();
+
+              await fenceJobs({ ...txCtx, jobs: jobs.slice(0, 2) });
+              const results = await applyJobOutcomes({
+                ...txCtx,
+                items: jobs.map((job, index) =>
+                  index === 0
+                    ? { job, output: { sent: true } }
+                    : index === 1
+                      ? { job, reschedule: { afterMs: 1_000 } }
+                      : { job, fail: new Error(job.input.userId) },
+                ),
+              });
+              expectTypeOf(results[0].status).toEqualTypeOf<"completed" | "pending">();
+            },
+          },
+        },
+      }),
+    ).toBeFunction();
+  });
+
+  it("types each result of a tuple of items by its own outcome", () => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: { sent: boolean } };
+    }>();
+
+    expectTypeOf((client: InProcessClient<typeof jobTypes>) =>
+      createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            batchLimit: 2,
+            attemptHandler: async ({ jobs: [first, second], applyJobOutcomes }) => {
+              const [sent, failed] = await applyJobOutcomes({
+                ...txCtx,
+                items: [
+                  { job: first, output: { sent: true } },
+                  { job: second, fail: new Error("no") },
+                ],
+              });
+              expectTypeOf(sent.status).toEqualTypeOf<"completed">();
+              expectTypeOf(sent.output).toEqualTypeOf<{ sent: boolean }>();
+              expectTypeOf(failed.status).toEqualTypeOf<"pending">();
+            },
+          },
+        },
+      }),
+    ).toBeFunction();
+  });
+
+  it("gives a handler with a batchLimit of 1 a single job", () => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    expectTypeOf((client: InProcessClient<typeof jobTypes>) =>
+      createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            batchLimit: 1,
+            attemptHandler: async ({ job, applyJobOutcome }) => {
+              expectTypeOf(job.status).toEqualTypeOf<"running">();
+              await applyJobOutcome({ ...txCtx, output: null });
+            },
+          },
+        },
+      }),
+    ).toBeFunction();
+  });
+
+  it("gives a handler with a batchLimit typed as number either shape", () => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+    const batchLimit: number = 10;
+
+    expectTypeOf((client: InProcessClient<typeof jobTypes>) =>
+      createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            batchLimit,
+            attemptHandler: async (options) => {
+              await (options.jobs
+                ? options.applyJobOutcomes({
+                    ...txCtx,
+                    items: options.jobs.map((job) => ({ job, output: null })),
+                  })
+                : options.applyJobOutcome({ ...txCtx, output: null }));
+            },
+          },
+        },
+      }),
+    ).toBeFunction();
+  });
+
+  it("rejects fail outside a batched handler", () => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    expectTypeOf((client: InProcessClient<typeof jobTypes>) =>
+      createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          test: {
+            attemptHandler: async ({ applyJobOutcome }) => {
+              // @ts-expect-error fail is a batched handler's outcome
+              await applyJobOutcome({ ...txCtx, fail: new Error("no") });
+            },
+          },
+        },
+      }),
+    ).toBeFunction();
+  });
+});
+
 describe("attempt middleware", () => {
   it("composes registry-level wrapHandler onion with typed ctx", () => {
     const jobTypes = defineJobTypes<{

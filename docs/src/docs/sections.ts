@@ -41,6 +41,7 @@ export const siteSections: SiteSection[] = [
           "guides/cleanup",
           "guides/slices",
           "guides/horizontal-scaling",
+          "guides/batched-processors",
           "guides/prioritization",
           "guides/middleware",
           "guides/runtime-validation",

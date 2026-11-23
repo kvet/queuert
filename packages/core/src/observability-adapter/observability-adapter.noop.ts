@@ -31,6 +31,7 @@ export const createNoopObservabilityAdapter = (): ObservabilityAdapter => ({
   chainDuration: noop,
   jobDuration: noop,
   jobAttemptDuration: noop,
+  jobAttemptBatchSize: noop,
 
   jobTypeIdleChange: noop,
   jobTypeProcessingChange: noop,

@@ -15,7 +15,6 @@
   - [TASK] List chains by identity — `listChains` gains an `identity` filter to page through the full recurrence history of a key
 - [EPIC] Unbounded blockers. See `design/unbounded-blockers.md`.
 - [EPIC] how to cleanup chains with 1k+ jobs in a single transaction (SQLite WAL, PG lock footprint)? introduce truncateChainJobs?
-- [EPIC,COMPLEX] Batched processors. See `design/batched-processors.md`
 - [EPIC] Align `@queuert/otel` with OpenTelemetry messaging semantic conventions
 
 # Long term

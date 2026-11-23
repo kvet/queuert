@@ -16,7 +16,7 @@ const billingJobTypes = defineJobTypes<{
    * Middleware nesting for one issue-invoice attempt:
    *
    *   tracing      --> { traceId }
-   *     loadTenant --> { tenant }
+   *     loadTenant --> { tenantOf }
    *       audit    --> { audit }
    *         attemptHandler
    */
@@ -71,9 +71,9 @@ const client = createClient({
 
 // #region tracing
 const tracing: AttemptMiddleware<typeof stateAdapter, { traceId: string }> = {
-  wrapHandler: async ({ job, next }) => {
+  wrapHandler: async ({ jobs, next }) => {
     const traceId = crypto.randomUUID();
-    const name = `${job.typeName} #${job.attempt}`;
+    const name = jobs.map((job) => `${job.typeName} #${job.attempt}`).join(", ");
     try {
       await next({ traceId });
       spans.push({ traceId, name, status: "ok" });
@@ -86,12 +86,20 @@ const tracing: AttemptMiddleware<typeof stateAdapter, { traceId: string }> = {
 // #endregion
 
 // #region load-tenant
-const loadTenant: AttemptMiddleware<typeof stateAdapter, { tenant: Tenant }> = {
-  wrapHandler: async ({ job, next }) => {
-    const { tenantId } = job.input as { tenantId: string };
-    const tenant = tenants.get(tenantId);
-    if (tenant === undefined) throw new Error(`Unknown tenant ${tenantId}`);
-    return next({ tenant });
+const loadTenant: AttemptMiddleware<
+  typeof stateAdapter,
+  { tenantOf: (job: { id: string }) => Tenant }
+> = {
+  wrapHandler: async ({ jobs, next }) => {
+    const tenantsByJobId = new Map(
+      jobs.map((job) => {
+        const { tenantId } = job.input as { tenantId: string };
+        const tenant = tenants.get(tenantId);
+        if (tenant === undefined) throw new Error(`Unknown tenant ${tenantId}`);
+        return [job.id, tenant];
+      }),
+    );
+    return next({ tenantOf: (job) => tenantsByJobId.get(job.id)! });
   },
 };
 // #endregion
@@ -99,11 +107,11 @@ const loadTenant: AttemptMiddleware<typeof stateAdapter, { tenant: Tenant }> = {
 // #region audit
 const audit: AttemptMiddleware<
   typeof stateAdapter,
-  { audit: (txCtx: TxContext, event: string) => void }
+  { audit: (txCtx: TxContext, job: { id: string }, event: string) => void }
 > = {
-  wrapHandler: async ({ job, next }) =>
+  wrapHandler: async ({ next }) =>
     next({
-      audit: (txCtx, event) => {
+      audit: (txCtx, job, event) => {
         insertRow(txCtx, auditEvents, { jobId: job.id, event });
       },
     }),
@@ -120,13 +128,13 @@ const billingProcessors = createProcessors({
   processors: {
     // #region issue-invoice
     "issue-invoice": {
-      attemptHandler: async ({ job, traceId, tenant, audit, applyJobOutcome }) => {
+      attemptHandler: async ({ job, traceId, tenantOf, audit, applyJobOutcome }) => {
         const invoiceId = `inv-${job.id}`;
         await stateAdapter.withTransaction(async (txCtx) => {
-          audit(txCtx, "invoice-issued");
+          audit(txCtx, job, "invoice-issued");
           insertInvoice(txCtx, {
             id: invoiceId,
-            tenantId: tenant.id,
+            tenantId: tenantOf(job).id,
             amountCents: job.input.amountCents,
             traceId,
           });
@@ -146,9 +154,9 @@ const notificationProcessors = createProcessors({
   // #hide
   processors: {
     "send-receipt": {
-      attemptHandler: async ({ job, tenant, applyJobOutcome }) => {
+      attemptHandler: async ({ job, tenantOf, applyJobOutcome }) => {
         await stateAdapter.withTransaction(async (txCtx) => {
-          receipts.push(`${job.input.invoiceId} to ${tenant.billingEmail}`);
+          receipts.push(`${job.input.invoiceId} to ${tenantOf(job).billingEmail}`);
           return applyJobOutcome({ ...txCtx, output: { delivered: true } });
         });
       },

@@ -6,7 +6,6 @@ import { createInProcessNotifyAdapter } from "../notify-adapter.in-process/notif
 import type { NotifyAdapter } from "../notify-adapter/notify-adapter.ts";
 import { wrapNotifyAdapterWithLogging } from "../notify-adapter/notify-adapter.wrapper.logging.ts";
 import { type NotifyHelper, createNotifyHelper } from "../notify-adapter/notify-helper.ts";
-import type { TxNotificationsByTransaction } from "../notify-adapter/tx-notifications.ts";
 import type { Log } from "../observability-adapter/log.ts";
 import { createNoopObservabilityAdapter } from "../observability-adapter/observability-adapter.noop.ts";
 import type { ObservabilityAdapter } from "../observability-adapter/observability-adapter.ts";
@@ -17,6 +16,7 @@ import {
 } from "../observability-adapter/observability-helper.ts";
 import type { StateAdapter, BaseTxContext } from "../state-adapter/state-adapter.ts";
 import { wrapStateAdapterWithLogging } from "../state-adapter/state-adapter.wrapper.logging.ts";
+import type { TxEffectsByTransaction } from "../tx-effects/tx-effects.ts";
 
 /**
  * A state adapter of either mode, seen through the operations both modes share.
@@ -29,7 +29,7 @@ export type Helpers<TMode extends Mode = Mode> = {
   notifyHelper: NotifyHelper;
   observabilityHelper: ObservabilityHelper;
   jobTypes: JobTypes;
-  txNotifications: TxNotificationsByTransaction;
+  txEffects: TxEffectsByTransaction;
 };
 
 export const runInMode = <TMode extends Mode, TArgs extends unknown[], TResult>(
@@ -93,6 +93,6 @@ export const createHelpers = ({
       jobTypes: jobTypesOption,
       observabilityHelper,
     }),
-    txNotifications: new WeakMap(),
+    txEffects: new WeakMap(),
   };
 };

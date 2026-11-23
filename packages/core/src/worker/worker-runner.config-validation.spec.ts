@@ -19,7 +19,7 @@ const setup = () => {
 };
 
 describe("createWorkerRunner config validation", () => {
-  it("names the processor and every invalid field", () => {
+  it("names every invalid field", () => {
     const { jobTypes, client } = setup();
 
     expect(() => {
@@ -32,8 +32,7 @@ describe("createWorkerRunner config validation", () => {
           jobTypes,
           processors: {
             foo: {
-              backoffConfig: { initialDelayMs: 1000, maxDelayMs: Number.NaN, multiplier: 0 },
-              attemptHandler: async () => undefined as never,
+              attemptHandler: async () => {},
             },
           },
         }),
@@ -45,8 +44,6 @@ describe("createWorkerRunner config validation", () => {
           "createWorkerRunner: invalid configuration:",
           "  - recoveryBackoffConfig.initialDelayMs must be a non-negative finite number (got -1)",
           "  - leaseConfig.durationMs must be a positive finite number (got 0)",
-          '  - processors["foo"].backoffConfig.maxDelayMs must be a non-negative number (got NaN)',
-          '  - processors["foo"].backoffConfig.multiplier must be a positive finite number (got 0)',
         ].join("\n"),
       }),
     );
@@ -62,7 +59,11 @@ describe("createWorkerRunner config validation", () => {
         processors: createProcessors({
           client,
           jobTypes,
-          processors: { foo: { attemptHandler: async () => undefined as never } },
+          processors: {
+            foo: {
+              attemptHandler: async () => {},
+            },
+          },
         }),
       });
     }).toThrow(
@@ -91,7 +92,11 @@ describe("createWorkerRunner config validation", () => {
       processors: createProcessors({
         client,
         jobTypes,
-        processors: { foo: { attemptHandler: async () => undefined as never } },
+        processors: {
+          foo: {
+            attemptHandler: async () => {},
+          },
+        },
       }),
     });
 
@@ -109,7 +114,11 @@ describe("createWorkerRunner config validation", () => {
         processors: createProcessors({
           client,
           jobTypes,
-          processors: { foo: { attemptHandler: async () => undefined as never } },
+          processors: {
+            foo: {
+              attemptHandler: async () => {},
+            },
+          },
         }),
       });
     }).toThrow(
@@ -139,7 +148,11 @@ describe("createWorkerRunner config validation", () => {
         processors: createProcessors({
           client,
           jobTypes,
-          processors: { foo: { attemptHandler: async () => undefined as never } },
+          processors: {
+            foo: {
+              attemptHandler: async () => {},
+            },
+          },
         }),
       });
     }).toThrow(InvalidWorkerIdError);

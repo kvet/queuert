@@ -1,21 +1,22 @@
 # Processing Capacity Benchmark
 
-Job throughput along two independent axes: state adapter (with a noop notify adapter, so only the state adapter is measured) and notify adapter (with the in-process state default). The in-process baselines run synchronously (`In-process`) and asynchronously (`In-process (async)`); synchronous notify adapters such as IPC run over the synchronous in-process state adapter and asynchronous ones over the asynchronous one, so compare each with the row of its mode. Each adapter runs five scenarios, each in a separate child process for isolation. Every scenario measures a fixed 2 s window, so a slow adapter costs the same wall time as a fast one:
+Job throughput along two independent axes: state adapter (with a noop notify adapter, so only the state adapter is measured) and notify adapter (with the in-process state default). The in-process baselines run synchronously (`In-process`) and asynchronously (`In-process (async)`); synchronous notify adapters such as IPC run over the synchronous in-process state adapter and asynchronous ones over the asynchronous one, so compare each with the row of its mode. Each adapter runs eight scenarios, each in a separate child process for isolation. Every scenario measures a fixed 2 s window, so a slow adapter costs the same wall time as a fast one:
 
 - **Single creation** (`create-single`) — chains created via `createChain`, one per transaction (chains/s).
 - **Batched creation** (`create-batched`) — chains created via `createChains` in batches of 100 (chains/s).
 - **No-op completion at concurrency 1, 4 and 16** (`complete-noop-1`, `-4`, `-16`) — 40,000 chains are seeded (not measured), then a worker with that many slots completes them; each handler opens its own transaction and calls `applyJobOutcome` in it (jobs/s).
+- **Batched no-op completion at concurrency 1, 4 and 16** (`complete-batched-1`, `-4`, `-16`) — the same seeded queue, completed by a processor with `batchLimit: 100`; each handler applies its whole batch with one `applyJobOutcomes` call in its own transaction (jobs/s).
 
 Every completion scenario starts from the same 40,000-job queue, so only concurrency varies between them. The window starts when the worker takes its first job; a fast adapter that drains the queue before the window ends is timed up to its last job, so its rate is still exact. Redis state runs also print the Redis main-thread CPU time spent per chain or job during the window.
 
-Containers (PostgreSQL, MySQL, MariaDB, Redis, NATS) start once per run and are shared: each scenario child gets its own PostgreSQL schema, MySQL database, channel prefix or subject prefix. After all runs finish, the tool writes `results.md`: one markdown table per scenario family (creation, no-op completion) and axis, with adapters as rows. A run of some adapters or scenarios rewrites only its own cells, and the line under the title records the date, commit, load average and what ran. The docs site reads its numbers from this file, so commit it with the run.
+Containers (PostgreSQL, MySQL, MariaDB, Redis, NATS) start once per run and are shared: each scenario child gets its own PostgreSQL schema, MySQL database, channel prefix or subject prefix. After all runs finish, the tool writes `results.md`: one markdown table per scenario family (creation, no-op completion, batched no-op completion) and axis, with adapters as rows. A run of some adapters or scenarios rewrites only its own cells, and the line under the title records the date, commit, load average and what ran. The docs site reads its numbers from this file, so commit it with the run.
 
 ## Running
 
-Each adapter has one script per provider example, so you can compare driver implementations head-to-head on identical hardware. By default each adapter runs all five scenarios; flags can override.
+Each adapter has one script per provider example, so you can compare driver implementations head-to-head on identical hardware. By default each adapter runs all eight scenarios; flags can override.
 
 ```bash
-pnpm start                                # all benchmarks, all five scenarios
+pnpm start                                # all benchmarks, all eight scenarios
 
 # State axis (noop notify)
 pnpm start:state-in-process          # synchronous in-process state

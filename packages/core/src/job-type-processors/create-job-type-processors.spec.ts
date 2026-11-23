@@ -13,6 +13,36 @@ const jobTypes = defineJobTypes<Defs>();
 const stateAdapter = createInProcessStateAdapter({ mode: "async" });
 const client = createClient({ stateAdapter, jobTypes });
 
+describe("createProcessors config validation", () => {
+  it("names the processor and every invalid field", () => {
+    expect(() => {
+      createProcessors({
+        client,
+        jobTypes,
+        backoffConfig: { initialDelayMs: -1, maxDelayMs: 1000 },
+        processors: {
+          foo: {
+            backoffConfig: { initialDelayMs: 1000, maxDelayMs: Number.NaN, multiplier: 0 },
+            batchLimit: 0,
+            attemptHandler: async () => {},
+          },
+        },
+      });
+    }).toThrow(
+      expect.objectContaining({
+        name: "TypeError",
+        message: [
+          "createProcessors: invalid configuration:",
+          "  - backoffConfig.initialDelayMs must be a non-negative finite number (got -1)",
+          '  - processors["foo"].backoffConfig.maxDelayMs must be a non-negative number (got NaN)',
+          '  - processors["foo"].backoffConfig.multiplier must be a positive finite number (got 0)',
+          '  - processors["foo"].batchLimit must be a positive integer (got 0)',
+        ].join("\n"),
+      }),
+    );
+  });
+});
+
 describe("registry-level backoffConfig cascade", () => {
   it("stamps registry-level defaults onto processors that don't override them", () => {
     const registry = createProcessors({

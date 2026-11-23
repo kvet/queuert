@@ -87,6 +87,11 @@ export const createOtelObservabilityAdapter = ({
     unit: "s",
     description: "Duration of job attempt processing",
   });
+  const jobAttemptBatchSizeHistogram = meter?.createHistogram("queuert.job.attempt.batch_size", {
+    unit: "{job}",
+    description: "Jobs one attempt handler call received",
+    advice: { explicitBucketBoundaries: [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000] },
+  });
 
   const jobTypeIdleGauge = meter?.createUpDownCounter("queuert.job_type.idle", {
     description: "Workers idle for this job type",
@@ -228,6 +233,9 @@ export const createOtelObservabilityAdapter = ({
         "queuert.job.type": typeName,
         "queuert.chain.type": chainTypeName,
       });
+    },
+    jobAttemptBatchSize: ({ typeName, size }) => {
+      jobAttemptBatchSizeHistogram?.record(size, { "queuert.job.type": typeName });
     },
 
     jobTypeIdleChange: ({ delta, typeName }) => {

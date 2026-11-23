@@ -82,6 +82,39 @@ export class JobTakenByAnotherWorkerError extends Error {
   }
 }
 
+/**
+ * Thrown when a batched attempt handler's `applyJobOutcomes` or `fenceJobs` finds jobs it names
+ * whose current attempt is not the one this worker holds. Batch variant of
+ * {@link JobTakenByAnotherWorkerError}, listing every such job.
+ */
+export class JobsTakenByAnotherWorkerError extends Error {
+  /** The jobs that were contested. */
+  readonly jobIds: readonly string[];
+  /** The worker that holds the batch. */
+  readonly workerId: string;
+  /**
+   * The worker that currently holds the attempt of each job in `jobIds`, in the same order, or
+   * `null` if unknown.
+   */
+  readonly attemptBys: readonly (string | null)[];
+
+  constructor(
+    message: string,
+    options: {
+      jobIds: readonly string[];
+      workerId: string;
+      attemptBys: readonly (string | null)[];
+      cause?: unknown;
+    },
+  ) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "JobsTakenByAnotherWorkerError";
+    this.jobIds = options.jobIds;
+    this.workerId = options.workerId;
+    this.attemptBys = options.attemptBys;
+  }
+}
+
 /** Thrown when a job does not exist. */
 export class JobNotFoundError extends Error {
   /** The ID that was looked up. */
@@ -622,6 +655,14 @@ export class JobsTypeValidationError extends Error {
 }
 
 export const toSingleJobError = (error: unknown): unknown => {
+  if (error instanceof JobsTakenByAnotherWorkerError) {
+    return new JobTakenByAnotherWorkerError(`Job taken by another worker`, {
+      jobId: error.jobIds[0],
+      workerId: error.workerId,
+      attemptBy: error.attemptBys[0],
+      cause: error,
+    });
+  }
   if (error instanceof JobsNotFoundError) {
     const jobId = error.jobIds[0];
     return new JobNotFoundError(`Job with id ${jobId} not found`, { jobId, cause: error });

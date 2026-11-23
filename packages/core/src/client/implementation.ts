@@ -1,7 +1,8 @@
-import { truncate } from "@queuert/helpers/serialize-error";
+import { serializeError, truncate } from "@queuert/helpers/serialize-error";
 import { type SyncAsync, syncAsync, step } from "@queuert/sync-async";
 
 import type { AnyJobOutcome, AnyJobOutcomeFields } from "../attempt/attempt-handler.types.ts";
+import { type BackoffConfig, calculateBackoffMs } from "../entities/backoff.ts";
 import { type Chain, assertChainsTypeName, mapStateChainToChain } from "../entities/chain.ts";
 import type { DeduplicationOptions } from "../entities/deduplication.ts";
 import type { ScheduleOptions } from "../entities/schedule.ts";
@@ -18,7 +19,6 @@ import {
   UnknownJobTypesError,
 } from "../errors.ts";
 import type { AnyNewJob } from "../job-types/job-types.resolvers.ts";
-import { notifyAfterTransaction } from "../notify-adapter/tx-notifications.ts";
 import type {
   BlockerSpanHandle,
   JobSpanHandle,
@@ -32,6 +32,12 @@ import type {
   StateJob,
   StateJobInfo,
 } from "../state-adapter/state-adapter.ts";
+import {
+  type TxEffects,
+  createTxEffects,
+  registerTxEffects,
+  registerTxEffectsAfterError,
+} from "../tx-effects/tx-effects.ts";
 import type { Helpers } from "./setup-helpers.ts";
 
 type BlockerSpan = { blockerChain: StateChain; blockerSpan: BlockerSpanHandle | undefined };
@@ -151,7 +157,13 @@ const lockBlockerChains = syncAsync(function* (
     items,
     itemIndexOf,
     txCtx,
-  }: { items: PreparedJob[]; itemIndexOf?: (index: number) => number; txCtx: BaseTxContext },
+    effects,
+  }: {
+    items: PreparedJob[];
+    itemIndexOf?: (index: number) => number;
+    txCtx: BaseTxContext;
+    effects: TxEffects;
+  },
 ) {
   const blockerChainIds: string[] = [];
   for (const item of items) {
@@ -167,7 +179,7 @@ const lockBlockerChains = syncAsync(function* (
           }),
         )
       : noChains;
-  notifyAfterTransaction(helpers, txCtx, {
+  effects.notify({
     lockedPendingJobs: lockedChains.flatMap((chain) =>
       chain?.head.status === "pending" ? [chain.head] : [],
     ),
@@ -260,16 +272,16 @@ const addJobsBlockers = syncAsync(function* (
 const reportCreatedJobs = (
   helpers: Helpers,
   items: (CreatedJob & { blockerSpans: BlockerSpan[] })[],
-  { isChainHead, txCtx }: { isChainHead: boolean; txCtx: BaseTxContext },
+  { isChainHead, effects }: { isChainHead: boolean; effects: TxEffects },
 ): void => {
   for (const item of items) {
     for (const { blockerChain, blockerSpan } of item.blockerSpans) {
       if (!blockerSpan) continue;
-      helpers.stateAdapter.onTransactionCommit(txCtx, () => {
+      effects.onCommit(() => {
         blockerSpan.end({ blockerChainTraceContext: blockerChain.traceContext });
       });
       if (blockerChain.completedAt !== null) {
-        helpers.stateAdapter.onTransactionCommit(txCtx, () => {
+        effects.onCommit(() => {
           helpers.observabilityHelper.completeBlockerSpan(blockerSpan.traceContext, blockerChain);
         });
       }
@@ -289,22 +301,22 @@ const reportCreatedJobs = (
     }
 
     if (jobSpan !== undefined) {
-      helpers.stateAdapter.onTransactionCommit(txCtx, () => {
+      effects.onCommit(() => {
         jobSpan.end({ status: "created", chainId: chain.id, jobId: job.id });
       });
-      helpers.stateAdapter.onTransactionRollback(txCtx, () => {
+      effects.onRollback(() => {
         jobSpan.end({ status: "error", error: new Error("savepoint rolled back") });
       });
     }
 
     if (isChainHead) {
-      helpers.stateAdapter.onTransactionCommit(txCtx, () => {
+      effects.onCommit(() => {
         helpers.observabilityHelper.chainCreated(chain, { input: job.input });
       });
     }
 
     const stateJob: StateJob = { ...job, chain };
-    helpers.stateAdapter.onTransactionCommit(txCtx, () => {
+    effects.onCommit(() => {
       helpers.observabilityHelper.jobCreated(stateJob, {
         blockers: blockerChains,
       });
@@ -321,14 +333,14 @@ const reportCreatedJobs = (
       scheduledTypeNames.push(job.typeName);
       continue;
     }
-    helpers.stateAdapter.onTransactionCommit(txCtx, () => {
+    effects.onCommit(() => {
       helpers.observabilityHelper.jobBlocked(stateJob, {
         blockedByChains: incompleteBlockerChains,
       });
     });
   }
 
-  notifyAfterTransaction(helpers, txCtx, { jobsScheduled: scheduledTypeNames });
+  effects.notify({ jobsScheduled: scheduledTypeNames });
 };
 
 type CreateChainsOptions = { chains: PreparedJob["entry"][]; txCtx: BaseTxContext };
@@ -355,8 +367,9 @@ export const runCreateChains: SyncAsync<
   for (const item of prepared) {
     item.jobSpan = helpers.observabilityHelper.startJobSpan(item.entry.typeName, null);
   }
+  const effects = createTxEffects();
   try {
-    const locked = yield* lockBlockerChains.steps(helpers, { items: prepared, txCtx });
+    const locked = yield* lockBlockerChains.steps(helpers, { items: prepared, txCtx, effects });
     const createdChains = yield* step(
       helpers.stateAdapter.createJobs({
         txCtx,
@@ -378,18 +391,20 @@ export const runCreateChains: SyncAsync<
         return { ...item, job: head, chain, deduplicated };
       }),
     });
-    reportCreatedJobs(helpers, created, { isChainHead: true, txCtx });
-
-    return createdChains.map(
+    reportCreatedJobs(helpers, created, { isChainHead: true, effects });
+    const chainsCreated = createdChains.map(
       (createdChain): Chain<string, string, unknown, unknown> & { deduplicated: boolean } => ({
         ...mapStateChainToChain(createdChain, helpers.jobTypes),
         deduplicated: createdChain.deduplicated,
       }),
     );
+    registerTxEffects(helpers, txCtx, effects);
+    return chainsCreated;
   } catch (error) {
     for (const { jobSpan } of prepared) {
       jobSpan?.end({ status: "error", error });
     }
+    registerTxEffectsAfterError(helpers, txCtx, effects);
     throw error;
   }
 });
@@ -400,17 +415,18 @@ const reportCompletedJob = syncAsync(function* (
     completed,
     encodedOutput,
     txCtx,
-  }: { completed: StateJob; encodedOutput: unknown; txCtx: BaseTxContext },
+    effects,
+  }: { completed: StateJob; encodedOutput: unknown; txCtx: BaseTxContext; effects: TxEffects },
 ) {
   const { chain } = completed;
 
-  helpers.stateAdapter.onTransactionCommit(txCtx, () => {
+  effects.onCommit(() => {
     helpers.observabilityHelper.jobCompleted(completed, { output: encodedOutput });
   });
-  helpers.stateAdapter.onTransactionCommit(txCtx, () => {
+  effects.onCommit(() => {
     helpers.observabilityHelper.chainCompleted(chain, { output: encodedOutput });
   });
-  notifyAfterTransaction(helpers, txCtx, { chainsCompleted: [completed.chainId] });
+  effects.notify({ chainsCompleted: [completed.chainId] });
 
   if (!chain.blocking) return;
   const dependentJobs = yield* step(
@@ -419,7 +435,7 @@ const reportCompletedJob = syncAsync(function* (
       blockedByChainId: chain.id,
     }),
   );
-  reportUnblockedJobs(helpers, { chain, dependentJobs, txCtx });
+  reportUnblockedJobs(helpers, { chain, dependentJobs, effects });
 });
 
 const reportUnblockedJobs = (
@@ -427,13 +443,13 @@ const reportUnblockedJobs = (
   {
     chain,
     dependentJobs,
-    txCtx,
-  }: { chain: StateChainInfo; dependentJobs: StateDependentJob[]; txCtx: BaseTxContext },
+    effects,
+  }: { chain: StateChainInfo; dependentJobs: StateDependentJob[]; effects: TxEffects },
 ): void => {
   if (dependentJobs.length === 0) return;
   for (const { traceContext } of dependentJobs) {
     if (traceContext === null) continue;
-    helpers.stateAdapter.onTransactionCommit(txCtx, () => {
+    effects.onCommit(() => {
       helpers.observabilityHelper.completeBlockerSpan(traceContext, chain);
     });
   }
@@ -444,11 +460,11 @@ const reportUnblockedJobs = (
       .map((dependentJob) => [dependentJob.job.id, dependentJob.job]),
   );
 
-  notifyAfterTransaction(helpers, txCtx, {
+  effects.notify({
     jobsScheduled: [...unblockedJobs.values()].map((stateJob) => stateJob.typeName),
   });
   for (const stateJob of unblockedJobs.values()) {
-    helpers.stateAdapter.onTransactionCommit(txCtx, () => {
+    effects.onCommit(() => {
       helpers.observabilityHelper.jobUnblocked(stateJob, { unblockedByChain: chain });
     });
   }
@@ -459,23 +475,38 @@ type OutcomeItem = {
   outcome: AnyJobOutcome;
   attemptToken?: string;
   workerId?: string;
+  backoffConfig?: BackoffConfig;
 };
 
 export type OutcomeJob = StateJob & { continuation?: StateJobInfo };
 
-export const parseJobOutcome = (options: AnyJobOutcomeFields, method: string): AnyJobOutcome => {
-  const outcomeCount =
-    Number("output" in options) +
-    Number("continueWith" in options) +
-    Number("reschedule" in options);
-  if (outcomeCount !== 1) {
-    throw new Error(`${method} requires exactly one of output, continueWith or reschedule`);
+export const jobOutcomeKeys: readonly (keyof AnyJobOutcomeFields)[] = [
+  "output",
+  "continueWith",
+  "reschedule",
+];
+
+export const batchJobOutcomeKeys: readonly (keyof AnyJobOutcomeFields)[] = [
+  ...jobOutcomeKeys,
+  "fail",
+];
+
+export const parseJobOutcome = (
+  options: AnyJobOutcomeFields,
+  { method, outcomeKeys }: { method: string; outcomeKeys: readonly (keyof AnyJobOutcomeFields)[] },
+): AnyJobOutcome => {
+  const presentKeys = batchJobOutcomeKeys.filter((key) => key in options);
+  if (presentKeys.length !== 1 || !outcomeKeys.includes(presentKeys[0])) {
+    throw new Error(
+      `${method} requires exactly one of ${outcomeKeys.slice(0, -1).join(", ")} or ${outcomeKeys.at(-1)}`,
+    );
   }
   if (options.reason !== undefined && !("reschedule" in options)) {
     throw new Error(`${method} accepts reason only together with reschedule`);
   }
   if ("reschedule" in options) return { reschedule: options.reschedule!, reason: options.reason };
   if ("continueWith" in options) return { continueWith: options.continueWith! };
+  if (presentKeys[0] === "fail") return { fail: options.fail };
   return { output: options.output };
 };
 
@@ -485,7 +516,13 @@ const completeOutputItems = syncAsync(function* (
     items,
     encodedOutputs,
     txCtx,
-  }: { items: OutcomeItem[]; encodedOutputs: unknown[]; txCtx: BaseTxContext },
+    effects,
+  }: {
+    items: OutcomeItem[];
+    encodedOutputs: unknown[];
+    txCtx: BaseTxContext;
+    effects: TxEffects;
+  },
 ) {
   const completedJobs = yield* step(
     helpers.stateAdapter.completeJobs({
@@ -504,6 +541,7 @@ const completeOutputItems = syncAsync(function* (
       completed,
       encodedOutput: encodedOutputs[index],
       txCtx,
+      effects,
     });
   }
   return completedJobs;
@@ -516,11 +554,13 @@ const continueItems = syncAsync(function* (
     prepared,
     itemIndexOf,
     txCtx,
+    effects,
   }: {
     items: OutcomeItem[];
     prepared: PreparedJob[];
     itemIndexOf?: (index: number) => number;
     txCtx: BaseTxContext;
+    effects: TxEffects;
   },
 ) {
   prepared.forEach((item, index) => {
@@ -531,6 +571,7 @@ const continueItems = syncAsync(function* (
       items: prepared,
       itemIndexOf,
       txCtx,
+      effects,
     });
     const continuedJobs = yield* step(
       helpers.stateAdapter.continueJobs({
@@ -557,7 +598,7 @@ const continueItems = syncAsync(function* (
           : [{ ...item, job: continued.continuation, chain: continued.chain, deduplicated: false }];
       }),
     });
-    reportCreatedJobs(helpers, created, { isChainHead: false, txCtx });
+    reportCreatedJobs(helpers, created, { isChainHead: false, effects });
 
     const continuationById = new Map(created.map(({ job }) => [job.id, job]));
     return continuedJobs.map((continued, index) => {
@@ -574,7 +615,7 @@ const continueItems = syncAsync(function* (
         ...continued,
         continuation: continuationById.get(continued.continuation.id)!,
       };
-      helpers.stateAdapter.onTransactionCommit(txCtx, () => {
+      effects.onCommit(() => {
         helpers.observabilityHelper.jobCompleted(completed, {
           output: null,
           continuedWith: completed.continuation,
@@ -592,12 +633,20 @@ const continueItems = syncAsync(function* (
 
 const rescheduleItems = syncAsync(function* (
   helpers: Helpers,
-  { items, txCtx }: { items: OutcomeItem[]; txCtx: BaseTxContext },
+  { items, txCtx, effects }: { items: OutcomeItem[]; txCtx: BaseTxContext; effects: TxEffects },
 ) {
   const rescheduledJobs = yield* step(
     helpers.stateAdapter.rescheduleJobs({
       txCtx,
-      jobs: items.map(({ job, outcome, attemptToken }) => {
+      jobs: items.map(({ job, outcome, attemptToken, backoffConfig }) => {
+        if ("fail" in outcome) {
+          return {
+            jobId: job.id,
+            schedule: { afterMs: calculateBackoffMs(job.consecutiveFailures + 1, backoffConfig!) },
+            error: serializeError(outcome.fail),
+            attemptToken,
+          };
+        }
         const { reschedule, reason } = outcome as { reschedule: ScheduleOptions; reason?: string };
         return {
           jobId: job.id,
@@ -611,17 +660,17 @@ const rescheduleItems = syncAsync(function* (
   reportRescheduledJobs(helpers, {
     rescheduledJobs,
     scheduledJobs: rescheduledJobs.filter((job) => job?.status === "pending"),
-    txCtx,
+    effects,
   });
   return rescheduledJobs;
 });
 
 export const runApplyJobOutcomes: SyncAsync<
-  [helpers: Helpers, options: { items: OutcomeItem[]; txCtx: BaseTxContext }],
+  [helpers: Helpers, options: { items: OutcomeItem[]; txCtx: BaseTxContext; effects: TxEffects }],
   (OutcomeJob | undefined)[]
 > = syncAsync(function* (
   helpers: Helpers,
-  { items, txCtx }: { items: OutcomeItem[]; txCtx: BaseTxContext },
+  { items, txCtx, effects }: { items: OutcomeItem[]; txCtx: BaseTxContext; effects: TxEffects },
 ) {
   const prepared = mapItems(items, ({ job, outcome }) => {
     if ("output" in outcome) return helpers.jobTypes.encodeOutput(job.typeName, outcome.output);
@@ -635,7 +684,9 @@ export const runApplyJobOutcomes: SyncAsync<
   });
   const outputItems = items.filter(({ outcome }) => "output" in outcome);
   const continueWithItems = items.filter(({ outcome }) => "continueWith" in outcome);
-  const reschedulesItems = items.filter(({ outcome }) => "reschedule" in outcome);
+  const reschedulesItems = items.filter(
+    ({ outcome }) => "reschedule" in outcome || "fail" in outcome,
+  );
   const encodedOutputs =
     outputItems.length === items.length
       ? prepared
@@ -655,13 +706,19 @@ export const runApplyJobOutcomes: SyncAsync<
               ? undefined
               : (index) => items.indexOf(continueWithItems[index]),
           txCtx,
+          effects,
         })
       : []),
     ...(outputItems.length > 0
-      ? yield* completeOutputItems.steps(helpers, { items: outputItems, encodedOutputs, txCtx })
+      ? yield* completeOutputItems.steps(helpers, {
+          items: outputItems,
+          encodedOutputs,
+          txCtx,
+          effects,
+        })
       : []),
     ...(reschedulesItems.length > 0
-      ? yield* rescheduleItems.steps(helpers, { items: reschedulesItems, txCtx })
+      ? yield* rescheduleItems.steps(helpers, { items: reschedulesItems, txCtx, effects })
       : []),
   ];
   const writtenById = new Map(written.flatMap((job) => (job === undefined ? [] : [[job.id, job]])));
@@ -673,19 +730,19 @@ const reportRescheduledJobs = (
   {
     rescheduledJobs,
     scheduledJobs,
-    txCtx,
+    effects,
   }: {
     rescheduledJobs: (StateJob | undefined)[];
     scheduledJobs: (StateJob | undefined)[];
-    txCtx: BaseTxContext;
+    effects: TxEffects;
   },
 ): void => {
-  notifyAfterTransaction(helpers, txCtx, {
+  effects.notify({
     jobsScheduled: scheduledJobs.flatMap((job) => (job === undefined ? [] : [job.typeName])),
   });
   for (const job of rescheduledJobs) {
     if (job === undefined) continue;
-    helpers.stateAdapter.onTransactionCommit(txCtx, () => {
+    effects.onCommit(() => {
       helpers.observabilityHelper.jobRescheduled(job);
     });
   }

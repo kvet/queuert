@@ -2,7 +2,7 @@
 title: Prioritization
 description: Reserve worker capacity for urgent workloads by partitioning job types across workers.
 sidebar:
-  order: 18
+  order: 19
 ---
 
 import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/diagram";
@@ -37,7 +37,7 @@ Queuert has no built-in `priority` field. Prioritization is a consequence of **p
 
 ## Workloads and Capacity
 
-A worker provides a fixed amount of capacity — up to `concurrency` jobs in flight at once. By default, every job type in its processor registry competes for those same slots. If one worker registers every type, a long-running bulk workload can occupy every slot and stall urgent work behind it.
+A worker provides a fixed amount of capacity — up to `concurrency` attempt handler calls in flight at once, each one job or one batch of a [batched processor](/queuert/guides/batched-processors/). By default, every job type in its processor registry competes for those same slots. If one worker registers every type, a long-running bulk workload can occupy every slot and stall urgent work behind it.
 
 The fix is to run multiple workers, each owning a different subset of job types. Customer-facing transactional emails (password resets, 2FA codes) and bulk marketing emails (digests, newsletters) are two workloads in one registry:
 

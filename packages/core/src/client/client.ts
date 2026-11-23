@@ -44,7 +44,6 @@ import {
   mergeJobTypes,
 } from "../job-types/merge-job-types.ts";
 import type { NotifyAdapter } from "../notify-adapter/notify-adapter.ts";
-import { notifyAfterTransaction } from "../notify-adapter/tx-notifications.ts";
 import type { Log } from "../observability-adapter/log.ts";
 import type { ObservabilityAdapter } from "../observability-adapter/observability-adapter.ts";
 import { completedAttemptSpanResult } from "../observability-adapter/observability-helper.ts";
@@ -56,7 +55,18 @@ import type {
   StateChain,
 } from "../state-adapter/state-adapter.ts";
 import { normalizeTxCtx, requireTxCtx } from "../state-adapter/tx-context.ts";
-import { parseJobOutcome, runApplyJobOutcomes, runCreateChains } from "./implementation.ts";
+import {
+  createTxEffects,
+  notifyAfterTransaction,
+  registerTxEffects,
+  registerTxEffectsAfterError,
+} from "../tx-effects/tx-effects.ts";
+import {
+  jobOutcomeKeys,
+  parseJobOutcome,
+  runApplyJobOutcomes,
+  runCreateChains,
+} from "./implementation.ts";
 import { type Helpers, createHelpers, runInMode } from "./setup-helpers.ts";
 
 export const helpersSymbol: unique symbol = Symbol("queuert.helpers");
@@ -913,9 +923,10 @@ export const createClient = <
                 >,
             );
 
+          const effects = createTxEffects();
           for (const stateChain of verdicts) {
             if (stateChain !== undefined && !Array.isArray(stateChain)) {
-              helpers.stateAdapter.onTransactionCommit(txCtx, () => {
+              effects.onCommit(() => {
                 helpers.observabilityHelper.chainDeleted(stateChain);
               });
             }
@@ -925,7 +936,7 @@ export const createClient = <
             const currentJob = verdict.tail ?? verdict.head;
             return currentJob.status === "pending" ? [currentJob] : [];
           });
-          notifyAfterTransaction(helpers, txCtx, {
+          effects.notify({
             lockedPendingJobs: deletedPendingJobs,
             settledJobIds: verdicts.flatMap((verdict) =>
               verdict === undefined || Array.isArray(verdict)
@@ -940,6 +951,7 @@ export const createClient = <
               )
               .flatMap((stateJob) => (stateJob?.status === "running" ? [stateJob.id] : [])),
           });
+          registerTxEffects(helpers, txCtx, effects);
 
           return deletedChains;
         }),
@@ -958,21 +970,20 @@ export const createClient = <
       runInMode(
         helpers,
         syncAsync(function* () {
-          const { job, output, continueWith, reschedule, reason, ...txCtx } = options as {
-            job: JobRef<TJobId, TJobTypeName>;
-          } & AnyJobOutcomeFields;
-          const item = {
-            job,
-            ...("output" in options && { output }),
-            ...("continueWith" in options && { continueWith }),
-            ...("reschedule" in options && { reschedule }),
-            ...(reason !== undefined && { reason }),
-          };
+          const { job, output, continueWith, reschedule, reason, fail, ...txCtxFields } =
+            options as { job: JobRef<TJobId, TJobTypeName> } & AnyJobOutcomeFields;
+          const outcome = parseJobOutcome(options, {
+            method: "applyJobOutcome",
+            outcomeKeys: jobOutcomeKeys,
+          });
+          const txCtx = requireTxCtx(helpers.stateAdapter, txCtxFields, "applyJobOutcome");
           try {
             const [applied] = yield* step(
               client.applyJobOutcomes({
                 ...(txCtx as GetStateAdapterTxContext<TStateAdapter>),
-                items: [item as ApplyJobOutcomesItem<TStateAdapter, TJobTypeDefinitions>],
+                items: [
+                  { job, ...outcome } as ApplyJobOutcomesItem<TStateAdapter, TJobTypeDefinitions>,
+                ],
               }),
             );
             return applied;
@@ -1007,7 +1018,10 @@ export const createClient = <
           } & AnyJobOutcomeFields)[];
           const parsedItems = typedItems.map((item) => ({
             job: item.job,
-            outcome: parseJobOutcome(item, "applyJobOutcomes"),
+            outcome: parseJobOutcome(item, {
+              method: "applyJobOutcomes",
+              outcomeKeys: jobOutcomeKeys,
+            }),
           }));
           const jobIds = parsedItems.map(({ job }) => job.id);
           if (new Set(jobIds).size !== jobIds.length) {
@@ -1017,69 +1031,84 @@ export const createClient = <
           const stateJobs = yield* step(
             helpers.stateAdapter.getJobs({ txCtx, jobIds, lock: "exclusive" }),
           );
-          notifyAfterTransaction(helpers, txCtx, {
-            lockedPendingJobs: stateJobs.flatMap((job) => (job?.status === "pending" ? [job] : [])),
-          });
-          const assertApplicable = (): void => {
-            const notFound = jobIds.filter((_, index) => stateJobs[index] === undefined);
-            if (notFound.length > 0) {
-              throw new JobsNotFoundError(`Jobs not found: ${notFound.join(", ")}`, {
-                jobIds: notFound,
+          const effects = createTxEffects();
+          try {
+            effects.notify({
+              lockedPendingJobs: stateJobs.flatMap((job) =>
+                job?.status === "pending" ? [job] : [],
+              ),
+            });
+            const assertApplicable = (): void => {
+              const notFound = jobIds.filter((_, index) => stateJobs[index] === undefined);
+              if (notFound.length > 0) {
+                throw new JobsNotFoundError(`Jobs not found: ${notFound.join(", ")}`, {
+                  jobIds: notFound,
+                });
+              }
+              const alreadyCompleted = jobIds.filter(
+                (_, index) => stateJobs[index]!.status === "completed",
+              );
+              if (alreadyCompleted.length > 0) {
+                throw new JobsAlreadyCompletedError(
+                  `Cannot apply outcomes to jobs that are already completed: ${alreadyCompleted.join(", ")}`,
+                  { jobIds: alreadyCompleted },
+                );
+              }
+              const changed = parsedItems.flatMap(({ job: { id, status } }, index) =>
+                status !== undefined && stateJobs[index]!.status !== status
+                  ? [{ id, expectedStatus: status, actualStatus: stateJobs[index]!.status }]
+                  : [],
+              );
+              if (changed.length > 0) {
+                throw new JobsStatusMismatchError(
+                  `Jobs changed status since they were read: ${changed.map(({ id }) => id).join(", ")}`,
+                  {
+                    jobIds: changed.map(({ id }) => id),
+                    expectedStatuses: changed.map(({ expectedStatus }) => expectedStatus),
+                    actualStatuses: changed.map(({ actualStatus }) => actualStatus),
+                  },
+                );
+              }
+              assertJobsTypeName(stateJobs, {
+                jobIds,
+                typeNames: parsedItems.map(({ job }) => job.typeName),
               });
-            }
-            const alreadyCompleted = jobIds.filter(
-              (_, index) => stateJobs[index]!.status === "completed",
-            );
-            if (alreadyCompleted.length > 0) {
-              throw new JobsAlreadyCompletedError(
-                `Cannot apply outcomes to jobs that are already completed: ${alreadyCompleted.join(", ")}`,
-                { jobIds: alreadyCompleted },
-              );
-            }
-            const changed = parsedItems.flatMap(({ job: { id, status } }, index) =>
-              status !== undefined && stateJobs[index]!.status !== status
-                ? [{ id, expectedStatus: status, actualStatus: stateJobs[index]!.status }]
-                : [],
-            );
-            if (changed.length > 0) {
-              throw new JobsStatusMismatchError(
-                `Jobs changed status since they were read: ${changed.map(({ id }) => id).join(", ")}`,
-                {
-                  jobIds: changed.map(({ id }) => id),
-                  expectedStatuses: changed.map(({ expectedStatus }) => expectedStatus),
-                  actualStatuses: changed.map(({ actualStatus }) => actualStatus),
-                },
-              );
-            }
-            assertJobsTypeName(stateJobs, {
-              jobIds,
-              typeNames: parsedItems.map(({ job }) => job.typeName),
-            });
-          };
+            };
 
-          assertApplicable();
-          const applied = yield* runApplyJobOutcomes.steps(helpers, {
-            txCtx,
-            items: parsedItems.map(({ outcome }, index) => ({ job: stateJobs[index]!, outcome })),
-          });
-          notifyAfterTransaction(helpers, txCtx, {
-            settledJobIds: jobIds,
-            jobAttemptsLost: applied.flatMap((written, index) =>
-              written !== undefined && stateJobs[index]!.status === "running" ? [written.id] : [],
-            ),
-          });
-
-          return applied.map((written, index) => {
-            if (written === undefined) {
-              throw new Error(`Job ${jobIds[index]} changed under its lock`);
-            }
-            helpers.stateAdapter.onTransactionCommit(txCtx, () => {
-              helpers.observabilityHelper
-                .startAttemptSpan(written, { workerId: null, workerSlot: null })
-                ?.end(completedAttemptSpanResult(written));
+            assertApplicable();
+            const applied = yield* runApplyJobOutcomes.steps(helpers, {
+              txCtx,
+              effects,
+              items: parsedItems.map(({ outcome }, index) => ({ job: stateJobs[index]!, outcome })),
             });
-            return mapStateJobToJob(written, helpers.jobTypes);
-          }) as unknown as ApplyJobOutcomesResult<TStateAdapter, TJobTypeDefinitions, TItems>;
+            effects.notify({
+              settledJobIds: jobIds,
+              jobAttemptsLost: applied.flatMap((written, index) =>
+                written !== undefined && stateJobs[index]!.status === "running" ? [written.id] : [],
+              ),
+            });
+
+            const appliedJobs = applied.map((written, index) => {
+              if (written === undefined) {
+                throw new Error(`Job ${jobIds[index]} changed under its lock`);
+              }
+              effects.onCommit(() => {
+                helpers.observabilityHelper
+                  .startAttemptSpan(written, { workerId: null, workerSlot: null })
+                  ?.end(completedAttemptSpanResult(written));
+              });
+              return mapStateJobToJob(written, helpers.jobTypes);
+            });
+            registerTxEffects(helpers, txCtx, effects);
+            return appliedJobs as unknown as ApplyJobOutcomesResult<
+              TStateAdapter,
+              TJobTypeDefinitions,
+              TItems
+            >;
+          } catch (error) {
+            registerTxEffectsAfterError(helpers, txCtx, effects);
+            throw error;
+          }
         }),
       ),
 

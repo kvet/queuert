@@ -22,7 +22,7 @@ import {
 
 This document describes the worker runner design in Queuert: how worker runners coordinate job processing, manage concurrency, and handle failures.
 
-A **worker runner**, returned by `createWorkerRunner`, runs one **worker** at a time. A worker is a row in the `worker` table with an id and a **lease**. The worker runner runs a main loop that coordinates job processing across multiple **slots**. Each slot processes one job at a time; the worker runner manages concurrency and scaling.
+A **worker runner**, returned by `createWorkerRunner`, runs one **worker** at a time. A worker is a row in the `worker` table with an id and a **lease**. The worker runner runs a main loop that coordinates job processing across multiple **slots**. Each slot runs one attempt handler call at a time — one job, or one batch of a [batched processor](/queuert/guides/batched-processors/); the worker runner manages concurrency and scaling.
 
 ## Concurrency Model
 
@@ -30,11 +30,11 @@ A worker runner processes jobs in parallel using slots. See `createWorkerRunner`
 
 ### Architecture
 
-<Diagram label="A worker runner with concurrency 3: the main loop acquires jobs for its idle slots in one batched call and spawns a slot per job, and each slot completes its own job in the database">
+<Diagram label="A worker runner with concurrency 3: the main loop acquires jobs for its idle slots in one startJobAttempts call and spawns a slot per job or batch, and each slot completes its own jobs in the database">
   <Flow direction="column">
     <Group title="worker runner · concurrency 3">
       <Flow>
-        <Node sub="acquires a batch">main loop</Node>
+        <Node sub="acquires jobs">main loop</Node>
         <Rows spine>
           <Flow>
             <Arrow label="spawn" />
@@ -58,9 +58,9 @@ A worker runner processes jobs in parallel using slots. See `createWorkerRunner`
 
 **How it works:**
 
-1. Main loop acquires up to the idle slot count of jobs in one `startJobAttempts` call and spawns a slot per job
-2. Each slot processes its job independently
-3. When slots complete, main loop acquires a batch for the freed slots
+1. Main loop acquires up to the idle slot count of jobs, or of batches for a batched processor, in one `startJobAttempts` call and spawns a slot per job or batch
+2. Each slot processes its job or batch independently
+3. When slots complete, main loop acquires jobs for the freed slots
 4. Worker runners compete for jobs via database-level locking (`FOR UPDATE SKIP LOCKED` in PostgreSQL)
 
 ## Worker Lifecycle
@@ -69,7 +69,7 @@ A worker runner processes jobs in parallel using slots. See `createWorkerRunner`
 
 The worker runner runs a single coordinating loop:
 
-1. **Fill**: Call `startJobAttempts` with the idle slot count as `limit`, start each returned job in its own slot, and repeat until a call returns fewer jobs than its `limit` or all slots are busy. Each call atomically starts up to `limit` attempts under the worker's id, so filling `N` idle slots costs one round-trip, and an idle worker runner issues one acquisition per wake-up
+1. **Fill**: Call `startJobAttempts` with the idle slot count as `limit` and each processor's `batchLimit` (1 without one), start each returned batch in its own slot, and repeat until a call returns fewer batches than its `limit` or all slots are busy. A type's claimed jobs are its oldest due ones, split into batches of its `batchLimit`, so a processor without one gets one job per slot. Each call atomically starts the attempts of up to `limit` batches under the worker's id, so filling `N` idle slots costs one round-trip, and an idle worker runner issues one acquisition per wake-up
 2. **Reclaim**: If any idle slots remain, reschedule the worker's own running jobs that no slot runs when due, then reclaim one expired worker (see [Reclaim](#reclaim)); if a worker was reclaimed, skip the wait and start the next iteration
 3. **Wait**: Listen for notification, poll timeout, or slot completion
 4. **Repeat**
@@ -172,7 +172,7 @@ delay = min(initialDelayMs * multiplier^(consecutiveFailures-1), maxDelayMs)
 
 See [Job Processing](../job-processing/) for details on error handling and abort signals.
 
-`createWorkerRunner` validates `concurrency`, `pollIntervalMs`, `recoveryBackoffConfig`, `leaseConfig` and every `backoffConfig` passed to it, including an unused top-level one, and throws a `TypeError` listing each invalid field. `concurrency` must be a positive integer, `initialDelayMs` finite and non-negative, `maxDelayMs` non-negative (`Infinity` means no cap), and `pollIntervalMs`, `multiplier`, `durationMs` and `heartbeatMs` finite and positive, with `heartbeatMs` below a third of `durationMs`. Fractional values are allowed.
+`createWorkerRunner` validates `concurrency`, `pollIntervalMs`, `recoveryBackoffConfig`, `leaseConfig` and its `backoffConfig`, including an unused one, and `createProcessors` validates its `backoffConfig` and every processor's `backoffConfig` and `batchLimit`; each throws a `TypeError` listing every invalid field. `concurrency` and `batchLimit` must be positive integers, `initialDelayMs` finite and non-negative, `maxDelayMs` non-negative (`Infinity` means no cap), and `pollIntervalMs`, `multiplier`, `durationMs` and `heartbeatMs` finite and positive, with `heartbeatMs` below a third of `durationMs`. Fractional values are allowed for the others.
 
 ## Client-Based Construction
 
@@ -183,7 +183,7 @@ This is purely a construction convenience — no lifecycle coupling is introduce
 
 ### Multi-Type Worker Runners
 
-A single worker runner can handle multiple job types. The main loop acquires jobs of all registered types for its idle slots, and each slot processes the job it was given. Per-type `backoffConfig` overrides the worker runner's.
+A single worker runner can handle multiple job types. The main loop acquires jobs of all registered types for its idle slots, and each slot processes the job or batch it was given. Per-type `backoffConfig` overrides the worker runner's.
 
 ### Attempt Middlewares
 

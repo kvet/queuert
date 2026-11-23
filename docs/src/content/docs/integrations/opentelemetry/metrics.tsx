@@ -13,6 +13,7 @@ const counter = { label: "counter", mono: true } as const;
 const histogram = { label: "histogram", tone: "accent", mono: true } as const;
 const upDown = { label: "up-down counter", tone: "strong", mono: true } as const;
 const seconds = { label: "unit s", mono: true } as const;
+const jobs = { label: "unit {job}", mono: true } as const;
 
 const jobAttributes = ["queuert.job.type", "queuert.chain.type"];
 
@@ -207,6 +208,16 @@ const histograms: FieldItem[] = [
   },
 ];
 
+const batchSizes: FieldItem[] = [
+  {
+    name: "queuert.job.attempt.batch_size",
+    chips: [histogram, jobs],
+    description:
+      "Jobs one attempt handler call received: up to the processor's batchLimit, and 1 without one.",
+    extra: ["queuert.job.type"],
+  },
+];
+
 const upDownCounters: FieldItem[] = [
   {
     name: "queuert.job_type.idle",
@@ -267,6 +278,11 @@ const Page = () => (
       label="queuert.chain.duration covers the head job's and the continuation's queuert.job.duration; the head job's duration covers a failed attempt, the wait before the retry and the second attempt"
       spans={onboardingDurations}
     />
+    <p>
+      One more histogram records how full batches run, so a processor's <code>batchLimit</code> can
+      be tuned against the batch sizes it actually gets.
+    </p>
+    <FieldList title="Batch sizes" items={batchSizes} idPrefix="metric" />
 
     <h2>Gauges</h2>
     <p>

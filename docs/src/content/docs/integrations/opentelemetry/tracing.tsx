@@ -171,10 +171,10 @@ const attributes = (): FieldItem[] => [
     chips: ["string"],
     description: (
       <>
-        Reason passed to an attempt handler's{" "}
-        <code>{"applyJobOutcome({ reschedule, reason })"}</code> or{" "}
-        <code>{"client.applyJobOutcome({ job, reschedule, reason })"}</code>; present when the job
-        was rescheduled with one.
+        Reason given with a <code>reschedule</code> outcome to an attempt handler's{" "}
+        <code>applyJobOutcome</code> or <code>applyJobOutcomes</code>, or to{" "}
+        <code>client.applyJobOutcome</code> or <code>client.applyJobOutcomes</code>; present when
+        the job was rescheduled with one.
       </>
     ),
   },

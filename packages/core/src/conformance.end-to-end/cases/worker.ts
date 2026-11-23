@@ -426,9 +426,9 @@ export const workerGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 
         const traceMiddleware: AttemptMiddleware<any, { trace: string }> = {
-          wrapHandler: async ({ job, next }) => {
+          wrapHandler: async ({ jobs, next }) => {
             order.push("mw1-before");
-            observed.push({ jobTypeName: job.typeName });
+            observed.push(...jobs.map((job) => ({ jobTypeName: job.typeName })));
             await next({ trace: "trace-1" });
             order.push("mw1-after");
           },

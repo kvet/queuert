@@ -1,29 +1,29 @@
 ---
 title: Job Attempt Middleware
-description: Wrap job attempts with cross-cutting logic — tracing, resource injection, audit, contextual logging.
+description: Wrap attempt handler calls with cross-cutting logic — tracing, resource injection, audit, contextual logging.
 sidebar:
-  order: 19
+  order: 20
 ---
 
-`AttemptMiddleware` wraps a **job attempt** — the attempt handler, from the moment the worker acquires the job until the handler returns. Middleware lets you add cross-cutting logic (tracing spans, contextual loggers, audit trails, shared resources) without touching each individual handler.
+`AttemptMiddleware` wraps an **attempt handler call** — from the moment the worker acquires its jobs until the handler returns. Middleware lets you add cross-cutting logic (tracing spans, contextual loggers, audit trails, shared resources) without touching each individual handler.
 
-A middleware has a single hook, `wrapHandler`, which wraps the whole attempt handler. It receives the attempt's `job` and a `next(ctx)` call that yields the inner layer; the object passed to `next` is merged into the `attemptHandler` options, and its type flows into the handler signature. `next` resolves once the handler returns and rejects with the handler's error; the attempt counts as completed once its `applyJobOutcome` commits.
+A middleware has a single hook, `wrapHandler`, which wraps the whole attempt handler. It receives the handler call's `jobs` — one job, or every job of the batch for a [batched processor](/queuert/guides/batched-processors/) — and a `next(ctx)` call that yields the inner layer; the object passed to `next` is merged into the `attemptHandler` options, and its type flows into the handler signature. `next` resolves once the handler returns and rejects with the handler's error; each job's attempt counts as completed once the attempt handler's `applyJobOutcome` or `applyJobOutcomes` call that settles it commits.
 
 See the [`AttemptMiddleware` API reference](/queuert/api/core/type-aliases/attemptmiddleware/) for the full type definition.
 
 ## Use Cases
 
-### Cross-Cutting Around the Whole Attempt
+### Cross-Cutting Around the Whole Handler Call
 
-Use for concerns that span the full attempt: tracing spans, contextual loggers, per-job resources, error classification. `tracing` gives each attempt a trace ID and records a span with the attempt's outcome:
+Use for concerns that span the whole handler call: tracing spans, contextual loggers, per-job resources, error classification. `tracing` gives each handler call a trace ID and records a span with its outcome:
 
 <ExampleCode example="guides" file="src/middleware.ts" region="tracing" />
 
-A failing attempt propagates through `next()` — the middleware can observe, log, or enrich the error. After the middleware chain unwinds, the engine catches the error, reschedules the job, and returns normally. Always re-throw the error so the engine can handle it; swallowing the error without a committed `applyJobOutcome` still fails the attempt.
+A handler's error propagates through `next()` — the middleware can observe, log, or enrich the error. After the middleware chain unwinds, the engine catches it, fails every job of the call without a committed outcome, and returns normally. Always re-throw the error: swallowing it still fails every job of the call without a committed outcome, but records an "Attempt handler returned without a committed …" error as their `lastAttemptError` in place of the handler's error.
 
 ### Load Shared Data Before the Handler
 
-Use when you want to load a resource once per attempt and make it available to the handler. `loadTenant` reads the tenant of every job before its handler runs. The middleware runs outside any transaction, so it reads through your database client directly.
+Use when you want to load a resource once per handler call and make it available to the handler. `loadTenant` reads the tenant of every job of the handler call before its handler runs and injects `tenantOf`, which returns a job's tenant. The middleware runs outside any transaction, so it reads through your database client directly.
 
 <ExampleCode example="guides" file="src/middleware.ts" region="load-tenant" />
 
@@ -31,11 +31,11 @@ Middleware is not tied to a job type, so `job.input` is `unknown` — narrow it 
 
 ### Inject Helpers Used in the Handler's Transaction
 
-Use to inject helpers that write alongside `applyJobOutcome` — audit recorders, usage meters. The handler owns the transaction, so the helper takes the transaction context from the handler. `audit` records an event for the current job through that transaction:
+Use to inject helpers that write alongside the handler's `applyJobOutcome` or `applyJobOutcomes` — audit recorders, usage meters. The handler owns the transaction, so the helper takes the transaction context from the handler. `audit` records an event for the job it is given through that transaction:
 
 <ExampleCode example="guides" file="src/middleware.ts" region="audit" />
 
-The handler receives every injected value typed: `traceId`, `tenant` and `audit` sit next to `job` and `applyJobOutcome`. It writes the audit event and the invoice in the transaction that calls `applyJobOutcome`:
+The handler receives every injected value typed: `traceId`, `tenantOf` and `audit` sit next to `job` and `applyJobOutcome`. It writes the audit event and the invoice in the transaction that calls `applyJobOutcome`:
 
 <ExampleCode example="guides" file="src/middleware.ts" region="issue-invoice" />
 

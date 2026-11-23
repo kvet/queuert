@@ -2,6 +2,7 @@
 
 The runnable code behind the [guides](https://kvet.github.io/queuert/guides/). Each file in `src/` belongs to one docs page, which embeds its regions, and keeps its state in the in-process state adapter, so it runs with no database.
 
+- `src/batched-processors.ts` — [Batched Processors](https://kvet.github.io/queuert/guides/batched-processors/)
 - `src/chain-awaiting.ts` — [Chain Awaiting](https://kvet.github.io/queuert/guides/chain-awaiting/)
 - `src/chain-deletion.ts` — [Chain Deletion](https://kvet.github.io/queuert/guides/chain-deletion/)
 - `src/chain-patterns.ts` — [Chain Patterns](https://kvet.github.io/queuert/guides/chain-patterns/)

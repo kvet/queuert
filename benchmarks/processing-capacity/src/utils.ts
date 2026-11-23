@@ -13,6 +13,7 @@ import {
 
 const WINDOW_MS = 2_000;
 const CREATE_BATCH_SIZE = 100;
+const COMPLETE_BATCH_LIMIT = 100;
 const SEED_COUNT = 40_000;
 const SEED_BATCH_SIZE = 1_000;
 
@@ -82,7 +83,7 @@ const seedChains = async ({ client, transaction }: BenchmarkContext): Promise<vo
 };
 
 const completeChainsForWindow =
-  (concurrency: number) =>
+  (concurrency: number, batchLimit: number) =>
   async (context: BenchmarkContext): Promise<Measurement> => {
     const { client, createProcessors, createWorkerRunner, transaction, onWindowStart } = context;
     await seedChains(context);
@@ -110,13 +111,20 @@ const completeChainsForWindow =
         jobTypes,
         processors: {
           "test-job": {
-            attemptHandler: async ({ applyJobOutcome }) => {
+            batchLimit,
+            attemptHandler: async (options) => {
               const startedAt = (begin ??= performance.now());
               // oxlint-disable-next-line typescript/promise-function-async -- a sync client's applyJobOutcome returns a plain value
               await transaction((txCtx, txHooks) =>
-                applyJobOutcome({ ...txCtx, txHooks, output: { done: true } }),
+                options.jobs
+                  ? options.applyJobOutcomes({
+                      ...txCtx,
+                      txHooks,
+                      items: options.jobs.map((job) => ({ job, output: { done: true as const } })),
+                    })
+                  : options.applyJobOutcome({ ...txCtx, txHooks, output: { done: true } }),
               );
-              completed++;
+              completed += options.jobs?.length ?? 1;
               const now = performance.now();
               if (completed === SEED_COUNT || now - startedAt >= WINDOW_MS) finish(now);
             },
@@ -137,7 +145,7 @@ const completeChainsForWindow =
 
 type ScenarioSpec =
   | { kind: "create"; unit: "chains"; batchSize: number }
-  | { kind: "complete"; unit: "jobs"; concurrency: number };
+  | { kind: "complete"; unit: "jobs"; concurrency: number; batchLimit: number };
 
 const NOOP_CONCURRENCY_LEVELS = [1, 4, 16];
 
@@ -147,7 +155,13 @@ const scenarios: Record<string, ScenarioSpec> = {
   ...Object.fromEntries(
     NOOP_CONCURRENCY_LEVELS.map((concurrency): [string, ScenarioSpec] => [
       `complete-noop-${concurrency}`,
-      { kind: "complete", unit: "jobs", concurrency },
+      { kind: "complete", unit: "jobs", concurrency, batchLimit: 1 },
+    ]),
+  ),
+  ...Object.fromEntries(
+    NOOP_CONCURRENCY_LEVELS.map((concurrency): [string, ScenarioSpec] => [
+      `complete-batched-${concurrency}`,
+      { kind: "complete", unit: "jobs", concurrency, batchLimit: COMPLETE_BATCH_LIMIT },
     ]),
   ),
 };
@@ -158,7 +172,7 @@ const runQueuertScenario = async (
 ): Promise<Measurement> =>
   spec.kind === "create"
     ? createChainsForWindow(spec.batchSize)(context)
-    : completeChainsForWindow(spec.concurrency)(context);
+    : completeChainsForWindow(spec.concurrency, spec.batchLimit)(context);
 
 export const scenarioNames = Object.keys(scenarios);
 
@@ -174,6 +188,13 @@ export const summaryTables: { title: string; columns: { scenario: string; label:
     title: "Completion, no-op handler (jobs/s)",
     columns: NOOP_CONCURRENCY_LEVELS.map((concurrency) => ({
       scenario: `complete-noop-${concurrency}`,
+      label: concurrency === 1 ? "1 slot" : `${concurrency} slots`,
+    })),
+  },
+  {
+    title: `Completion, batched no-op handler (${COMPLETE_BATCH_LIMIT} per batch, jobs/s)`,
+    columns: NOOP_CONCURRENCY_LEVELS.map((concurrency) => ({
+      scenario: `complete-batched-${concurrency}`,
       label: concurrency === 1 ? "1 slot" : `${concurrency} slots`,
     })),
   },

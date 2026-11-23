@@ -119,24 +119,27 @@ export type ObservabilityHelper = {
   jobAttemptStarted: (
     stateJob: StateJob,
     options: { workerId: string; workerSlot: number },
-  ) => void;
-  jobAttemptLost: (stateJob: StateJob, options: { workerId: string; workerSlot: number }) => void;
-  jobAttemptFailed: (
-    stateJob: StateJob,
-    options: { workerId: string; workerSlot: number; error: unknown },
-  ) => void;
-  jobAttemptCompleted: (
-    stateJob: StateJob,
-    options: {
-      output?: unknown;
-      continuedWith?: StateJobInfo;
-      workerId: string;
-      workerSlot: number;
-    },
-  ) => void;
+  ) => JobAttemptSpanHandle | undefined;
   jobAttemptReclaimed: (
     stateJob: StateJob,
     options: { workerId: string; reclaimedFrom: string },
+  ) => void;
+  jobAttemptsFailed: (
+    failures: {
+      stateJob: StateJob;
+      span: JobAttemptSpanHandle | undefined;
+      rescheduledJob: StateJob | undefined;
+    }[],
+    options: { workerId: string; workerSlot: number; error: unknown },
+  ) => void;
+  jobAttemptsSettled: (
+    settlements: {
+      stateJob: StateJob;
+      span: JobAttemptSpanHandle | undefined;
+      written: StateJob & { continuation?: StateJobInfo };
+      failure: { error: unknown } | undefined;
+    }[],
+    options: { durationMs: number; workerId: string; workerSlot: number },
   ) => void;
 
   // notify adapter
@@ -150,15 +153,19 @@ export type ObservabilityHelper = {
 
   // histograms
   jobAttemptDuration: (
-    stateJob: StateJob,
+    stateJobs: readonly StateJob[],
     options: { durationMs: number; workerId: string },
+  ) => void;
+  jobAttemptBatchSize: (
+    stateJobs: readonly Pick<StateJobInfo, "typeName">[],
+    workerId: string,
   ) => void;
 
   // gauges
   jobTypeIdleChange: (delta: number, workerId: string, typeNames: readonly string[]) => void;
   jobTypeProcessingChange: (
     delta: number,
-    stateJob: Pick<StateJobInfo, "typeName">,
+    stateJobs: readonly Pick<StateJobInfo, "typeName">[],
     workerId: string,
   ) => void;
 
@@ -173,6 +180,80 @@ export type ObservabilityHelper = {
     options: { jobTraceContext: string; blockerChain: StateChainInfo; blockerIndex: number },
   ) => BlockerSpanHandle | undefined;
   completeBlockerSpan: (traceContext: string, blockerChain: StateChainInfo) => void;
+};
+
+const reportJobRescheduled = (log: Log, adapter: ObservabilityAdapter, stateJob: StateJob) => {
+  const data: JobRescheduleData = {
+    ...mapStateJobToJobBasicData(stateJob),
+    scheduledAt: stateJob.scheduledAt,
+    consecutiveFailures: stateJob.consecutiveFailures,
+    ...(stateJob.lastRescheduleReason !== null && { reason: stateJob.lastRescheduleReason }),
+  };
+  log({
+    type: "job_rescheduled",
+    level: "info",
+    message: "Job rescheduled",
+    data,
+  });
+  adapter.jobRescheduled(data);
+};
+
+const reportJobAttemptFailed = (
+  log: Log,
+  adapter: ObservabilityAdapter,
+  stateJob: StateJob,
+  options: { workerId: string; workerSlot: number; error: unknown },
+) => {
+  const data = {
+    ...mapStateJobToJobProcessingData(stateJob),
+    workerId: options.workerId,
+    workerSlot: options.workerSlot,
+  };
+  log({
+    type: "job_attempt_failed",
+    level: "error",
+    message: "Job attempt failed",
+    data,
+    error: options.error,
+  });
+  adapter.jobAttemptFailed({ ...data, error: options.error });
+};
+
+const reportJobAttemptDuration = (
+  adapter: ObservabilityAdapter,
+  stateJob: StateJob,
+  options: { durationMs: number; workerId: string },
+) => {
+  adapter.jobAttemptDuration({
+    ...mapStateJobToJobProcessingData(stateJob),
+    durationMs: options.durationMs,
+    workerId: options.workerId,
+  });
+};
+
+const startAttemptSpan = (
+  adapter: ObservabilityAdapter,
+  stateJob: StateJob,
+  {
+    workerId,
+    workerSlot,
+  }: { workerId: string; workerSlot: number } | { workerId: null; workerSlot: null },
+): JobAttemptSpanHandle | undefined => {
+  try {
+    return adapter.startAttemptSpan({
+      chainId: stateJob.chain.id,
+      chainTypeName: stateJob.chain.typeName,
+      jobId: stateJob.id,
+      jobTypeName: stateJob.typeName,
+      attempt: stateJob.attempt,
+      workerId,
+      workerSlot,
+      chainTraceContext: stateJob.chain.traceContext,
+      traceContext: stateJob.traceContext,
+    });
+  } catch {
+    return undefined;
+  }
 };
 
 const noopLog: Log = () => {};
@@ -292,19 +373,7 @@ export const createObservabilityHelper = ({
     }
   },
   jobRescheduled(stateJob) {
-    const data: JobRescheduleData = {
-      ...mapStateJobToJobBasicData(stateJob),
-      scheduledAt: stateJob.scheduledAt,
-      consecutiveFailures: stateJob.consecutiveFailures,
-      ...(stateJob.lastRescheduleReason !== null && { reason: stateJob.lastRescheduleReason }),
-    };
-    log({
-      type: "job_rescheduled",
-      level: "info",
-      message: "Job rescheduled",
-      data,
-    });
-    adapter.jobRescheduled(data);
+    reportJobRescheduled(log, adapter, stateJob);
   },
   jobBlocked(stateJob, options) {
     const blockedByChains = options.blockedByChains.map(mapStateChainToChainData);
@@ -345,20 +414,7 @@ export const createObservabilityHelper = ({
       data,
     });
     adapter.jobAttemptStarted(data);
-  },
-  jobAttemptLost(stateJob, options) {
-    const data = {
-      ...mapStateJobToJobAttemptData(stateJob),
-      workerId: options.workerId,
-      workerSlot: options.workerSlot,
-    };
-    log({
-      type: "job_attempt_lost",
-      level: "warn",
-      message: "Job attempt lost",
-      data,
-    });
-    adapter.jobAttemptLost(data);
+    return startAttemptSpan(adapter, stateJob, options);
   },
   jobAttemptReclaimed(stateJob, options) {
     const data = {
@@ -374,34 +430,53 @@ export const createObservabilityHelper = ({
     });
     adapter.jobAttemptReclaimed(data);
   },
-  jobAttemptFailed(stateJob, options) {
-    const data = {
-      ...mapStateJobToJobProcessingData(stateJob),
-      workerId: options.workerId,
-      workerSlot: options.workerSlot,
-    };
-    log({
-      type: "job_attempt_failed",
-      level: "error",
-      message: "Job attempt failed",
-      data,
-      error: options.error,
-    });
-    adapter.jobAttemptFailed({ ...data, error: options.error });
+  jobAttemptsFailed(failures, { workerId, workerSlot, error }) {
+    for (const { stateJob, span, rescheduledJob } of failures) {
+      if (rescheduledJob === undefined) {
+        const data = { ...mapStateJobToJobAttemptData(stateJob), workerId, workerSlot };
+        log({
+          type: "job_attempt_lost",
+          level: "warn",
+          message: "Job attempt lost",
+          data,
+        });
+        adapter.jobAttemptLost(data);
+      } else {
+        reportJobRescheduled(log, adapter, rescheduledJob);
+        reportJobAttemptFailed(log, adapter, stateJob, { workerId, workerSlot, error });
+      }
+      span?.end({ status: "failed", error });
+    }
   },
-  jobAttemptCompleted(stateJob, options) {
-    const data = {
-      ...mapStateJobToJobCompletionData(stateJob, options),
-      workerId: options.workerId,
-      workerSlot: options.workerSlot,
-    };
-    log({
-      type: "job_attempt_completed",
-      level: "info",
-      message: "Job attempt completed",
-      data,
-    });
-    adapter.jobAttemptCompleted(data);
+  jobAttemptsSettled(settlements, { durationMs, workerId, workerSlot }) {
+    for (const { stateJob, span, written, failure } of settlements) {
+      reportJobAttemptDuration(adapter, stateJob, { durationMs, workerId });
+      if (failure !== undefined) {
+        reportJobAttemptFailed(log, adapter, stateJob, {
+          workerId,
+          workerSlot,
+          error: failure.error,
+        });
+        span?.end({ status: "failed", error: failure.error });
+        continue;
+      }
+      const data = {
+        ...mapStateJobToJobCompletionData(stateJob, {
+          output: written.output,
+          continuedWith: written.continuation,
+        }),
+        workerId,
+        workerSlot,
+      };
+      log({
+        type: "job_attempt_completed",
+        level: "info",
+        message: "Job attempt completed",
+        data,
+      });
+      adapter.jobAttemptCompleted(data);
+      span?.end(completedAttemptSpanResult(written));
+    }
   },
 
   // notify adapter
@@ -444,11 +519,16 @@ export const createObservabilityHelper = ({
   },
 
   // histograms
-  jobAttemptDuration(stateJob, options) {
-    adapter.jobAttemptDuration({
-      ...mapStateJobToJobProcessingData(stateJob),
-      durationMs: options.durationMs,
-      workerId: options.workerId,
+  jobAttemptDuration(stateJobs, options) {
+    for (const stateJob of stateJobs) {
+      reportJobAttemptDuration(adapter, stateJob, options);
+    }
+  },
+  jobAttemptBatchSize(stateJobs, workerId) {
+    adapter.jobAttemptBatchSize({
+      typeName: stateJobs[0].typeName,
+      workerId,
+      size: stateJobs.length,
     });
   },
 
@@ -458,12 +538,14 @@ export const createObservabilityHelper = ({
       adapter.jobTypeIdleChange({ delta, typeName, workerId });
     }
   },
-  jobTypeProcessingChange(delta, stateJob, workerId) {
-    adapter.jobTypeProcessingChange({
-      delta,
-      typeName: stateJob.typeName,
-      workerId,
-    });
+  jobTypeProcessingChange(delta, stateJobs, workerId) {
+    for (const stateJob of stateJobs) {
+      adapter.jobTypeProcessingChange({
+        delta,
+        typeName: stateJob.typeName,
+        workerId,
+      });
+    }
   },
 
   // tracing
@@ -505,21 +587,5 @@ export const createObservabilityHelper = ({
       adapter.completeBlockerSpan({ traceContext, blockerChainTypeName: blockerChain.typeName });
     } catch {}
   },
-  startAttemptSpan: (stateJob, { workerId, workerSlot }) => {
-    try {
-      return adapter.startAttemptSpan({
-        chainId: stateJob.chain.id,
-        chainTypeName: stateJob.chain.typeName,
-        jobId: stateJob.id,
-        jobTypeName: stateJob.typeName,
-        attempt: stateJob.attempt,
-        workerId,
-        workerSlot,
-        chainTraceContext: stateJob.chain.traceContext,
-        traceContext: stateJob.traceContext,
-      });
-    } catch {
-      return undefined;
-    }
-  },
+  startAttemptSpan: (stateJob, options) => startAttemptSpan(adapter, stateJob, options),
 });

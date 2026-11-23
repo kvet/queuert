@@ -30,9 +30,9 @@ const logger = winston.createLogger({
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.errors({ stack: true }),
-    winston.format.printf(({ timestamp, level, message, type, error, jobAttempt, ...meta }) => {
-      const jobStr = jobAttempt
-        ? ` [job:${(jobAttempt as JobAttemptMeta).typeName}#${(jobAttempt as JobAttemptMeta).attempt}]`
+    winston.format.printf(({ timestamp, level, message, type, error, jobAttempts, ...meta }) => {
+      const jobStr = Array.isArray(jobAttempts)
+        ? ` [job:${(jobAttempts as JobAttemptMeta[]).map((jobAttempt) => `${jobAttempt.typeName}#${jobAttempt.attempt}`).join(", ")}]`
         : "";
       const metaStr = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : "";
       const errorStr = error instanceof Error ? `\n${error.stack}` : "";
@@ -76,19 +76,19 @@ const client = createClient({
 });
 // #endregion
 
-// Middleware that injects a child logger pre-bound to job context.
+// Middleware that injects a child logger pre-bound to the handler call's jobs.
 // The handler receives `log` in its typed ctx — no AsyncLocalStorage, no mixin.
 const loggerInjectionMiddleware: AttemptMiddleware<typeof stateAdapter, { log: winston.Logger }> = {
-  wrapHandler: async ({ job, workerId, next }) =>
+  wrapHandler: async ({ jobs, workerId, next }) =>
     next({
       log: logger.child({
-        jobAttempt: {
+        jobAttempts: jobs.map((job): JobAttemptMeta => ({
           jobId: job.id,
           typeName: job.typeName,
           chainTypeName: job.chainTypeName,
           attempt: job.attempt,
           workerId,
-        } satisfies JobAttemptMeta,
+        })),
       }),
     }),
 };

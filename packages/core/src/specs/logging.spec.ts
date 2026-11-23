@@ -312,6 +312,103 @@ describe("Logging", () => {
     ]);
   });
 
+  it("logs one attempt event per job of a batch", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expectLogs,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { index: number };
+        output: { result: boolean };
+      };
+    }>();
+
+    const client = createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    await using workerRunner = createWorkerRunner({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        backoffConfig: { initialDelayMs: 60_000, multiplier: 1, maxDelayMs: 60_000 },
+        processors: {
+          test: {
+            batchLimit: 5,
+            attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+              await withTransaction(async (txCtx) =>
+                applyJobOutcomes({
+                  ...txCtx,
+                  items: jobs.map((job) =>
+                    job.input.index === 0
+                      ? { job, output: { result: true } }
+                      : { job, fail: new Error("bad item") },
+                  ),
+                }),
+              );
+            },
+          },
+        },
+      }),
+    });
+
+    const chains = await withTransaction(async (txCtx) =>
+      client.createChains({
+        ...txCtx,
+        items: [0, 1].map((index) => ({ typeName: "test" as const, input: { index } })),
+      }),
+    );
+
+    await workerRunner.start();
+    await client.awaitChain({ chain: chains[0], ...completionOptions });
+    await workerRunner.close();
+
+    const workerArgs = {
+      workerId: expect.stringMatching(/^[0-9a-f-]{36}$/) as unknown as string,
+    };
+    const [completedJobArgs, failedJobArgs] = chains.map((chain) => ({
+      typeName: "test",
+      id: chain.id,
+      chainId: chain.id,
+      chainTypeName: "test",
+    }));
+    expectLogs([
+      { type: "chain_created", data: { typeName: "test", id: chains[0].id } },
+      { type: "job_created", data: { ...completedJobArgs, input: { index: 0 } } },
+      { type: "chain_created", data: { typeName: "test", id: chains[1].id } },
+      { type: "job_created", data: { ...failedJobArgs, input: { index: 1 } } },
+      { type: "worker_started", data: { ...workerArgs, jobTypeNames: ["test"] } },
+      { type: "job_attempt_started", data: { ...completedJobArgs, attempt: 1, ...workerArgs } },
+      { type: "job_attempt_started", data: { ...failedJobArgs, attempt: 1, ...workerArgs } },
+      {
+        type: "job_completed",
+        data: { ...completedJobArgs, status: "completed", output: { result: true } },
+      },
+      { type: "chain_completed", data: { typeName: "test", id: chains[0].id } },
+      { type: "job_rescheduled", data: { ...failedJobArgs } },
+      {
+        type: "job_attempt_completed",
+        data: { ...completedJobArgs, attempt: 1, output: { result: true }, ...workerArgs },
+      },
+      {
+        type: "job_attempt_failed",
+        data: { ...failedJobArgs, attempt: 1, ...workerArgs },
+        error: new Error("bad item"),
+      },
+      { type: "worker_stopped", data: { ...workerArgs } },
+    ]);
+  });
+
   it("logs job rescheduling", async ({
     stateAdapter,
     notifyAdapter,

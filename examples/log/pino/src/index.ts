@@ -59,19 +59,19 @@ const client = createClient({
 });
 // #endregion
 
-// Middleware that injects a child logger pre-bound to job context.
+// Middleware that injects a child logger pre-bound to the handler call's jobs.
 // The handler receives `log` in its typed ctx — no AsyncLocalStorage, no mixin.
 const loggerInjectionMiddleware: AttemptMiddleware<typeof stateAdapter, { log: Logger }> = {
-  wrapHandler: async ({ job, workerId, next }) =>
+  wrapHandler: async ({ jobs, workerId, next }) =>
     next({
       log: logger.child({
-        jobAttempt: {
+        jobAttempts: jobs.map((job) => ({
           jobId: job.id,
           typeName: job.typeName,
           chainTypeName: job.chainTypeName,
           attempt: job.attempt,
           workerId,
-        },
+        })),
       }),
     }),
 };

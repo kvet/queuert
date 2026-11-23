@@ -455,7 +455,7 @@ export const examples: Example[] = [
     name: "log/pino",
     label: "Pino",
     description:
-      "Pino integration for structured logging, with per-job contextual loggers injected via attemptMiddleware.",
+      "Pino integration for structured logging, with contextual loggers bound to each handler call's jobs, injected via attemptMiddleware.",
     runtime: "Node.js",
     services: [],
     files: ["src/log.ts", "src/index.ts"],
@@ -465,7 +465,7 @@ export const examples: Example[] = [
     name: "log/winston",
     label: "Winston",
     description:
-      "Winston integration for structured logging, with per-job contextual loggers injected via attemptMiddleware.",
+      "Winston integration for structured logging, with contextual loggers bound to each handler call's jobs, injected via attemptMiddleware.",
     runtime: "Node.js",
     services: [],
     files: ["src/log.ts", "src/index.ts"],

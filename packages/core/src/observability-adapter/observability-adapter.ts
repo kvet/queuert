@@ -177,6 +177,7 @@ export type ObservabilityAdapter = {
   chainDuration: (data: ChainBasicData & { durationMs: number }) => void;
   jobDuration: (data: JobProcessingData & { durationMs: number }) => void;
   jobAttemptDuration: (data: JobProcessingData & WorkerBasicData & { durationMs: number }) => void;
+  jobAttemptBatchSize: (data: WorkerBasicData & { typeName: string; size: number }) => void;
 
   // gauges
   jobTypeIdleChange: (data: WorkerBasicData & { delta: number; typeName: string }) => void;

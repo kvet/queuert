@@ -41,9 +41,9 @@ const Page = () => (
     <ul>
       <li>
         <strong>Queue concepts</strong> like named serial queues, <code>job_key</code> replace /
-        throttle / dedupe modes, batch jobs, and a crontab are central to Graphile Worker because it
-        is a queue. They are absent from Queuert because Queuert models chains tied to data, not
-        messages through lanes.
+        throttle / dedupe modes, and a crontab are central to Graphile Worker because it is a queue.
+        They are absent from Queuert because Queuert models chains tied to data, not messages
+        through lanes.
       </li>
       <li>
         <strong>Chain concepts</strong> like typed continuations, blockers on other chains, and a

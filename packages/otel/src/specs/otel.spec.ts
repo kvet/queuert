@@ -54,6 +54,7 @@ const methodToMetricName: Record<string, string> = {
   chainDuration: "queuert.chain.duration",
   jobDuration: "queuert.job.duration",
   jobAttemptDuration: "queuert.job.attempt.duration",
+  jobAttemptBatchSize: "queuert.job.attempt.batch_size",
   // gauges
   jobTypeIdleChange: "queuert.job_type.idle",
   jobTypeProcessingChange: "queuert.job_type.processing",
@@ -388,6 +389,7 @@ describe("Metrics", () => {
       { method: "jobDuration", args: { typeName: "test" } },
       { method: "chainDuration", args: { typeName: "test" } },
       { method: "jobAttemptDuration", args: { typeName: "test", workerId: workerIdMatcher } },
+      { method: "jobAttemptBatchSize", args: { typeName: "test", size: 1 } },
     ]);
   });
 
@@ -462,6 +464,97 @@ describe("Metrics", () => {
       { method: "chainCompleted" },
       { method: "jobAttemptCompleted" },
       { method: "workerStopped" },
+    ]);
+  });
+
+  it("tracks one attempt metric per job of a batch and one batch size per handler call", async ({
+    stateAdapter,
+    notifyAdapter,
+    withTransaction,
+    observabilityAdapter,
+    log,
+    expectMetrics,
+    expectHistograms,
+  }) => {
+    const jobTypes = defineJobTypes<{
+      test: {
+        entry: true;
+        input: { index: number };
+        output: null;
+      };
+    }>();
+
+    const client = createClient({
+      stateAdapter,
+      notifyAdapter,
+      observabilityAdapter,
+      log,
+      jobTypes,
+    });
+    await using workerRunner = createWorkerRunner({
+      client,
+      concurrency: 1,
+      processors: createProcessors({
+        client,
+        jobTypes,
+        backoffConfig: {
+          initialDelayMs: 60_000,
+          multiplier: 1,
+          maxDelayMs: 60_000,
+        },
+        processors: {
+          test: {
+            batchLimit: 5,
+            attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+              await withTransaction(async (txCtx) =>
+                applyJobOutcomes({
+                  ...txCtx,
+                  items: jobs.map((job) =>
+                    job.input.index === 0
+                      ? { job, output: null }
+                      : { job, fail: new Error("bad item") },
+                  ),
+                }),
+              );
+            },
+          },
+        },
+      }),
+    });
+
+    const chains = await withTransaction(async (txCtx) =>
+      client.createChains({
+        ...txCtx,
+        items: [0, 1].map((index) => ({ typeName: "test" as const, input: { index } })),
+      }),
+    );
+
+    await workerRunner.start();
+    await client.awaitChain({ chain: chains[0], ...completionOptions });
+    await workerRunner.close();
+
+    await expectMetrics([
+      { method: "chainCreated" },
+      { method: "jobCreated" },
+      { method: "chainCreated" },
+      { method: "jobCreated" },
+      { method: "workerStarted" },
+      { method: "jobAttemptStarted" },
+      { method: "jobAttemptStarted" },
+      { method: "jobCompleted" },
+      { method: "chainCompleted" },
+      { method: "jobRescheduled" },
+      { method: "jobAttemptCompleted" },
+      { method: "jobAttemptFailed" },
+      { method: "workerStopped" },
+    ]);
+
+    await expectHistograms([
+      { method: "jobDuration", args: { typeName: "test" } },
+      { method: "chainDuration", args: { typeName: "test" } },
+      { method: "jobAttemptDuration", args: { typeName: "test" } },
+      { method: "jobAttemptDuration", args: { typeName: "test" } },
+      { method: "jobAttemptBatchSize", args: { typeName: "test", size: 2 } },
     ]);
   });
 
@@ -655,6 +748,9 @@ describe("Metrics", () => {
       { method: "jobDuration", args: { typeName: "linear_next_next" } },
       { method: "chainDuration", args: { typeName: "linear" } },
       { method: "jobAttemptDuration", args: { typeName: "linear_next_next" } },
+      { method: "jobAttemptBatchSize", args: { typeName: "linear" } },
+      { method: "jobAttemptBatchSize", args: { typeName: "linear_next" } },
+      { method: "jobAttemptBatchSize", args: { typeName: "linear_next_next" } },
     ]);
   });
 

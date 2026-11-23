@@ -9,6 +9,8 @@ import {
   JobsNotFoundError,
   JobsStatusMismatchError,
   JobsTypeMismatchError,
+  JobTakenByAnotherWorkerError,
+  JobsTakenByAnotherWorkerError,
   ChainTypeMismatchError,
   ChainsTypeMismatchError,
   JobBlockerLimitExceededError,
@@ -46,6 +48,22 @@ describe("toSingleJobError", () => {
       constructor: JobAlreadyCompletedError,
       message: "Cannot apply an outcome to job job-1: job is already completed",
       jobId: "job-1",
+      cause: batchError,
+    });
+  });
+
+  it("maps JobsTakenByAnotherWorkerError to JobTakenByAnotherWorkerError", () => {
+    const batchError = new JobsTakenByAnotherWorkerError("batch", {
+      jobIds: ["job-1"],
+      workerId: "worker-1",
+      attemptBys: ["worker-2"],
+    });
+
+    expect(toSingleJobError(batchError)).toMatchObject({
+      constructor: JobTakenByAnotherWorkerError,
+      jobId: "job-1",
+      workerId: "worker-1",
+      attemptBy: "worker-2",
       cause: batchError,
     });
   });

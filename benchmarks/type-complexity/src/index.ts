@@ -195,8 +195,8 @@ const generateMiddleware = (count: number): string => {
   InProcessStateAdapter<"async">,
   { ctx${i}: number }
 > = {
-  wrapHandler: async ({ job, next }) => {
-    void job.typeName;
+  wrapHandler: async ({ jobs, next }) => {
+    void jobs.map((job) => job.typeName);
     return next({ ctx${i}: ${i} });
   },
 };`,

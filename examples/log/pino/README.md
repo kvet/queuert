@@ -1,6 +1,6 @@
 # Pino Logging Example
 
-Pino integration for structured logging, with per-job contextual loggers injected via `attemptMiddleware`.
+Pino integration for structured logging, with contextual loggers bound to each handler call's jobs, injected via `attemptMiddleware`.
 
 ## Running
 

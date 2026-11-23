@@ -134,9 +134,8 @@ export type WorkerRunner = {
  * end and registers again under the same id.
  *
  * @param options - Worker runner configuration.
- * @throws {TypeError} When `concurrency`, `pollIntervalMs`, `recoveryBackoffConfig`, `leaseConfig`,
- * `backoffConfig` or any processor's `backoffConfig` holds an invalid value; the message lists
- * every invalid field.
+ * @throws {TypeError} When `concurrency`, `pollIntervalMs`, `recoveryBackoffConfig`, `leaseConfig`
+ * or `backoffConfig` holds an invalid value; the message lists every invalid field.
  * @throws {@link InvalidWorkerIdError} if `workerId` fails the state adapter's
  * `validateWorkerId`.
  * @throws {@link DuplicateJobTypeError} if slices in a `processors` array share job types.
@@ -170,7 +169,8 @@ export const createWorkerRunner = <
    */
   workerId?: GetStateAdapterWorkerId<TStateAdapter>;
   /**
-   * Maximum number of jobs to process in parallel. Must be a positive integer.
+   * Maximum number of attempt handler calls to run in parallel: one job each, or one batch for a
+   * processor with a `batchLimit` above 1. Must be a positive integer.
    *
    * @defaultValue `1`
    */
@@ -288,12 +288,6 @@ export const createWorkerRunner = <
     ...backoffConfigViolations("recoveryBackoffConfig", recoveryBackoffConfig),
     ...workerLeaseConfigViolations("leaseConfig", leaseConfig),
     ...backoffConfigViolations("backoffConfig", defaultBackoffConfig),
-    ...typeNames.flatMap((typeName) =>
-      backoffConfigViolations(
-        `processors["${typeName}"].backoffConfig`,
-        processors[typeName].backoffConfig,
-      ),
-    ),
   ];
   if (configViolations.length > 0) {
     throw new TypeError(

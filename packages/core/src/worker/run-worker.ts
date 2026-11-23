@@ -1,3 +1,4 @@
+import { chunk } from "@queuert/helpers/chunk";
 import { type ParallelExecutor, createParallelExecutor } from "@queuert/helpers/parallel-executor";
 import { serializeError } from "@queuert/helpers/serialize-error";
 import { raceWithSleep, sleep } from "@queuert/helpers/sleep";
@@ -5,6 +6,7 @@ import { step, syncAsync } from "@queuert/sync-async";
 
 import type { AnyAttemptMiddleware } from "../attempt-middleware/attempt-middleware.ts";
 import { runAttempt } from "../attempt/attempt-handler.ts";
+import type { AnyAttemptHandler } from "../attempt/attempt-handler.types.ts";
 import { type Helpers, withHelpersTransaction } from "../client/setup-helpers.ts";
 import { type BackoffConfig, calculateBackoffMs } from "../entities/backoff.ts";
 import {
@@ -16,11 +18,11 @@ import {
   type Processor,
   processorAttemptMiddlewareSymbol,
 } from "../job-type-processors/job-type-processors.ts";
-import { notifyAfterTransaction } from "../notify-adapter/tx-notifications.ts";
 import type { BaseTxContext, StateJob } from "../state-adapter/state-adapter.ts";
+import { createTxEffects, registerTxEffects } from "../tx-effects/tx-effects.ts";
 import { type WorkerLeaseConfig, holdLease } from "./worker-lease.ts";
 
-export type StampedProcessor = Processor<any, any, any, any> & {
+export type StampedProcessor = Processor<any, any, any, any, any> & {
   readonly [processorAttemptMiddlewareSymbol]: readonly AnyAttemptMiddleware[];
 };
 
@@ -157,15 +159,17 @@ const announceReclaimed = (
   txCtx: BaseTxContext,
   { jobs, workerId }: { jobs: ReclaimedJob[]; workerId: string },
 ): void => {
+  const effects = createTxEffects();
   for (const job of jobs) {
-    helpers.stateAdapter.onTransactionCommit(txCtx, () => {
+    effects.onCommit(() => {
       observeReclaimed(helpers, job, workerId);
     });
   }
-  notifyAfterTransaction(helpers, txCtx, {
+  effects.notify({
     jobAttemptsLost: jobs.map(({ reclaimed }) => reclaimed.id),
     jobsScheduled: jobs.map(({ reclaimed }) => reclaimed.typeName),
   });
+  registerTxEffects(helpers, txCtx, effects);
 };
 
 const lockWorker = syncAsync(function* (
@@ -337,7 +341,9 @@ export const runWorker = async ({
   stopSignal: AbortSignal;
 }): Promise<boolean> => {
   const { stateAdapter, observabilityHelper } = helpers;
-  const batchLimits = Object.fromEntries(typeNames.map((typeName) => [typeName, 1]));
+  const batchLimits = Object.fromEntries(
+    typeNames.map((typeName) => [typeName, processors[typeName]?.batchLimit ?? 1]),
+  );
   const backoffConfigFor = (typeName: string): BackoffConfig =>
     (Object.hasOwn(processors, typeName) ? processors[typeName].backoffConfig : undefined) ??
     defaultBackoffConfig;
@@ -389,20 +395,25 @@ export const runWorker = async ({
   let finishedJobsReclaimDue = false;
   let finishedJobsReclaimedAt = performance.now();
 
-  const dispatchJob = (stateJob: StateJob & { hasBlockers: boolean }) => {
-    runningAttemptTokens.add(stateJob.attemptToken!);
+  const dispatchBatch = (stateJobs: (StateJob & { hasBlockers: boolean })[]) => {
+    for (const stateJob of stateJobs) {
+      runningAttemptTokens.add(stateJob.attemptToken!);
+    }
     void executor.add(async (workerSlot) => {
-      observabilityHelper.jobTypeProcessingChange(1, stateJob, workerId);
+      observabilityHelper.jobAttemptBatchSize(stateJobs, workerId);
+      observabilityHelper.jobTypeProcessingChange(1, stateJobs, workerId);
       observabilityHelper.jobTypeIdleChange(-1, workerId, typeNames);
       try {
-        const jobTypeProcessor = processors[stateJob.typeName];
+        const typeName = stateJobs[0].typeName;
+        const jobTypeProcessor = processors[typeName];
         if (!jobTypeProcessor) {
-          throw new Error(`No attempt handler registered for job type "${stateJob.typeName}"`);
+          throw new Error(`No attempt handler registered for job type "${typeName}"`);
         }
         await runAttempt({
           helpers,
-          attemptHandler: jobTypeProcessor.attemptHandler,
-          stateJob,
+          attemptHandler: jobTypeProcessor.attemptHandler as AnyAttemptHandler,
+          batched: (jobTypeProcessor.batchLimit ?? 1) > 1,
+          stateJobs,
           backoffConfig: jobTypeProcessor.backoffConfig ?? defaultBackoffConfig,
           workerId,
           workerSlot,
@@ -413,9 +424,11 @@ export const runWorker = async ({
         finishedJobsReclaimDue = true;
         observabilityHelper.workerError({ workerId }, error);
       } finally {
-        runningAttemptTokens.delete(stateJob.attemptToken!);
+        for (const stateJob of stateJobs) {
+          runningAttemptTokens.delete(stateJob.attemptToken!);
+        }
         observabilityHelper.jobTypeIdleChange(1, workerId, typeNames);
-        observabilityHelper.jobTypeProcessingChange(-1, stateJob, workerId);
+        observabilityHelper.jobTypeProcessingChange(-1, stateJobs, workerId);
       }
     });
   };
@@ -453,11 +466,14 @@ export const runWorker = async ({
         workerToken,
         limit,
       });
-      for (const stateJob of stateJobs) {
-        dispatchJob(stateJob);
+      const batches = [...Map.groupBy(stateJobs, (stateJob) => stateJob.typeName)].flatMap(
+        ([typeName, typeJobs]) => chunk(typeJobs, batchLimits[typeName]),
+      );
+      for (const batch of batches) {
+        dispatchBatch(batch);
       }
       startedJobs += stateJobs.length;
-      if (stateJobs.length < limit) {
+      if (batches.length < limit) {
         break;
       }
     }

@@ -19,15 +19,17 @@ const stateAdapter = createInProcessStateAdapter({ mode: "async" });
 const client = createClient({ stateAdapter, jobTypes });
 
 describe("middleware ctx cannot shadow built-in handler keys", () => {
-  it("handler built-ins (job, applyJobOutcome, fenceJob) win over middleware-injected ctx", async () => {
+  it("handler built-ins (job, applyJobOutcome, fenceJob) win over middleware-injected ctx and in-place changes to jobs", async () => {
     const sentinel = { tampered: true };
     const tampering: AttemptMiddleware<InProcessStateAdapter<"async">> = {
-      wrapHandler: async ({ next }) =>
-        next({
+      wrapHandler: async ({ jobs, next }) => {
+        jobs.splice(0);
+        await next({
           job: sentinel,
           applyJobOutcome: sentinel,
           fenceJob: sentinel,
-        }),
+        });
+      },
     };
 
     let observedJobHasId = false;
@@ -87,8 +89,8 @@ describe("middleware ctx flows into the handler through wrapHandler", () => {
       },
     };
     const inner: AttemptMiddleware<InProcessStateAdapter<"async">, { source: string }> = {
-      wrapHandler: async ({ job, next }) => {
-        events.push(`inner:before:${job.typeName}`);
+      wrapHandler: async ({ jobs, next }) => {
+        events.push(...jobs.map((job) => `inner:before:${job.typeName}`));
         await next({ source: "inner" });
         events.push("inner:after");
       },
@@ -141,14 +143,14 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
     const sliceBCalls: string[] = [];
 
     const wrapA: AttemptMiddleware<InProcessStateAdapter<"async">> = {
-      wrapHandler: async ({ job, next }) => {
-        sliceACalls.push(job.typeName);
+      wrapHandler: async ({ jobs, next }) => {
+        sliceACalls.push(...jobs.map((job) => job.typeName));
         return next({});
       },
     };
     const wrapB: AttemptMiddleware<InProcessStateAdapter<"async">> = {
-      wrapHandler: async ({ job, next }) => {
-        sliceBCalls.push(job.typeName);
+      wrapHandler: async ({ jobs, next }) => {
+        sliceBCalls.push(...jobs.map((job) => job.typeName));
         return next({});
       },
     };

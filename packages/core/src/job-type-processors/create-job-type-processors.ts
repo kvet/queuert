@@ -1,3 +1,4 @@
+import { isPositiveSafeInteger } from "@queuert/helpers/number";
 import type { Mode } from "@queuert/sync-async";
 
 import type {
@@ -6,7 +7,7 @@ import type {
   MergedAttemptHandlerCtx,
 } from "../attempt-middleware/attempt-middleware.ts";
 import type { Client } from "../client/client.ts";
-import type { BackoffConfig } from "../entities/backoff.ts";
+import { type BackoffConfig, backoffConfigViolations } from "../entities/backoff.ts";
 import type { BaseJobTypeDefinitions } from "../job-types/job-type.ts";
 import type { JobTypeNames } from "../job-types/job-types.resolvers.ts";
 import type { JobTypes } from "../job-types/job-types.ts";
@@ -37,7 +38,8 @@ type MergedDefs<
  * registry unless that processor overrides it.
  *
  * Handlers follow the client's mode: over a client of a `"sync"` {@link StateAdapter}, their
- * `applyJobOutcome` and `fenceJob` return their results directly and throw synchronously.
+ * `applyJobOutcome`, `applyJobOutcomes`, `fenceJob` and `fenceJobs` return their results
+ * directly and throw synchronously.
  *
  * @example
  * const orderProcessors = createProcessors({
@@ -54,13 +56,16 @@ type MergedDefs<
  *     },
  *   },
  * });
+ *
+ * @throws {TypeError} When `backoffConfig`, or any processor's `backoffConfig` or `batchLimit`,
+ * holds an invalid value; the message lists every invalid field.
  */
 export const createProcessors = <
   TClientJobTypeDefinitions extends BaseJobTypeDefinitions,
   TStateAdapter extends StateAdapter<any, any, any, Mode>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TExternalJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TProcessors extends keyof TJobTypeDefinitions & string,
+  const TBatchLimits,
   const TAttemptMiddleware extends readonly AnyAttemptMiddleware[] = readonly [],
   TMergedJobTypeDefinitions extends BaseJobTypeDefinitions = MergedDefs<
     TJobTypeDefinitions,
@@ -75,19 +80,38 @@ export const createProcessors = <
     readonly AttemptMiddleware<NoInfer<TStateAdapter>, any>[];
   backoffConfig?: BackoffConfig;
   processors: {
-    [K in TProcessors]: Processor<
+    [K in keyof TBatchLimits]: Processor<
       TStateAdapter,
       TMergedJobTypeDefinitions,
-      K,
-      MergedAttemptHandlerCtx<TAttemptMiddleware>
+      K & string,
+      MergedAttemptHandlerCtx<TAttemptMiddleware>,
+      TBatchLimits[K]
     >;
-  } & Record<Exclude<TProcessors, keyof TJobTypeDefinitions & string>, never>;
+  } & Record<Exclude<keyof TBatchLimits, keyof TJobTypeDefinitions & string>, never>;
 }): Processors<TJobTypeDefinitions, TAttemptMiddleware> => {
+  const processorEntries = Object.entries<Processor<any, any, any, any, any>>(options.processors);
+  const configViolations = [
+    ...backoffConfigViolations("backoffConfig", options.backoffConfig),
+    ...processorEntries.flatMap(([typeName, processor]) => [
+      ...backoffConfigViolations(
+        `processors["${typeName}"].backoffConfig`,
+        processor.backoffConfig,
+      ),
+      ...(processor.batchLimit === undefined || isPositiveSafeInteger(processor.batchLimit)
+        ? []
+        : [
+            `processors["${typeName}"].batchLimit must be a positive integer (got ${String(processor.batchLimit)})`,
+          ]),
+    ]),
+  ];
+  if (configViolations.length > 0) {
+    throw new TypeError(
+      `createProcessors: invalid configuration:\n${configViolations.map((v) => `  - ${v}`).join("\n")}`,
+    );
+  }
   const middleware = options.attemptMiddleware ?? [];
   const stampedProcessors: Record<string, unknown> = {};
-  for (const [typeName, processor] of Object.entries(
-    options.processors as Record<string, Processor<any, any, any, any>>,
-  )) {
+  for (const [typeName, processor] of processorEntries) {
     stampedProcessors[typeName] = Object.assign(
       {},
       processor,

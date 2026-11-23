@@ -2,7 +2,7 @@
 title: Runtime Validation
 description: Add runtime validation with Zod, Valibot, TypeBox, or ArkType.
 sidebar:
-  order: 20
+  order: 21
 ---
 
 `defineJobTypes` gives you compile-time type safety with zero runtime cost. When job inputs come from outside your program — HTTP handlers, dashboards, cross-service cron payloads — TypeScript can't reject a malformed value before your handler runs. `createJobTypes` closes that gap: it accepts callbacks that run at every boundary the library touches (entry, input, output, continuation, blockers).
@@ -83,7 +83,7 @@ try {
 
 Errors thrown by the underlying schema library (`ZodError`, `ValiError`, `TypeBoxError`, ...) are caught and wrapped, so callers always handle a single error type regardless of which library the adapter uses. The five codes are `not_entry_point`, `invalid_input`, `invalid_output`, `invalid_continuation`, and `invalid_blockers`. `details` holds what failed validation (the input, output, continuation target or blockers), and `cause` the error the validation function threw. When an encoder returns a value that is not JSON-serializable, `details` holds that encoded value and the `path` to the offending part, such as `["items", 1, "at"]`.
 
-The batch methods `createChains` and `applyJobOutcomes` validate every item before throwing, and throw `JobsTypeValidationError`: `itemIndexes` lists the position of each rejected item in `items`, and `errors` holds its `JobTypeValidationError`, in the same order. When items fail with different kinds of errors, it lists the items of the first kind, and blockers are validated after the other checks pass.
+The client's `createChains` and `applyJobOutcomes`, and a batched attempt handler's `applyJobOutcomes`, validate every item before throwing, and throw `JobsTypeValidationError`: `itemIndexes` lists the position of each rejected item in `items`, and `errors` holds its `JobTypeValidationError`, in the same order. When items fail with different kinds of errors, it lists the items of the first kind, and blockers are validated after the other checks pass.
 
 ## See also
 

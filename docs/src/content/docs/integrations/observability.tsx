@@ -81,11 +81,13 @@ const members = (): FieldItem[] => [
   },
   {
     name: "Durations and gauges",
-    description: "Chain, job and attempt durations, and per-type idle and processing changes.",
+    description:
+      "Chain, job and attempt durations, batch sizes, and per-type idle and processing changes.",
     extra: [
       "chainDuration",
       "jobDuration",
       "jobAttemptDuration",
+      "jobAttemptBatchSize",
       "jobTypeIdleChange",
       "jobTypeProcessingChange",
     ],

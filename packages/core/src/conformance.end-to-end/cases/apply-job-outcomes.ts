@@ -1424,7 +1424,7 @@ export const applyJobOutcomesGroup: ConformanceGroup<StateAdapterConformanceCont
       }),
     },
     {
-      name: "applyJobOutcome and applyJobOutcomes throw when called without transaction context",
+      name: "applyJobOutcome and applyJobOutcomes name themselves when called without transaction context or with more than one outcome",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -1450,7 +1450,7 @@ export const applyJobOutcomesGroup: ConformanceGroup<StateAdapterConformanceCont
                 job: { id: chain.id, typeName: "test" },
                 output: { result: 84 },
               }),
-            /requires a transaction context/,
+            /applyJobOutcome requires a transaction context/,
           ),
         );
         yield* step(
@@ -1460,7 +1460,39 @@ export const applyJobOutcomesGroup: ConformanceGroup<StateAdapterConformanceCont
               client.applyJobOutcomes({
                 items: [{ job: { id: chain.id, typeName: "test" }, output: { result: 84 } }],
               }),
-            /requires a transaction context/,
+            /applyJobOutcomes requires a transaction context/,
+          ),
+        );
+        yield* step(
+          assertRejects(
+            () =>
+              stateAdapter.withTransaction((txCtx) =>
+                client.applyJobOutcome({
+                  ...txCtx,
+                  job: { id: chain.id, typeName: "test" },
+                  output: { result: 84 },
+                  ...({ reschedule: { afterMs: 0 } } as object),
+                }),
+              ),
+            /applyJobOutcome requires exactly one of output, continueWith or reschedule/,
+          ),
+        );
+        yield* step(
+          assertRejects(
+            () =>
+              stateAdapter.withTransaction((txCtx) =>
+                client.applyJobOutcomes({
+                  ...txCtx,
+                  items: [
+                    {
+                      job: { id: chain.id, typeName: "test" },
+                      output: { result: 84 },
+                      ...({ reschedule: { afterMs: 0 } } as object),
+                    },
+                  ],
+                }),
+              ),
+            /applyJobOutcomes requires exactly one of output, continueWith or reschedule/,
           ),
         );
 

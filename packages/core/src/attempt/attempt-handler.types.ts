@@ -2,7 +2,7 @@ import type { MaybePromise, ModeResult, Mode } from "@queuert/sync-async";
 
 import type { ModeOf } from "../adapter-mode.ts";
 import type { AnyChain } from "../entities/chain.ts";
-import type { AnyJob } from "../entities/job.ts";
+import type { AnyJob, JobRef } from "../entities/job.ts";
 import type { ScheduleOptions } from "../entities/schedule.ts";
 import type { BaseJobTypeDefinitions } from "../job-types/job-type.ts";
 import type {
@@ -85,6 +85,28 @@ export type JobOutcome<
   | JobContinueWithOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TJobTypeDefinitions>
   | JobRescheduleOutcome;
 
+/**
+ * Fails one job of a batch: the job counts a failed attempt, records `fail` as its
+ * `lastAttemptError` and is rescheduled with backoff, while the other jobs named in the same call
+ * take their own outcomes in the same write.
+ */
+export type JobFailOutcome = {
+  fail: unknown;
+  output?: never;
+  continueWith?: never;
+  reschedule?: never;
+  reason?: never;
+};
+
+/**
+ * Every outcome a batched attempt handler's `applyJobOutcomes` accepts for one job of its batch.
+ */
+export type BatchJobOutcome<
+  TStateAdapter extends StateAdapter<any, any, any, Mode>,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends string,
+> = JobOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName> | JobFailOutcome;
+
 /** Resolves the committed job shape from the outcome's discriminant key. */
 export type JobOutcomeResult<
   TStateAdapter extends StateAdapter<any, any, any, Mode>,
@@ -101,7 +123,7 @@ export type JobOutcomeResult<
       TChainTypeName,
       TContinuationTypeName
     >
-  : TOutcome extends { reschedule: any }
+  : TOutcome extends { reschedule: any } | { fail: any }
     ? RescheduledJob<
         GetStateAdapterJobId<TStateAdapter>,
         TJobTypeDefinitions,
@@ -180,6 +202,76 @@ export type AttemptApplyJobOutcome<
 >;
 
 /**
+ * Commits an outcome for each named job of the batch inside the caller's transaction. Takes that
+ * transaction's context, with every field the state provider's context type requires (`txHooks`
+ * included, for a provider that carries them), spread alongside `items`: each item names one job of
+ * the batch as `job` next to exactly one outcome, like the items of `client.applyJobOutcomes`.
+ * Returns the committed jobs in the order of `items`, each typed by its own item's outcome.
+ *
+ * The transaction is the unit of atomicity: every write is conditional on this attempt still owning
+ * the item's job, and if any named job is lost, `applyJobOutcomes` throws after writing the
+ * outcomes of the jobs it still owns, so the caller's transaction must roll back. A transaction
+ * that catches the error and commits keeps those writes, and the attempt reports their jobs as
+ * lost. Jobs settled in different transactions do not share a fate, so the handler picks which jobs
+ * succeed or fail together by grouping them into one call. `{ fail: error }` fails one job: it is
+ * rescheduled with backoff and `error` becomes its `lastAttemptError`.
+ *
+ * Each job settles at most once per attempt. A call that threw before writing, or whose
+ * transaction or savepoint the state provider reported as rolled back, does not count for its
+ * jobs, so they can be settled again in a new transaction. Jobs of the batch without a counted
+ * outcome when the handler ends fail, and are rescheduled with backoff.
+ *
+ * Misuse throws a plain `Error`, without aborting any `job.signal`: a transaction context outside
+ * an open transaction, an item naming a job outside the batch or a job named twice, an item without
+ * exactly one outcome, a job already settled or being settled by a concurrent call, or a call
+ * after the handler ended.
+ *
+ * When named jobs are lost in different ways, the error reports the deleted jobs if there are any,
+ * else the completed ones, else the reclaimed ones, and the `job.signal` of every lost job aborts.
+ *
+ * @throws {@link JobsTakenByAnotherWorkerError} if named jobs' attempts were reclaimed, listing
+ * each job, and aborts their `job.signal`.
+ * @throws {@link JobsAlreadyCompletedError} if named jobs were completed elsewhere, for example by
+ * `client.applyJobOutcomes`, and aborts their `job.signal`.
+ * @throws {@link JobsNotFoundError} if named jobs were deleted, and aborts their `job.signal`.
+ * @throws {@link JobsBlockerLimitExceededError} if `continueWith` outcomes declare more blockers
+ * than the per-job limit.
+ * @throws {@link ChainsNotFoundError} if `continueWith` blocker chains do not exist.
+ * @throws {@link ChainsTypeMismatchError} if `continueWith` blockers' `typeName` differs from the
+ * stored chains'.
+ * @throws {@link JobsTypeValidationError} if the job type rejects an `output`, or the continuation
+ * job type rejects a `continueWith` target, input or blockers.
+ * @throws {@link UnknownJobTypesError} if a merged registry owns no slice for the job type.
+ * @throws {@link InvalidJobIdsError} if a `continueWith` `id` fails the state adapter's
+ * `validateJobId` check.
+ */
+export type AttemptApplyJobOutcomes<
+  TStateAdapter extends StateAdapter<any, any, any, Mode>,
+  in out TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  in out TJobTypeName extends string,
+  out TChainTypeName extends string,
+> = <
+  TItems extends
+    | readonly ({
+        job: JobRef<GetStateAdapterJobId<TStateAdapter>, TJobTypeName>;
+      } & BatchJobOutcome<TStateAdapter, TJobTypeDefinitions, TJobTypeName>)[]
+    | [],
+>(
+  options: { items: TItems } & GetStateAdapterTxContext<TStateAdapter>,
+) => ModeResult<
+  ModeOf<TStateAdapter>,
+  NoInfer<{
+    -readonly [K in keyof TItems]: JobOutcomeResult<
+      TStateAdapter,
+      TJobTypeDefinitions,
+      TJobTypeName,
+      TChainTypeName,
+      TItems[K]
+    >;
+  }>
+>;
+
+/**
  * Holds the job's attempt inside the caller's transaction until it commits or rolls back. Takes the
  * transaction context of that transaction; unlike `applyJobOutcome`, it registers no commit
  * callbacks, so any part of the context that identifies the transaction is enough.
@@ -205,6 +297,42 @@ export type AttemptApplyJobOutcome<
  */
 export type AttemptFenceJob<TStateAdapter extends StateAdapter<any, any, any, Mode>> = (
   options: Partial<GetStateAdapterTxContext<TStateAdapter>>,
+) => ModeResult<ModeOf<TStateAdapter>, void>;
+
+/**
+ * Holds the attempts of the named jobs of the batch inside the caller's transaction until it
+ * commits or rolls back. Takes the transaction context of that transaction spread alongside `jobs`;
+ * unlike `applyJobOutcomes`, it registers no commit callbacks, so any part of the context that
+ * identifies the transaction is enough.
+ *
+ * `fenceJobs` locks the row and chain head of each named job and checks that its attempt in
+ * this batch still owns it. Reclaiming, completing or deleting one of them waits for the caller's
+ * transaction to end, so every write in a transaction where `fenceJobs` succeeded commits while
+ * the attempts own those jobs. Fence the jobs whose work the transaction writes, in the
+ * transactions the handler opens besides the one that settles them; keep them short, since the
+ * locks hold back everything else that writes to the jobs or their chains.
+ *
+ * `fenceJobs` writes nothing and can be called any number of times, in the same or different
+ * transactions. In the transaction that settles a job, fence it before `applyJobOutcomes`, which
+ * ends the job's attempt, so a later `fenceJobs` treats it as lost.
+ *
+ * Misuse throws a plain `Error`: a transaction context outside an open transaction, a job outside
+ * the batch or a job named twice, or a call after the handler ended.
+ *
+ * When named jobs are lost in different ways, the error reports the deleted jobs if there are any,
+ * else the completed ones, else the reclaimed ones, and the `job.signal` of every lost job aborts.
+ *
+ * @throws {@link JobsTakenByAnotherWorkerError} if named jobs' attempts were reclaimed, listing
+ * each job, and aborts their `job.signal`.
+ * @throws {@link JobsAlreadyCompletedError} if named jobs were completed elsewhere, for example by
+ * `client.applyJobOutcomes`, listing each, and aborts their `job.signal`.
+ * @throws {@link JobsNotFoundError} if named jobs were deleted, listing each, and aborts their
+ * `job.signal`.
+ */
+export type AttemptFenceJobs<TStateAdapter extends StateAdapter<any, any, any, Mode>> = (
+  options: { jobs: readonly JobRef<GetStateAdapterJobId<TStateAdapter>, string>[] } & Partial<
+    GetStateAdapterTxContext<TStateAdapter>
+  >,
 ) => ModeResult<ModeOf<TStateAdapter>, void>;
 
 type AttemptRunningJob<
@@ -266,6 +394,44 @@ export type AttemptHandler<
   } & THandlerCtx,
 ) => Promise<void>;
 
+/**
+ * Handler function called once per batch of jobs, for a processor with a `batchLimit` above 1.
+ *
+ * Receives `jobs` (the running jobs of the batch, all of one type, each with its completed blocker
+ * chains and its own `job.signal`), `applyJobOutcomes` (commits outcomes for named jobs inside the
+ * caller's transaction) and `fenceJobs` (holds the attempts of named jobs inside another of the
+ * caller's transactions until it ends). The batch is one handler call holding one attempt per job.
+ *
+ * Each job of the batch keeps its own attempt: losing one (reclaimed, completed elsewhere, deleted)
+ * aborts only its `job.signal`, and the handler keeps settling the others. A job settles once the
+ * state provider runs the commit callbacks of the `applyJobOutcomes` call that named it. Jobs
+ * without a counted outcome when the handler ends — returned or thrown — fail, and are rescheduled
+ * with backoff; settled jobs keep their outcome. To hand a job back for another attempt without a
+ * failure, settle it with `{ reschedule: { afterMs: 0 } }`. Await every transaction that calls
+ * `applyJobOutcomes` before the handler returns, including those started for each job in parallel:
+ * a call still running when the handler ends races the failure of its jobs.
+ *
+ * The batch takes one worker runner concurrency slot until the handler ends.
+ */
+export type BatchAttemptHandler<
+  TStateAdapter extends StateAdapter<any, any, any, Mode>,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends string,
+  TChainTypeName extends string,
+  THandlerCtx,
+> = (
+  processOptions: {
+    jobs: AttemptRunningJob<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TChainTypeName>[];
+    applyJobOutcomes: AttemptApplyJobOutcomes<
+      TStateAdapter,
+      TJobTypeDefinitions,
+      TJobTypeName,
+      TChainTypeName
+    >;
+    fenceJobs: AttemptFenceJobs<TStateAdapter>;
+  } & THandlerCtx,
+) => Promise<void>;
+
 export type AnyRunningJob = AnyJob & { blockers: AnyChain[]; signal: AbortSignal };
 
 export type AnyAttemptHandler = (options: {
@@ -276,6 +442,16 @@ export type AnyAttemptHandler = (options: {
   fenceJob: (options: BaseTxContext) => MaybePromise<void>;
 }) => Promise<void>;
 
+export type AnyBatchJobOutcomeItem = { job: { id: string } } & AnyJobOutcomeFields;
+
+export type AnyBatchAttemptHandler = (options: {
+  jobs: AnyRunningJob[];
+  applyJobOutcomes: (
+    options: BaseTxContext & { items: AnyBatchJobOutcomeItem[] },
+  ) => MaybePromise<(AnyJob & { continuedTo?: AnyJob })[]>;
+  fenceJobs: (options: BaseTxContext & { jobs: { id: string }[] }) => MaybePromise<void>;
+}) => Promise<void>;
+
 export type AnyJobOutcomeOptions = BaseTxContext & AnyJobOutcomeFields;
 
 export type AnyJobOutcomeFields = {
@@ -283,9 +459,11 @@ export type AnyJobOutcomeFields = {
   continueWith?: AnyNewJob;
   reschedule?: ScheduleOptions;
   reason?: string;
+  fail?: unknown;
 };
 
 export type AnyJobOutcome =
   | { output: unknown }
   | { continueWith: AnyNewJob }
-  | { reschedule: ScheduleOptions; reason?: string };
+  | { reschedule: ScheduleOptions; reason?: string }
+  | { fail: unknown };

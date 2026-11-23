@@ -135,9 +135,9 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
       wrapHandler: async ({ next }) => next({ traceId: "t" }),
     };
     const tenantMw: AttemptMiddleware<DbStateAdapter, { tenant: string }> = {
-      wrapHandler: async ({ job, next }) => {
-        expectTypeOf(job.id).toEqualTypeOf<string>();
-        expectTypeOf(job.signal).toEqualTypeOf<AbortSignal>();
+      wrapHandler: async ({ jobs, next }) => {
+        expectTypeOf<(typeof jobs)[number]["id"]>().toEqualTypeOf<string>();
+        expectTypeOf<(typeof jobs)[number]["signal"]>().toEqualTypeOf<AbortSignal>();
         return next({ tenant: "acme" });
       },
     };
@@ -193,8 +193,8 @@ describe("middleware must match the client's state adapter", () => {
     type PgJobId = string & { readonly brand: "pg" };
     type PgAdapter = StateAdapter<{ sql: (q: string) => Promise<void> }, PgJobId, string, "async">;
     const foreignMw: AttemptMiddleware<PgAdapter, { tenant: string }> = {
-      wrapHandler: async ({ job, next }) => {
-        void (job.id satisfies PgJobId);
+      wrapHandler: async ({ jobs, next }) => {
+        void jobs.map((job) => job.id satisfies PgJobId);
         return next({ tenant: "acme" });
       },
     };

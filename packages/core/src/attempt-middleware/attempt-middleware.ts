@@ -19,10 +19,11 @@ type RunningJob<TStateAdapter extends StateAdapter<any, any, any, Mode>> = Resol
 /**
  * Wraps job processing with cross-cutting logic.
  *
- * `wrapHandler` wraps the entire attempt handler. It receives the attempt's `job`. The `next(ctx)`
- * callback runs the inner layers with typed context merged into `attemptHandler`'s options, and
- * resolves once the handler returns; a handler's throw rejects it. The attempt's outcome is decided
- * by the `applyJobOutcome` call that committed it.
+ * `wrapHandler` wraps the entire attempt handler. It receives the handler call's `jobs`: one job,
+ * or every job of the batch for a processor with a `batchLimit` above 1. The `next(ctx)` callback
+ * runs the inner layers with typed context merged into `attemptHandler`'s options, and resolves
+ * once the handler returns; a handler's throw rejects it. Each job's outcome is decided by the
+ * attempt handler's `applyJobOutcome` or `applyJobOutcomes` call that committed it.
  *
  * Multiple middleware compose as an onion — the first middleware's "before" runs
  * outermost. Each `next(ctx)` accumulates ctx for inner layers.
@@ -32,7 +33,7 @@ export type AttemptMiddleware<
   THandlerCtx extends Record<string, unknown> = Record<string, unknown>,
 > = {
   wrapHandler: (opts: {
-    job: RunningJob<TStateAdapter>;
+    jobs: RunningJob<TStateAdapter>[];
     workerId: GetStateAdapterWorkerId<TStateAdapter>;
     next: (ctx: THandlerCtx) => Promise<void>;
   }) => Promise<void>;
@@ -94,7 +95,7 @@ export type IsAttemptMiddlewareSubsequence<
 
 export const runHandlerMiddlewareChain = async (
   attemptMiddleware: readonly AnyAttemptMiddleware[] | undefined,
-  baseOpts: { job: unknown; workerId: string },
+  baseOpts: { jobs: unknown[]; workerId: string },
   innerCallback: (ctx: Record<string, unknown>) => Promise<void>,
 ): Promise<void> => {
   if (!attemptMiddleware || attemptMiddleware.length === 0) return innerCallback({});
@@ -104,7 +105,7 @@ export const runHandlerMiddlewareChain = async (
     const wrap = attemptMiddleware[i].wrapHandler;
     chain = async (outerCtx) =>
       wrap({
-        job: baseOpts.job as any,
+        jobs: baseOpts.jobs as any,
         workerId: baseOpts.workerId,
         next: async (addedCtx: Record<string, unknown>) => next({ ...outerCtx, ...addedCtx }),
       });

@@ -9,4 +9,4 @@ pnpm install
 pnpm --filter example-log-console start
 ```
 
-For per-job contextual logging (child logger bound to `{jobId, typeName, attempt, workerId}`), see [log/pino](../pino) and [log/winston](../winston), which add an `attemptMiddleware`.
+For contextual logging (a child logger bound to the handler call's jobs as `jobAttempts`, each `{jobId, typeName, chainTypeName, attempt, workerId}`), see [log/pino](../pino) and [log/winston](../winston), which add an `attemptMiddleware`.

@@ -48,6 +48,7 @@ export {
   JobsStatusMismatchError,
   JobsNotFoundError,
   JobTakenByAnotherWorkerError,
+  JobsTakenByAnotherWorkerError,
   JobTypeMismatchError,
   JobsTypeMismatchError,
   JobTypeValidationError,

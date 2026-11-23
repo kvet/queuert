@@ -4,45 +4,54 @@ import type { Helpers } from "../client/setup-helpers.ts";
 import type { StateJob } from "../state-adapter/state-adapter.ts";
 
 export type AttemptOwnership = {
-  signal: AbortSignal;
-  abort: () => void;
+  signals: ReadonlyMap<string, AbortSignal>;
+  abort: (jobIds: string[]) => void;
   release: () => Promise<void>;
 };
 
 export const startAttemptOwnership = async (
   helpers: Helpers,
   {
-    stateJob,
+    stateJobs,
     abortSignal,
   }: {
-    stateJob: StateJob;
+    stateJobs: StateJob[];
     abortSignal: AbortSignal;
   },
 ): Promise<AttemptOwnership> => {
-  const abortController = new AbortController();
-  const abort = () => {
-    abortController.abort();
+  const abortControllers = new Map(
+    stateJobs.map((stateJob) => [stateJob.id, new AbortController()]),
+  );
+  const abort = (jobIds: string[]) => {
+    for (const jobId of jobIds) {
+      abortControllers.get(jobId)?.abort();
+    }
   };
-  abortSignal.addEventListener("abort", abort, { once: true });
-  if (abortSignal.aborted) abort();
+  const abortAll = () => {
+    abort([...abortControllers.keys()]);
+  };
+  abortSignal.addEventListener("abort", abortAll, { once: true });
+  if (abortSignal.aborted) abortAll();
 
   const released = createLatch();
   const disposeAttemptLostListener = await helpers.notifyHelper.listenJobAttemptsLost(
-    [stateJob.id],
-    () => {
-      if (!released.tripped) abortController.abort();
+    [...abortControllers.keys()],
+    (jobId) => {
+      if (!released.tripped) abort([jobId]);
     },
   );
 
   return {
-    signal: abortController.signal,
+    signals: new Map(
+      [...abortControllers].map(([jobId, abortController]) => [jobId, abortController.signal]),
+    ),
     abort,
     release: async () => {
       released.trip();
       try {
         await disposeAttemptLostListener();
       } finally {
-        abortSignal.removeEventListener("abort", abort);
+        abortSignal.removeEventListener("abort", abortAll);
       }
     },
   };
