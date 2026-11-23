@@ -54,13 +54,13 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           const user = await orm.em.fork().findOneOrFail(User, { id: job.input.userId });
 
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          return orm.em.transactional(async (em) =>
-            applyOutcome({ em, output: { sentAt: new Date().toISOString() } }),
+          await orm.em.transactional(async (em) =>
+            applyJobOutcome({ em, output: { sentAt: new Date().toISOString() } }),
           );
         },
       },

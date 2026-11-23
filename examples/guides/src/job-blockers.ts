@@ -59,40 +59,43 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       "fetch-data": {
-        attemptHandler: async ({ job, applyOutcome }) =>
-          stateAdapter.withTransaction(async (txCtx) =>
-            applyOutcome({ ...txCtx, output: { data: `data from ${job.input.url}` } }),
-          ),
+        attemptHandler: async ({ job, applyJobOutcome }) => {
+          await stateAdapter.withTransaction(async (txCtx) =>
+            applyJobOutcome({ ...txCtx, output: { data: `data from ${job.input.url}` } }),
+          );
+        },
       },
       // #region fan-out-process
       "process-all": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           const results = job.blockers.map((blocker) => blocker.output.data);
-          return stateAdapter.withTransaction(async (txCtx) =>
-            applyOutcome({ ...txCtx, output: { results } }),
+          await stateAdapter.withTransaction(async (txCtx) =>
+            applyJobOutcome({ ...txCtx, output: { results } }),
           );
         },
       },
       // #endregion
       "capture-payment": {
-        attemptHandler: async ({ job, applyOutcome }) =>
-          stateAdapter.withTransaction(async (txCtx) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
+          await stateAdapter.withTransaction(async (txCtx) => {
             orders.set(job.input.orderId, { status: "paid", paymentChainId: null });
-            return applyOutcome({
+            return applyJobOutcome({
               ...txCtx,
               output: { transactionId: `txn-${job.input.orderId}` },
             });
-          }),
+          });
+        },
       },
       "ship-order": {
-        attemptHandler: async ({ job, applyOutcome }) =>
-          stateAdapter.withTransaction(async (txCtx) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
+          await stateAdapter.withTransaction(async (txCtx) => {
             orders.set(job.input.orderId, { status: "shipped", paymentChainId: null });
-            return applyOutcome({
+            return applyJobOutcome({
               ...txCtx,
               output: { trackingNumber: `track-${job.input.orderId}` },
             });
-          }),
+          });
+        },
       },
     },
   }),

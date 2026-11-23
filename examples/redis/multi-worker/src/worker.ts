@@ -54,7 +54,7 @@ const workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       process_order: {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           process.send!({
             type: "processing",
             orderId: job.input.orderId,
@@ -64,8 +64,8 @@ const workerRunner = createWorkerRunner({
 
           await new Promise((resolve) => setTimeout(resolve, 100 + Math.random() * 200));
 
-          return stateAdapter.withTransaction(async (txCtx) =>
-            applyOutcome({
+          await stateAdapter.withTransaction(async (txCtx) =>
+            applyJobOutcome({
               ...txCtx,
               output: { processedAt: new Date().toISOString(), processName },
             }),

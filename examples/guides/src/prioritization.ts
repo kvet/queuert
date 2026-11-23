@@ -68,20 +68,20 @@ await using transactionalWorkerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       "email.transactional": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           await simulateWork("transactional", job.input.to, 20);
-          return stateAdapter.withTransaction(async (txCtx) =>
-            applyOutcome({ ...txCtx, output: { sentAt: Date.now() } }),
+          await stateAdapter.withTransaction(async (txCtx) =>
+            applyJobOutcome({ ...txCtx, output: { sentAt: Date.now() } }),
           );
         },
       },
       // #hide
       // #region handoff
       "alert.dispatch": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           await simulateWork("transactional", job.input.alertId, 20);
-          return stateAdapter.withTransaction(async (txCtx) =>
-            applyOutcome({
+          await stateAdapter.withTransaction(async (txCtx) =>
+            applyJobOutcome({
               ...txCtx,
               continueWith: { typeName: "alert.archive", input: { alertId: job.input.alertId } },
             }),
@@ -102,19 +102,19 @@ await using marketingWorkerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       "email.marketing": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           await simulateWork("marketing", job.input.to, 200);
-          return stateAdapter.withTransaction(async (txCtx) =>
-            applyOutcome({ ...txCtx, output: { sentAt: Date.now() } }),
+          await stateAdapter.withTransaction(async (txCtx) =>
+            applyJobOutcome({ ...txCtx, output: { sentAt: Date.now() } }),
           );
         },
       },
       // #hide
       "alert.archive": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           await simulateWork("marketing", job.input.alertId, 200);
-          return stateAdapter.withTransaction(async (txCtx) =>
-            applyOutcome({ ...txCtx, output: { archivedAt: Date.now() } }),
+          await stateAdapter.withTransaction(async (txCtx) =>
+            applyJobOutcome({ ...txCtx, output: { archivedAt: Date.now() } }),
           );
         },
       },

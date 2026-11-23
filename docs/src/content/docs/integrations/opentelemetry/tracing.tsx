@@ -61,7 +61,7 @@ const spans = (): FieldItem[] => [
     kind: producer,
     created: (
       <>
-        <code>createChain()</code>, <code>{"applyOutcome({ continueWith: ... })"}</code>
+        <code>createChain()</code>, <code>{"applyJobOutcome({ continueWith: ... })"}</code>
       </>
     ),
     ended: "on commit",
@@ -171,9 +171,10 @@ const attributes = (): FieldItem[] => [
     chips: ["string"],
     description: (
       <>
-        Reason passed to <code>{"applyOutcome({ reschedule, reason })"}</code> or{" "}
-        <code>{"applyJobOutcome({ reschedule, reason })"}</code>; present when the job was
-        rescheduled with one.
+        Reason passed to an attempt handler's{" "}
+        <code>{"applyJobOutcome({ reschedule, reason })"}</code> or{" "}
+        <code>{"client.applyJobOutcome({ job, reschedule, reason })"}</code>; present when the job
+        was rescheduled with one.
       </>
     ),
   },
@@ -258,24 +259,24 @@ const Page = () => (
     <p>
       When{" "}
       <a href={siteHref("/guides/workerless-outcomes/")}>
-        <code>applyJobOutcome</code>
+        <code>client.applyJobOutcome</code>
       </a>{" "}
-      or <code>applyJobOutcomes</code> completes a job, the job-attempt span marks the completion as
-      it does for a worker, without <code>queuert.worker.id</code>, and if the chain is fully
-      completed, a CONSUMER chain span closes the trace:
+      or <code>client.applyJobOutcomes</code> completes a job, the job-attempt span marks the
+      completion as it does for a worker, without <code>queuert.worker.id</code>, and if the chain
+      is fully completed, a CONSUMER chain span closes the trace:
     </p>
     <TraceWaterfall
       title="trace"
       subtitle="chain approve-refund"
-      label="approve-refund is created, then completed three minutes later through applyJobOutcome: a job-attempt span and its complete chain child"
+      label="approve-refund is created, then completed three minutes later through client.applyJobOutcome: a job-attempt span and its complete chain child"
       spans={approveRefundTrace}
     />
     <p>
       The job-attempt span is a child of the PRODUCER job span and ends right away. When the client
       continues the chain with <code>continueWith</code>, the CONSUMER chain span is omitted. A{" "}
       <code>reschedule</code> outcome ends the job-attempt span with{" "}
-      <code>queuert.reschedule.reason</code> when a <code>reason</code> is given, like a worker's{" "}
-      <code>applyOutcome({"{ reschedule }"})</code>.
+      <code>queuert.reschedule.reason</code> when a <code>reason</code> is given, like an attempt
+      handler's <code>applyJobOutcome({"{ reschedule }"})</code>.
     </p>
 
     <h2>Chain completion link</h2>

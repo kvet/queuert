@@ -65,12 +65,12 @@ const workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       "provision-account": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           const accountId = await provisionAccount(job.input.userId);
 
-          return withTxHooks(async (txHooks) =>
+          await withTxHooks(async (txHooks) =>
             db.transaction(async (tx) =>
-              applyOutcome({
+              applyJobOutcome({
                 tx,
                 txHooks,
                 continueWith: {

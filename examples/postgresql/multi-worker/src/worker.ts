@@ -40,7 +40,7 @@ const workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       process_order: {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           const [order] = await sql<{ items: string[]; total: number }[]>`
             SELECT items, total FROM orders WHERE id = ${job.input.orderId}
           `;
@@ -55,9 +55,9 @@ const workerRunner = createWorkerRunner({
 
           await new Promise((resolve) => setTimeout(resolve, 100 + Math.random() * 200));
 
-          return withTxHooks(async (txHooks) =>
+          await withTxHooks(async (txHooks) =>
             sql.begin(async (txSql) =>
-              applyOutcome({
+              applyJobOutcome({
                 txSql,
                 txHooks,
                 output: {

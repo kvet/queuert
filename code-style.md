@@ -217,7 +217,7 @@ export const createClient = ({
 ### General Guidelines
 
 - Embed small verification tests into existing related tests rather than creating separate ones
-- Test the relevant outcomes of an attempt: work before the transaction, `applyOutcome` committed, `applyOutcome` rolled back, and errors before and after the commit
+- Test the relevant outcomes of an attempt: work before the transaction, `applyJobOutcome` committed, `applyJobOutcome` rolled back, and errors before and after the commit
 - Prefer descriptive test names that match what's being tested
 - To enable verbose logging when debugging tests, run with `DEBUG=1` environment variable
 - **No one-line helpers in tests or conformance cases**: assert fields where they are checked (`assert.equal(job.status, "running"); assert.equal(job.attemptBy, worker.id)`) and call utilities such as `raceWithSleep` at the assertion site. A curried predicate or a wrapper around a single assertion or utility call hides what the case checks.

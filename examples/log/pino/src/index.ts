@@ -85,13 +85,13 @@ await using workerRunner = createWorkerRunner({
     attemptMiddleware: [loggerInjectionMiddleware],
     processors: {
       greet: {
-        attemptHandler: async ({ job, log, applyOutcome }) => {
+        attemptHandler: async ({ job, log, applyJobOutcome }) => {
           // `log` is already bound to this job's context
           log.info("Starting to process greeting");
           log.info({ name: job.input.name }, "Generating greeting");
 
-          return stateAdapter.withTransaction((ctx) =>
-            applyOutcome({
+          stateAdapter.withTransaction((ctx) =>
+            applyJobOutcome({
               ...ctx,
               output: { greeting: `Hello, ${job.input.name}!` },
             }),
@@ -99,7 +99,7 @@ await using workerRunner = createWorkerRunner({
         },
       },
       "might-fail": {
-        attemptHandler: async ({ job, log, applyOutcome }) => {
+        attemptHandler: async ({ job, log, applyJobOutcome }) => {
           log.info("Processing might-fail job");
 
           if (job.input.shouldFail && job.attempt < 2) {
@@ -109,8 +109,8 @@ await using workerRunner = createWorkerRunner({
 
           log.info("Job succeeded");
 
-          return stateAdapter.withTransaction((ctx) =>
-            applyOutcome({ ...ctx, output: { success: true as const } }),
+          stateAdapter.withTransaction((ctx) =>
+            applyJobOutcome({ ...ctx, output: { success: true as const } }),
           );
         },
         backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },

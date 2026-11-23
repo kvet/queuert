@@ -79,7 +79,7 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           let user: { id: number; name: string; email: string } | null;
           {
             using _h = await lock.acquireRead();
@@ -90,12 +90,12 @@ await using workerRunner = createWorkerRunner({
           // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          return withTxHooks(async (txHooks) => {
+          await withTxHooks(async (txHooks) => {
             // The handler's transaction holds the provider's write lock, so the worker's
             // autocommit statements on this connection cannot run inside it.
             using _h = await lock.acquireWrite();
             return await prisma.$transaction(async (prisma) =>
-              applyOutcome({ prisma, txHooks, output: { sentAt: new Date().toISOString() } }),
+              applyJobOutcome({ prisma, txHooks, output: { sentAt: new Date().toISOString() } }),
             );
           });
         },

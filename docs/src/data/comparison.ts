@@ -106,7 +106,7 @@ export const compareTools: CompareTool[] = [
       },
       operate: { text: "None — your existing database" },
       enqueue: { mark: "yes", text: "createChain writes in your SQL transaction" },
-      completion: { mark: "yes", text: "applyOutcome commits with your SQL domain writes" },
+      completion: { mark: "yes", text: "applyJobOutcome commits with your SQL domain writes" },
       chains: { mark: "yes", text: "continueWith, types inferred end to end" },
       fanIn: { mark: "yes", text: "Typed blockers on other chains" },
       delayed: { mark: "yes", text: "schedule, reschedule" },

@@ -764,21 +764,23 @@ export const createChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ job, applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: { result: job.input.value } }),
-                    ),
+                  attemptHandler: async ({ job, applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: { result: job.input.value } }),
+                    );
+                  },
                 },
                 main: {
-                  attemptHandler: async ({ job, applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({
+                  attemptHandler: async ({ job, applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({
                         ...txCtx,
                         output: {
                           finalResult: job.blockers[0].output.result,
                         },
                       }),
-                    ),
+                    );
+                  },
                 },
               },
             }),
@@ -826,10 +828,11 @@ export const createChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: { result: job.input.value * 2 } }),
-                    ),
+                  attemptHandler: async ({ job, applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: { result: job.input.value * 2 } }),
+                    );
+                  },
                 },
               },
             }),

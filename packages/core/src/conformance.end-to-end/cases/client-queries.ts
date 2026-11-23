@@ -1067,16 +1067,18 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 task_a: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
+                    );
+                  },
                 },
                 task_b: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
+                    );
+                  },
                 },
               },
             }),
@@ -1219,16 +1221,18 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 task_a: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
+                    );
+                  },
                 },
                 task_b: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
+                    );
+                  },
                 },
               },
             }),
@@ -1594,16 +1598,18 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 task_a: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
+                    );
+                  },
                 },
                 task_b: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
+                    );
+                  },
                 },
               },
             }),
@@ -2008,16 +2014,18 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 job_a: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
+                    );
+                  },
                 },
                 job_b: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
+                    );
+                  },
                 },
               },
             }),
@@ -2209,17 +2217,18 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 step: {
-                  attemptHandler: async ({ job, applyOutcome }) =>
-                    job.input.n < 2
+                  attemptHandler: async ({ job, applyJobOutcome }) => {
+                    await (job.input.n < 2
                       ? stateAdapter.withTransaction((txCtx) =>
-                          applyOutcome({
+                          applyJobOutcome({
                             ...txCtx,
                             continueWith: { typeName: "step", input: { n: job.input.n + 1 } },
                           }),
                         )
                       : stateAdapter.withTransaction((txCtx) =>
-                          applyOutcome({ ...txCtx, output: { done: true } }),
-                        ),
+                          applyJobOutcome({ ...txCtx, output: { done: true } }),
+                        ));
+                  },
                 },
               },
             }),
@@ -2291,17 +2300,18 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 step: {
-                  attemptHandler: async ({ job, applyOutcome }) =>
-                    job.input.n < 1
+                  attemptHandler: async ({ job, applyJobOutcome }) => {
+                    await (job.input.n < 1
                       ? stateAdapter.withTransaction((txCtx) =>
-                          applyOutcome({
+                          applyJobOutcome({
                             ...txCtx,
                             continueWith: { typeName: "step", input: { n: job.input.n + 1 } },
                           }),
                         )
                       : stateAdapter.withTransaction((txCtx) =>
-                          applyOutcome({ ...txCtx, output: { done: true } }),
-                        ),
+                          applyJobOutcome({ ...txCtx, output: { done: true } }),
+                        ));
+                  },
                 },
               },
             }),
@@ -2367,17 +2377,18 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 step: {
-                  attemptHandler: async ({ job, applyOutcome }) =>
-                    job.input.n < 2
+                  attemptHandler: async ({ job, applyJobOutcome }) => {
+                    await (job.input.n < 2
                       ? stateAdapter.withTransaction((txCtx) =>
-                          applyOutcome({
+                          applyJobOutcome({
                             ...txCtx,
                             continueWith: { typeName: "step", input: { n: job.input.n + 1 } },
                           }),
                         )
                       : stateAdapter.withTransaction((txCtx) =>
-                          applyOutcome({ ...txCtx, output: { done: true } }),
-                        ),
+                          applyJobOutcome({ ...txCtx, output: { done: true } }),
+                        ));
+                  },
                 },
               },
             }),
@@ -2930,16 +2941,18 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 dep: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: { ok: true } }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: { ok: true } }),
+                    );
+                  },
                 },
                 main: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: { result: "done" } }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: { result: "done" } }),
+                    );
+                  },
                 },
               },
             }),
@@ -3295,19 +3308,20 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 send_email: {
-                  attemptHandler: async ({ applyOutcome }) => {
+                  attemptHandler: async ({ applyJobOutcome }) => {
                     attemptStarted.resolve();
                     await releaseAttempt.promise;
-                    return stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
                 sync_crm: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
+                    );
+                  },
                 },
               },
             }),
@@ -3370,19 +3384,20 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 send_email: {
-                  attemptHandler: async ({ applyOutcome }) => {
+                  attemptHandler: async ({ applyJobOutcome }) => {
                     attemptStarted.resolve();
                     await releaseAttempt.promise;
-                    return stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
                 sync_crm: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
+                    );
+                  },
                 },
               },
             }),
@@ -3435,19 +3450,20 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 send_email: {
-                  attemptHandler: async ({ applyOutcome }) => {
+                  attemptHandler: async ({ applyJobOutcome }) => {
                     attemptStarted.resolve();
                     await releaseAttempt.promise;
-                    return stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
                 sync_crm: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
+                    );
+                  },
                 },
               },
             }),
@@ -3508,19 +3524,20 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 send_email: {
-                  attemptHandler: async ({ applyOutcome }) => {
+                  attemptHandler: async ({ applyJobOutcome }) => {
                     attemptStarted.resolve();
                     await releaseAttempt.promise;
-                    return stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
                 sync_crm: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
+                    );
+                  },
                 },
               },
             }),
@@ -3579,19 +3596,20 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 send_email: {
-                  attemptHandler: async ({ applyOutcome }) => {
+                  attemptHandler: async ({ applyJobOutcome }) => {
                     attemptStarted.resolve();
                     await releaseAttempt.promise;
-                    return stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
                 sync_crm: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
+                    );
+                  },
                 },
               },
             }),
@@ -3652,11 +3670,11 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           jobTypes,
           processors: {
             send_email: {
-              attemptHandler: async ({ job, applyOutcome }) => {
+              attemptHandler: async ({ job, applyJobOutcome }) => {
                 attemptsStarted[job.input.index].resolve();
                 await releaseAttempts.promise;
-                return stateAdapter.withTransaction((txCtx) =>
-                  applyOutcome({ ...txCtx, output: null }),
+                await stateAdapter.withTransaction((txCtx) =>
+                  applyJobOutcome({ ...txCtx, output: null }),
                 );
               },
             },
@@ -3737,19 +3755,20 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 send_email: {
-                  attemptHandler: async ({ applyOutcome }) => {
+                  attemptHandler: async ({ applyJobOutcome }) => {
                     attemptStarted.resolve();
                     await releaseAttempt.promise;
-                    return stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
                 sync_crm: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
+                    );
+                  },
                 },
               },
             }),
@@ -3820,19 +3839,20 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 send_email: {
-                  attemptHandler: async ({ applyOutcome }) => {
+                  attemptHandler: async ({ applyJobOutcome }) => {
                     attemptStarted.resolve();
                     await releaseAttempt.promise;
-                    return stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },
                 sync_crm: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
+                    );
+                  },
                 },
               },
             }),
@@ -3895,11 +3915,11 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
           jobTypes,
           processors: {
             send_email: {
-              attemptHandler: async ({ job, applyOutcome }) => {
+              attemptHandler: async ({ job, applyJobOutcome }) => {
                 attemptsStarted[job.input.index].resolve();
                 await releaseAttempts.promise;
-                return stateAdapter.withTransaction((txCtx) =>
-                  applyOutcome({ ...txCtx, output: null }),
+                await stateAdapter.withTransaction((txCtx) =>
+                  applyJobOutcome({ ...txCtx, output: null }),
                 );
               },
             },
@@ -3997,19 +4017,21 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 task: {
-                  attemptHandler: async ({ job, applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({
+                  attemptHandler: async ({ job, applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({
                         ...txCtx,
                         continueWith: { typeName: "task_next", input: { n: job.input.n + 1 } },
                       }),
-                    ),
+                    );
+                  },
                 },
                 task_next: {
-                  attemptHandler: async ({ job, applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: { final: job.input.n * 10 } }),
-                    ),
+                  attemptHandler: async ({ job, applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: { final: job.input.n * 10 } }),
+                    );
+                  },
                 },
               },
             }),
@@ -4082,16 +4104,18 @@ export const clientQueriesGroup: ConformanceGroup<StateAdapterConformanceContext
               jobTypes,
               processors: {
                 dep: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: { ok: true } }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: { ok: true } }),
+                    );
+                  },
                 },
                 main: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: { result: "done" } }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: { result: "done" } }),
+                    );
+                  },
                 },
               },
             }),
@@ -4877,16 +4901,16 @@ export const clientQueriesLockedReadsConcurrentTransactionsLockWaitGroup: Confor
               jobTypes,
               processors: {
                 order: {
-                  attemptHandler: async ({ job, applyOutcome }) =>
-                    stateAdapter.withTransaction(async (txCtx) => {
-                      const result = await applyOutcome({
+                  attemptHandler: async ({ job, applyJobOutcome }) => {
+                    await stateAdapter.withTransaction(async (txCtx) => {
+                      await applyJobOutcome({
                         ...txCtx,
                         continueWith: { typeName: "order_fulfill", input: { orderId: job.id } },
                       });
                       continued.resolve();
                       await commitGate.promise;
-                      return result;
-                    }),
+                    });
+                  },
                 },
               },
             }),

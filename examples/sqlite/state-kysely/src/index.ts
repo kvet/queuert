@@ -78,7 +78,7 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           const user = await db
             .selectFrom("users")
             .selectAll()
@@ -90,9 +90,9 @@ await using workerRunner = createWorkerRunner({
 
           // Kysely holds its single SQLite connection for the whole transaction, so the
           // worker's own statements cannot run inside it.
-          return withTxHooks(async (txHooks) =>
+          await withTxHooks(async (txHooks) =>
             db.transaction().execute(async (txDb) =>
-              applyOutcome({
+              applyJobOutcome({
                 db: txDb,
                 txHooks,
                 output: { sentAt: new Date().toISOString() },

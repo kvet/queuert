@@ -7,7 +7,7 @@
 "@queuert/dashboard": patch
 ---
 
-The client applies the same outcomes an attempt handler passes to `applyOutcome` through `applyJobOutcome` and `applyJobOutcomes`, which replace `completeChain` and `rescheduleJob(s)`. Read the job first with a locked read, such as `getChainTailJob({ lock: "exclusive" })`, check its type and status, then apply the outcome.
+The client's `applyJobOutcome` and `applyJobOutcomes`, which replace `completeChain` and `rescheduleJob(s)`, apply the same outcomes an attempt handler passes to its own `applyJobOutcome`. Read the job first with a locked read, such as `getChainTailJob({ lock: "exclusive" })`, check its type and status, then apply the outcome.
 
 - `client.applyJobOutcome({ job, output | continueWith | reschedule })` and `client.applyJobOutcomes({ items })` apply any outcome to a blocked, pending or running job, all or nothing, and a running job's attempt is lost; `job` is `{ id, typeName? }` or a job read earlier, and `output` / `continueWith` need its `typeName` narrowed to one job type.
 - A job read earlier whose `status` changed since throws the new `JobStatusMismatchError`, or `JobsStatusMismatchError` listing every such job in a batch, instead of being overwritten.

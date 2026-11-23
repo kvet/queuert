@@ -27,14 +27,14 @@ const workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       generate_report: {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           console.log(`[worker] Generating ${job.input.reportType} report...`);
           // Simulate report generation work
           await new Promise((r) => setTimeout(r, 500));
           const rowCount = Math.floor(Math.random() * 1000) + 100;
           console.log(`[worker] Report generated with ${rowCount} rows`);
-          return stateAdapter.withTransaction((ctx) =>
-            applyOutcome({ ...ctx, output: { reportId: `RPT-${Date.now()}`, rowCount } }),
+          stateAdapter.withTransaction((ctx) =>
+            applyJobOutcome({ ...ctx, output: { reportId: `RPT-${Date.now()}`, rowCount } }),
           );
         },
       },

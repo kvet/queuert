@@ -176,8 +176,8 @@ const Page = () => (
       </li>
       <li>
         <strong>Runtime interaction.</strong> Temporal's signals / queries / updates are
-        first-class. Queuert exposes <code>applyJobOutcome</code> and locked reads but doesn't model
-        an externally-interactive running process.
+        first-class. Queuert exposes <code>client.applyJobOutcome</code> and locked reads but
+        doesn't model an externally-interactive running process.
       </li>
       <li>
         <strong>Versioning.</strong> Changing workflow code mid-flight in Temporal needs either{" "}

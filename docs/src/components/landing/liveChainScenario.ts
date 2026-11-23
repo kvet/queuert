@@ -9,16 +9,16 @@ export const chainJobs = [
 export const chainPhases: { statuses: ChainJobStatus[]; log: string }[] = [
   { statuses: ["pending"], log: "createChain provision-account · commits with your tx" },
   { statuses: ["running"], log: "worker-1 acquired provision-account" },
-  { statuses: ["completed", "pending"], log: "applyOutcome → continueWith send-welcome-email" },
+  { statuses: ["completed", "pending"], log: "applyJobOutcome → continueWith send-welcome-email" },
   { statuses: ["completed", "running"], log: "worker-2 acquired send-welcome-email" },
   {
     statuses: ["completed", "completed", "pending"],
-    log: "applyOutcome → continueWith sync-to-crm",
+    log: "applyJobOutcome → continueWith sync-to-crm",
   },
   { statuses: ["completed", "completed", "running"], log: "worker-1 acquired sync-to-crm" },
   {
     statuses: ["completed", "completed", "completed"],
-    log: "applyOutcome → chain completed · output { syncedAt }",
+    log: "applyJobOutcome → chain completed · output { syncedAt }",
   },
 ];
 

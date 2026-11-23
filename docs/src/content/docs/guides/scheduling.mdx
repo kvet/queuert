@@ -21,11 +21,11 @@ Combine `schedule` with `deduplication: { key, scope }` to prevent duplicate fut
 
 ## Rescheduling from a Handler
 
-When a handler needs to defer work without treating it as a failure — for example, a rate-limited API saying "come back later" — use `applyOutcome({ reschedule })`. The handler below waits as long as the API asks before calling it again, and says why in `reason`:
+When a handler needs to defer work without treating it as a failure — for example, a rate-limited API saying "come back later" — use `applyJobOutcome({ reschedule })`. The handler below waits as long as the API asks before calling it again, and says why in `reason`:
 
 <ExampleCode example="guides" file="src/scheduling.ts" region="reschedule-from-handler" />
 
-`applyOutcome({ reschedule })` is a normal outcome, not an error: no failure event, no error span. It sets `consecutiveFailures` to 0, so if the job later fails for real, backoff starts again from its initial delay. The optional `reason` is stored on the job as `lastRescheduleReason`, where the next attempt and the dashboard can read it; keep it short, since longer reasons are truncated to 10,000 characters. `reschedule` takes the same `{ afterMs }` or `{ at }` as `schedule`.
+`applyJobOutcome({ reschedule })` is a normal outcome, not an error: no failure event, no error span. It sets `consecutiveFailures` to 0, so if the job later fails for real, backoff starts again from its initial delay. The optional `reason` is stored on the job as `lastRescheduleReason`, where the next attempt and the dashboard can read it; keep it short, since longer reasons are truncated to 10,000 characters. `reschedule` takes the same `{ afterMs }` or `{ at }` as `schedule`.
 
 ## Rescheduling from Outside a Handler
 
@@ -45,6 +45,6 @@ Queuert has no cron syntax. For periodic tasks like daily digests, health checks
 
 <ExampleCode example="guides" file="src/scheduling.ts" region="recurring" />
 
-Each occurrence is its own chain, so the next digest can be pushed back or run now with `applyJobOutcome` like any other scheduled job. To make sure only one occurrence is ever queued, add a deduplication key and keep `applyOutcome` ahead of `createChain`, as [Self-Scheduling Recurring Chains](../deduplication/#self-scheduling-recurring-chains) explains.
+Each occurrence is its own chain, so the next digest can be pushed back or run now with the client's `applyJobOutcome` like any other scheduled job. To make sure only one occurrence is ever queued, add a deduplication key and keep the handler's `applyJobOutcome` ahead of `createChain`, as [Self-Scheduling Recurring Chains](../deduplication/#self-scheduling-recurring-chains) explains.
 
 See [examples/guides/src/scheduling.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/scheduling.ts) for the runnable code. See also [Deduplication](../deduplication/) and [Tx Hooks](../tx-hooks/).

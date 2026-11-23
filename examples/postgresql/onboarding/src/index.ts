@@ -76,12 +76,12 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       "provision-account": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           const accountId = await provisionAccount(job.input.userId);
 
-          return withTxHooks(async (txHooks) =>
+          await withTxHooks(async (txHooks) =>
             db.transaction(async (tx) =>
-              applyOutcome({
+              applyJobOutcome({
                 tx,
                 txHooks,
                 continueWith: {
@@ -97,12 +97,12 @@ await using workerRunner = createWorkerRunner({
       // ...handlers for "send-welcome-email" and "sync-to-crm"
       // #hide
       "send-welcome-email": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           await sendWelcomeEmail(job.input.userId);
 
-          return withTxHooks(async (txHooks) =>
+          await withTxHooks(async (txHooks) =>
             db.transaction(async (tx) =>
-              applyOutcome({
+              applyJobOutcome({
                 tx,
                 txHooks,
                 continueWith: { typeName: "sync-to-crm", input: job.input },
@@ -112,11 +112,11 @@ await using workerRunner = createWorkerRunner({
         },
       },
       "sync-to-crm": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           const syncedAt = await syncToCrm(job.input.userId, job.input.accountId);
 
-          return withTxHooks(async (txHooks) =>
-            db.transaction(async (tx) => applyOutcome({ tx, txHooks, output: { syncedAt } })),
+          await withTxHooks(async (txHooks) =>
+            db.transaction(async (tx) => applyJobOutcome({ tx, txHooks, output: { syncedAt } })),
           );
         },
       },

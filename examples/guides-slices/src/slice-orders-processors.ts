@@ -8,14 +8,14 @@ export const orderProcessors = createProcessors({
   jobTypes: orderJobTypes,
   processors: {
     "orders.place-order": {
-      attemptHandler: async ({ job, applyOutcome }) =>
-        stateAdapter.withTransaction(async (txCtx) => {
+      attemptHandler: async ({ job, applyJobOutcome }) => {
+        await stateAdapter.withTransaction(async (txCtx) => {
           const notificationChain = await client.createChain({
             ...txCtx,
             typeName: "notifications.send-notification",
             input: { userId: job.input.userId, message: `Order ${job.input.orderId} received` },
           });
-          return applyOutcome({
+          return applyJobOutcome({
             ...txCtx,
             continueWith: {
               typeName: "orders.confirm-order",
@@ -23,13 +23,14 @@ export const orderProcessors = createProcessors({
               blockers: [notificationChain],
             },
           });
-        }),
+        });
+      },
     },
     "orders.confirm-order": {
-      attemptHandler: async ({ job, applyOutcome }) => {
+      attemptHandler: async ({ job, applyJobOutcome }) => {
         const [notification] = job.blockers;
-        return stateAdapter.withTransaction(async (txCtx) =>
-          applyOutcome({ ...txCtx, output: { confirmedAt: notification.output.sentAt } }),
+        await stateAdapter.withTransaction(async (txCtx) =>
+          applyJobOutcome({ ...txCtx, output: { confirmedAt: notification.output.sentAt } }),
         );
       },
     },

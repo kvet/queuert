@@ -75,9 +75,8 @@ const tracing: AttemptMiddleware<typeof stateAdapter, { traceId: string }> = {
     const traceId = crypto.randomUUID();
     const name = `${job.typeName} #${job.attempt}`;
     try {
-      const result = await next({ traceId });
+      await next({ traceId });
       spans.push({ traceId, name, status: "ok" });
-      return result;
     } catch (error) {
       spans.push({ traceId, name, status: "error" });
       throw error;
@@ -121,9 +120,9 @@ const billingProcessors = createProcessors({
   processors: {
     // #region issue-invoice
     "issue-invoice": {
-      attemptHandler: async ({ job, traceId, tenant, audit, applyOutcome }) => {
+      attemptHandler: async ({ job, traceId, tenant, audit, applyJobOutcome }) => {
         const invoiceId = `inv-${job.id}`;
-        return stateAdapter.withTransaction(async (txCtx) => {
+        await stateAdapter.withTransaction(async (txCtx) => {
           audit(txCtx, "invoice-issued");
           insertInvoice(txCtx, {
             id: invoiceId,
@@ -131,7 +130,7 @@ const billingProcessors = createProcessors({
             amountCents: job.input.amountCents,
             traceId,
           });
-          return applyOutcome({ ...txCtx, output: { invoiceId } });
+          return applyJobOutcome({ ...txCtx, output: { invoiceId } });
         });
       },
     },
@@ -147,11 +146,12 @@ const notificationProcessors = createProcessors({
   // #hide
   processors: {
     "send-receipt": {
-      attemptHandler: async ({ job, tenant, applyOutcome }) =>
-        stateAdapter.withTransaction(async (txCtx) => {
+      attemptHandler: async ({ job, tenant, applyJobOutcome }) => {
+        await stateAdapter.withTransaction(async (txCtx) => {
           receipts.push(`${job.input.invoiceId} to ${tenant.billingEmail}`);
-          return applyOutcome({ ...txCtx, output: { delivered: true } });
-        }),
+          return applyJobOutcome({ ...txCtx, output: { delivered: true } });
+        });
+      },
     },
   },
   // #endhide

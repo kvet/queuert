@@ -4,7 +4,7 @@ Job throughput along two independent axes: state adapter (with a noop notify ada
 
 - **Single creation** (`create-single`) — chains created via `createChain`, one per transaction (chains/s).
 - **Batched creation** (`create-batched`) — chains created via `createChains` in batches of 100 (chains/s).
-- **No-op completion at concurrency 1, 4 and 16** (`complete-noop-1`, `-4`, `-16`) — 40,000 chains are seeded (not measured), then a worker with that many slots completes them; each handler opens its own transaction and calls `applyOutcome` in it (jobs/s).
+- **No-op completion at concurrency 1, 4 and 16** (`complete-noop-1`, `-4`, `-16`) — 40,000 chains are seeded (not measured), then a worker with that many slots completes them; each handler opens its own transaction and calls `applyJobOutcome` in it (jobs/s).
 
 Every completion scenario starts from the same 40,000-job queue, so only concurrency varies between them. The window starts when the worker takes its first job; a fast adapter that drains the queue before the window ends is timed up to its last job, so its rate is still exact. Redis state runs also print the Redis main-thread CPU time spent per chain or job during the window.
 

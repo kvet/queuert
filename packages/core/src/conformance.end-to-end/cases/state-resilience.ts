@@ -79,10 +79,11 @@ const completesChainsOverFlakyStateAdapter = syncAsync(function* ({
           backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
           processors: {
             test: {
-              attemptHandler: async ({ job, applyOutcome }) =>
-                flakyStateAdapter.withTransaction((txCtx) =>
-                  applyOutcome({ ...txCtx, output: { result: job.input.value * 2 } }),
-                ),
+              attemptHandler: async ({ job, applyJobOutcome }) => {
+                await flakyStateAdapter.withTransaction((txCtx) =>
+                  applyJobOutcome({ ...txCtx, output: { result: job.input.value * 2 } }),
+                );
+              },
             },
           },
         }),
@@ -231,10 +232,11 @@ export const stateResilienceGroup: ConformanceGroup<StateAdapterConformanceConte
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
+                    );
+                  },
                 },
               },
             }),
@@ -309,13 +311,13 @@ export const stateResilienceGroup: ConformanceGroup<StateAdapterConformanceConte
               backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
               processors: {
                 test: {
-                  attemptHandler: async ({ job, signal, applyOutcome }) => {
+                  attemptHandler: async ({ job, applyJobOutcome }) => {
                     if (job.attempt === 1) {
-                      await sleep(Number.POSITIVE_INFINITY, { signal });
+                      await sleep(Number.POSITIVE_INFINITY, { signal: job.signal });
                       throw new Error("lease lost");
                     }
-                    return stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
                     );
                   },
                 },

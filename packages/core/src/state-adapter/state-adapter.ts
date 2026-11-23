@@ -163,9 +163,9 @@ type TransactionTxContextParam<TTxContext extends BaseTxContext> = { txCtx: TTxC
  * In the `"async"` mode its methods return promises. In the `"sync"` mode, for drivers
  * that run statements synchronously (better-sqlite3, node:sqlite, bun:sqlite), it sets
  * `sync: true`, every method returns its result directly, and a failure throws instead of
- * rejecting, so the client, `applyOutcome` and `fence` over it run inside the driver's own
- * synchronous transaction. `StateAdapter<any, any, any, "async" | "sync">` is an adapter of
- * either mode.
+ * rejecting, so the client and an attempt handler's `applyJobOutcome` and `fenceJob` over it run
+ * inside the driver's own synchronous transaction. `StateAdapter<any, any, any, "async" | "sync">`
+ * is an adapter of either mode.
  *
  * An adapter never throws Queuert's domain errors: an absent or already completed row is
  * reported as `undefined` in the result position it belongs to, and the caller decides which

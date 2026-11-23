@@ -79,8 +79,8 @@ export type JobAttemptSpanResult =
       /** `output` is the encoded (stored) form — see {@link ObservabilityAdapter}. */
       chainCompleted?: { output: unknown };
       /**
-       * Set when the job was rescheduled, by `applyOutcome({ reschedule })` or the client's
-       * `applyJobOutcome({ reschedule })`, with its `reason` if given.
+       * Set when the job was rescheduled, by an attempt handler's `applyJobOutcome({ reschedule })`
+       * or the client's `applyJobOutcome({ reschedule })`, with its `reason` if given.
        */
       rescheduled?: { reason?: string };
     }

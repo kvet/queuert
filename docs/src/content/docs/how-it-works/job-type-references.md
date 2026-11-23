@@ -140,13 +140,13 @@ const processors = createProcessors({
   jobTypes,
   processors: {
     process: {
-      attemptHandler: async ({ job, applyOutcome }) => {
+      attemptHandler: async ({ job, applyJobOutcome }) => {
         const [auth, validate] = job.blockers;
         // auth.output is { userId: string }
         // validate.output is { valid: boolean }
-        return withTxHooks(async (txHooks) =>
+        await withTxHooks(async (txHooks) =>
           db.transaction(async (tx) =>
-            applyOutcome({
+            applyJobOutcome({
               tx,
               txHooks,
               output: { done: auth.output.userId !== "" && validate.output.valid },
@@ -172,4 +172,4 @@ With `defineJobTypes`, references are checked at compile time only; with `create
 - [Chain Patterns](/queuert/guides/chain-patterns/) — Continuation patterns (linear, branched, loops, go-to)
 - [Job Blockers](/queuert/guides/job-blockers/) — Fan-out/fan-in dependencies
 - [Chain Model](../chain-model/) — Chain structure, Promise analogy
-- [Job Processing](../job-processing/) — Handler lifecycle, `applyOutcome`, and the worker lease
+- [Job Processing](../job-processing/) — Handler lifecycle, `applyJobOutcome`, and the worker lease

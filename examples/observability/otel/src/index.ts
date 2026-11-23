@@ -169,10 +169,10 @@ await using workerRunner = createWorkerRunner({
     processors: {
       // Scenario 1: Simple job
       greet: {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           await new Promise((r) => setTimeout(r, 20));
-          return stateAdapter.withTransaction((ctx) =>
-            applyOutcome({
+          stateAdapter.withTransaction((ctx) =>
+            applyJobOutcome({
               ...ctx,
               output: {
                 greeting: `Hello, ${job.input.name}!`,
@@ -184,10 +184,10 @@ await using workerRunner = createWorkerRunner({
 
       // Scenario 2: Continuation jobs
       "order:validate": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           await new Promise((r) => setTimeout(r, 50));
-          return stateAdapter.withTransaction((ctx) =>
-            applyOutcome({
+          stateAdapter.withTransaction((ctx) =>
+            applyJobOutcome({
               ...ctx,
               continueWith: {
                 typeName: "order:process",
@@ -198,10 +198,10 @@ await using workerRunner = createWorkerRunner({
         },
       },
       "order:process": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           await new Promise((r) => setTimeout(r, 100));
-          return stateAdapter.withTransaction((ctx) =>
-            applyOutcome({
+          stateAdapter.withTransaction((ctx) =>
+            applyJobOutcome({
               ...ctx,
               continueWith: {
                 typeName: "order:complete",
@@ -212,10 +212,10 @@ await using workerRunner = createWorkerRunner({
         },
       },
       "order:complete": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           await new Promise((r) => setTimeout(r, 30));
-          return stateAdapter.withTransaction((ctx) =>
-            applyOutcome({
+          stateAdapter.withTransaction((ctx) =>
+            applyJobOutcome({
               ...ctx,
               output: {
                 orderId: job.input.orderId,
@@ -228,10 +228,10 @@ await using workerRunner = createWorkerRunner({
 
       // Scenario 3: Blocker jobs
       "fetch-user": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           await new Promise((r) => setTimeout(r, 80));
-          return stateAdapter.withTransaction((ctx) =>
-            applyOutcome({
+          stateAdapter.withTransaction((ctx) =>
+            applyJobOutcome({
               ...ctx,
               output: {
                 userId: job.input.userId,
@@ -242,10 +242,10 @@ await using workerRunner = createWorkerRunner({
         },
       },
       "fetch-permissions": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           await new Promise((r) => setTimeout(r, 60));
-          return stateAdapter.withTransaction((ctx) =>
-            applyOutcome({
+          stateAdapter.withTransaction((ctx) =>
+            applyJobOutcome({
               ...ctx,
               output: {
                 userId: job.input.userId,
@@ -256,11 +256,11 @@ await using workerRunner = createWorkerRunner({
         },
       },
       "process-with-blockers": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           const [userBlocker, permBlocker] = job.blockers;
           await new Promise((r) => setTimeout(r, 40));
-          return stateAdapter.withTransaction((ctx) =>
-            applyOutcome({
+          stateAdapter.withTransaction((ctx) =>
+            applyJobOutcome({
               ...ctx,
               output: {
                 taskId: job.input.taskId,
@@ -273,24 +273,24 @@ await using workerRunner = createWorkerRunner({
 
       // Scenario 4: Batched work
       "batch-process": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           let total = 0;
           for (const item of job.input.items) {
             await new Promise((r) => setTimeout(r, 30));
             total += stateAdapter.withTransaction(() => item * 2);
           }
-          return stateAdapter.withTransaction((ctx) => applyOutcome({ ...ctx, output: { total } }));
+          stateAdapter.withTransaction((ctx) => applyJobOutcome({ ...ctx, output: { total } }));
         },
       },
 
       // Scenario 5: Failing job
       "might-fail": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           if (job.input.shouldFail && job.attempt < 2) {
             throw new Error("Simulated failure");
           }
-          return stateAdapter.withTransaction((ctx) =>
-            applyOutcome({ ...ctx, output: { success: true as const } }),
+          stateAdapter.withTransaction((ctx) =>
+            applyJobOutcome({ ...ctx, output: { success: true as const } }),
           );
         },
         backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },

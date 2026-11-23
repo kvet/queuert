@@ -91,12 +91,12 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       "fetch-data": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           console.log(`Fetching data from ${job.input.url}`);
           const data = { items: [1, 2, 3], source: job.input.url };
 
-          return stateAdapter.withTransaction((ctx) =>
-            applyOutcome({
+          stateAdapter.withTransaction((ctx) =>
+            applyJobOutcome({
               ...ctx,
               continueWith: {
                 typeName: "process-data",
@@ -107,12 +107,12 @@ await using workerRunner = createWorkerRunner({
         },
       },
       "process-data": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           console.log("Processing data:", job.input.data);
           const data = job.input.data as { items: number[] };
 
-          return stateAdapter.withTransaction((ctx) =>
-            applyOutcome({
+          stateAdapter.withTransaction((ctx) =>
+            applyJobOutcome({
               ...ctx,
               output: {
                 processed: true,
@@ -123,21 +123,21 @@ await using workerRunner = createWorkerRunner({
         },
       },
       "batch-process": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           console.log(`Processing batch ${job.input.batchId}`);
           console.log("Blockers completed:", job.blockers.length);
 
-          return stateAdapter.withTransaction((ctx) =>
-            applyOutcome({ ...ctx, output: { success: true } }),
+          stateAdapter.withTransaction((ctx) =>
+            applyJobOutcome({ ...ctx, output: { success: true } }),
           );
         },
       },
       auth: {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           console.log(`Authenticating with token: ${job.input.token.substring(0, 8)}...`);
 
-          return stateAdapter.withTransaction((ctx) =>
-            applyOutcome({
+          stateAdapter.withTransaction((ctx) =>
+            applyJobOutcome({
               ...ctx,
               output: {
                 userId: `user-${job.input.token.substring(0, 4)}`,

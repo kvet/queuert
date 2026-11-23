@@ -46,7 +46,7 @@ The `sync-user` chains above use `running`: once the first sync completes, the s
 
 ## Self-Scheduling Recurring Chains
 
-A recurring chain schedules its next occurrence from its own terminal job. Under `scope: "running"` the ordering matters: complete **first**, then create the next chain in the same transaction. `applyOutcome({ output: ... })` applies the completion inside your transaction, so by the time `createChain` runs, the chain being completed already reads as completed and cannot match itself.
+A recurring chain schedules its next occurrence from its own terminal job. Under `scope: "running"` the ordering matters: complete **first**, then create the next chain in the same transaction. `applyJobOutcome({ output: ... })` applies the completion inside your transaction, so by the time `createChain` runs, the chain being completed already reads as completed and cannot match itself.
 
 <ExampleCode example="guides" file="src/deduplication.ts" region="self-scheduling" />
 

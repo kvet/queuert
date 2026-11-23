@@ -75,17 +75,18 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       "send-reminder": {
-        attemptHandler: async ({ job, applyOutcome }) =>
-          stateAdapter.withTransaction(async (txCtx) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
+          await stateAdapter.withTransaction(async (txCtx) => {
             sentEmails.push(job.input.message);
-            return applyOutcome({ ...txCtx, output: { sentAt: new Date().toISOString() } });
-          }),
+            return applyJobOutcome({ ...txCtx, output: { sentAt: new Date().toISOString() } });
+          });
+        },
       },
       // #region continue-with-schedule
       "start-trial": {
-        attemptHandler: async ({ job, applyOutcome }) =>
-          stateAdapter.withTransaction(async (txCtx) =>
-            applyOutcome({
+        attemptHandler: async ({ job, applyJobOutcome }) => {
+          await stateAdapter.withTransaction(async (txCtx) =>
+            applyJobOutcome({
               ...txCtx,
               continueWith: {
                 typeName: "send-trial-follow-up",
@@ -93,43 +94,46 @@ await using workerRunner = createWorkerRunner({
                 schedule: { afterMs: 24 * 60 * 60 * 1000 },
               },
             }),
-          ),
+          );
+        },
       },
       // #endregion
       "send-trial-follow-up": {
-        attemptHandler: async ({ applyOutcome }) =>
-          stateAdapter.withTransaction(async (txCtx) =>
-            applyOutcome({ ...txCtx, output: { sentAt: new Date().toISOString() } }),
-          ),
+        attemptHandler: async ({ applyJobOutcome }) => {
+          await stateAdapter.withTransaction(async (txCtx) =>
+            applyJobOutcome({ ...txCtx, output: { sentAt: new Date().toISOString() } }),
+          );
+        },
       },
       // #region reschedule-from-handler
       "call-rate-limited-api": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           const response = await callApi(job.input.endpoint);
 
           if (response.status === 429) {
-            return stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({
                 ...txCtx,
                 reschedule: { afterMs: response.retryAfterMs },
                 reason: "rate limited",
               }),
             );
+            return;
           }
 
-          return stateAdapter.withTransaction(async (txCtx) =>
-            applyOutcome({ ...txCtx, output: { data: response.data } }),
+          await stateAdapter.withTransaction(async (txCtx) =>
+            applyJobOutcome({ ...txCtx, output: { data: response.data } }),
           );
         },
       },
       // #endregion
       // #region recurring
       "daily-digest": {
-        attemptHandler: async ({ job, applyOutcome }) =>
-          stateAdapter.withTransaction(async (txCtx) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
+          await stateAdapter.withTransaction(async (txCtx) => {
             sentEmails.push(`digest for ${job.input.userId}`);
 
-            const completedJob = await applyOutcome({
+            await applyJobOutcome({
               ...txCtx,
               output: { sentAt: new Date().toISOString() },
             });
@@ -142,8 +146,8 @@ await using workerRunner = createWorkerRunner({
                 schedule: { afterMs: 24 * 60 * 60 * 1000 },
               });
             }
-            return completedJob;
-          }),
+          });
+        },
       },
       // #endregion
     },

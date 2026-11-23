@@ -23,10 +23,11 @@ describe("createWorkerRunner lifecycle", () => {
         jobTypes,
         processors: {
           foo: {
-            attemptHandler: async ({ applyOutcome }) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                applyOutcome({ ...txCtx, output: null }),
-              ),
+            attemptHandler: async ({ applyJobOutcome }) => {
+              await stateAdapter.withTransaction(async (txCtx) =>
+                applyJobOutcome({ ...txCtx, output: null }),
+              );
+            },
           },
         },
       }),
@@ -67,11 +68,11 @@ describe("createWorkerRunner lifecycle", () => {
         jobTypes,
         processors: {
           foo: {
-            attemptHandler: async ({ applyOutcome }) => {
+            attemptHandler: async ({ applyJobOutcome }) => {
               attemptStarted.resolve();
               await attemptReleased.promise;
-              return stateAdapter.withTransaction(async (txCtx) =>
-                applyOutcome({ ...txCtx, output: null }),
+              await stateAdapter.withTransaction(async (txCtx) =>
+                applyJobOutcome({ ...txCtx, output: null }),
               );
             },
           },
@@ -116,11 +117,11 @@ describe("createWorkerRunner lifecycle", () => {
         jobTypes,
         processors: {
           foo: {
-            attemptHandler: async ({ applyOutcome }) => {
+            attemptHandler: async ({ applyJobOutcome }) => {
               attemptStarted.resolve();
               await attemptReleased.promise;
-              return stateAdapter.withTransaction(async (txCtx) =>
-                applyOutcome({ ...txCtx, output: null }),
+              await stateAdapter.withTransaction(async (txCtx) =>
+                applyJobOutcome({ ...txCtx, output: null }),
               );
             },
           },
@@ -156,7 +157,11 @@ describe("createWorkerRunner lifecycle", () => {
     const processors = createProcessors({
       client,
       jobTypes,
-      processors: { foo: { attemptHandler: async () => undefined as never } },
+      processors: {
+        foo: {
+          attemptHandler: async () => {},
+        },
+      },
     });
 
     const neverStartedWorkerRunner = createWorkerRunner({ client, processors });

@@ -44,16 +44,18 @@ const orderProcessors = createProcessors({
   jobTypes: orderJobTypes,
   processors: {
     "orders.create": {
-      attemptHandler: async ({ applyOutcome }) =>
-        stateAdapter.withTransaction(async (txCtx) =>
-          applyOutcome({ ...txCtx, output: { orderId: "1" } }),
-        ),
+      attemptHandler: async ({ applyJobOutcome }) => {
+        await stateAdapter.withTransaction(async (txCtx) =>
+          applyJobOutcome({ ...txCtx, output: { orderId: "1" } }),
+        );
+      },
     },
     "orders.fulfill": {
-      attemptHandler: async ({ applyOutcome }) =>
-        stateAdapter.withTransaction(async (txCtx) =>
-          applyOutcome({ ...txCtx, output: { fulfilled: true } }),
-        ),
+      attemptHandler: async ({ applyJobOutcome }) => {
+        await stateAdapter.withTransaction(async (txCtx) =>
+          applyJobOutcome({ ...txCtx, output: { fulfilled: true } }),
+        );
+      },
     },
   },
 });
@@ -63,10 +65,11 @@ const notificationProcessors = createProcessors({
   jobTypes: notificationJobTypes,
   processors: {
     "notifications.send": {
-      attemptHandler: async ({ applyOutcome }) =>
-        stateAdapter.withTransaction(async (txCtx) =>
-          applyOutcome({ ...txCtx, output: { sent: true } }),
-        ),
+      attemptHandler: async ({ applyJobOutcome }) => {
+        await stateAdapter.withTransaction(async (txCtx) =>
+          applyJobOutcome({ ...txCtx, output: { sent: true } }),
+        );
+      },
     },
   },
 });
@@ -78,10 +81,11 @@ describe("createProcessors", () => {
       jobTypes: orderJobTypes,
       processors: {
         "orders.create": {
-          attemptHandler: async ({ applyOutcome }) =>
-            stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { orderId: "1" } }),
-            ),
+          attemptHandler: async ({ applyJobOutcome }) => {
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { orderId: "1" } }),
+            );
+          },
         },
       },
     });
@@ -97,10 +101,11 @@ describe("createProcessors", () => {
       jobTypes: billingJobTypes,
       processors: {
         "billing.charge": {
-          attemptHandler: async ({ applyOutcome }) =>
-            stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { charged: true } }),
-            ),
+          attemptHandler: async ({ applyJobOutcome }) => {
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { charged: true } }),
+            );
+          },
         },
       },
     });
@@ -132,10 +137,11 @@ describe("createProcessors", () => {
       jobTypes: orderJobTypes,
       processors: {
         "orders.create": {
-          attemptHandler: async ({ applyOutcome }) =>
-            stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { orderId: "1" } }),
-            ),
+          attemptHandler: async ({ applyJobOutcome }) => {
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { orderId: "1" } }),
+            );
+          },
         },
         // @ts-expect-error — "orders.unknown" is not a key of the client's defs
         "orders.unknown": orderProcessors["orders.create"],
@@ -149,10 +155,11 @@ describe("createProcessors", () => {
       jobTypes: orderJobTypes,
       processors: {
         "orders.create": {
-          attemptHandler: async ({ applyOutcome }) =>
-            stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { orderId: "1" } }),
-            ),
+          attemptHandler: async ({ applyJobOutcome }) => {
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { orderId: "1" } }),
+            );
+          },
         },
       },
     });
@@ -211,10 +218,11 @@ describe("mergeProcessors", () => {
       jobTypes: billingJobTypes,
       processors: {
         "billing.charge": {
-          attemptHandler: async ({ applyOutcome }) =>
-            stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { charged: true } }),
-            ),
+          attemptHandler: async ({ applyJobOutcome }) => {
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { charged: true } }),
+            );
+          },
         },
       },
     });
@@ -252,10 +260,11 @@ describe("mergeProcessors", () => {
       jobTypes: orderJobTypes,
       processors: {
         "orders.create": {
-          attemptHandler: async ({ applyOutcome }) =>
-            stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { orderId: "alt" } }),
-            ),
+          attemptHandler: async ({ applyJobOutcome }) => {
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { orderId: "alt" } }),
+            );
+          },
         },
       },
     });
@@ -272,10 +281,11 @@ describe("mergeProcessors", () => {
       jobTypes: orderJobTypes,
       processors: {
         "orders.create": {
-          attemptHandler: async ({ applyOutcome }) =>
-            stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { orderId: "1" } }),
-            ),
+          attemptHandler: async ({ applyJobOutcome }) => {
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { orderId: "1" } }),
+            );
+          },
         },
       },
     });
@@ -295,10 +305,11 @@ describe("mergeProcessors", () => {
       jobTypes: orderJobTypes,
       processors: {
         "orders.create": {
-          attemptHandler: async ({ applyOutcome }) =>
-            stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { orderId: "alt" } }),
-            ),
+          attemptHandler: async ({ applyJobOutcome }) => {
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { orderId: "alt" } }),
+            );
+          },
         },
       },
     });
@@ -348,10 +359,11 @@ describe("cross-slice blocker type resolution", () => {
       jobTypes: notifJobTypes,
       processors: {
         "notif.send": {
-          attemptHandler: async ({ applyOutcome }) =>
-            stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { sentAt: "now" } }),
-            ),
+          attemptHandler: async ({ applyJobOutcome }) => {
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { sentAt: "now" } }),
+            );
+          },
         },
       },
     });
@@ -361,9 +373,9 @@ describe("cross-slice blocker type resolution", () => {
       jobTypes: orderJobTypes,
       processors: {
         "orders.place": {
-          attemptHandler: async ({ applyOutcome }) =>
-            stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({
+          attemptHandler: async ({ applyJobOutcome }) => {
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({
                 ...txCtx,
                 continueWith: {
                   typeName: "orders.confirm",
@@ -371,13 +383,14 @@ describe("cross-slice blocker type resolution", () => {
                   blockers: [] as never,
                 },
               }),
-            ),
+            );
+          },
         },
         "orders.confirm": {
-          attemptHandler: async ({ job, applyOutcome }) => {
+          attemptHandler: async ({ job, applyJobOutcome }) => {
             expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ sentAt: string }>();
-            return stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { confirmedAt: "now" } }),
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { confirmedAt: "now" } }),
             );
           },
         },
@@ -424,9 +437,9 @@ describe("cross-slice blocker type resolution", () => {
       jobTypes: orderJobTypes,
       processors: {
         "orders.place": {
-          attemptHandler: async ({ applyOutcome }) =>
-            stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({
+          attemptHandler: async ({ applyJobOutcome }) => {
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({
                 ...txCtx,
                 continueWith: {
                   typeName: "orders.confirm",
@@ -434,13 +447,14 @@ describe("cross-slice blocker type resolution", () => {
                   blockers: [] as never,
                 },
               }),
-            ),
+            );
+          },
         },
         "orders.confirm": {
-          attemptHandler: async ({ job, applyOutcome }) => {
+          attemptHandler: async ({ job, applyJobOutcome }) => {
             expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ sentAt: string }>();
-            return stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { confirmedAt: "now" } }),
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { confirmedAt: "now" } }),
             );
           },
         },
@@ -490,10 +504,10 @@ describe("cross-slice blocker type resolution", () => {
       jobTypes: localJobTypes,
       processors: {
         "local.finish": {
-          attemptHandler: async ({ job, applyOutcome }) => {
+          attemptHandler: async ({ job, applyJobOutcome }) => {
             expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ aResult: string }>();
-            return stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { done: true } }),
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { done: true } }),
             );
           },
         },
@@ -543,10 +557,10 @@ describe("cross-slice blocker type resolution", () => {
       jobTypes: localJobTypes,
       processors: {
         "local.finish": {
-          attemptHandler: async ({ job, applyOutcome }) => {
+          attemptHandler: async ({ job, applyJobOutcome }) => {
             expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ aResult: string }>();
-            return stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { done: true } }),
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { done: true } }),
             );
           },
         },
@@ -606,18 +620,18 @@ describe("cross-slice blocker type resolution", () => {
       jobTypes: localJobTypes,
       processors: {
         "local.finish-a": {
-          attemptHandler: async ({ job, applyOutcome }) => {
+          attemptHandler: async ({ job, applyJobOutcome }) => {
             expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ aResult: string }>();
-            return stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { resultA: "pass" } }),
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { resultA: "pass" } }),
             );
           },
         },
         "local.finish-b": {
-          attemptHandler: async ({ job, applyOutcome }) => {
+          attemptHandler: async ({ job, applyJobOutcome }) => {
             expectTypeOf(job.blockers[0].output).toEqualTypeOf<{ bResult: number }>();
-            return stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { resultB: "pass" } }),
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { resultB: "pass" } }),
             );
           },
         },
@@ -701,10 +715,11 @@ describe("2-level merge (merge of merges)", () => {
       jobTypes: billingJobTypes,
       processors: {
         "billing.charge": {
-          attemptHandler: async ({ applyOutcome }) =>
-            stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { charged: true } }),
-            ),
+          attemptHandler: async ({ applyJobOutcome }) => {
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { charged: true } }),
+            );
+          },
         },
       },
     });
@@ -763,10 +778,11 @@ describe("createWorkerRunner with partial processor registries", () => {
       jobTypes: unrelatedJobTypes,
       processors: {
         "unrelated.task": {
-          attemptHandler: async ({ applyOutcome }) =>
-            stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { y: 1 } }),
-            ),
+          attemptHandler: async ({ applyJobOutcome }) => {
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { y: 1 } }),
+            );
+          },
         },
       },
     });

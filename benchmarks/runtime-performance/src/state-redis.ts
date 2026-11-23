@@ -75,12 +75,11 @@ await runDoubleRunBenchmark<Infra>({
           jobTypes,
           processors: {
             "test-job": {
-              attemptHandler: async ({ applyOutcome }) => {
-                const result = await stateAdapter.withTransaction(async (txCtx) =>
-                  applyOutcome({ ...txCtx, output: { processed: true } }),
+              attemptHandler: async ({ applyJobOutcome }) => {
+                await stateAdapter.withTransaction(async (txCtx) =>
+                  applyJobOutcome({ ...txCtx, output: { processed: true } }),
                 );
                 completions.record();
-                return result;
               },
             },
           },

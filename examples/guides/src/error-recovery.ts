@@ -103,32 +103,33 @@ await using workerRunner = createWorkerRunner({
       // #region before-transaction
       "charge-payment": {
         backoffConfig: { initialDelayMs: 1000, multiplier: 2, maxDelayMs: 60_000 },
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           const order = orders.get(job.input.orderId);
           if (order === undefined) throw new Error("Order not found");
 
           const { paymentId } = await paymentApi.charge(job.id, order.amountCents);
 
-          return stateAdapter.withTransaction(async (txCtx) => {
+          await stateAdapter.withTransaction(async (txCtx) => {
             orders.set(job.input.orderId, { ...order, paymentId });
-            return applyOutcome({ ...txCtx, output: { paymentId } });
+            return applyJobOutcome({ ...txCtx, output: { paymentId } });
           });
         },
       },
       // #endregion
       // #region inside-transaction
       "transfer-funds": {
-        attemptHandler: async ({ job, applyOutcome }) =>
-          stateAdapter.withTransaction(async (txCtx) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
+          await stateAdapter.withTransaction(async (txCtx) => {
             updateBalance(txCtx, job.input.toAccountId, job.input.amountCents);
             updateBalance(txCtx, job.input.fromAccountId, -job.input.amountCents);
-            return applyOutcome({ ...txCtx, output: { transferred: true } });
-          }),
+            return applyJobOutcome({ ...txCtx, output: { transferred: true } });
+          });
+        },
       },
       // #endregion
       // #region intermediate-transaction
       "sync-item": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           const item = await stateAdapter.withTransaction(async () => {
             const current = items.get(job.input.itemId)!;
             const started = { ...current, syncStarts: current.syncStarts + 1 };
@@ -138,23 +139,21 @@ await using workerRunner = createWorkerRunner({
 
           const externalId = await externalApi.sync(job.input.itemId);
 
-          return stateAdapter.withTransaction(async (txCtx) => {
+          await stateAdapter.withTransaction(async (txCtx) => {
             items.set(job.input.itemId, { ...item, externalId });
-            return applyOutcome({ ...txCtx, output: { externalId } });
+            return applyJobOutcome({ ...txCtx, output: { externalId } });
           });
         },
       },
       // #endregion
       // #region after-commit
       "notify-account": {
-        attemptHandler: async ({ job, applyOutcome }) => {
-          const result = await stateAdapter.withTransaction(async (txCtx) =>
-            applyOutcome({ ...txCtx, output: { notified: true } }),
+        attemptHandler: async ({ job, applyJobOutcome }) => {
+          await stateAdapter.withTransaction(async (txCtx) =>
+            applyJobOutcome({ ...txCtx, output: { notified: true } }),
           );
 
           await notificationApi.send(job.input.accountId);
-
-          return result;
         },
       },
       // #endregion

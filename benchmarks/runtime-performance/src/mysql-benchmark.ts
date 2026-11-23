@@ -98,12 +98,11 @@ export const runMysqlBenchmark = async ({
             jobTypes,
             processors: {
               "test-job": {
-                attemptHandler: async ({ applyOutcome }) => {
-                  const result = await stateProvider.withTransaction(async (ctx) =>
-                    applyOutcome({ ...ctx, output: { processed: true } }),
+                attemptHandler: async ({ applyJobOutcome }) => {
+                  await stateProvider.withTransaction(async (ctx) =>
+                    applyJobOutcome({ ...ctx, output: { processed: true } }),
                   );
                   completions.record();
-                  return result;
                 },
               },
             },

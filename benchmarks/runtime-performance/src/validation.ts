@@ -70,16 +70,15 @@ export const runValidationBenchmark = async ({
             jobTypes,
             processors: {
               "process-order": {
-                attemptHandler: async ({ job, applyOutcome }) => {
+                attemptHandler: async ({ job, applyJobOutcome }) => {
                   const total = job.input.items.reduce(
                     (sum, item) => sum + item.quantity * item.price,
                     0,
                   );
-                  const result = await stateAdapter.withTransaction(async (ctx) =>
-                    applyOutcome({ ...ctx, output: { processed: true, total } }),
+                  await stateAdapter.withTransaction(async (ctx) =>
+                    applyJobOutcome({ ...ctx, output: { processed: true, total } }),
                   );
                   completions.record();
-                  return result;
                 },
               },
             },

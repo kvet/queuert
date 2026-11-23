@@ -11,9 +11,9 @@ import {
 
 const jobTypes = defineJobTypes<{
   /*
-   * process-batch (stops early when the worker stops; output records how far it got)
+   * import-records (stops early when the worker stops; output records how far it got)
    */
-  "process-batch": {
+  "import-records": {
     entry: true;
     input: { items: string[] };
     output: { processed: number };
@@ -29,7 +29,7 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-const { promise: batchStarted, resolve: onBatchStarted } = Promise.withResolvers<void>();
+const { promise: importStarted, resolve: onImportStarted } = Promise.withResolvers<void>();
 const { promise: pollingStarted, resolve: onPollingStarted } = Promise.withResolvers<void>();
 const processItem = async (_item: string) => delay(10);
 const pollPaymentProvider = async (_paymentId: string) => delay(10).then(() => false);
@@ -44,37 +44,38 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       // #region partial-results
-      "process-batch": {
-        attemptHandler: async ({ signal, job, applyOutcome }) => {
+      "import-records": {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           // #hide
-          onBatchStarted();
+          onImportStarted();
           // #endhide
           let processed = 0;
           for (const item of job.input.items) {
-            if (signal.aborted) break;
+            if (job.signal.aborted) break;
             await processItem(item);
             processed++;
           }
-          return stateAdapter.withTransaction(async (txCtx) =>
-            applyOutcome({ ...txCtx, output: { processed } }),
+          await stateAdapter.withTransaction(async (txCtx) =>
+            applyJobOutcome({ ...txCtx, output: { processed } }),
           );
         },
       },
       // #endregion
       // #region polling-handler
       "await-payment-confirmation": {
-        attemptHandler: async ({ signal, job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           // #hide
           onPollingStarted();
           // #endhide
-          while (!signal.aborted) {
+          while (!job.signal.aborted) {
             if (await pollPaymentProvider(job.input.paymentId)) {
-              return stateAdapter.withTransaction(async (txCtx) =>
-                applyOutcome({ ...txCtx, output: { confirmedBy: "poll" } }),
+              await stateAdapter.withTransaction(async (txCtx) =>
+                applyJobOutcome({ ...txCtx, output: { confirmedBy: "poll" } }),
               );
+              return;
             }
           }
-          throw signal.reason;
+          throw job.signal.reason;
         },
       },
       // #endregion
@@ -105,12 +106,12 @@ const confirmedPayment = await client.awaitChain({ chain: payment, timeoutMs: 50
 assert.equal(confirmedPayment.output.confirmedBy, "webhook");
 
 const items = Array.from({ length: 1000 }, (_, index) => `item-${index}`);
-const batch = await stateAdapter.withTransaction(async (txCtx) =>
-  client.createChain({ ...txCtx, typeName: "process-batch", input: { items } }),
+const importChain = await stateAdapter.withTransaction(async (txCtx) =>
+  client.createChain({ ...txCtx, typeName: "import-records", input: { items } }),
 );
-await batchStarted;
+await importStarted;
 await delay(50);
 await workerRunner.stop();
 
-const batchResult = await client.awaitChain({ chain: batch, timeoutMs: 5000 });
-assert.ok(batchResult.output.processed > 0 && batchResult.output.processed < items.length);
+const importResult = await client.awaitChain({ chain: importChain, timeoutMs: 5000 });
+assert.ok(importResult.output.processed > 0 && importResult.output.processed < items.length);

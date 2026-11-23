@@ -47,20 +47,25 @@ const imageProcessors = createProcessors({
   backoffConfig: { initialDelayMs: 10, multiplier: 2, maxDelayMs: 100 },
   processors: {
     "images.resize": {
-      attemptHandler: async ({ job, applyOutcome }) =>
-        stateAdapter.withTransaction(async (txCtx) =>
-          applyOutcome({ ...txCtx, output: { url: job.input.url } }),
-        ),
+      attemptHandler: async ({ job, applyJobOutcome }) => {
+        await stateAdapter.withTransaction(async (txCtx) =>
+          applyJobOutcome({ ...txCtx, output: { url: job.input.url } }),
+        );
+      },
     },
     "images.transcode": {
-      attemptHandler: async ({ job, applyOutcome }) =>
-        stateAdapter.withTransaction(async (txCtx) =>
-          applyOutcome({ ...txCtx, output: { url: job.input.url } }),
-        ),
+      attemptHandler: async ({ job, applyJobOutcome }) => {
+        await stateAdapter.withTransaction(async (txCtx) =>
+          applyJobOutcome({ ...txCtx, output: { url: job.input.url } }),
+        );
+      },
     },
     "images.notify": {
-      attemptHandler: async ({ applyOutcome }) =>
-        stateAdapter.withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null })),
+      attemptHandler: async ({ applyJobOutcome }) => {
+        await stateAdapter.withTransaction(async (txCtx) =>
+          applyJobOutcome({ ...txCtx, output: null }),
+        );
+      },
     },
   },
 });
@@ -70,8 +75,11 @@ const billingProcessors = createProcessors({
   jobTypes: billingJobTypes,
   processors: {
     "billing.charge": {
-      attemptHandler: async ({ applyOutcome }) =>
-        stateAdapter.withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null })),
+      attemptHandler: async ({ applyJobOutcome }) => {
+        await stateAdapter.withTransaction(async (txCtx) =>
+          applyJobOutcome({ ...txCtx, output: null }),
+        );
+      },
     },
   },
 });

@@ -60,14 +60,14 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       generate_report: {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           console.log(`Generating ${job.input.reportType} report...`);
           // Simulate report generation work
           await new Promise((r) => setTimeout(r, 500));
           const rowCount = Math.floor(Math.random() * 1000) + 100;
           console.log(`Report generated with ${rowCount} rows`);
-          return stateAdapter.withTransaction(async (ctx) =>
-            applyOutcome({
+          await stateAdapter.withTransaction(async (ctx) =>
+            applyJobOutcome({
               ...ctx,
               output: {
                 reportId: `RPT-${Date.now()}`,

@@ -349,9 +349,9 @@ describe("Metrics", () => {
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ applyOutcome }) => {
-              return withTransaction(async (txCtx) =>
-                applyOutcome({ ...txCtx, output: { result: true } }),
+            attemptHandler: async ({ applyJobOutcome }) => {
+              await withTransaction(async (txCtx) =>
+                applyJobOutcome({ ...txCtx, output: { result: true } }),
               );
             },
           },
@@ -427,11 +427,11 @@ describe("Metrics", () => {
         },
         processors: {
           test: {
-            attemptHandler: async ({ job, applyOutcome }) => {
+            attemptHandler: async ({ job, applyJobOutcome }) => {
               if (job.attempt < 2) {
                 throw new Error("Unexpected error");
               }
-              return withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null }));
+              await withTransaction(async (txCtx) => applyJobOutcome({ ...txCtx, output: null }));
             },
           },
         },
@@ -496,13 +496,14 @@ describe("Metrics", () => {
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ job, applyOutcome }) => {
+            attemptHandler: async ({ job, applyJobOutcome }) => {
               if (job.attempt < 2) {
-                return withTransaction(async (txCtx) =>
-                  applyOutcome({ ...txCtx, reschedule: { afterMs: 100 } }),
+                await withTransaction(async (txCtx) =>
+                  applyJobOutcome({ ...txCtx, reschedule: { afterMs: 100 } }),
                 );
+                return;
               }
-              return withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null }));
+              await withTransaction(async (txCtx) => applyJobOutcome({ ...txCtx, output: null }));
             },
           },
         },
@@ -576,37 +577,40 @@ describe("Metrics", () => {
         jobTypes,
         processors: {
           linear: {
-            attemptHandler: async ({ job, applyOutcome }) =>
-              withTransaction(async (txCtx) =>
-                applyOutcome({
+            attemptHandler: async ({ job, applyJobOutcome }) => {
+              await withTransaction(async (txCtx) =>
+                applyJobOutcome({
                   ...txCtx,
                   continueWith: {
                     typeName: "linear_next",
                     input: { valueNext: job.input.value + 1 },
                   },
                 }),
-              ),
+              );
+            },
           },
           linear_next: {
-            attemptHandler: async ({ job, applyOutcome }) =>
-              withTransaction(async (txCtx) =>
-                applyOutcome({
+            attemptHandler: async ({ job, applyJobOutcome }) => {
+              await withTransaction(async (txCtx) =>
+                applyJobOutcome({
                   ...txCtx,
                   continueWith: {
                     typeName: "linear_next_next",
                     input: { valueNextNext: job.input.valueNext + 1 },
                   },
                 }),
-              ),
+              );
+            },
           },
           linear_next_next: {
-            attemptHandler: async ({ job, applyOutcome }) =>
-              withTransaction(async (txCtx) =>
-                applyOutcome({
+            attemptHandler: async ({ job, applyJobOutcome }) => {
+              await withTransaction(async (txCtx) =>
+                applyJobOutcome({
                   ...txCtx,
                   output: { result: job.input.valueNextNext },
                 }),
-              ),
+              );
+            },
           },
         },
       }),
@@ -692,18 +696,19 @@ describe("Metrics", () => {
         jobTypes,
         processors: {
           blocker: {
-            attemptHandler: async ({ job, applyOutcome }) =>
-              withTransaction(async (txCtx) =>
+            attemptHandler: async ({ job, applyJobOutcome }) => {
+              await withTransaction(async (txCtx) =>
                 job.input.value < 1
-                  ? applyOutcome({
+                  ? applyJobOutcome({
                       ...txCtx,
                       continueWith: {
                         typeName: "blocker",
                         input: { value: job.input.value + 1 },
                       },
                     })
-                  : applyOutcome({ ...txCtx, output: { done: true } }),
-              ),
+                  : applyJobOutcome({ ...txCtx, output: { done: true } }),
+              );
+            },
           },
           main: {
             attemptHandler: async ({
@@ -711,10 +716,10 @@ describe("Metrics", () => {
                 input,
                 blockers: [blocker],
               },
-              applyOutcome,
+              applyJobOutcome,
             }) => {
-              return withTransaction(async (txCtx) =>
-                applyOutcome({
+              await withTransaction(async (txCtx) =>
+                applyJobOutcome({
                   ...txCtx,
                   output: {
                     finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
@@ -857,10 +862,10 @@ describe("Metrics", () => {
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ applyOutcome }) => {
+            attemptHandler: async ({ applyJobOutcome }) => {
               jobStarted.resolve();
               await handlerReleased.promise;
-              return withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null }));
+              await withTransaction(async (txCtx) => applyJobOutcome({ ...txCtx, output: null }));
             },
           },
         },
@@ -875,8 +880,9 @@ describe("Metrics", () => {
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ applyOutcome }) =>
-              withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null })),
+            attemptHandler: async ({ applyJobOutcome }) => {
+              await withTransaction(async (txCtx) => applyJobOutcome({ ...txCtx, output: null }));
+            },
           },
         },
       }),
@@ -969,16 +975,16 @@ describe("Metrics", () => {
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ applyOutcome }) => {
+            attemptHandler: async ({ applyJobOutcome }) => {
               started.resolve();
               await takenOver.promise;
-              const applyOutcomeAsWorker = async () =>
+              const applyJobOutcomeAsWorker = async () =>
                 withTransaction(async (txCtx) =>
-                  applyOutcome({ ...txCtx, output: { by: "worker" } }),
+                  applyJobOutcome({ ...txCtx, output: { by: "worker" } }),
                 );
-              await expect(applyOutcomeAsWorker()).rejects.toThrow(JobAlreadyCompletedError);
+              await expect(applyJobOutcomeAsWorker()).rejects.toThrow(JobAlreadyCompletedError);
               attemptEnded.resolve();
-              return applyOutcomeAsWorker();
+              await applyJobOutcomeAsWorker();
             },
           },
         },
@@ -1043,10 +1049,10 @@ describe("Metrics", () => {
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ applyOutcome }) => {
+            attemptHandler: async ({ applyJobOutcome }) => {
               started.resolve();
               await deleted.promise;
-              return withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null }));
+              await withTransaction(async (txCtx) => applyJobOutcome({ ...txCtx, output: null }));
             },
           },
         },
@@ -1122,8 +1128,8 @@ describe("Metrics", () => {
         backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           test: {
-            attemptHandler: async ({ applyOutcome }) => {
-              return withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null }));
+            attemptHandler: async ({ applyJobOutcome }) => {
+              await withTransaction(async (txCtx) => applyJobOutcome({ ...txCtx, output: null }));
             },
           },
         },
@@ -1178,8 +1184,8 @@ describe("Metrics", () => {
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ applyOutcome }) => {
-              return withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null }));
+            attemptHandler: async ({ applyJobOutcome }) => {
+              await withTransaction(async (txCtx) => applyJobOutcome({ ...txCtx, output: null }));
             },
           },
         },
@@ -1347,9 +1353,9 @@ describe("Spans", () => {
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ applyOutcome }) => {
-              return withTransaction(async (txCtx) =>
-                applyOutcome({ ...txCtx, output: { result: true } }),
+            attemptHandler: async ({ applyJobOutcome }) => {
+              await withTransaction(async (txCtx) =>
+                applyJobOutcome({ ...txCtx, output: { result: true } }),
               );
             },
           },
@@ -1423,11 +1429,11 @@ describe("Spans", () => {
         },
         processors: {
           test: {
-            attemptHandler: async ({ job, applyOutcome }) => {
+            attemptHandler: async ({ job, applyJobOutcome }) => {
               if (job.attempt < 2) {
                 throw new Error("Unexpected error");
               }
-              return withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null }));
+              await withTransaction(async (txCtx) => applyJobOutcome({ ...txCtx, output: null }));
             },
           },
         },
@@ -1503,13 +1509,14 @@ describe("Spans", () => {
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ job, applyOutcome }) => {
+            attemptHandler: async ({ job, applyJobOutcome }) => {
               if (job.attempt < 2) {
-                return withTransaction(async (txCtx) =>
-                  applyOutcome({ ...txCtx, reschedule: { afterMs: 100 }, reason: "waiting" }),
+                await withTransaction(async (txCtx) =>
+                  applyJobOutcome({ ...txCtx, reschedule: { afterMs: 100 }, reason: "waiting" }),
                 );
+                return;
               }
-              return withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null }));
+              await withTransaction(async (txCtx) => applyJobOutcome({ ...txCtx, output: null }));
             },
           },
         },
@@ -1594,37 +1601,40 @@ describe("Spans", () => {
         jobTypes,
         processors: {
           linear: {
-            attemptHandler: async ({ job, applyOutcome }) =>
-              withTransaction(async (txCtx) =>
-                applyOutcome({
+            attemptHandler: async ({ job, applyJobOutcome }) => {
+              await withTransaction(async (txCtx) =>
+                applyJobOutcome({
                   ...txCtx,
                   continueWith: {
                     typeName: "linear_next",
                     input: { valueNext: job.input.value + 1 },
                   },
                 }),
-              ),
+              );
+            },
           },
           linear_next: {
-            attemptHandler: async ({ job, applyOutcome }) =>
-              withTransaction(async (txCtx) =>
-                applyOutcome({
+            attemptHandler: async ({ job, applyJobOutcome }) => {
+              await withTransaction(async (txCtx) =>
+                applyJobOutcome({
                   ...txCtx,
                   continueWith: {
                     typeName: "linear_next_next",
                     input: { valueNextNext: job.input.valueNext + 1 },
                   },
                 }),
-              ),
+              );
+            },
           },
           linear_next_next: {
-            attemptHandler: async ({ job, applyOutcome }) =>
-              withTransaction(async (txCtx) =>
-                applyOutcome({
+            attemptHandler: async ({ job, applyJobOutcome }) => {
+              await withTransaction(async (txCtx) =>
+                applyJobOutcome({
                   ...txCtx,
                   output: { result: job.input.valueNextNext },
                 }),
-              ),
+              );
+            },
           },
         },
       }),
@@ -1716,25 +1726,27 @@ describe("Spans", () => {
         jobTypes,
         processors: {
           linear: {
-            attemptHandler: async ({ job, applyOutcome }) =>
-              withTransaction(async (txCtx) =>
-                applyOutcome({
+            attemptHandler: async ({ job, applyJobOutcome }) => {
+              await withTransaction(async (txCtx) =>
+                applyJobOutcome({
                   ...txCtx,
                   continueWith: {
                     typeName: "linear_next",
                     input: { valueNext: job.input.value + 1 },
                   },
                 }),
-              ),
+              );
+            },
           },
           linear_next: {
-            attemptHandler: async ({ job, applyOutcome }) =>
-              withTransaction(async (txCtx) =>
-                applyOutcome({
+            attemptHandler: async ({ job, applyJobOutcome }) => {
+              await withTransaction(async (txCtx) =>
+                applyJobOutcome({
                   ...txCtx,
                   output: { result: job.input.valueNext },
                 }),
-              ),
+              );
+            },
           },
         },
       }),
@@ -1808,18 +1820,19 @@ describe("Spans", () => {
         jobTypes,
         processors: {
           blocker: {
-            attemptHandler: async ({ job, applyOutcome }) =>
-              withTransaction(async (txCtx) =>
+            attemptHandler: async ({ job, applyJobOutcome }) => {
+              await withTransaction(async (txCtx) =>
                 job.input.value < 1
-                  ? applyOutcome({
+                  ? applyJobOutcome({
                       ...txCtx,
                       continueWith: {
                         typeName: "blocker",
                         input: { value: job.input.value + 1 },
                       },
                     })
-                  : applyOutcome({ ...txCtx, output: { done: true } }),
-              ),
+                  : applyJobOutcome({ ...txCtx, output: { done: true } }),
+              );
+            },
           },
           main: {
             attemptHandler: async ({
@@ -1827,10 +1840,10 @@ describe("Spans", () => {
                 input,
                 blockers: [blocker],
               },
-              applyOutcome,
+              applyJobOutcome,
             }) => {
-              return withTransaction(async (txCtx) =>
-                applyOutcome({
+              await withTransaction(async (txCtx) =>
+                applyJobOutcome({
                   ...txCtx,
                   output: {
                     finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
@@ -1935,8 +1948,11 @@ describe("Spans", () => {
         jobTypes,
         processors: {
           blocker: {
-            attemptHandler: async ({ applyOutcome }) =>
-              withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: { done: true } })),
+            attemptHandler: async ({ applyJobOutcome }) => {
+              await withTransaction(async (txCtx) =>
+                applyJobOutcome({ ...txCtx, output: { done: true } }),
+              );
+            },
           },
           main: {
             attemptHandler: async ({
@@ -1944,10 +1960,10 @@ describe("Spans", () => {
                 input,
                 blockers: [blocker],
               },
-              applyOutcome,
+              applyJobOutcome,
             }) => {
-              return withTransaction(async (txCtx) =>
-                applyOutcome({
+              await withTransaction(async (txCtx) =>
+                applyJobOutcome({
                   ...txCtx,
                   output: {
                     finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
@@ -2460,9 +2476,9 @@ describe("Gauges", () => {
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ job, applyOutcome }) => {
-              return withTransaction(async (txCtx) =>
-                applyOutcome({ ...txCtx, output: { result: job.input.test } }),
+            attemptHandler: async ({ job, applyJobOutcome }) => {
+              await withTransaction(async (txCtx) =>
+                applyJobOutcome({ ...txCtx, output: { result: job.input.test } }),
               );
             },
           },
@@ -2535,18 +2551,18 @@ describe("Gauges", () => {
         jobTypes,
         processors: {
           email: {
-            attemptHandler: async ({ applyOutcome }) => {
+            attemptHandler: async ({ applyJobOutcome }) => {
               processedTypes.push("email");
-              return withTransaction(async (txCtx) =>
-                applyOutcome({ ...txCtx, output: { sent: true } }),
+              await withTransaction(async (txCtx) =>
+                applyJobOutcome({ ...txCtx, output: { sent: true } }),
               );
             },
           },
           sms: {
-            attemptHandler: async ({ applyOutcome }) => {
+            attemptHandler: async ({ applyJobOutcome }) => {
               processedTypes.push("sms");
-              return withTransaction(async (txCtx) =>
-                applyOutcome({ ...txCtx, output: { sent: true } }),
+              await withTransaction(async (txCtx) =>
+                applyJobOutcome({ ...txCtx, output: { sent: true } }),
               );
             },
           },
@@ -2756,7 +2772,7 @@ describe("Rollback", () => {
     ]);
   });
 
-  it("discards completion metrics on worker applyOutcome rollback", async ({
+  it("discards completion metrics on worker applyJobOutcome rollback", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -2804,8 +2820,9 @@ describe("Rollback", () => {
         backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           test: {
-            attemptHandler: async ({ applyOutcome }) =>
-              withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null })),
+            attemptHandler: async ({ applyJobOutcome }) => {
+              await withTransaction(async (txCtx) => applyJobOutcome({ ...txCtx, output: null }));
+            },
           },
         },
       }),
@@ -2884,12 +2901,12 @@ describe("Rollback", () => {
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ applyOutcome }) => {
+            attemptHandler: async ({ applyJobOutcome }) => {
               if (!handlerFailed) {
                 handlerFailed = true;
                 throw new Error("simulated handler failure");
               }
-              return withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null }));
+              await withTransaction(async (txCtx) => applyJobOutcome({ ...txCtx, output: null }));
             },
           },
         },
@@ -2960,9 +2977,9 @@ describe("Rollback", () => {
         backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           linear: {
-            attemptHandler: async ({ applyOutcome }) =>
-              withTransaction(async (txCtx) => {
-                const result = await applyOutcome({
+            attemptHandler: async ({ applyJobOutcome }) => {
+              await withTransaction(async (txCtx) => {
+                await applyJobOutcome({
                   ...txCtx,
                   continueWith: { typeName: "linear_next", input: null },
                 });
@@ -2970,12 +2987,13 @@ describe("Rollback", () => {
                   throwOnce = false;
                   throw new Error("user error after continueWith");
                 }
-                return result;
-              }),
+              });
+            },
           },
           linear_next: {
-            attemptHandler: async ({ applyOutcome }) =>
-              withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null })),
+            attemptHandler: async ({ applyJobOutcome }) => {
+              await withTransaction(async (txCtx) => applyJobOutcome({ ...txCtx, output: null }));
+            },
           },
         },
       }),
@@ -3062,8 +3080,9 @@ describe("Rollback", () => {
         backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           test: {
-            attemptHandler: async ({ applyOutcome }) =>
-              withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null })),
+            attemptHandler: async ({ applyJobOutcome }) => {
+              await withTransaction(async (txCtx) => applyJobOutcome({ ...txCtx, output: null }));
+            },
           },
         },
       }),
@@ -3255,17 +3274,19 @@ describe("Rollback", () => {
         backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           linear: {
-            attemptHandler: async ({ applyOutcome }) =>
-              withTransaction(async (txCtx) =>
-                applyOutcome({
+            attemptHandler: async ({ applyJobOutcome }) => {
+              await withTransaction(async (txCtx) =>
+                applyJobOutcome({
                   ...txCtx,
                   continueWith: { typeName: "linear_next", input: null },
                 }),
-              ),
+              );
+            },
           },
           linear_next: {
-            attemptHandler: async ({ applyOutcome }) =>
-              withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null })),
+            attemptHandler: async ({ applyJobOutcome }) => {
+              await withTransaction(async (txCtx) => applyJobOutcome({ ...txCtx, output: null }));
+            },
           },
         },
       }),
@@ -3374,9 +3395,9 @@ describe("Rollback", () => {
         backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           linear: {
-            attemptHandler: async ({ applyOutcome }) =>
-              withTransaction(async (txCtx) => {
-                const result = await applyOutcome({
+            attemptHandler: async ({ applyJobOutcome }) => {
+              await withTransaction(async (txCtx) => {
+                await applyJobOutcome({
                   ...txCtx,
                   continueWith: { typeName: "linear_next", input: null },
                 });
@@ -3384,12 +3405,13 @@ describe("Rollback", () => {
                   throwOnce = false;
                   throw new Error("user error after continueWith");
                 }
-                return result;
-              }),
+              });
+            },
           },
           linear_next: {
-            attemptHandler: async ({ applyOutcome }) =>
-              withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null })),
+            attemptHandler: async ({ applyJobOutcome }) => {
+              await withTransaction(async (txCtx) => applyJobOutcome({ ...txCtx, output: null }));
+            },
           },
         },
       }),
@@ -3448,7 +3470,7 @@ describe("Rollback", () => {
     ]);
   });
 
-  it("ends rolled-back createChain spans when the handler's transaction rolls back after applyOutcome", async ({
+  it("ends rolled-back createChain spans when the handler's transaction rolls back after applyJobOutcome", async ({
     stateAdapter,
     notifyAdapter,
     withTransaction,
@@ -3480,20 +3502,20 @@ describe("Rollback", () => {
         backoffConfig: { initialDelayMs: 1, multiplier: 1, maxDelayMs: 1 },
         processors: {
           test: {
-            attemptHandler: async ({ applyOutcome }) =>
-              withTransaction(async (txCtx) => {
+            attemptHandler: async ({ applyJobOutcome }) => {
+              await withTransaction(async (txCtx) => {
                 await client.createChain({
                   ...txCtx,
                   typeName: "other",
                   input: null,
                 });
-                const result = await applyOutcome({ ...txCtx, output: null });
+                await applyJobOutcome({ ...txCtx, output: null });
                 if (throwOnce) {
                   throwOnce = false;
-                  throw new Error("user error after applyOutcome");
+                  throw new Error("user error after applyJobOutcome");
                 }
-                return result;
-              }),
+              });
+            },
           },
         },
       }),

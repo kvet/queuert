@@ -73,8 +73,8 @@ export type JobRescheduleOutcome = {
 };
 
 /**
- * Every outcome `applyOutcome` and `client.applyJobOutcome` accept for a job type, as a single
- * union.
+ * Every outcome an attempt handler's `applyJobOutcome` and `client.applyJobOutcome` accept for a
+ * job type, as a single union.
  */
 export type JobOutcome<
   TStateAdapter extends StateAdapter<any, any, any, Mode>,
@@ -121,32 +121,33 @@ export type JobOutcomeResult<
  * field the state provider's context type requires (`txHooks` included, for a provider that carries
  * them), spread alongside exactly one outcome key — the same convention as `client.createChain`.
  *
- * The attempt counts as completed once the state provider runs the commit callbacks `applyOutcome`
- * registered, so the provider must run them only after COMMIT: callbacks that run before COMMIT
- * make the worker treat the attempt as completed even if the transaction then rolls back.
+ * The attempt counts as completed once the state provider runs the commit callbacks
+ * `applyJobOutcome` registered, so the provider must run them only after COMMIT: callbacks that run
+ * before COMMIT make the worker treat the attempt as completed even if the transaction then rolls
+ * back.
  *
  * The isolation levels the transaction may run at depend on the state adapter. At a level stricter
  * than READ COMMITTED it can fail on a conflict with a concurrent transaction; the caller retries
  * it with fresh `txHooks`, or inside `txHooks.retryBoundary`.
  *
  * Every write is conditional on this attempt still owning the job; if it does not, nothing is
- * written and `applyOutcome` throws, so the caller's transaction rolls back. Validation runs before
- * the first write, so a caught error never leaves a partial write behind.
+ * written and `applyJobOutcome` throws, so the caller's transaction rolls back. Validation runs
+ * before the first write, so a caught error never leaves a partial write behind.
  *
- * `applyOutcome` ends the attempt, not necessarily the job: with `output` the job is completed,
+ * `applyJobOutcome` ends the attempt, not necessarily the job: with `output` the job is completed,
  * with `continueWith` the job is completed and the chain moves on, and with `reschedule` the job
  * goes back to `pending` for a later attempt.
  *
- * `applyOutcome` succeeds at most once per attempt. A call that threw before writing, or whose
+ * `applyJobOutcome` succeeds at most once per attempt. A call that threw before writing, or whose
  * transaction or savepoint the state provider reported as rolled back, does not count, so the
- * attempt can call `applyOutcome` again in a new transaction. Its events are released through the
- * state provider's `onTransactionCommit` once the caller's transaction commits.
+ * attempt can call `applyJobOutcome` again in a new transaction. Its events are released through
+ * the state provider's `onTransactionCommit` once the caller's transaction commits.
  *
  * The return shape is determined by the outcome's discriminant key, never by the user's data.
  *
- * Misuse throws a plain `Error`, without aborting `signal`: a transaction context outside an open
- * transaction, not exactly one outcome, a second success or a concurrent call for the same attempt,
- * or a call after the handler ended.
+ * Misuse throws a plain `Error`, without aborting `job.signal`: a transaction context outside an
+ * open transaction, not exactly one outcome, a second success or a concurrent call for the same
+ * attempt, or a call after the handler ended.
  *
  * @throws {@link JobTakenByAnotherWorkerError} if the attempt was reclaimed and the job
  * acquired by another attempt.
@@ -164,7 +165,7 @@ export type JobOutcomeResult<
  * @throws {@link InvalidJobIdError} if a `continueWith` `id` fails the state adapter's
  * `validateJobId` check.
  */
-export type AttemptApplyOutcome<
+export type AttemptApplyJobOutcome<
   TStateAdapter extends StateAdapter<any, any, any, Mode>,
   in out TJobTypeDefinitions extends BaseJobTypeDefinitions,
   in out TJobTypeName extends string,
@@ -179,52 +180,72 @@ export type AttemptApplyOutcome<
 >;
 
 /**
- * Holds the attempt's ownership of the job inside the caller's transaction until it commits or
- * rolls back. Takes the transaction context of that transaction; unlike `applyOutcome`, it
- * registers no commit callbacks, so any part of the context that identifies the transaction is
- * enough.
+ * Holds the job's attempt inside the caller's transaction until it commits or rolls back. Takes the
+ * transaction context of that transaction; unlike `applyJobOutcome`, it registers no commit
+ * callbacks, so any part of the context that identifies the transaction is enough.
  *
- * `fence` locks the job row and its chain head and checks that this attempt still owns the job.
+ * `fenceJob` locks the job row and its chain head and checks that this attempt still owns the job.
  * Reclaiming, completing or deleting the job waits for the caller's transaction to end, so every
- * write in a transaction where `fence` succeeded commits while the attempt owns the job. Use it in
- * the transactions the handler opens besides the one that calls `applyOutcome`; keep them short,
- * since the lock holds back everything else that writes to the job or its chain.
+ * write in a transaction where `fenceJob` succeeded commits while the attempt owns the job. Use it
+ * in the transactions the handler opens besides the one that calls `applyJobOutcome`; keep them
+ * short, since the lock holds back everything else that writes to the job or its chain.
  *
- * `fence` writes nothing and can be called any number of times, in the same or different
- * transactions. In the transaction that calls `applyOutcome`, call it before `applyOutcome`, which
- * ends the attempt, so a later `fence` treats it as lost.
+ * `fenceJob` writes nothing and can be called any number of times, in the same or different
+ * transactions. In the transaction that calls `applyJobOutcome`, call it before `applyJobOutcome`,
+ * which ends the attempt, so a later `fenceJob` treats it as lost.
  *
  * Misuse throws a plain `Error`: a transaction context outside an open transaction, or a call
  * after the handler ended.
  *
- * @throws {@link JobTakenByAnotherWorkerError} if the attempt was reclaimed, and aborts `signal`.
+ * @throws {@link JobTakenByAnotherWorkerError} if the attempt was reclaimed, and aborts
+ * `job.signal`.
  * @throws {@link JobAlreadyCompletedError} if the job was completed elsewhere, for example by
- * `client.applyJobOutcome`, and aborts `signal`.
- * @throws {@link JobNotFoundError} if the job was deleted, and aborts `signal`.
+ * `client.applyJobOutcome`, and aborts `job.signal`.
+ * @throws {@link JobNotFoundError} if the job was deleted, and aborts `job.signal`.
  */
-export type AttemptFence<TStateAdapter extends StateAdapter<any, any, any, Mode>> = (
+export type AttemptFenceJob<TStateAdapter extends StateAdapter<any, any, any, Mode>> = (
   options: Partial<GetStateAdapterTxContext<TStateAdapter>>,
 ) => ModeResult<ModeOf<TStateAdapter>, void>;
+
+type AttemptRunningJob<
+  TStateAdapter extends StateAdapter<any, any, any, Mode>,
+  TJobTypeDefinitions extends BaseJobTypeDefinitions,
+  TJobTypeName extends string,
+  TChainTypeName extends string,
+> = ResolvedRunningJob<
+  GetStateAdapterJobId<TStateAdapter>,
+  GetStateAdapterWorkerId<TStateAdapter>,
+  TJobTypeDefinitions,
+  TJobTypeName,
+  TChainTypeName
+> & {
+  /**
+   * Aborts when this job's attempt is lost (reclaimed, completed elsewhere or deleted), or when
+   * the worker is stopping or lost its lease.
+   */
+  signal: AbortSignal;
+};
 
 /**
  * Handler function called for each job attempt.
  *
- * Receives `signal` (aborts when the worker is stopping or lost its lease, or the attempt is
- * lost), `job` (the running job with its completed blocker chains), `applyOutcome` (commits the
- * outcome inside the caller's transaction) and `fence` (holds the attempt's ownership inside
+ * Receives `job` (the running job with its completed blocker chains, and `job.signal`, which
+ * aborts when the attempt is lost or the worker is stopping or lost its lease), `applyJobOutcome`
+ * (commits the outcome inside the caller's transaction) and `fenceJob` (holds the attempt inside
  * another of the caller's transactions until it ends). Do the work, then open a transaction and
- * call `applyOutcome` inside it. The handler returns what `applyOutcome` returned.
+ * call `applyJobOutcome` inside it.
  *
- * An `applyOutcome` call counts once the state provider runs its commit callbacks — right after
- * COMMIT — and then completes the attempt without another database call, whatever the handler
- * returns. An error the handler throws afterwards does not
- * undo the completion; it is reported as a worker error. Without a counted `applyOutcome` — a
- * throw before it, no call, or a call that rolled back — the attempt fails, and the job is
- * rescheduled with backoff.
+ * An `applyJobOutcome` call counts once the state provider runs its commit callbacks — right after
+ * COMMIT — and then completes the attempt without another database call. An error the handler
+ * throws afterwards does not undo the completion; it is reported as a worker error. Without a
+ * counted `applyJobOutcome` when the handler ends — a throw before it, no call, or a call that
+ * rolled back — the attempt fails, and the job is rescheduled with backoff. Await the transaction
+ * that calls `applyJobOutcome` before the handler returns: a call still running when the handler
+ * ends races the failed attempt's reschedule.
  *
- * The handler is asynchronous in both modes. Over a `"sync"` {@link StateAdapter}, `applyOutcome`
- * and `fence` return their results directly and throw synchronously, so the transaction that calls
- * them can be the driver's own synchronous transaction.
+ * The handler is asynchronous in both modes. Over a `"sync"` {@link StateAdapter},
+ * `applyJobOutcome` and `fenceJob` return their results directly and throw synchronously, so the
+ * transaction that calls them can be the driver's own synchronous transaction.
  */
 export type AttemptHandler<
   TStateAdapter extends StateAdapter<any, any, any, Mode>,
@@ -234,30 +255,26 @@ export type AttemptHandler<
   THandlerCtx,
 > = (
   processOptions: {
-    signal: AbortSignal;
-    job: ResolvedRunningJob<
-      GetStateAdapterJobId<TStateAdapter>,
-      GetStateAdapterWorkerId<TStateAdapter>,
-      TJobTypeDefinitions,
-      TJobTypeName,
-      TChainTypeName
-    >;
-    applyOutcome: AttemptApplyOutcome<
+    job: AttemptRunningJob<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TChainTypeName>;
+    applyJobOutcome: AttemptApplyJobOutcome<
       TStateAdapter,
       TJobTypeDefinitions,
       TJobTypeName,
       TChainTypeName
     >;
-    fence: AttemptFence<TStateAdapter>;
+    fenceJob: AttemptFenceJob<TStateAdapter>;
   } & THandlerCtx,
-) => Promise<Exclude<AnyJob, { status: "running" }>>;
+) => Promise<void>;
+
+export type AnyRunningJob = AnyJob & { blockers: AnyChain[]; signal: AbortSignal };
 
 export type AnyAttemptHandler = (options: {
-  signal: AbortSignal;
-  job: AnyJob & { blockers: AnyChain[] };
-  applyOutcome: (options: AnyJobOutcomeOptions) => MaybePromise<AnyJob & { continuedTo?: AnyJob }>;
-  fence: (options: BaseTxContext) => MaybePromise<void>;
-}) => Promise<unknown>;
+  job: AnyRunningJob;
+  applyJobOutcome: (
+    options: AnyJobOutcomeOptions,
+  ) => MaybePromise<AnyJob & { continuedTo?: AnyJob }>;
+  fenceJob: (options: BaseTxContext) => MaybePromise<void>;
+}) => Promise<void>;
 
 export type AnyJobOutcomeOptions = BaseTxContext & AnyJobOutcomeFields;
 

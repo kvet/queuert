@@ -65,25 +65,26 @@ await using workerRunner = createWorkerRunner({
     processors: {
       // #region linear
       "activate-trial": {
-        attemptHandler: async ({ job, applyOutcome }) =>
-          stateAdapter.withTransaction(async (txCtx) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
+          await stateAdapter.withTransaction(async (txCtx) => {
             subscriptions.get(job.input.subscriptionId)!.status = "trial";
-            return applyOutcome({
+            return applyJobOutcome({
               ...txCtx,
               continueWith: {
                 typeName: "trial-decision",
                 input: { subscriptionId: job.input.subscriptionId },
               },
             });
-          }),
+          });
+        },
       },
       // #endregion
       // #region branched
       "trial-decision": {
-        attemptHandler: async ({ job, applyOutcome }) =>
-          stateAdapter.withTransaction(async (txCtx) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
+          await stateAdapter.withTransaction(async (txCtx) => {
             const subscription = subscriptions.get(job.input.subscriptionId)!;
-            return applyOutcome({
+            return applyJobOutcome({
               ...txCtx,
               continueWith: subscription.cardOnFile
                 ? {
@@ -95,24 +96,26 @@ await using workerRunner = createWorkerRunner({
                     input: { subscriptionId: job.input.subscriptionId },
                   },
             });
-          }),
+          });
+        },
       },
       // #endregion
       "expire-trial": {
-        attemptHandler: async ({ job, applyOutcome }) =>
-          stateAdapter.withTransaction(async (txCtx) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
+          await stateAdapter.withTransaction(async (txCtx) => {
             subscriptions.get(job.input.subscriptionId)!.status = "expired";
-            return applyOutcome({ ...txCtx, output: { expired: true } });
-          }),
+            return applyJobOutcome({ ...txCtx, output: { expired: true } });
+          });
+        },
       },
       // #region loop
       "charge-billing": {
-        attemptHandler: async ({ job, applyOutcome }) =>
-          stateAdapter.withTransaction(async (txCtx) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
+          await stateAdapter.withTransaction(async (txCtx) => {
             const subscription = subscriptions.get(job.input.subscriptionId)!;
             // #region go-to
             if (subscription.cancelRequested) {
-              return applyOutcome({
+              return applyJobOutcome({
                 ...txCtx,
                 continueWith: {
                   typeName: "cancel-subscription",
@@ -127,7 +130,7 @@ await using workerRunner = createWorkerRunner({
             subscription.status = "active";
             subscription.cyclesCharged = job.input.cycle;
             if (job.input.cycle < billingCycles) {
-              return applyOutcome({
+              return applyJobOutcome({
                 ...txCtx,
                 continueWith: {
                   typeName: "charge-billing",
@@ -136,19 +139,21 @@ await using workerRunner = createWorkerRunner({
               });
             }
             subscription.status = "ended";
-            return applyOutcome({ ...txCtx, output: { cyclesCharged: job.input.cycle } });
-          }),
+            return applyJobOutcome({ ...txCtx, output: { cyclesCharged: job.input.cycle } });
+          });
+        },
       },
       // #endregion
       "cancel-subscription": {
-        attemptHandler: async ({ job, applyOutcome }) =>
-          stateAdapter.withTransaction(async (txCtx) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
+          await stateAdapter.withTransaction(async (txCtx) => {
             subscriptions.get(job.input.subscriptionId)!.status = "cancelled";
-            return applyOutcome({
+            return applyJobOutcome({
               ...txCtx,
               output: { cancelledAfterCycles: job.input.cyclesCharged },
             });
-          }),
+          });
+        },
       },
     },
   }),

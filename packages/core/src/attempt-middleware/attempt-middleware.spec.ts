@@ -75,11 +75,11 @@ describe("AttemptMiddleware ctx type inference", () => {
       attemptMiddleware: [w1, w2],
       processors: {
         foo: {
-          attemptHandler: async ({ traceId, log, applyOutcome }) => {
+          attemptHandler: async ({ traceId, log, applyJobOutcome }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
             expectTypeOf(log).toEqualTypeOf<(msg: string) => void>();
-            return stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { ok: true as const } }),
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { ok: true as const } }),
             );
           },
         },
@@ -103,11 +103,11 @@ describe("tuple narrowing without `as const`", () => {
       attemptMiddleware: [traceMw, logMw],
       processors: {
         foo: {
-          attemptHandler: async ({ traceId, log, applyOutcome }) => {
+          attemptHandler: async ({ traceId, log, applyJobOutcome }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
             expectTypeOf(log).toEqualTypeOf<(msg: string) => void>();
-            return stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { ok: true as const } }),
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { ok: true as const } }),
             );
           },
         },
@@ -137,6 +137,7 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
     const tenantMw: AttemptMiddleware<DbStateAdapter, { tenant: string }> = {
       wrapHandler: async ({ job, next }) => {
         expectTypeOf(job.id).toEqualTypeOf<string>();
+        expectTypeOf(job.signal).toEqualTypeOf<AbortSignal>();
         return next({ tenant: "acme" });
       },
     };
@@ -147,12 +148,12 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
       attemptMiddleware: [traceMw, tenantMw],
       processors: {
         foo: {
-          attemptHandler: async ({ traceId, tenant, applyOutcome }) => {
+          attemptHandler: async ({ traceId, tenant, applyJobOutcome }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
             expectTypeOf(tenant).toEqualTypeOf<string>();
-            return dbStateAdapter.withTransaction(async (txCtx) => {
+            await dbStateAdapter.withTransaction(async (txCtx) => {
               expectTypeOf(txCtx.db).toEqualTypeOf<Tx["db"]>();
-              return applyOutcome({ ...txCtx, output: { ok: true as const } });
+              return applyJobOutcome({ ...txCtx, output: { ok: true as const } });
             });
           },
         },
@@ -174,11 +175,11 @@ describe("AttemptMiddleware accepts concrete (non-any) state adapters", () => {
       attemptMiddleware: [agnosticMw, concreteMw],
       processors: {
         foo: {
-          attemptHandler: async ({ traceId, log, applyOutcome }) => {
+          attemptHandler: async ({ traceId, log, applyJobOutcome }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
             expectTypeOf(log).toEqualTypeOf<(msg: string) => void>();
-            return stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { ok: true as const } }),
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { ok: true as const } }),
             );
           },
         },
@@ -205,10 +206,9 @@ describe("middleware must match the client's state adapter", () => {
       attemptMiddleware: [foreignMw],
       processors: {
         foo: {
-          attemptHandler: async ({ applyOutcome }) =>
-            stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { ok: true as const } }),
-            ),
+          attemptHandler: async () => {
+            throw new Error("not called");
+          },
         },
       },
     });
@@ -225,10 +225,10 @@ describe("middleware must match the client's state adapter", () => {
       attemptMiddleware: [agnosticMw],
       processors: {
         foo: {
-          attemptHandler: async ({ traceId, applyOutcome }) => {
+          attemptHandler: async ({ traceId, applyJobOutcome }) => {
             expectTypeOf(traceId).toEqualTypeOf<string>();
-            return stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { ok: true as const } }),
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { ok: true as const } }),
             );
           },
         },
@@ -238,14 +238,10 @@ describe("middleware must match the client's state adapter", () => {
 });
 
 describe("wrapHandler result", () => {
-  it("passes the handler's `applyOutcome` result through next", () => {
-    type WrapHandler = NonNullable<AttemptMiddleware<any, { traceId: string }>["wrapHandler"]>;
-    const wrapHandler = null as unknown as WrapHandler;
-    type Instantiated = typeof wrapHandler<{ marker: 1 }>;
-    expectTypeOf<ReturnType<Parameters<Instantiated>[0]["next"]>>().toEqualTypeOf<
-      Promise<{ marker: 1 }>
-    >();
-    expectTypeOf<ReturnType<Instantiated>>().toEqualTypeOf<Promise<{ marker: 1 }>>();
+  it("resolves next and wrapHandler to void", () => {
+    type WrapHandler = AttemptMiddleware<any, { traceId: string }>["wrapHandler"];
+    expectTypeOf<ReturnType<Parameters<WrapHandler>[0]["next"]>>().toEqualTypeOf<Promise<void>>();
+    expectTypeOf<ReturnType<WrapHandler>>().toEqualTypeOf<Promise<void>>();
   });
 });
 
@@ -268,11 +264,11 @@ describe("handler ctx compile-time negatives", () => {
       processors: {
         foo: {
           // @ts-expect-error — 'otherKey' not provided by any middleware
-          attemptHandler: async ({ traceId, otherKey, applyOutcome }) => {
+          attemptHandler: async ({ traceId, otherKey, applyJobOutcome }) => {
             void traceId;
             void otherKey;
-            return stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { ok: true as const } }),
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { ok: true as const } }),
             );
           },
         },

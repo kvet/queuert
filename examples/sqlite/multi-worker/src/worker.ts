@@ -40,7 +40,7 @@ const workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       process_order: {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           const order = selectOrder.get(job.input.orderId) as
             | { items: string; total: number }
             | undefined;
@@ -55,10 +55,10 @@ const workerRunner = createWorkerRunner({
 
           await new Promise((resolve) => setTimeout(resolve, 100 + Math.random() * 200));
 
-          return withTxHooks((txHooks) =>
+          withTxHooks((txHooks) =>
             db
               .transaction(() =>
-                applyOutcome({
+                applyJobOutcome({
                   db,
                   txHooks,
                   output: { processedAt: new Date().toISOString(), processName },

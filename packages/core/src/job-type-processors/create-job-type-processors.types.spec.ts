@@ -27,14 +27,14 @@ describe("attempt handler job", () => {
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ job, applyOutcome }) => {
+            attemptHandler: async ({ job, applyJobOutcome }) => {
               expectTypeOf(job.attempt).toEqualTypeOf<number>();
               expectTypeOf(job.lastAttemptAt).toEqualTypeOf<Date | null>();
               expectTypeOf(job.consecutiveFailures).toEqualTypeOf<number>();
               expectTypeOf(job.lastAttemptError).toEqualTypeOf<string | null>();
               expectTypeOf(job.lastRescheduleReason).toEqualTypeOf<string | null>();
 
-              return applyOutcome({ ...txCtx, output: null });
+              await applyJobOutcome({ ...txCtx, output: null });
             },
           },
         },
@@ -53,18 +53,17 @@ describe("attempt handler job", () => {
         jobTypes,
         processors: {
           test: {
-            attemptHandler: async ({ job, applyOutcome }) => {
+            attemptHandler: async ({ job, applyJobOutcome }) => {
               expectTypeOf(job.typeName).toEqualTypeOf<"test">();
               expectTypeOf(job.input).toEqualTypeOf<{ test: boolean }>();
               expectTypeOf(job.status).toEqualTypeOf<"running">();
 
-              const completedJob = await applyOutcome({ ...txCtx, output: { result: true } });
+              const completedJob = await applyJobOutcome({ ...txCtx, output: { result: true } });
               expectTypeOf(completedJob.typeName).toEqualTypeOf<"test">();
               expectTypeOf(completedJob.status).toEqualTypeOf<"completed">();
               if (completedJob.status === "completed") {
                 expectTypeOf(completedJob.completedBy).toEqualTypeOf<string | null>();
               }
-              return completedJob;
             },
           },
         },
@@ -97,27 +96,27 @@ describe("attempt handler job", () => {
         jobTypes,
         processors: {
           entryA: {
-            attemptHandler: async ({ job, applyOutcome }) => {
+            attemptHandler: async ({ job, applyJobOutcome }) => {
               expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA">();
-              return applyOutcome({
+              await applyJobOutcome({
                 ...txCtx,
                 continueWith: { typeName: "shared", input: { data: 1 } },
               });
             },
           },
           entryB: {
-            attemptHandler: async ({ job, applyOutcome }) => {
+            attemptHandler: async ({ job, applyJobOutcome }) => {
               expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryB">();
-              return applyOutcome({
+              await applyJobOutcome({
                 ...txCtx,
                 continueWith: { typeName: "shared", input: { data: 2 } },
               });
             },
           },
           shared: {
-            attemptHandler: async ({ job, applyOutcome }) => {
+            attemptHandler: async ({ job, applyJobOutcome }) => {
               expectTypeOf(job.chainTypeName).toEqualTypeOf<"entryA" | "entryB">();
-              return applyOutcome({ ...txCtx, output: { done: true } });
+              await applyJobOutcome({ ...txCtx, output: { done: true } });
             },
           },
         },
@@ -147,8 +146,9 @@ describe("attempt handler job", () => {
         jobTypes,
         processors: {
           blocker: {
-            attemptHandler: async ({ applyOutcome }) =>
-              applyOutcome({ ...txCtx, output: { done: true } }),
+            attemptHandler: async ({ applyJobOutcome }) => {
+              await applyJobOutcome({ ...txCtx, output: { done: true } });
+            },
           },
           main: {
             attemptHandler: async ({
@@ -156,13 +156,13 @@ describe("attempt handler job", () => {
                 input,
                 blockers: [blocker],
               },
-              applyOutcome,
+              applyJobOutcome,
             }) => {
               expectTypeOf<(typeof blocker)["output"]>().toEqualTypeOf<{
                 done: true;
               }>();
 
-              return applyOutcome({
+              await applyJobOutcome({
                 ...txCtx,
                 output: {
                   finalResult: (blocker.output.done ? 1 : 0) + (input.start ? 1 : 0),
@@ -196,10 +196,10 @@ describe("attempt middleware", () => {
         attemptMiddleware: [traceMiddleware, auditMiddleware],
         processors: {
           test: {
-            attemptHandler: async ({ trace, audit, applyOutcome }) => {
+            attemptHandler: async ({ trace, audit, applyJobOutcome }) => {
               expectTypeOf(trace).toEqualTypeOf<string>();
               expectTypeOf(audit).toEqualTypeOf<string>();
-              return applyOutcome({ ...txCtx, output: null });
+              await applyJobOutcome({ ...txCtx, output: null });
             },
           },
         },
@@ -232,15 +232,15 @@ describe("continueWith", () => {
         jobTypes,
         processors: {
           linear: {
-            attemptHandler: async ({ job, applyOutcome }) => {
+            attemptHandler: async ({ job, applyJobOutcome }) => {
               expectTypeOf<
                 Extract<
-                  Parameters<typeof applyOutcome>[0],
+                  Parameters<typeof applyJobOutcome>[0],
                   { continueWith: unknown }
                 >["continueWith"]["typeName"]
               >().toEqualTypeOf<"linear_next">();
 
-              const completedJob = await applyOutcome({
+              const completedJob = await applyJobOutcome({
                 ...txCtx,
                 continueWith: {
                   typeName: "linear_next",
@@ -249,19 +249,18 @@ describe("continueWith", () => {
               });
               expectTypeOf(completedJob.continuedTo.typeName).toEqualTypeOf<"linear_next">();
               expectTypeOf(completedJob.continuedTo.status).toEqualTypeOf<"pending">();
-              return completedJob;
             },
           },
           linear_next: {
-            attemptHandler: async ({ job, applyOutcome }) => {
+            attemptHandler: async ({ job, applyJobOutcome }) => {
               expectTypeOf<
                 Extract<
-                  Parameters<typeof applyOutcome>[0],
+                  Parameters<typeof applyJobOutcome>[0],
                   { continueWith: unknown }
                 >["continueWith"]["typeName"]
               >().toEqualTypeOf<"linear_next_next">();
 
-              const completedJob = await applyOutcome({
+              const completedJob = await applyJobOutcome({
                 ...txCtx,
                 continueWith: {
                   typeName: "linear_next_next",
@@ -270,18 +269,16 @@ describe("continueWith", () => {
               });
               expectTypeOf(completedJob.continuedTo.typeName).toEqualTypeOf<"linear_next_next">();
               expectTypeOf(completedJob.continuedTo.status).toEqualTypeOf<"pending">();
-              return completedJob;
             },
           },
           linear_next_next: {
-            attemptHandler: async ({ job, applyOutcome }) => {
-              const result = await applyOutcome({
+            attemptHandler: async ({ job, applyJobOutcome }) => {
+              const result = await applyJobOutcome({
                 ...txCtx,
                 output: { result: job.input.valueNextNext },
               });
               expectTypeOf(result.typeName).toEqualTypeOf<"linear_next_next">();
               expectTypeOf(result.status).toEqualTypeOf<"completed">();
-              return result;
             },
           },
         },
@@ -333,15 +330,15 @@ describe("continueWith", () => {
         jobTypes,
         processors: {
           main: {
-            attemptHandler: async ({ job, applyOutcome }) => {
+            attemptHandler: async ({ job, applyJobOutcome }) => {
               expectTypeOf<
                 Extract<
-                  Parameters<typeof applyOutcome>[0],
+                  Parameters<typeof applyJobOutcome>[0],
                   { continueWith: unknown }
                 >["continueWith"]["typeName"]
               >().toEqualTypeOf<"branch1" | "branch2">();
 
-              return applyOutcome({
+              await applyJobOutcome({
                 ...txCtx,
                 continueWith: {
                   typeName: job.input.value % 2 === 0 ? "branch1" : "branch2",
@@ -406,22 +403,22 @@ describe("continueWith", () => {
         jobTypes,
         processors: {
           main: {
-            attemptHandler: async ({ job, applyOutcome }) => {
+            attemptHandler: async ({ job, applyJobOutcome }) => {
               expectTypeOf<
                 Extract<
-                  Parameters<typeof applyOutcome>[0],
+                  Parameters<typeof applyJobOutcome>[0],
                   { continueWith: unknown }
                 >["continueWith"]["typeName"]
               >().toEqualTypeOf<"branch1" | "branch2">();
 
               const badInput = { valueBranched2: job.input.value };
-              void applyOutcome({
+              void applyJobOutcome({
                 ...txCtx,
                 // @ts-expect-error typeName/input mismatch must be rejected
                 continueWith: { typeName: "branch1", input: badInput },
               });
 
-              return applyOutcome({
+              await applyJobOutcome({
                 ...txCtx,
                 continueWith: {
                   typeName: "branch1",
@@ -475,20 +472,20 @@ describe("continueWith", () => {
         jobTypes,
         processors: {
           loop: {
-            attemptHandler: async ({ job, applyOutcome }) => {
+            attemptHandler: async ({ job, applyJobOutcome }) => {
               expectTypeOf<
                 Extract<
-                  Parameters<typeof applyOutcome>[0],
+                  Parameters<typeof applyJobOutcome>[0],
                   { continueWith: unknown }
                 >["continueWith"]["typeName"]
               >().toEqualTypeOf<"loop">();
 
-              return job.input.counter < 3
-                ? applyOutcome({
+              await (job.input.counter < 3
+                ? applyJobOutcome({
                     ...txCtx,
                     continueWith: { typeName: "loop", input: { counter: job.input.counter + 1 } },
                   })
-                : applyOutcome({ ...txCtx, output: { done: true } });
+                : applyJobOutcome({ ...txCtx, output: { done: true } }));
             },
           },
         },
@@ -525,30 +522,30 @@ describe("continueWith", () => {
         jobTypes,
         processors: {
           start: {
-            attemptHandler: async ({ job, applyOutcome }) => {
+            attemptHandler: async ({ job, applyJobOutcome }) => {
               expectTypeOf<
                 Extract<
-                  Parameters<typeof applyOutcome>[0],
+                  Parameters<typeof applyJobOutcome>[0],
                   { continueWith: unknown }
                 >["continueWith"]["typeName"]
               >().toEqualTypeOf<"end">();
 
-              return applyOutcome({
+              await applyJobOutcome({
                 ...txCtx,
                 continueWith: { typeName: "end", input: { result: job.input.value + 1 } },
               });
             },
           },
           end: {
-            attemptHandler: async ({ job, applyOutcome }) => {
+            attemptHandler: async ({ job, applyJobOutcome }) => {
               expectTypeOf<
                 Extract<
-                  Parameters<typeof applyOutcome>[0],
+                  Parameters<typeof applyJobOutcome>[0],
                   { continueWith: unknown }
                 >["continueWith"]["typeName"]
               >().toEqualTypeOf<"start">();
 
-              return applyOutcome({ ...txCtx, output: { finalResult: job.input.result } });
+              await applyJobOutcome({ ...txCtx, output: { finalResult: job.input.result } });
             },
           },
         },

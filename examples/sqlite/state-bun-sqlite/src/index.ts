@@ -62,7 +62,7 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           const user = db
             .query<{ id: number; name: string; email: string }, [number]>(
               "SELECT id, name, email FROM users WHERE id = ?",
@@ -73,9 +73,9 @@ await using workerRunner = createWorkerRunner({
           // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          return withTxHooks((txHooks) =>
+          withTxHooks((txHooks) =>
             db.transaction(() =>
-              applyOutcome({ db, txHooks, output: { sentAt: new Date().toISOString() } }),
+              applyJobOutcome({ db, txHooks, output: { sentAt: new Date().toISOString() } }),
             )(),
           );
         },

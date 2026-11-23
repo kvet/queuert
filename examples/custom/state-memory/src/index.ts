@@ -34,10 +34,10 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       resize_image: {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           console.log(`Resizing image ${job.input.imageId}`);
-          return stateAdapter.withTransaction(async (txCtx) =>
-            applyOutcome({
+          await stateAdapter.withTransaction(async (txCtx) =>
+            applyJobOutcome({
               ...txCtx,
               continueWith: {
                 typeName: "publish_image",
@@ -48,10 +48,10 @@ await using workerRunner = createWorkerRunner({
         },
       },
       publish_image: {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           console.log(`Publishing image ${job.input.imageId} at ${job.input.width}px`);
-          return stateAdapter.withTransaction(async (txCtx) =>
-            applyOutcome({
+          await stateAdapter.withTransaction(async (txCtx) =>
+            applyJobOutcome({
               ...txCtx,
               output: {
                 url: `https://cdn.example.com/${job.input.imageId}-${job.input.width}.jpg`,

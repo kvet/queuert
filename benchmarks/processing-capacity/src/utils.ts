@@ -110,16 +110,15 @@ const completeChainsForWindow =
         jobTypes,
         processors: {
           "test-job": {
-            attemptHandler: async ({ applyOutcome }) => {
+            attemptHandler: async ({ applyJobOutcome }) => {
               const startedAt = (begin ??= performance.now());
-              // oxlint-disable-next-line typescript/promise-function-async -- a sync client's applyOutcome returns a plain value
-              const result = await transaction((txCtx, txHooks) =>
-                applyOutcome({ ...txCtx, txHooks, output: { done: true } }),
+              // oxlint-disable-next-line typescript/promise-function-async -- a sync client's applyJobOutcome returns a plain value
+              await transaction((txCtx, txHooks) =>
+                applyJobOutcome({ ...txCtx, txHooks, output: { done: true } }),
               );
               completed++;
               const now = performance.now();
               if (completed === SEED_COUNT || now - startedAt >= WINDOW_MS) finish(now);
-              return result;
             },
           },
         },

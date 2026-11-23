@@ -45,10 +45,11 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
         attemptMiddleware: [authMiddleware, traceMiddleware],
         processors: {
           foo: {
-            attemptHandler: async ({ applyOutcome }) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                applyOutcome({ ...txCtx, output: null }),
-              ),
+            attemptHandler: async ({ applyJobOutcome }) => {
+              await stateAdapter.withTransaction(async (txCtx) =>
+                applyJobOutcome({ ...txCtx, output: null }),
+              );
+            },
           },
         },
       }),
@@ -71,10 +72,11 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
         attemptMiddleware: [metricsMiddleware, authMiddleware, traceMiddleware],
         processors: {
           foo: {
-            attemptHandler: async ({ applyOutcome }) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                applyOutcome({ ...txCtx, output: null }),
-              ),
+            attemptHandler: async ({ applyJobOutcome }) => {
+              await stateAdapter.withTransaction(async (txCtx) =>
+                applyJobOutcome({ ...txCtx, output: null }),
+              );
+            },
           },
         },
       }),
@@ -100,10 +102,11 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
           attemptMiddleware: [authMiddleware],
           processors: {
             foo: {
-              attemptHandler: async ({ applyOutcome }) =>
-                stateAdapter.withTransaction(async (txCtx) =>
-                  applyOutcome({ ...txCtx, output: null }),
-                ),
+              attemptHandler: async ({ applyJobOutcome }) => {
+                await stateAdapter.withTransaction(async (txCtx) =>
+                  applyJobOutcome({ ...txCtx, output: null }),
+                );
+              },
             },
           },
         }),
@@ -128,10 +131,11 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
           attemptMiddleware: [traceMiddleware, authMiddleware],
           processors: {
             foo: {
-              attemptHandler: async ({ applyOutcome }) =>
-                stateAdapter.withTransaction(async (txCtx) =>
-                  applyOutcome({ ...txCtx, output: null }),
-                ),
+              attemptHandler: async ({ applyJobOutcome }) => {
+                await stateAdapter.withTransaction(async (txCtx) =>
+                  applyJobOutcome({ ...txCtx, output: null }),
+                );
+              },
             },
           },
         }),
@@ -161,10 +165,11 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
           attemptMiddleware: [lookalike],
           processors: {
             foo: {
-              attemptHandler: async ({ applyOutcome }) =>
-                stateAdapter.withTransaction(async (txCtx) =>
-                  applyOutcome({ ...txCtx, output: null }),
-                ),
+              attemptHandler: async ({ applyJobOutcome }) => {
+                await stateAdapter.withTransaction(async (txCtx) =>
+                  applyJobOutcome({ ...txCtx, output: null }),
+                );
+              },
             },
           },
         }),
@@ -187,8 +192,11 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
       attemptMiddleware: [authMiddleware],
       processors: {
         foo: {
-          attemptHandler: async ({ applyOutcome }) =>
-            stateAdapter.withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null })),
+          attemptHandler: async ({ applyJobOutcome }) => {
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: null }),
+            );
+          },
         },
       },
     });
@@ -198,8 +206,11 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
       jobTypes: barJobTypes,
       processors: {
         bar: {
-          attemptHandler: async ({ applyOutcome }) =>
-            stateAdapter.withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null })),
+          attemptHandler: async ({ applyJobOutcome }) => {
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: null }),
+            );
+          },
         },
       },
     });
@@ -232,10 +243,11 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
         attemptMiddleware: [mw],
         processors: {
           foo: {
-            attemptHandler: async ({ applyOutcome }) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                applyOutcome({ ...txCtx, output: null }),
-              ),
+            attemptHandler: async ({ applyJobOutcome }) => {
+              await stateAdapter.withTransaction(async (txCtx) =>
+                applyJobOutcome({ ...txCtx, output: null }),
+              );
+            },
           },
         },
       }),
@@ -269,10 +281,11 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
           attemptMiddleware: [other],
           processors: {
             foo: {
-              attemptHandler: async ({ applyOutcome }) =>
-                stateAdapter.withTransaction(async (txCtx) =>
-                  applyOutcome({ ...txCtx, output: null }),
-                ),
+              attemptHandler: async ({ applyJobOutcome }) => {
+                await stateAdapter.withTransaction(async (txCtx) =>
+                  applyJobOutcome({ ...txCtx, output: null }),
+                );
+              },
             },
           },
         }),
@@ -292,10 +305,11 @@ describe("createWorkerRunner requiredAttemptMiddleware", () => {
         jobTypes,
         processors: {
           foo: {
-            attemptHandler: async ({ applyOutcome }) =>
-              stateAdapter.withTransaction(async (txCtx) =>
-                applyOutcome({ ...txCtx, output: null }),
-              ),
+            attemptHandler: async ({ applyJobOutcome }) => {
+              await stateAdapter.withTransaction(async (txCtx) =>
+                applyJobOutcome({ ...txCtx, output: null }),
+              );
+            },
           },
         },
       }),

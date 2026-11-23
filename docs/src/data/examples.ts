@@ -172,7 +172,7 @@ export const examples: Example[] = [
     name: "sqlite/state-kysely",
     label: "Kysely",
     description:
-      "SQLite state storage via @queuert/sqlite with Kysely — job creation and completion inside application transactions. Kysely's better-sqlite3 dialect uses a size-1 connection pool that already serializes writers, so no external lock is needed, for client calls or for the transaction a handler passes to applyOutcome.",
+      "SQLite state storage via @queuert/sqlite with Kysely — job creation and completion inside application transactions. Kysely's better-sqlite3 dialect uses a size-1 connection pool that already serializes writers, so no external lock is needed, for client calls or for the transaction a handler passes to applyJobOutcome.",
     runtime: "Node.js",
     services: [],
     files: stateProviderFiles,
@@ -192,7 +192,7 @@ export const examples: Example[] = [
     name: "sqlite/state-prisma",
     label: "Prisma",
     description:
-      "SQLite state storage via @queuert/sqlite with Prisma ORM — job creation and completion inside application transactions, with createAsyncRwLock() for write serialization: the handler holds the same lock around the transaction it passes to applyOutcome.",
+      "SQLite state storage via @queuert/sqlite with Prisma ORM — job creation and completion inside application transactions, with createAsyncRwLock() for write serialization: the handler holds the same lock around the transaction it passes to applyJobOutcome.",
     runtime: "Node.js",
     services: [],
     files: ["src/provider.ts", "src/index.ts", "src/migrations.ts", "prisma/schema.prisma"],
@@ -202,7 +202,7 @@ export const examples: Example[] = [
     name: "sqlite/state-knex",
     label: "Knex",
     description:
-      "SQLite state storage via @queuert/sqlite with Knex — job creation and completion inside application transactions. Knex's better-sqlite3 dialect uses a size-1 connection pool that already serializes writers, so no external lock is needed, for client calls or for the transaction a handler passes to applyOutcome.",
+      "SQLite state storage via @queuert/sqlite with Knex — job creation and completion inside application transactions. Knex's better-sqlite3 dialect uses a size-1 connection pool that already serializes writers, so no external lock is needed, for client calls or for the transaction a handler passes to applyJobOutcome.",
     runtime: "Node.js",
     services: [],
     files: stateProviderFiles,
@@ -222,7 +222,7 @@ export const examples: Example[] = [
     name: "sqlite/state-bun-sql",
     label: "Bun.SQL",
     description:
-      "SQLite state storage via @queuert/sqlite using Bun's built-in SQL client in its sqlite:// mode — no external SQLite dependencies. The handler holds the provider's createAsyncRwLock() write lock around the transaction it passes to applyOutcome.",
+      "SQLite state storage via @queuert/sqlite using Bun's built-in SQL client in its sqlite:// mode — no external SQLite dependencies. The handler holds the provider's createAsyncRwLock() write lock around the transaction it passes to applyJobOutcome.",
     runtime: "Bun",
     services: [],
     files: stateProviderFiles,

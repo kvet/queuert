@@ -39,25 +39,28 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       "reserve-stock": {
-        attemptHandler: async ({ applyOutcome }) =>
-          stateAdapter.withTransaction(async (txCtx) =>
-            applyOutcome({ ...txCtx, output: { reserved: true } }),
-          ),
+        attemptHandler: async ({ applyJobOutcome }) => {
+          await stateAdapter.withTransaction(async (txCtx) =>
+            applyJobOutcome({ ...txCtx, output: { reserved: true } }),
+          );
+        },
       },
       "process-order": {
-        attemptHandler: async ({ job, applyOutcome }) =>
-          stateAdapter.withTransaction(async (txCtx) =>
-            applyOutcome({
+        attemptHandler: async ({ job, applyJobOutcome }) => {
+          await stateAdapter.withTransaction(async (txCtx) =>
+            applyJobOutcome({
               ...txCtx,
               continueWith: { typeName: "ship-order", input: { orderId: job.input.orderId } },
             }),
-          ),
+          );
+        },
       },
       "ship-order": {
-        attemptHandler: async ({ job, applyOutcome }) =>
-          stateAdapter.withTransaction(async (txCtx) =>
-            applyOutcome({ ...txCtx, output: { trackingNumber: `track-${job.input.orderId}` } }),
-          ),
+        attemptHandler: async ({ job, applyJobOutcome }) => {
+          await stateAdapter.withTransaction(async (txCtx) =>
+            applyJobOutcome({ ...txCtx, output: { trackingNumber: `track-${job.input.orderId}` } }),
+          );
+        },
       },
     },
   }),

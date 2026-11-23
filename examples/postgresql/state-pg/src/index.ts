@@ -68,7 +68,7 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           const { rows } = await db.query<{ id: number; name: string; email: string }>(
             "SELECT id, name, email FROM users WHERE id = $1",
             [job.input.userId],
@@ -79,17 +79,16 @@ await using workerRunner = createWorkerRunner({
           // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          return withTxHooks(async (txHooks) => {
+          await withTxHooks(async (txHooks) => {
             const poolClient = await db.connect();
             try {
               await poolClient.query("BEGIN");
-              const result = await applyOutcome({
+              await applyJobOutcome({
                 poolClient,
                 txHooks,
                 output: { sentAt: new Date().toISOString() },
               });
               await poolClient.query("COMMIT");
-              return result;
             } catch (error) {
               await poolClient.query("ROLLBACK").catch(() => {});
               throw error;

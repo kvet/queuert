@@ -142,10 +142,10 @@ const Page = () => (
     </p>
     <p>
       In Queuert the handler opens its transaction with your database client and calls{" "}
-      <code>applyOutcome</code> inside it, so the domain writes, the job's completion, and the next
-      step's <code>continueWith</code> commit together; <code>applyOutcome</code> writes only if
-      this attempt still owns the job. For DB-bound work, the second run never sees a half-committed
-      first one.
+      <code>applyJobOutcome</code> inside it, so the domain writes, the job's completion, and the
+      next step's <code>continueWith</code> commit together; <code>applyJobOutcome</code> writes
+      only if this attempt still owns the job. For DB-bound work, the second run never sees a
+      half-committed first one.
     </p>
     <h2>Choosing between them</h2>
     <p>

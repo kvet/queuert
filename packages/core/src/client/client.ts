@@ -279,9 +279,10 @@ export type Client<
   ) => ModeResult<TMode, CreateChainsResult<TJobId, TJobTypeDefinitions, TChains>>;
 
   /**
-   * Delete a single chain by ID. Returns the deleted chain, or `undefined` if no
-   * chain with that ID exists. A running job's `applyOutcome` throws {@link JobNotFoundError}, and
-   * its attempt is notified as lost, so with a notify adapter its handler's `signal` aborts.
+   * Delete a single chain by ID. Returns the deleted chain, or `undefined` if no chain with that ID
+   * exists. The `applyJobOutcome` of a running job's attempt handler throws
+   * {@link JobNotFoundError}, and its attempt is notified as lost, so with a notify adapter its
+   * `job.signal` aborts.
    *
    * @throws {@link BlockerReferenceError} if external jobs depend on it.
    */
@@ -295,9 +296,9 @@ export type Client<
   ) => ModeResult<TMode, ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName> | undefined>;
 
   /**
-   * Delete chains by ID. Missing IDs are silently skipped. A running job's `applyOutcome` throws
-   * {@link JobNotFoundError}, and its attempt is notified as lost, so with a notify adapter its
-   * handler's `signal` aborts.
+   * Delete chains by ID. Missing IDs are silently skipped. The `applyJobOutcome` of a running job's
+   * attempt handler throws {@link JobNotFoundError}, and its attempt is notified as lost, so with a
+   * notify adapter its `job.signal` aborts.
    *
    * @throws {@link BlockerReferenceError} if external jobs depend on them.
    */
@@ -311,7 +312,7 @@ export type Client<
   ) => ModeResult<TMode, ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName>[]>;
 
   /**
-   * Apply one outcome to a job, the same outcomes an attempt handler's `applyOutcome` takes:
+   * Apply one outcome to a job, the same outcomes an attempt handler's `applyJobOutcome` takes:
    * `output` completes the job and its chain, `continueWith` completes the job and continues the
    * chain, and `reschedule` brings the job back later. `job` is `{ id, typeName? }` or a job read
    * earlier; with `output` or `continueWith` its `typeName` must name a single job type.
@@ -321,7 +322,7 @@ export type Client<
    * `continueWith` complete a blocked, pending or running job. `reschedule` sets `scheduledAt` on a
    * pending job, moves it on a blocked one, which stays blocked, and returns a running one to
    * pending; `reason` is stored as `lastRescheduleReason`. A running job's attempt is lost either
-   * way: its `applyOutcome` throws {@link JobAlreadyCompletedError} after `output` or
+   * way: its handler's `applyJobOutcome` throws {@link JobAlreadyCompletedError} after `output` or
    * `continueWith`, and {@link JobTakenByAnotherWorkerError} after `reschedule`. To leave running
    * jobs alone, read with `lock: "exclusive"` and check `status` first.
    *

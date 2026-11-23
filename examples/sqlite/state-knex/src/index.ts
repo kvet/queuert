@@ -72,7 +72,7 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       send_welcome_email: {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           const user = await knex<{ id: number; name: string; email: string }>("users")
             .where({ id: job.input.userId })
             .first();
@@ -83,10 +83,10 @@ await using workerRunner = createWorkerRunner({
 
           // Knex holds its single SQLite connection for the whole transaction, so the
           // worker's own statements cannot run inside it.
-          return withTxHooks(async (txHooks) =>
+          await withTxHooks(async (txHooks) =>
             knex.transaction(
               async (trx) =>
-                applyOutcome({ trx, txHooks, output: { sentAt: new Date().toISOString() } }),
+                applyJobOutcome({ trx, txHooks, output: { sentAt: new Date().toISOString() } }),
               { doNotRejectOnRollback: false },
             ),
           );

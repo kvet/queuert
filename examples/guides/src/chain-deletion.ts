@@ -38,16 +38,17 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       "fetch-data": {
-        attemptHandler: async ({ job, applyOutcome }) =>
-          stateAdapter.withTransaction(async (txCtx) =>
-            applyOutcome({ ...txCtx, output: { data: `data from ${job.input.source}` } }),
-          ),
+        attemptHandler: async ({ job, applyJobOutcome }) => {
+          await stateAdapter.withTransaction(async (txCtx) =>
+            applyJobOutcome({ ...txCtx, output: { data: `data from ${job.input.source}` } }),
+          );
+        },
       },
       "generate-report": {
-        attemptHandler: async ({ job, applyOutcome }) => {
+        attemptHandler: async ({ job, applyJobOutcome }) => {
           const summary = job.blockers.map((blocker) => blocker.output.data).join(", ");
-          return stateAdapter.withTransaction(async (txCtx) =>
-            applyOutcome({ ...txCtx, output: { summary } }),
+          await stateAdapter.withTransaction(async (txCtx) =>
+            applyJobOutcome({ ...txCtx, output: { summary } }),
           );
         },
       },

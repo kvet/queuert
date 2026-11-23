@@ -19,20 +19,21 @@ const stateAdapter = createInProcessStateAdapter({ mode: "async" });
 const client = createClient({ stateAdapter, jobTypes });
 
 describe("middleware ctx cannot shadow built-in handler keys", () => {
-  it("handler built-ins (signal, job, applyOutcome) win over middleware-injected ctx", async () => {
+  it("handler built-ins (job, applyJobOutcome, fenceJob) win over middleware-injected ctx", async () => {
     const sentinel = { tampered: true };
     const tampering: AttemptMiddleware<InProcessStateAdapter<"async">> = {
       wrapHandler: async ({ next }) =>
         next({
-          signal: sentinel,
           job: sentinel,
-          applyOutcome: sentinel,
+          applyJobOutcome: sentinel,
+          fenceJob: sentinel,
         }),
     };
 
-    let observedSignalIsAbortSignal = false;
     let observedJobHasId = false;
-    let observedApplyOutcomeIsFn = false;
+    let observedJobSignalIsAbortSignal = false;
+    let observedApplyJobOutcomeIsFn = false;
+    let observedFenceJobIsFn = false;
 
     const registry = createProcessors({
       client,
@@ -40,12 +41,13 @@ describe("middleware ctx cannot shadow built-in handler keys", () => {
       attemptMiddleware: [tampering],
       processors: {
         foo: {
-          attemptHandler: async ({ signal, job, applyOutcome }) => {
-            observedSignalIsAbortSignal = typeof signal?.aborted === "boolean";
+          attemptHandler: async ({ job, applyJobOutcome, fenceJob }) => {
             observedJobHasId = typeof job?.id === "string";
-            observedApplyOutcomeIsFn = typeof applyOutcome === "function";
-            return stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { ok: true as const } }),
+            observedJobSignalIsAbortSignal = job?.signal instanceof AbortSignal;
+            observedApplyJobOutcomeIsFn = typeof applyJobOutcome === "function";
+            observedFenceJobIsFn = typeof fenceJob === "function";
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { ok: true as const } }),
             );
           },
         },
@@ -63,16 +65,16 @@ describe("middleware ctx cannot shadow built-in handler keys", () => {
     await client.awaitChain({ chain, timeoutMs: 5000, pollIntervalMs: 50 });
     await workerRunner.close();
 
-    expect(observedSignalIsAbortSignal).toBe(true);
     expect(observedJobHasId).toBe(true);
-    expect(observedApplyOutcomeIsFn).toBe(true);
+    expect(observedJobSignalIsAbortSignal).toBe(true);
+    expect(observedApplyJobOutcomeIsFn).toBe(true);
+    expect(observedFenceJobIsFn).toBe(true);
   });
 });
 
 describe("middleware ctx flows into the handler through wrapHandler", () => {
-  it("merges ctx across middleware, runs them as an onion and passes the `applyOutcome` result back out", async () => {
+  it("merges ctx across middleware and runs them as an onion around the handler", async () => {
     const events: string[] = [];
-    let outerResult: unknown;
 
     const outer: AttemptMiddleware<
       InProcessStateAdapter<"async">,
@@ -80,18 +82,15 @@ describe("middleware ctx flows into the handler through wrapHandler", () => {
     > = {
       wrapHandler: async ({ next }) => {
         events.push("outer:before");
-        const result = await next({ tenant: "acme", source: "outer" });
-        outerResult = result;
+        await next({ tenant: "acme", source: "outer" });
         events.push("outer:after");
-        return result;
       },
     };
     const inner: AttemptMiddleware<InProcessStateAdapter<"async">, { source: string }> = {
       wrapHandler: async ({ job, next }) => {
         events.push(`inner:before:${job.typeName}`);
-        const result = await next({ source: "inner" });
+        await next({ source: "inner" });
         events.push("inner:after");
-        return result;
       },
     };
 
@@ -103,11 +102,11 @@ describe("middleware ctx flows into the handler through wrapHandler", () => {
       attemptMiddleware: [outer, inner],
       processors: {
         foo: {
-          attemptHandler: async ({ tenant, source, applyOutcome }) => {
+          attemptHandler: async ({ tenant, source, applyJobOutcome }) => {
             events.push("handler");
             observedCtx = { tenant, source };
-            return stateAdapter.withTransaction(async (txCtx) =>
-              applyOutcome({ ...txCtx, output: { ok: true as const } }),
+            await stateAdapter.withTransaction(async (txCtx) =>
+              applyJobOutcome({ ...txCtx, output: { ok: true as const } }),
             );
           },
         },
@@ -133,11 +132,6 @@ describe("middleware ctx flows into the handler through wrapHandler", () => {
       "outer:after",
     ]);
     expect(observedCtx).toEqual({ tenant: "acme", source: "inner" });
-    expect(outerResult).toMatchObject({
-      id: chain.id,
-      status: "completed",
-      output: { ok: true },
-    });
   });
 });
 
@@ -175,8 +169,9 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
       attemptMiddleware: [wrapA],
       processors: {
         a: {
-          attemptHandler: async ({ applyOutcome }) =>
-            sa.withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null })),
+          attemptHandler: async ({ applyJobOutcome }) => {
+            await sa.withTransaction(async (txCtx) => applyJobOutcome({ ...txCtx, output: null }));
+          },
         },
       },
     });
@@ -186,8 +181,9 @@ describe("registry-level attemptMiddleware — runtime per-slice isolation", () 
       attemptMiddleware: [wrapB],
       processors: {
         b: {
-          attemptHandler: async ({ applyOutcome }) =>
-            sa.withTransaction(async (txCtx) => applyOutcome({ ...txCtx, output: null })),
+          attemptHandler: async ({ applyJobOutcome }) => {
+            await sa.withTransaction(async (txCtx) => applyJobOutcome({ ...txCtx, output: null }));
+          },
         },
       },
     });

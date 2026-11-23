@@ -239,8 +239,8 @@ const Page = () => (
       follow the state adapter's mode, so the client built over it is synchronous.
     </p>
     <p>
-      That client's state-touching methods, such as <code>applyJobOutcome</code>, and the attempt
-      handler's <code>applyOutcome</code> and <code>fence</code> return plain values and throw
+      That client's state-touching methods, such as <code>createChain</code>, and the attempt
+      handler's <code>applyJobOutcome</code> and <code>fenceJob</code> return plain values and throw
       synchronously, so they run inside the driver's own transaction, such as{" "}
       <code>db.transaction(() =&gt; …)()</code>, and an error rolls it back. The provider's{" "}
       <code>onTransactionCommit</code> and <code>onTransactionRollback</code> are synchronous too; a
@@ -363,11 +363,11 @@ const Page = () => (
 
     <h2>Your transactions</h2>
     <p>
-      With a synchronous provider, call the client and <code>applyOutcome</code> inside the driver's
-      own transaction, wrapped in <code>withTxHooks</code>, and pass its <code>txHooks</code> in the
-      context. With an async provider, transactions you pass to <code>applyOutcome</code> or to
-      client methods must be serialized with the worker's own statements the way the provider's{" "}
-      <code>withTransaction</code> is, for example by holding its{" "}
+      With a synchronous provider, call the client and a handler's <code>applyJobOutcome</code>{" "}
+      inside the driver's own transaction, wrapped in <code>withTxHooks</code>, and pass its{" "}
+      <code>txHooks</code> in the context. With an async provider, transactions you pass to{" "}
+      <code>applyJobOutcome</code> or to client methods must be serialized with the worker's own
+      statements the way the provider's <code>withTransaction</code> is, for example by holding its{" "}
       <a href="#asyncrwlock">AsyncRwLock</a> write lock. They also supply the <code>txHooks</code>{" "}
       field the provider's context requires, created with <code>withTxHooks</code> around the
       transaction. The MikroORM provider takes them from MikroORM's transaction events and its

@@ -63,11 +63,9 @@ test("round-trips a Date through the worker and back out of a client read", asyn
       jobTypes,
       processors: {
         remind: {
-          attemptHandler: async ({ job, applyOutcome }) => {
+          attemptHandler: async ({ job, applyJobOutcome }) => {
             expect(job.input.sendAt).toBeInstanceOf(Date);
-            return stateAdapter.withTransaction((ctx) =>
-              applyOutcome({ ...ctx, output: { sentAt } }),
-            );
+            stateAdapter.withTransaction((ctx) => applyJobOutcome({ ...ctx, output: { sentAt } }));
           },
         },
       },

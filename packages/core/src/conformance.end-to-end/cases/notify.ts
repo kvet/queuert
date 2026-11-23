@@ -39,10 +39,10 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, applyOutcome }) => {
+                  attemptHandler: async ({ job, applyJobOutcome }) => {
                     await sleep(50);
-                    return stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: { result: job.input.value } }),
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: { result: job.input.value } }),
                     );
                   },
                 },
@@ -85,10 +85,10 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, applyOutcome }) => {
+                  attemptHandler: async ({ job, applyJobOutcome }) => {
                     await sleep(50);
-                    return stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: { result: job.input.value } }),
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: { result: job.input.value } }),
                     );
                   },
                 },
@@ -147,10 +147,10 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ applyOutcome }) => {
+                  attemptHandler: async ({ applyJobOutcome }) => {
                     await sleep(25);
-                    return stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: { allowed: true } }),
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: { allowed: true } }),
                     );
                   },
                 },
@@ -167,10 +167,10 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               jobTypes,
               processors: {
                 main: {
-                  attemptHandler: async ({ applyOutcome }) => {
+                  attemptHandler: async ({ applyJobOutcome }) => {
                     await sleep(25);
-                    return stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: { done: true } }),
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: { done: true } }),
                     );
                   },
                 },
@@ -234,10 +234,10 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               jobTypes,
               processors: {
                 step1: {
-                  attemptHandler: async ({ applyOutcome }) => {
+                  attemptHandler: async ({ applyJobOutcome }) => {
                     await sleep(25);
-                    return stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({
                         ...txCtx,
                         continueWith: { typeName: "step2", input: null },
                       }),
@@ -257,10 +257,10 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               jobTypes,
               processors: {
                 step2: {
-                  attemptHandler: async ({ applyOutcome }) => {
+                  attemptHandler: async ({ applyJobOutcome }) => {
                     await sleep(25);
-                    return stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: { finished: true } }),
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: { finished: true } }),
                     );
                   },
                 },
@@ -308,11 +308,11 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ signal }) => {
+                  attemptHandler: async ({ job }) => {
                     jobStarted.resolve();
 
-                    await sleep(1000, { signal });
-                    assert.equal(signal.aborted, true);
+                    await sleep(1000, { signal: job.signal });
+                    assert.equal(job.signal.aborted, true);
                     jobCompleted.resolve();
 
                     throw new Error();
@@ -387,20 +387,21 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ signal, job, applyOutcome }) => {
+                  attemptHandler: async ({ job, applyJobOutcome }) => {
                     if (job.attempt > 1) {
                       await jobCompleted.promise;
                       await sleep(10);
 
-                      return stateAdapter.withTransaction((txCtx) =>
-                        applyOutcome({ ...txCtx, output: { result: "recovered" } }),
+                      await stateAdapter.withTransaction((txCtx) =>
+                        applyJobOutcome({ ...txCtx, output: { result: "recovered" } }),
                       );
+                      return;
                     }
 
                     jobStarted.resolve();
 
-                    await sleep(2000, { signal });
-                    assert.equal(signal.aborted, true);
+                    await sleep(2000, { signal: job.signal });
+                    assert.equal(job.signal.aborted, true);
                     jobCompleted.resolve();
 
                     throw new Error();
@@ -450,15 +451,15 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
           jobTypes,
           processors: {
             test: {
-              attemptHandler: async ({ job, applyOutcome }) => {
+              attemptHandler: async ({ job, applyJobOutcome }) => {
                 if (job.attempt === 1) {
                   firstAttemptStarted.resolve();
                   await gate.promise;
                   throw new Error("first attempt fails");
                 }
 
-                return stateAdapter.withTransaction((txCtx) =>
-                  applyOutcome({ ...txCtx, output: { result: "retried" } }),
+                await stateAdapter.withTransaction((txCtx) =>
+                  applyJobOutcome({ ...txCtx, output: { result: "retried" } }),
                 );
               },
               backoffConfig: { initialDelayMs: 10, multiplier: 1, maxDelayMs: 10 },
@@ -589,10 +590,11 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
+                    );
+                  },
                 },
               },
             }),
@@ -660,8 +662,8 @@ export const notifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ signal }) => {
-                    await sleep(Number.POSITIVE_INFINITY, { signal });
+                  attemptHandler: async ({ job }) => {
+                    await sleep(Number.POSITIVE_INFINITY, { signal: job.signal });
                     throw new Error("crashed");
                   },
                 },

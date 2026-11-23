@@ -179,19 +179,19 @@ export const populateScenarios = async ({
       jobTypes,
       processors: {
         greet: {
-          attemptHandler: async ({ job, applyOutcome }) => {
+          attemptHandler: async ({ job, applyJobOutcome }) => {
             await sleep(20);
-            return transaction((ctx) =>
-              applyOutcome({ ...ctx, output: { greeting: `Hello, ${job.input.name}!` } }),
+            transaction((ctx) =>
+              applyJobOutcome({ ...ctx, output: { greeting: `Hello, ${job.input.name}!` } }),
             );
           },
         },
 
         "order:validate": {
-          attemptHandler: async ({ job, applyOutcome }) => {
+          attemptHandler: async ({ job, applyJobOutcome }) => {
             await sleep(50);
-            return transaction((ctx) =>
-              applyOutcome({
+            transaction((ctx) =>
+              applyJobOutcome({
                 ...ctx,
                 continueWith: {
                   typeName: "order:process",
@@ -202,10 +202,10 @@ export const populateScenarios = async ({
           },
         },
         "order:process": {
-          attemptHandler: async ({ job, applyOutcome }) => {
+          attemptHandler: async ({ job, applyJobOutcome }) => {
             await sleep(100);
-            return transaction((ctx) =>
-              applyOutcome({
+            transaction((ctx) =>
+              applyJobOutcome({
                 ...ctx,
                 continueWith: {
                   typeName: "order:complete",
@@ -216,27 +216,30 @@ export const populateScenarios = async ({
           },
         },
         "order:complete": {
-          attemptHandler: async ({ job, applyOutcome }) => {
+          attemptHandler: async ({ job, applyJobOutcome }) => {
             await sleep(30);
-            return transaction((ctx) =>
-              applyOutcome({ ...ctx, output: { orderId: job.input.orderId, status: "completed" } }),
+            transaction((ctx) =>
+              applyJobOutcome({
+                ...ctx,
+                output: { orderId: job.input.orderId, status: "completed" },
+              }),
             );
           },
         },
 
         "fetch-user": {
-          attemptHandler: async ({ job, applyOutcome }) => {
+          attemptHandler: async ({ job, applyJobOutcome }) => {
             await sleep(80);
-            return transaction((ctx) =>
-              applyOutcome({ ...ctx, output: { userId: job.input.userId, name: "Alice" } }),
+            transaction((ctx) =>
+              applyJobOutcome({ ...ctx, output: { userId: job.input.userId, name: "Alice" } }),
             );
           },
         },
         "fetch-permissions": {
-          attemptHandler: async ({ job, applyOutcome }) => {
+          attemptHandler: async ({ job, applyJobOutcome }) => {
             await sleep(60);
-            return transaction((ctx) =>
-              applyOutcome({
+            transaction((ctx) =>
+              applyJobOutcome({
                 ...ctx,
                 output: { userId: job.input.userId, permissions: ["read", "write"] },
               }),
@@ -244,11 +247,11 @@ export const populateScenarios = async ({
           },
         },
         "process-with-blockers": {
-          attemptHandler: async ({ job, applyOutcome }) => {
+          attemptHandler: async ({ job, applyJobOutcome }) => {
             const [userBlocker, permBlocker] = job.blockers;
             await sleep(40);
-            return transaction((ctx) =>
-              applyOutcome({
+            transaction((ctx) =>
+              applyJobOutcome({
                 ...ctx,
                 output: {
                   taskId: job.input.taskId,
@@ -260,49 +263,52 @@ export const populateScenarios = async ({
         },
 
         "might-fail": {
-          attemptHandler: async ({ job, applyOutcome }) => {
+          attemptHandler: async ({ job, applyJobOutcome }) => {
             if (job.input.shouldFail && job.attempt < 2) {
               throw new Error("Simulated failure");
             }
-            return transaction((ctx) => applyOutcome({ ...ctx, output: { success: true } }));
+            transaction((ctx) => applyJobOutcome({ ...ctx, output: { success: true } }));
           },
           backoffConfig: { initialDelayMs: 100, maxDelayMs: 100 },
         },
 
         "scheduled-report": {
-          attemptHandler: async ({ applyOutcome }) => {
+          attemptHandler: async ({ applyJobOutcome }) => {
             await sleep(50);
-            return transaction((ctx) =>
-              applyOutcome({ ...ctx, output: { generatedAt: new Date().toISOString() } }),
+            transaction((ctx) =>
+              applyJobOutcome({ ...ctx, output: { generatedAt: new Date().toISOString() } }),
             );
           },
         },
 
         "count-step": {
-          attemptHandler: async ({ job, applyOutcome }) =>
+          attemptHandler: async ({ job, applyJobOutcome }) => {
             transaction((ctx) =>
               job.input.n >= job.input.total
-                ? applyOutcome({ ...ctx, output: { total: job.input.total } })
-                : applyOutcome({
+                ? applyJobOutcome({ ...ctx, output: { total: job.input.total } })
+                : applyJobOutcome({
                     ...ctx,
                     continueWith: {
                       typeName: "count-step",
                       input: { n: job.input.n + 1, total: job.input.total },
                     },
                   }),
-            ),
+            );
+          },
         },
 
         signal: {
-          attemptHandler: async ({ applyOutcome }) =>
-            transaction((ctx) => applyOutcome({ ...ctx, output: { fired: true } })),
+          attemptHandler: async ({ applyJobOutcome }) => {
+            transaction((ctx) => applyJobOutcome({ ...ctx, output: { fired: true } }));
+          },
         },
 
         "blocked-task": {
-          attemptHandler: async ({ job, applyOutcome }) =>
+          attemptHandler: async ({ job, applyJobOutcome }) => {
             transaction((ctx) =>
-              applyOutcome({ ...ctx, output: { index: job.input.index, done: true } }),
-            ),
+              applyJobOutcome({ ...ctx, output: { index: job.input.index, done: true } }),
+            );
+          },
         },
 
         "sync-to-crm": {
@@ -313,14 +319,15 @@ export const populateScenarios = async ({
         },
 
         "render-invoice-pdf": {
-          attemptHandler: async ({ applyOutcome }) =>
+          attemptHandler: async ({ applyJobOutcome }) => {
             transaction((ctx) =>
-              applyOutcome({
+              applyJobOutcome({
                 ...ctx,
                 reschedule: { afterMs: HOUR_MS },
                 reason: "Renderer at capacity",
               }),
-            ),
+            );
+          },
         },
       },
     }),

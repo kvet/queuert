@@ -59,7 +59,7 @@ For explicit control over when the next attempt runs, see [Rescheduling from a H
 
 ## lastAttemptError
 
-When the last attempt failed, `job.lastAttemptError` contains its serialized error and `job.consecutiveFailures` is above 0. It is `null` on the first attempt and after an attempt that ended without failing, such as `applyOutcome({ reschedule })`. A client `applyJobOutcome` with `reschedule` runs no attempt, so it leaves the error in place. The handler above records each error; use it for logging or to adjust how the next attempt behaves. When the previous attempt was reclaimed because its worker lost its lease, stopped, or no longer ran it, it holds a serialized `JobAttemptReclaimedError`.
+When the last attempt failed, `job.lastAttemptError` contains its serialized error and `job.consecutiveFailures` is above 0. It is `null` on the first attempt and after an attempt that ended without failing, such as a handler's `applyJobOutcome({ reschedule })`. The client's `applyJobOutcome` with `reschedule` runs no attempt, so it leaves the error in place. The handler above records each error; use it for logging or to adjust how the next attempt behaves. When the previous attempt was reclaimed because its worker lost its lease, stopped, or no longer ran it, it holds a serialized `JobAttemptReclaimedError`.
 
 | Thrown value   | Stored as                                                                   |
 | -------------- | --------------------------------------------------------------------------- |
@@ -69,4 +69,4 @@ When the last attempt failed, `job.lastAttemptError` contains its serialized err
 
 Values are truncated to 10,000 characters.
 
-See [examples/guides/src/error-handling.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/error-handling.ts) for the runnable code. See also [Job Processing Reliability](../../how-it-works/processing-reliability/) for engine-level safety guarantees such as the token-guarded `applyOutcome` and automatic reschedule, and [Timeouts](../timeouts/).
+See [examples/guides/src/error-handling.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/error-handling.ts) for the runnable code. See also [Job Processing Reliability](../../how-it-works/processing-reliability/) for engine-level safety guarantees such as the handler's token-guarded `applyJobOutcome` and automatic reschedule, and [Timeouts](../timeouts/).

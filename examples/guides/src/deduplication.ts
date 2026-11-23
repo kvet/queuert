@@ -70,22 +70,24 @@ await using workerRunner = createWorkerRunner({
     jobTypes,
     processors: {
       "sync-user": {
-        attemptHandler: async ({ applyOutcome }) =>
-          stateAdapter.withTransaction(async (txCtx) =>
-            applyOutcome({ ...txCtx, output: { syncedAt: new Date().toISOString() } }),
-          ),
+        attemptHandler: async ({ applyJobOutcome }) => {
+          await stateAdapter.withTransaction(async (txCtx) =>
+            applyJobOutcome({ ...txCtx, output: { syncedAt: new Date().toISOString() } }),
+          );
+        },
       },
       "send-welcome-email": {
-        attemptHandler: async ({ applyOutcome }) =>
-          stateAdapter.withTransaction(async (txCtx) =>
-            applyOutcome({ ...txCtx, output: { sentAt: new Date().toISOString() } }),
-          ),
+        attemptHandler: async ({ applyJobOutcome }) => {
+          await stateAdapter.withTransaction(async (txCtx) =>
+            applyJobOutcome({ ...txCtx, output: { sentAt: new Date().toISOString() } }),
+          );
+        },
       },
       // #region self-scheduling
       "health-check": {
-        attemptHandler: async ({ job, applyOutcome }) =>
-          stateAdapter.withTransaction(async (txCtx) => {
-            const completedJob = await applyOutcome({
+        attemptHandler: async ({ job, applyJobOutcome }) => {
+          await stateAdapter.withTransaction(async (txCtx) => {
+            await applyJobOutcome({
               ...txCtx,
               output: { checkedAt: new Date().toISOString() },
             });
@@ -97,9 +99,8 @@ await using workerRunner = createWorkerRunner({
               schedule: { afterMs: 5 * 60 * 1000 },
               deduplication: { key: `health:${job.input.serviceId}`, scope: "running" },
             });
-
-            return completedJob;
-          }),
+          });
+        },
       },
       // #endregion
     },

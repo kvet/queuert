@@ -14,15 +14,15 @@ type RunningJob<TStateAdapter extends StateAdapter<any, any, any, Mode>> = Resol
   BaseJobTypeDefinitions,
   string,
   string
->;
+> & { signal: AbortSignal };
 
 /**
  * Wraps job processing with cross-cutting logic.
  *
- * `wrapHandler` wraps the entire attempt handler. The `next(ctx)` callback injects typed
- * context that is merged into `attemptHandler`'s options. Pass `next`'s result through: it is
- * the handler's `applyOutcome` result. The attempt's outcome is decided by the `applyOutcome` call
- * that committed, not by the value `wrapHandler` returns.
+ * `wrapHandler` wraps the entire attempt handler. It receives the attempt's `job`. The `next(ctx)`
+ * callback runs the inner layers with typed context merged into `attemptHandler`'s options, and
+ * resolves once the handler returns; a handler's throw rejects it. The attempt's outcome is decided
+ * by the `applyJobOutcome` call that committed it.
  *
  * Multiple middleware compose as an onion — the first middleware's "before" runs
  * outermost. Each `next(ctx)` accumulates ctx for inner layers.
@@ -31,11 +31,11 @@ export type AttemptMiddleware<
   TStateAdapter extends StateAdapter<any, any, any, Mode>,
   THandlerCtx extends Record<string, unknown> = Record<string, unknown>,
 > = {
-  wrapHandler: <T>(opts: {
+  wrapHandler: (opts: {
     job: RunningJob<TStateAdapter>;
     workerId: GetStateAdapterWorkerId<TStateAdapter>;
-    next: (ctx: THandlerCtx) => Promise<T>;
-  }) => Promise<T>;
+    next: (ctx: THandlerCtx) => Promise<void>;
+  }) => Promise<void>;
 };
 
 /**
@@ -92,13 +92,13 @@ export type IsAttemptMiddlewareSubsequence<
       : true
     : false;
 
-export const runHandlerMiddlewareChain = async <T>(
+export const runHandlerMiddlewareChain = async (
   attemptMiddleware: readonly AnyAttemptMiddleware[] | undefined,
   baseOpts: { job: unknown; workerId: string },
-  innerCallback: (ctx: Record<string, unknown>) => Promise<T>,
-): Promise<T> => {
+  innerCallback: (ctx: Record<string, unknown>) => Promise<void>,
+): Promise<void> => {
   if (!attemptMiddleware || attemptMiddleware.length === 0) return innerCallback({});
-  let chain: (ctx: Record<string, unknown>) => Promise<T> = innerCallback;
+  let chain: (ctx: Record<string, unknown>) => Promise<void> = innerCallback;
   for (let i = attemptMiddleware.length - 1; i >= 0; i--) {
     const next = chain;
     const wrap = attemptMiddleware[i].wrapHandler;

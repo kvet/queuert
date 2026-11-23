@@ -405,13 +405,14 @@ const Page = () => (
 
     <h2>Isolation level</h2>
     <p>
-      The transactions you pass to <code>applyOutcome</code>, <code>fence</code> and client methods
-      can run at READ COMMITTED, REPEATABLE READ (InnoDB's default) or SERIALIZABLE, set as the
-      session default or per transaction, and transactions at different levels can work on the same
-      jobs at once. Whenever one transaction acts on what another may be changing, both write or
-      lock the same row, and every read that decides such a write is a locking read, which sees the
-      latest committed row at any level: attaching a dependent and completing its blocker both lock
-      the blocker's head job, and deleting a chain share-locks the blocker rows that reference it.
+      The transactions you pass to <code>applyJobOutcome</code>, <code>fenceJob</code> and client
+      methods can run at READ COMMITTED, REPEATABLE READ (InnoDB's default) or SERIALIZABLE, set as
+      the session default or per transaction, and transactions at different levels can work on the
+      same jobs at once. Whenever one transaction acts on what another may be changing, both write
+      or lock the same row, and every read that decides such a write is a locking read, which sees
+      the latest committed row at any level: attaching a dependent and completing its blocker both
+      lock the blocker's head job, and deleting a chain share-locks the blocker rows that reference
+      it.
     </p>
     <ul>
       <li>

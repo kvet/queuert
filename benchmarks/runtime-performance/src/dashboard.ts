@@ -43,12 +43,11 @@ await runDoubleRunBenchmark<Record<string, never>>({
           jobTypes,
           processors: {
             "test-job": {
-              attemptHandler: async ({ applyOutcome }) => {
-                const result = await stateAdapter.withTransaction(async (ctx) =>
-                  applyOutcome({ ...ctx, output: { processed: true } }),
+              attemptHandler: async ({ applyJobOutcome }) => {
+                await stateAdapter.withTransaction(async (ctx) =>
+                  applyJobOutcome({ ...ctx, output: { processed: true } }),
                 );
                 completions.record();
-                return result;
               },
             },
           },

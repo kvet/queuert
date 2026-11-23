@@ -343,7 +343,7 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
       }),
     },
     {
-      name: "deleted job during applyOutcome is handled gracefully",
+      name: "deleted job during applyJobOutcome is handled gracefully",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -361,7 +361,7 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes, log: logs.log });
 
         const jobStarted = Promise.withResolvers<void>();
-        const applyOutcomeError = Promise.withResolvers<unknown>();
+        const applyJobOutcomeError = Promise.withResolvers<unknown>();
 
         const workerRunner = yield* resource(
           createWorkerRunner({
@@ -372,18 +372,19 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ job, applyOutcome }) => {
+                  attemptHandler: async ({ job, applyJobOutcome }) => {
                     if (job.input.deleteDuringAttempt) {
                       jobStarted.resolve();
                       await sleep(200);
                     }
 
                     try {
-                      return await stateAdapter.withTransaction((txCtx) =>
-                        applyOutcome({ ...txCtx, output: null }),
+                      await stateAdapter.withTransaction((txCtx) =>
+                        applyJobOutcome({ ...txCtx, output: null }),
                       );
+                      return;
                     } catch (error) {
-                      applyOutcomeError.resolve(error);
+                      applyJobOutcomeError.resolve(error);
                       throw error;
                     }
                   },
@@ -422,7 +423,7 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           input: { deleteDuringAttempt: true },
         });
 
-        assert.ok((yield* wait(applyOutcomeError.promise)) instanceof JobNotFoundError);
+        assert.ok((yield* wait(applyJobOutcomeError.promise)) instanceof JobNotFoundError);
 
         const nextChain = yield* step(
           stateAdapter.withTransaction((txCtx) =>
@@ -900,12 +901,12 @@ export const deletionAsyncGroup: ConformanceGroup<StateAdapterConformanceContext
             jobTypes,
             processors: {
               test: {
-                attemptHandler: async ({ job, fence }) => {
+                attemptHandler: async ({ job, fenceJob }) => {
                   const { deletion } = await stateAdapter.withTransaction((txCtx) =>
                     runInModeOf(
                       stateAdapter,
                       syncAsync(function* () {
-                        yield* step(fence({ ...txCtx }));
+                        yield* step(fenceJob({ ...txCtx }));
                         const pendingDeletion = stateAdapter.withTransaction((deletionTxCtx) =>
                           client.deleteChains({ ...deletionTxCtx, ids: [job.chainId] }),
                         );
@@ -920,7 +921,7 @@ export const deletionAsyncGroup: ConformanceGroup<StateAdapterConformanceContext
                   );
                   assert.equal((await deletion).length, 1);
                   await assertRejects(
-                    () => stateAdapter.withTransaction((txCtx) => fence({ ...txCtx })),
+                    () => stateAdapter.withTransaction((txCtx) => fenceJob({ ...txCtx })),
                     JobNotFoundError,
                   );
                   handlerAsserted.resolve();
@@ -947,7 +948,7 @@ export const deletionNotifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
   name: "deletion",
   cases: [
     {
-      name: "running job receives deletion signal and its fence and applyOutcome fail",
+      name: "running job receives deletion signal and its fenceJob and applyJobOutcome fail",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter, mode }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter, mode));
         const notifyAdapter = yield* resource(
@@ -975,26 +976,26 @@ export const deletionNotifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               jobTypes,
               processors: {
                 test: {
-                  attemptHandler: async ({ signal, applyOutcome, fence }) => {
+                  attemptHandler: async ({ job, applyJobOutcome, fenceJob }) => {
                     jobStarted.resolve();
 
-                    await sleep(5000, { signal });
+                    await sleep(5000, { signal: job.signal });
 
-                    assert.equal(signal.aborted, true);
+                    assert.equal(job.signal.aborted, true);
                     await assertRejects(
-                      () => stateAdapter.withTransaction((txCtx) => fence({ ...txCtx })),
+                      () => stateAdapter.withTransaction((txCtx) => fenceJob({ ...txCtx })),
                       JobNotFoundError,
                     );
                     try {
                       await stateAdapter.withTransaction((txCtx) =>
-                        applyOutcome({ ...txCtx, output: null }),
+                        applyJobOutcome({ ...txCtx, output: null }),
                       );
                     } catch (error) {
                       assert.ok(error instanceof JobNotFoundError);
                       jobDeleted.resolve();
                       throw error;
                     }
-                    throw new Error("applyOutcome succeeded after the chain was deleted");
+                    throw new Error("applyJobOutcome succeeded after the chain was deleted");
                   },
                 },
               },
@@ -1077,10 +1078,11 @@ export const deletionNotifyConcurrentTransactionsGroup: ConformanceGroup<StateAd
               jobTypes,
               processors: {
                 task: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
+                    );
+                  },
                 },
               },
             }),
@@ -1153,16 +1155,18 @@ export const deletionNotifyConcurrentTransactionsGroup: ConformanceGroup<StateAd
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
+                    );
+                  },
                 },
                 main: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
+                    );
+                  },
                 },
               },
             }),
@@ -1241,16 +1245,18 @@ export const deletionNotifyConcurrentTransactionsGroup: ConformanceGroup<StateAd
               jobTypes,
               processors: {
                 blocker: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
+                    );
+                  },
                 },
                 main: {
-                  attemptHandler: async ({ applyOutcome }) =>
-                    stateAdapter.withTransaction((txCtx) =>
-                      applyOutcome({ ...txCtx, output: null }),
-                    ),
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcome({ ...txCtx, output: null }),
+                    );
+                  },
                 },
               },
             }),

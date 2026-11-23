@@ -52,7 +52,7 @@ const voidStmts = (prefix: string, count: number, indent: string): string => {
   return Array.from({ length: count }, (_, i) => `${indent}void ${prefix}${i};`).join("\n") + "\n";
 };
 
-const applyOutcomeInTransaction = (body: string): string =>
+const applyJobOutcomeInTransaction = (body: string): string =>
   `stateAdapter.withTransaction(async (txCtx) => {
 ${body}
           })`;
@@ -63,14 +63,14 @@ const generateProcessors = (defs: JobTypeDef[], clientVar: string, middlewareCou
 
   const handler = (
     body: string,
-  ): string => `      attemptHandler: async ({ applyOutcome${hKeys} }) => {
-${hVoid}        return ${applyOutcomeInTransaction(body)};
+  ): string => `      attemptHandler: async ({ applyJobOutcome${hKeys} }) => {
+${hVoid}        await ${applyJobOutcomeInTransaction(body)};
       },`;
 
   const processors = defs.map((def) => {
     if (def.output && !def.continueWith) {
       return `    "${def.name}": {
-${handler(`            return applyOutcome({ ...txCtx, output: (${typeToValue(def.output)}) });`)}
+${handler(`            return applyJobOutcome({ ...txCtx, output: (${typeToValue(def.output)}) });`)}
     }`;
     }
 
@@ -94,17 +94,17 @@ ${handler(`            return applyOutcome({ ...txCtx, output: (${typeToValue(de
 
         return `    "${def.name}": {
 ${handler(`${blockerAwaits}
-            return applyOutcome({ ...txCtx, continueWith: { typeName: "${firstTarget}", input: ${typeToValue(targetDef.input)}, blockers: [${blockerArray}] } });`)}
+            return applyJobOutcome({ ...txCtx, continueWith: { typeName: "${firstTarget}", input: ${typeToValue(targetDef.input)}, blockers: [${blockerArray}] } });`)}
     }`;
       }
 
       return `    "${def.name}": {
-${handler(`            return applyOutcome({ ...txCtx, continueWith: { typeName: "${firstTarget}", input: ${typeToValue(targetDef?.input ?? "{ id: string }")} } });`)}
+${handler(`            return applyJobOutcome({ ...txCtx, continueWith: { typeName: "${firstTarget}", input: ${typeToValue(targetDef?.input ?? "{ id: string }")} } });`)}
     }`;
     }
 
     return `    "${def.name}": {
-${handler(`            return applyOutcome({ ...txCtx, output: null });`)}
+${handler(`            return applyJobOutcome({ ...txCtx, output: null });`)}
     }`;
   });
 
