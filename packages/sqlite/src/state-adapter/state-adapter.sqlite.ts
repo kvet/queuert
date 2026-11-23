@@ -1,5 +1,3 @@
-import type { UUID } from "node:crypto";
-
 import { createLatch } from "@queuert/helpers/latch";
 import {
   type MaybePromise,
@@ -60,6 +58,8 @@ import type {
   ProviderTxContext,
   SqliteStateProvider,
 } from "../state-provider/state-provider.sqlite.ts";
+
+type UUID = ReturnType<typeof crypto.randomUUID>;
 
 const jobColumns = [
   "created_at",

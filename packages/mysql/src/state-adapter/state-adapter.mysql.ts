@@ -1,5 +1,3 @@
-import { type UUID, randomUUID } from "node:crypto";
-
 import { createLatch } from "@queuert/helpers/latch";
 import {
   type DataType,
@@ -43,6 +41,8 @@ import {
 
 import { createMysqlMigrationStore } from "../migration-store/migration-store.mysql.ts";
 import type { MysqlStateProvider } from "../state-provider/state-provider.mysql.ts";
+
+type UUID = ReturnType<typeof crypto.randomUUID>;
 
 type Row = Record<string, unknown>;
 
@@ -1641,7 +1641,10 @@ SET j.status = 'running',
 WHERE {{fence_guard}}`,
             { params: [t.string(), workerIdDataType] },
           ),
-          [JSON.stringify(pickedIds.map((id) => ({ id, attempt_token: randomUUID() }))), workerId],
+          [
+            JSON.stringify(pickedIds.map((id) => ({ id, attempt_token: crypto.randomUUID() }))),
+            workerId,
+          ],
         );
         const rows = await execute(
           txCtx,
@@ -1882,7 +1885,7 @@ FROM DUAL
 WHERE {{fence_guard}}`,
           { params: [workerIdDataType, t.string(), t.number(), t.number(), t.uuid()] },
         ),
-        [workerId, JSON.stringify(typeNames), concurrency, leaseMs, randomUUID()],
+        [workerId, JSON.stringify(typeNames), concurrency, leaseMs, crypto.randomUUID()],
       );
       return (await readWorkerById(txCtx, workerId))!;
     },

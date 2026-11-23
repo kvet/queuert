@@ -1,5 +1,3 @@
-import type { UUID } from "node:crypto";
-
 import { createLatch } from "@queuert/helpers/latch";
 import {
   type DataType,
@@ -48,6 +46,8 @@ import {
 
 import { createPgMigrationStore } from "../migration-store/migration-store.pg.ts";
 import type { PgStateProvider } from "../state-provider/state-provider.pg.ts";
+
+type UUID = ReturnType<typeof crypto.randomUUID>;
 
 type DbJob = {
   id: string;
