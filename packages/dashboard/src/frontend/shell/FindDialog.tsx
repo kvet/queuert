@@ -1,12 +1,20 @@
+import { Listbox } from "@kobalte/core/listbox";
 import { StatusPill } from "@queuert/ui/components";
 import { useNavigate } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
-import { For, Match, Show, Switch, createMemo, createSignal } from "solid-js";
+import { Match, Show, Switch, createMemo, createSignal } from "solid-js";
 
 import { MAX_IDS } from "../../shared/limits.ts";
-import type { UnknownChain, UnknownJob, WorkerWithRunningJobs } from "../../shared/types.ts";
 import { errorMessage, serverFns } from "../api.ts";
 import { appHref } from "../base.ts";
+import {
+  type FindChoice,
+  type FindOption,
+  type TypeSuggestion,
+  choiceHref,
+  findOptions,
+  typeSuggestionHref,
+} from "../domain/findOptions.ts";
 import { parseIdList } from "../domain/ids.ts";
 import { matchTypeNames } from "../domain/typeMatch.ts";
 import { chainTypeNamesQuery, jobTypeNamesQuery } from "../state/queries.ts";
@@ -30,31 +38,85 @@ export const handleFindShortcut = (event: KeyboardEvent): void => {
   setFindOpen(true);
 };
 
-type Choice =
-  | { kind: "chain"; chain: UnknownChain }
-  | { kind: "job"; job: UnknownJob }
-  | { kind: "worker"; worker: WorkerWithRunningJobs };
-
-const choiceHref = (choice: Choice): string => {
-  if (choice.kind === "chain") return `/chains/${choice.chain.id}`;
-  if (choice.kind === "job") return `/jobs/${choice.job.id}`;
-  return `/workers/${encodeURIComponent(choice.worker.id)}`;
-};
-
-type TypeSuggestion = { kind: "chain" | "job"; typeName: string };
-
 const TYPE_SUGGESTIONS = 5;
+
+const OptionLabel = (props: { option: FindOption }) => (
+  <Switch>
+    <Match when={"suggestion" in props.option && props.option.suggestion}>
+      {(suggestion) => (
+        <>
+          <span class="shrink-0 text-fg-muted">
+            {suggestion().kind === "chain" ? "Chain type" : "Job type"}
+          </span>
+          <span class="text-fg-subtle">·</span>
+          <span class="truncate font-mono font-medium">{suggestion().typeName}</span>
+        </>
+      )}
+    </Match>
+    <Match
+      when={
+        "choice" in props.option &&
+        props.option.choice.kind === "chain" &&
+        props.option.choice.chain
+      }
+    >
+      {(chain) => (
+        <>
+          <span class="font-medium">Chain</span>
+          <span class="text-fg-subtle">·</span>
+          <span class="truncate font-mono">{chain().typeName}</span>
+          <span class="flex-1" />
+          <StatusPill status={chain().status} />
+        </>
+      )}
+    </Match>
+    <Match
+      when={
+        "choice" in props.option && props.option.choice.kind === "job" && props.option.choice.job
+      }
+    >
+      {(job) => (
+        <>
+          <span class="font-medium">Job</span>
+          <span class="text-fg-subtle">·</span>
+          <span class="truncate font-mono">{job().typeName}</span>
+          <span class="text-fg-subtle">·</span>
+          <span class="text-fg-muted">job #{job().chainIndex + 1}</span>
+          <span class="flex-1" />
+          <StatusPill status={job().status} />
+        </>
+      )}
+    </Match>
+    <Match
+      when={
+        "choice" in props.option &&
+        props.option.choice.kind === "worker" &&
+        props.option.choice.worker
+      }
+    >
+      {(worker) => (
+        <>
+          <span class="font-medium">Worker</span>
+          <span class="text-fg-subtle">·</span>
+          <span class="truncate font-mono">{worker().typeNames.join(", ")}</span>
+          <span class="flex-1" />
+          <span class="shrink-0 text-xs text-fg-muted tabular-nums">
+            {worker().runningJobCount} / {worker().concurrency} running
+          </span>
+        </>
+      )}
+    </Match>
+  </Switch>
+);
 
 export const FindDialog = () => {
   const navigate = useNavigate();
   const [text, setText] = createSignal("");
   const [searching, setSearching] = createSignal(false);
   const [message, setMessage] = createSignal<{ text: string; error: boolean } | null>(null);
-  const [choices, setChoices] = createSignal<Choice[]>([]);
-  const [active, setActive] = createSignal(0);
-  let choiceList: HTMLUListElement | undefined;
-  let suggestionList: HTMLUListElement | undefined;
+  const [choices, setChoices] = createSignal<FindChoice[]>([]);
   let input: HTMLTextAreaElement | undefined;
+  let results: HTMLUListElement | undefined;
   let controller: AbortController | null = null;
 
   const parsed = () => parseIdList(text());
@@ -75,7 +137,12 @@ export const FindDialog = () => {
       })),
     ];
   });
-  const suggestionButtons = () => [...(suggestionList?.querySelectorAll("button") ?? [])];
+  const options = () => findOptions(choices(), suggestions());
+
+  const open = (href: string) => {
+    close();
+    navigate(appHref(href));
+  };
 
   const close = () => {
     setFindOpen(false);
@@ -86,25 +153,11 @@ export const FindDialog = () => {
     setSearching(false);
   };
 
-  const go = (choice: Choice) => {
-    close();
-    navigate(appHref(choiceHref(choice)));
-  };
-
-  const goToType = (suggestion: TypeSuggestion) => {
-    close();
-    navigate(
-      appHref(
-        `${suggestion.kind === "chain" ? "/chains" : "/jobs"}?typeName=${encodeURIComponent(suggestion.typeName)}`,
-      ),
-    );
-  };
-
   const submit = async () => {
     const { ids } = parsed();
     if (ids.length === 0) return;
     if (ids.length > 1 && suggestions().length > 0) {
-      goToType(suggestions()[0]);
+      open(typeSuggestionHref(suggestions()[0]));
       return;
     }
     if (ids.length > 1) {
@@ -125,32 +178,23 @@ export const FindDialog = () => {
         serverFns.getWorkers({ data: { ids }, signal: own.signal }),
       ]);
       if (own.signal.aborted) return;
-      const found: Choice[] = [
+      const found: FindChoice[] = [
         ...chains.map((chain) => ({ kind: "chain" as const, chain })),
         ...jobs.map((job) => ({ kind: "job" as const, job })),
         ...workers.map((worker) => ({ kind: "worker" as const, worker })),
       ];
       const topSuggestion = suggestions()[0];
-      if (found.length === 0 && topSuggestion) goToType(topSuggestion);
+      if (found.length === 0 && topSuggestion) open(typeSuggestionHref(topSuggestion));
       else if (found.length === 0)
         setMessage({ text: "No chain, job or worker with this ID", error: false });
-      else if (found.length === 1) go(found[0]);
-      else {
-        setChoices(found);
-        setActive(0);
-        queueMicrotask(() => choiceList?.querySelector("button")?.focus());
-      }
+      else if (found.length === 1) open(choiceHref(found[0]));
+      else setChoices(found);
     } catch (error) {
       if (own.signal.aborted) return;
       setMessage({ text: `Lookup failed: ${errorMessage(error)}`, error: true });
     } finally {
       if (controller === own) setSearching(false);
     }
-  };
-
-  const focusChoice = (index: number) => {
-    setActive(index);
-    choiceList?.querySelectorAll("button")[index]?.focus();
   };
 
   return (
@@ -181,9 +225,9 @@ export const FindDialog = () => {
               setChoices([]);
             }}
             onKeyDown={(event) => {
-              if (event.key === "ArrowDown" && suggestions().length > 0) {
+              if (event.key === "ArrowDown" && options().length > 0) {
                 event.preventDefault();
-                suggestionButtons()[0]?.focus();
+                results?.focus();
                 return;
               }
               if (event.key === "Enter" && !event.shiftKey) {
@@ -226,124 +270,41 @@ export const FindDialog = () => {
           )}
         </Show>
 
-        <Show when={suggestions().length > 0}>
-          <ul
-            ref={(element) => {
-              suggestionList = element;
-            }}
-            class="mt-3 flex flex-col gap-1"
-            aria-label="Matching types"
-            onKeyDown={(event) => {
-              if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-              event.preventDefault();
-              const buttons = suggestionButtons();
-              const index = buttons.indexOf(event.target as HTMLButtonElement);
-              if (event.key === "ArrowUp" && index <= 0) input?.focus();
-              else
-                buttons[(index + (event.key === "ArrowDown" ? 1 : -1)) % buttons.length]?.focus();
-            }}
-          >
-            <For each={suggestions()}>
-              {(suggestion) => (
-                <li>
-                  <button
-                    type="button"
-                    class="flex w-full items-center gap-2 rounded-xs border border-border px-3 py-2 text-left text-sm hover:bg-surface-2 focus:border-accent focus:outline-none"
-                    onClick={() => {
-                      goToType(suggestion);
-                    }}
-                  >
-                    <span class="shrink-0 text-fg-muted">
-                      {suggestion.kind === "chain" ? "Chain type" : "Job type"}
-                    </span>
-                    <span class="text-fg-subtle">·</span>
-                    <span class="truncate font-mono font-medium">{suggestion.typeName}</span>
-                  </button>
-                </li>
-              )}
-            </For>
-          </ul>
-        </Show>
-
         <Show when={choices().length > 0}>
           <p class="mt-3 mb-2 text-xs text-fg-muted">
             {choices().some((choice) => choice.kind === "worker")
               ? "Several items have this ID. Choose one:"
               : "This ID is both a chain and its job #1. Choose one:"}
           </p>
-          <ul
-            ref={(element) => {
-              choiceList = element;
+        </Show>
+        <Show when={options().length > 0}>
+          <Listbox<FindOption>
+            ref={(element: HTMLUListElement) => {
+              results = element;
             }}
-            class="flex flex-col gap-1"
-            onKeyDown={(event) => {
-              if (event.key === "ArrowDown") {
-                event.preventDefault();
-                focusChoice((active() + 1) % choices().length);
-              } else if (event.key === "ArrowUp") {
-                event.preventDefault();
-                focusChoice((active() - 1 + choices().length) % choices().length);
-              }
+            class={["flex flex-col gap-1", { "mt-3": choices().length === 0 }]}
+            aria-label={choices().length > 0 ? "Matching items" : "Matching types"}
+            options={options()}
+            optionValue="href"
+            optionTextValue="href"
+            autoFocus={choices().length > 0 ? "first" : false}
+            onKeyDown={(event: KeyboardEvent) => {
+              const first = results?.querySelector("[role=option]");
+              if (event.key === "ArrowUp" && document.activeElement === first) input?.focus();
             }}
-          >
-            <For each={choices()}>
-              {(choice, index) => (
-                <li>
-                  <button
-                    type="button"
-                    class={[
-                      "flex w-full items-center gap-2 rounded-xs border px-3 py-2 text-left text-sm hover:bg-surface-2",
-                      active() === index() ? "border-accent" : "border-border",
-                    ]}
-                    onFocus={() => setActive(index())}
-                    onClick={() => {
-                      go(choice);
-                    }}
-                  >
-                    <Switch>
-                      <Match when={choice.kind === "chain" && choice.chain}>
-                        {(chain) => (
-                          <>
-                            <span class="font-medium">Chain</span>
-                            <span class="text-fg-subtle">·</span>
-                            <span class="truncate font-mono">{chain().typeName}</span>
-                            <span class="flex-1" />
-                            <StatusPill status={chain().status} />
-                          </>
-                        )}
-                      </Match>
-                      <Match when={choice.kind === "job" && choice.job}>
-                        {(job) => (
-                          <>
-                            <span class="font-medium">Job</span>
-                            <span class="text-fg-subtle">·</span>
-                            <span class="truncate font-mono">{job().typeName}</span>
-                            <span class="text-fg-subtle">·</span>
-                            <span class="text-fg-muted">job #{job().chainIndex + 1}</span>
-                            <span class="flex-1" />
-                            <StatusPill status={job().status} />
-                          </>
-                        )}
-                      </Match>
-                      <Match when={choice.kind === "worker" && choice.worker}>
-                        {(worker) => (
-                          <>
-                            <span class="font-medium">Worker</span>
-                            <span class="text-fg-subtle">·</span>
-                            <span class="truncate font-mono">{worker().typeNames.join(", ")}</span>
-                            <span class="flex-1" />
-                            <span class="shrink-0 text-xs text-fg-muted tabular-nums">
-                              {worker().runningJobCount} / {worker().concurrency} running
-                            </span>
-                          </>
-                        )}
-                      </Match>
-                    </Switch>
-                  </button>
-                </li>
-              )}
-            </For>
-          </ul>
+            onChange={(selected) => {
+              const [href] = selected;
+              if (href !== undefined) open(href);
+            }}
+            renderItem={(item) => (
+              <Listbox.Item
+                item={item}
+                class="flex w-full cursor-pointer items-center gap-2 rounded-xs border border-border px-3 py-2 text-left text-sm outline-none hover:bg-surface-2 data-highlighted:border-accent"
+              >
+                <OptionLabel option={item.rawValue} />
+              </Listbox.Item>
+            )}
+          />
         </Show>
       </div>
     </Dialog>

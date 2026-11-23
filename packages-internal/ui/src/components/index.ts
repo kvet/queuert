@@ -25,4 +25,5 @@ export { Pips } from "./Pips.tsx";
 export { Row, RowLink, SubLine } from "./Row.tsx";
 export { StatusDot, StatusPill } from "./StatusPill.tsx";
 export { ThemeToggle } from "./ThemeToggle.tsx";
+export { ChoiceChips, ToggleChips } from "./ToggleChips.tsx";
 export { TopBarFrame, TopBarNavLink, iconButtonClass } from "./TopBar.tsx";

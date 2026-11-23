@@ -46,11 +46,12 @@
     "test": "vitest --run"
   },
   "devDependencies": {
+    "@kobalte/core": "2.0.0-alpha.5",
     "@queuert/rpc": "workspace:*",
     "@queuert/sync-async": "workspace:*",
     "@queuert/tsconfig": "workspace:*",
     "@queuert/ui": "workspace:*",
-    "@solidjs/router": "2.0.0",
+    "@solidjs/router": "2.0.1",
     "@solidjs/vite-plugin": "3.0.1",
     "@solidjs/web": "2.0.3",
     "@tailwindcss/vite": "4.3.5",

@@ -1,5 +1,6 @@
+import { Tabs as TabsPrimitive } from "@kobalte/core/tabs";
 import type { JSX } from "@solidjs/web";
-import { For, children, createSignal, createStore, createUniqueId, snapshot } from "solid-js";
+import { For, children, createSignal, createStore, snapshot } from "solid-js";
 
 import { createHydrated } from "../hydrated.ts";
 
@@ -50,9 +51,7 @@ export const Tabs = (props: { syncKey?: string; children: JSX.Element }) => {
   const resolved = children(() => props.children);
   const items = () => (resolved.toArray() as unknown[]).filter(isTabItem);
   const [local, setLocal] = createSignal<string>();
-  // Panels fade in only after the reader switches tabs, never on the first render.
   const [switched, setSwitched] = createSignal(false);
-  const id = createUniqueId();
   const syncedTab = createSyncedTabs();
 
   const selected = () => {
@@ -69,20 +68,13 @@ export const Tabs = (props: { syncKey?: string; children: JSX.Element }) => {
   };
 
   return (
-    <div class="my-5">
-      <div role="tablist" class="flex flex-wrap gap-1 border-b border-border pb-2">
+    <TabsPrimitive class="my-5" value={selected()} onChange={select}>
+      <TabsPrimitive.List class="flex flex-wrap gap-1 border-b border-border pb-2">
         <For each={items()}>
-          {(item, index) => (
-            <button
-              type="button"
-              role="tab"
-              id={`${id}-tab-${index()}`}
-              aria-controls={`${id}-panel-${index()}`}
-              aria-selected={selected() === item.label ? "true" : "false"}
-              class="rounded-xs px-2 py-0.5 text-xs text-fg-muted hover:bg-surface-2 hover:text-fg aria-selected:bg-fg aria-selected:text-bg"
-              onClick={() => {
-                select(item.label);
-              }}
+          {(item) => (
+            <TabsPrimitive.Trigger
+              value={item.label}
+              class="rounded-xs px-2 py-0.5 text-xs text-fg-muted hover:bg-surface-2 hover:text-fg data-selected:bg-fg data-selected:text-bg"
             >
               {item.label}
               {item.badge === undefined ? null : (
@@ -90,28 +82,26 @@ export const Tabs = (props: { syncKey?: string; children: JSX.Element }) => {
                   {item.badge}
                 </span>
               )}
-            </button>
+            </TabsPrimitive.Trigger>
           )}
         </For>
-      </div>
-      <div>
-        <For each={items()}>
-          {(item, index) => (
-            <div
-              role="tabpanel"
-              data-tab-label={item.label}
-              id={`${id}-panel-${index()}`}
-              aria-labelledby={`${id}-tab-${index()}`}
-              hidden={selected() !== item.label}
-              class={`min-w-0 pt-3 [&>*:first-child]:mt-0 [&>*+*]:mt-3 ${
-                switched() && selected() === item.label ? "animate-fade-in" : ""
-              }`}
-            >
-              {item.children}
-            </div>
-          )}
-        </For>
-      </div>
-    </div>
+      </TabsPrimitive.List>
+      <For each={items()}>
+        {(item) => (
+          <TabsPrimitive.Content
+            value={item.label}
+            forceMount
+            data-tab-label={item.label}
+            hidden={selected() !== item.label}
+            class={[
+              "min-w-0 pt-3 [&>*:first-child]:mt-0 [&>*+*]:mt-3",
+              { "animate-fade-in": switched() && selected() === item.label },
+            ]}
+          >
+            {item.children}
+          </TabsPrimitive.Content>
+        )}
+      </For>
+    </TabsPrimitive>
   );
 };

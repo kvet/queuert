@@ -23,12 +23,14 @@
     "test": "vitest --run"
   },
   "devDependencies": {
+    "@kobalte/core": "2.0.0-alpha.5",
     "@queuert/tsconfig": "workspace:*",
     "@solidjs/web": "2.0.3",
     "queuert": "workspace:*",
     "solid-js": "2.0.3"
   },
   "peerDependencies": {
+    "@kobalte/core": "2.0.0-alpha.5",
     "@solidjs/web": "2.0.3",
     "solid-js": "2.0.3"
   }

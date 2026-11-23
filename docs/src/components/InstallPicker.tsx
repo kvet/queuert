@@ -1,4 +1,4 @@
-import { Box, Chip } from "@queuert/ui/components";
+import { Box, Chip, ChoiceChips, ToggleChips } from "@queuert/ui/components";
 import type { JSX } from "@solidjs/web";
 import { For, Show, createSignal } from "solid-js";
 
@@ -19,28 +19,16 @@ const Choice = (props: {
   selected: string;
   onSelect: (label: string) => void;
 }) => (
-  <div class="flex flex-wrap gap-1.5" role="radiogroup" aria-label={props.label}>
-    <For each={props.options}>
-      {(option) => (
-        <button
-          type="button"
-          role="radio"
-          aria-checked={props.selected === option.label ? "true" : "false"}
-          class="rounded-xs border border-border px-2 py-0.5 text-xs text-fg-muted hover:border-border-strong hover:text-fg aria-checked:border-fg aria-checked:bg-fg aria-checked:text-bg"
-          onClick={() => {
-            props.onSelect(option.label);
-          }}
-        >
-          {option.label}
-          <Show when={option.experimental !== undefined}>
-            <span class="ml-1.5 font-mono text-[10px] tracking-wider uppercase opacity-70">
-              exp
-            </span>
-          </Show>
-        </button>
-      )}
-    </For>
-  </div>
+  <ChoiceChips
+    label={props.label}
+    options={props.options.map((option) => ({
+      value: option.label,
+      label: option.label,
+      badge: option.experimental === undefined ? undefined : "exp",
+    }))}
+    value={props.selected}
+    onChange={props.onSelect}
+  />
 );
 
 const Field = (props: { label: string; children: JSX.Element }) => (
@@ -130,27 +118,16 @@ export const InstallPicker = () => {
           <Notes options={allNotifyOptions} selected={notify()} />
         </Field>
         <Field label="Extras (optional)">
-          <div class="flex flex-wrap gap-1.5" role="group" aria-label="Extras">
-            <For each={extraInstallOptions}>
-              {(extra) => (
-                <button
-                  type="button"
-                  aria-pressed={extras().includes(extra.label) ? "true" : "false"}
-                  title={extra.note}
-                  class="rounded-xs border border-border px-2 py-0.5 text-xs text-fg-muted hover:border-border-strong hover:text-fg aria-pressed:border-fg aria-pressed:bg-fg aria-pressed:text-bg"
-                  onClick={() => {
-                    setExtras((current) =>
-                      current.includes(extra.label)
-                        ? current.filter((label) => label !== extra.label)
-                        : [...current, extra.label],
-                    );
-                  }}
-                >
-                  {extra.label}
-                </button>
-              )}
-            </For>
-          </div>
+          <ToggleChips
+            label="Extras"
+            options={extraInstallOptions.map((extra) => ({
+              value: extra.label,
+              label: extra.label,
+              title: extra.note,
+            }))}
+            value={extras()}
+            onChange={setExtras}
+          />
           <p class="m-0 text-[13px] leading-6 text-fg-muted">
             <For each={extraInstallOptions}>
               {(extra, index) => (

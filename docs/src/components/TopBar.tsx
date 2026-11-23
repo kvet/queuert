@@ -1,3 +1,4 @@
+import { Tabs } from "@kobalte/core/tabs";
 import {
   CloseIcon,
   iconButtonClass as iconButton,
@@ -41,22 +42,30 @@ export const TopBar = () => {
         <Show when={menuOpen()}>
           <Portal>
             <div class="fixed inset-x-0 top-14 bottom-0 z-40 overflow-y-auto border-t border-border bg-bg px-4 pt-3 pb-10 lg:hidden">
-              <div class="mb-5 flex flex-wrap gap-1 border-b border-border pb-3" role="tablist">
+              <Tabs value={drawerSection()} onChange={setDrawerSection}>
+                <Tabs.List
+                  class="mb-5 flex flex-wrap gap-1 border-b border-border pb-3"
+                  aria-label="Sections"
+                >
+                  <For each={topBarSections}>
+                    {(section) => (
+                      <Tabs.Trigger
+                        value={section.id}
+                        class="rounded-xs px-2.5 py-1 text-sm text-fg-muted data-selected:bg-surface-2 data-selected:font-medium data-selected:text-fg"
+                      >
+                        {section.label}
+                      </Tabs.Trigger>
+                    )}
+                  </For>
+                </Tabs.List>
                 <For each={topBarSections}>
                   {(section) => (
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={drawerSection() === section.id ? "true" : "false"}
-                      class="rounded-xs px-2.5 py-1 text-sm text-fg-muted aria-selected:bg-surface-2 aria-selected:font-medium aria-selected:text-fg"
-                      onClick={() => setDrawerSection(section.id)}
-                    >
-                      {section.label}
-                    </button>
+                    <Tabs.Content value={section.id}>
+                      <SectionNav section={section.id} />
+                    </Tabs.Content>
                   )}
                 </For>
-              </div>
-              <SectionNav section={drawerSection()} />
+              </Tabs>
             </div>
           </Portal>
         </Show>

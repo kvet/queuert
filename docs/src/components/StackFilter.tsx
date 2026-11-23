@@ -1,7 +1,7 @@
-import { Box } from "@queuert/ui/components";
-import { For, Show } from "solid-js";
+import { Box, ToggleChips } from "@queuert/ui/components";
+import { Show } from "solid-js";
 
-import { type Backend, backends, createPickedStack, setStack, stack } from "../stack.ts";
+import { type Backend, backends, createPickedStack, setStack } from "../stack.ts";
 
 const labelOf = (id: Backend) => backends.find((backend) => backend.id === id)?.label ?? id;
 
@@ -11,9 +11,6 @@ const labelOf = (id: Backend) => backends.find((backend) => backend.id === id)?.
  */
 export const StackFilter = (props: { backends: Backend[] }) => {
   const picked = createPickedStack();
-  const toggle = (id: Backend) => {
-    setStack(stack().includes(id) ? stack().filter((backend) => backend !== id) : [...stack(), id]);
-  };
 
   return (
     <Box
@@ -34,22 +31,12 @@ export const StackFilter = (props: { backends: Backend[] }) => {
         </Show>
       }
     >
-      <div class="flex flex-wrap gap-1.5" role="group" aria-label="Backends to show">
-        <For each={props.backends}>
-          {(id) => (
-            <button
-              type="button"
-              aria-pressed={picked().includes(id) ? "true" : "false"}
-              class="rounded-xs border border-border px-2 py-0.5 text-xs text-fg-muted hover:border-border-strong hover:text-fg aria-pressed:border-fg aria-pressed:bg-fg aria-pressed:text-bg"
-              onClick={() => {
-                toggle(id);
-              }}
-            >
-              {labelOf(id)}
-            </button>
-          )}
-        </For>
-      </div>
+      <ToggleChips
+        label="Backends to show"
+        options={props.backends.map((id) => ({ value: id, label: labelOf(id) }))}
+        value={picked()}
+        onChange={setStack}
+      />
       <p class="m-0 text-[13px] text-fg-subtle">
         <Show
           when={picked().length > 0}

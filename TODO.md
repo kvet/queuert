@@ -10,6 +10,7 @@
 # Medium term
 
 - [TASK] Built-in cleanup. See `design/builtin-cleanup.md`.
+- [TASK] Move the hand-rolled overlays (the dashboard's chain actions menu and mobile menu, the docs mobile drawer, the dashboard's `Fact` hint) onto Kobalte's `DropdownMenu`, `Popover`, `Dialog` and `Tooltip` once they work on Solid 2: on `@kobalte/core@2.0.0-alpha.5` the dialog ignores Escape and the popover never renders its content
 - [EPIC] Chain identity. Closing [#3](https://github.com/kvet/queuert/issues/3). See `design/chain-identity.md`.
   - [TASK] List chains by identity — `listChains` gains an `identity` filter to page through the full recurrence history of a key
 - [EPIC] Unbounded blockers. See `design/unbounded-blockers.md`.

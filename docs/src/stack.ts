@@ -56,9 +56,6 @@ const apply = (next: Backend[]) => {
   else document.documentElement.dataset.stack = next.join(" ");
 };
 
-/** The backends the reader picked; empty means every backend is shown. */
-export { stack };
-
 export const createPickedStack = (): Accessor<Backend[]> => {
   const hydrated = createHydrated();
   return () => (hydrated() ? stack() : []);

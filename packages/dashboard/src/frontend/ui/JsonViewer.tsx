@@ -1,4 +1,4 @@
-import { Box, ChevronRightIcon } from "@queuert/ui/components";
+import { Box, ChevronRightIcon, ChoiceChips } from "@queuert/ui/components";
 import { For, Match, Show, Switch, createSignal, onSettled } from "solid-js";
 
 import { CopyButton } from "./IdChip.tsx";
@@ -134,23 +134,16 @@ export const JsonViewer = (props: { data: unknown; title: string; label: string 
       bodyClass=""
       actions={
         <>
-          <div class="flex" role="group" aria-label={`${props.label} view`}>
-            <For each={["tree", "raw"] as const}>
-              {(option) => (
-                <button
-                  type="button"
-                  class={[
-                    "rounded-xs px-1.5",
-                    mode() === option ? "bg-fg text-bg" : "text-fg-muted hover:text-fg",
-                  ]}
-                  aria-pressed={mode() === option ? "true" : "false"}
-                  onClick={() => setMode(option)}
-                >
-                  {option}
-                </button>
-              )}
-            </For>
-          </div>
+          <ChoiceChips
+            label={`${props.label} view`}
+            variant="segment"
+            options={[
+              { value: "tree", label: "tree" },
+              { value: "raw", label: "raw" },
+            ]}
+            value={mode()}
+            onChange={setMode}
+          />
           <CopyButton text={pretty(props.data)} label={`Copy ${props.label} as JSON`} />
         </>
       }
