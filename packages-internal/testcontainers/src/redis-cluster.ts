@@ -22,9 +22,13 @@ const nodePortsFromImage = (image: string): number[] => {
 // Node state lives on tmpfs, which is wiped when a stopped container is reused, so every boot
 // forms a fresh cluster.
 const clusterScript = (ports: number[]): string => `
+unprotected_bus_if_supported=""
+if ! redis-server --port 0 --cluster-bus-port-protected-mode no 2>&1 | grep -q "FATAL CONFIG"; then
+  unprotected_bus_if_supported="--cluster-bus-port-protected-mode no"
+fi
 for p in ${ports.join(" ")}; do
   mkdir /cluster/$p
-  redis-server --port $p --dir /cluster/$p --cluster-enabled yes --save "" --protected-mode no &
+  redis-server --port $p --dir /cluster/$p --cluster-enabled yes --save "" --protected-mode no $unprotected_bus_if_supported &
   until redis-cli -p $p ping >/dev/null 2>&1; do sleep 0.1; done
 done
 redis-cli --cluster create ${ports.map((port) => `127.0.0.1:${port}`).join(" ")} --cluster-replicas 1 --cluster-yes
