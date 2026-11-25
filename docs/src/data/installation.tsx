@@ -16,7 +16,7 @@ const redisNotify: InstallOption = {
   note: () => (
     <>
       Uses Redis pub/sub. Requires Redis 6+. See{" "}
-      <a href="/queuert/integrations/notify-adapters/redis/">Redis Notify Adapter</a>.
+      <a href="/queuert/integrations/notify-adapters/redis/">Redis notify adapter</a>.
     </>
   ),
 };
@@ -28,7 +28,7 @@ const natsNotify: InstallOption = {
   note: () => (
     <>
       Uses NATS pub/sub. Requires NATS 2.2+. See{" "}
-      <a href="/queuert/integrations/notify-adapters/nats/">NATS Notify Adapter</a>.
+      <a href="/queuert/integrations/notify-adapters/nats/">NATS notify adapter</a>.
     </>
   ),
 };
@@ -52,7 +52,7 @@ export const stateInstallOptions: (InstallOption & { notify: InstallOption[] })[
     note: () => (
       <>
         Supports horizontal scaling and all Queuert features. Requires PostgreSQL 14+. See{" "}
-        <a href="/queuert/integrations/state-adapters/postgres/">PostgreSQL State Adapter</a>.
+        <a href="/queuert/integrations/state-adapters/postgres/">PostgreSQL state adapter</a>.
       </>
     ),
     notify: [
@@ -64,7 +64,7 @@ export const stateInstallOptions: (InstallOption & { notify: InstallOption[] })[
             Uses PostgreSQL's built-in <code>LISTEN</code>/<code>NOTIFY</code>. No additional
             infrastructure beyond your existing PostgreSQL database — already included in{" "}
             <code>@queuert/postgres</code>. See{" "}
-            <a href="/queuert/integrations/notify-adapters/postgres/">PostgreSQL Notify Adapter</a>.
+            <a href="/queuert/integrations/notify-adapters/postgres/">PostgreSQL notify adapter</a>.
           </>
         ),
       },
@@ -79,7 +79,7 @@ export const stateInstallOptions: (InstallOption & { notify: InstallOption[] })[
     note: () => (
       <>
         Suitable for local development, CLI tools, and embedded applications. Requires SQLite 3.42+.
-        See <a href="/queuert/integrations/state-adapters/sqlite/">SQLite State Adapter</a>.
+        See <a href="/queuert/integrations/state-adapters/sqlite/">SQLite state adapter</a>.
       </>
     ),
     notify: [
@@ -94,7 +94,7 @@ export const stateInstallOptions: (InstallOption & { notify: InstallOption[] })[
               synchronous provider
             </a>
             . No server to run. See{" "}
-            <a href="/queuert/integrations/notify-adapters/ipc/">IPC Notify Adapter</a>.
+            <a href="/queuert/integrations/notify-adapters/ipc/">IPC notify adapter</a>.
           </>
         ),
       },
@@ -120,7 +120,7 @@ export const stateInstallOptions: (InstallOption & { notify: InstallOption[] })[
       <>
         For applications whose data lives in MySQL or MariaDB. Requires MySQL 8.4+ or MariaDB 11.4+
         (InnoDB). See{" "}
-        <a href="/queuert/integrations/state-adapters/mysql/">MySQL / MariaDB State Adapter</a>.
+        <a href="/queuert/integrations/state-adapters/mysql/">MySQL / MariaDB state adapter</a>.
       </>
     ),
     notify: [redisNotify, natsNotify, noNotify],
@@ -137,7 +137,7 @@ export const stateInstallOptions: (InstallOption & { notify: InstallOption[] })[
       <>
         Queuert's state on Redis or Redis Cluster, kept apart from your application database.
         Requires Redis 6+. See{" "}
-        <a href="/queuert/integrations/state-adapters/redis/">Redis State Adapter</a>.
+        <a href="/queuert/integrations/state-adapters/redis/">Redis state adapter</a>.
       </>
     ),
     notify: [redisNotify, natsNotify, noNotify],

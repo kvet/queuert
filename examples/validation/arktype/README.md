@@ -1,4 +1,4 @@
-# Runtime Validation with ArkType
+# Runtime validation with ArkType
 
 Custom validation adapter backed by ArkType — covers nominal (by type name) and structural (by input shape) reference validation.
 

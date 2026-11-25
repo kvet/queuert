@@ -1,4 +1,4 @@
-# MySQL State Adapter (Prisma)
+# MySQL state adapter (Prisma)
 
 MySQL state storage via `@queuert/mysql` with Prisma ORM and its `@prisma/adapter-mariadb` driver adapter, which also connects to MySQL — job creation and completion inside application transactions.
 

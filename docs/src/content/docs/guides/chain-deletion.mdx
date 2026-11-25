@@ -1,8 +1,8 @@
 ---
-title: Chain Deletion
-description: Delete chains with blocker safety.
+title: Chain deletion
+description: Delete chains safely, with checks for chains that still block other chains.
 sidebar:
-  order: 13
+  order: 14
 ---
 
 import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/diagram";
@@ -17,7 +17,7 @@ Use `deleteChain` to target a single chain — it returns the deleted chain or `
 
 <ExampleCode example="guides" file="src/chain-deletion.ts" region="delete-single" />
 
-## Blocker Safety
+## Blocker safety
 
 <Diagram label="Two fetch-data chains block generate-report; deleting a fetch-data chain alone is rejected, deleting all three together succeeds">
   <Group title="one deleteChains call" dashed>
@@ -41,7 +41,7 @@ Before deleting, the system checks whether any external chain depends on the tar
 
 <ExampleCode example="guides" file="src/chain-deletion.ts" region="blocker-safety" />
 
-## Deleting a Chain with Its Blockers
+## Deleting a chain with its blockers
 
 Deletion never follows blocker relationships on its own. To remove a chain together with the chains it waits on, collect its blocker chains with `getJobBlockers` and pass them in the same `deleteChains` call:
 
@@ -49,8 +49,8 @@ Deletion never follows blocker relationships on its own. To remove a chain toget
 
 `getJobBlockers` takes a job ID: a chain's head job has the chain's ID, and a continuation declared with its own `blockers` has to be queried separately (list the chain's jobs with `listChainJobs`). Repeat the lookup on each blocker chain to reach blockers of blockers. If any chain in the set is still a blocker of a job outside it — for example, a blocker shared with another report — the call throws `BlockerReferenceError` and deletes nothing; leave that chain out, or add its dependents to the set.
 
-## What Gets Deleted
+## What gets deleted
 
 Given a list of `ids`, the operation deletes all jobs in each chain (every job where `job.chainId` matches a provided ID, including the head and continuations), together with the blocker references those jobs hold on other chains. References pointing at a deleted chain from a job outside the deletion set are never removed — they make the whole deletion fail.
 
-See [examples/guides/src/chain-deletion.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/chain-deletion.ts) for the runnable code. See also [Tx Hooks](../tx-hooks/) and [Job Blockers](../job-blockers/).
+The runnable code is in [examples/guides/src/chain-deletion.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/chain-deletion.ts). Related: [Tx hooks](../tx-hooks/) and [Job blockers](../job-blockers/).

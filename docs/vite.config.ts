@@ -9,15 +9,32 @@ import { dashboardDemoWorker, writeDashboardDemoWorker } from "./plugins/dashboa
 import { pageHref, writeSearchIndex } from "./plugins/search-index.ts";
 import { writeSiteFiles } from "./plugins/site-files.ts";
 import { finishStaticOutput } from "./plugins/static-output.ts";
+import { tutorialTypes } from "./plugins/tutorial-types.ts";
 import { siteUrl } from "./src/docs/site.ts";
 
 const base = new URL(siteUrl).pathname;
 
 export default defineConfig({
   base,
+  worker: { format: "es", plugins: () => [tutorialTypes()] },
+  optimizeDeps: {
+    include: [
+      "@codemirror/autocomplete",
+      "@codemirror/commands",
+      "@codemirror/lang-javascript",
+      "@codemirror/language",
+      "@codemirror/lint",
+      "@codemirror/state",
+      "@codemirror/view",
+      "@lezer/highlight",
+      "minisearch",
+      "typescript",
+    ],
+  },
   plugins: [
     content({ base }),
     dashboardDemoWorker({ base }),
+    tutorialTypes(),
     tailwindcss(),
     solidPlugin({
       start: { renderMode: "async" },

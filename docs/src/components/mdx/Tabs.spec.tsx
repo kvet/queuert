@@ -40,4 +40,19 @@ describe("Tabs", () => {
     expect(html).toContain("pino output");
     expect(html).toContain("winston output");
   });
+
+  it("selects the tab named by value", () => {
+    const picked = renderToString(() => (
+      <Tabs syncKey="logger" value="Winston">
+        <TabItem label="Console">
+          <p>console output</p>
+        </TabItem>
+        <TabItem label="Winston">
+          <p>winston output</p>
+        </TabItem>
+      </Tabs>
+    ));
+    const panels = picked.match(/<[^>]*role="tabpanel"[^>]*>/g) ?? [];
+    expect(panels.map((tag) => /\shidden(\s|>|=)/.test(tag))).toEqual([true, false]);
+  });
 });

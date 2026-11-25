@@ -2,6 +2,7 @@ import { ExampleCode } from "../../../../components/ExampleCode.tsx";
 import { ExampleRows } from "../../../../components/ExampleList.tsx";
 import { type FieldItem, FieldList } from "../../../../components/FieldList.tsx";
 import { Aside } from "../../../../components/mdx/Aside.tsx";
+import { Code } from "../../../../components/mdx/Code.tsx";
 import { TabItem, Tabs } from "../../../../components/mdx/Tabs.tsx";
 import { siteHref } from "../../../../docs/href.ts";
 
@@ -64,9 +65,18 @@ const Page = () => (
         Calls <code>createJobTypes</code> with functions that delegate to the schema library.
       </li>
     </ol>
+    <h2>When to use it</h2>
     <p>
-      When to use runtime validation instead of the type-only <code>defineJobTypes</code> is covered
-      in the <a href={siteHref("/guides/runtime-validation/")}>Runtime Validation</a> guide.
+      <code>defineJobTypes</code> gives compile-time type safety with zero runtime cost. When job
+      inputs come from outside your program — HTTP handlers, dashboards, cross-service cron payloads
+      — TypeScript can't reject a malformed value before your handler runs.{" "}
+      <code>createJobTypes</code> closes that gap with callbacks that run at every boundary the
+      library touches (entry, input, output, continuation, blockers).
+    </p>
+    <p>
+      Reach for it when inputs cross a trust boundary, or when you already depend on a schema
+      library and want the same schemas to guard your jobs. Stick with <code>defineJobTypes</code>{" "}
+      when every caller is internal code TypeScript already checks.
     </p>
 
     <h2 id="runtime-form-vs-stored-form">Runtime form vs stored form</h2>
@@ -104,6 +114,38 @@ const Page = () => (
       time, and a definition carrying a <code>Date</code>, <code>Map</code> or <code>bigint</code>{" "}
       is a type error.
     </p>
+
+    <h3>Values that aren't JSON</h3>
+    <p>
+      A <code>Date</code>, <code>Map</code> or <code>bigint</code> needs a codec adapter that
+      converts it to a stored form on every write and back on every read. A Zod codec does that in
+      one schema:
+    </p>
+    <Code lang="ts">{`const zDate = z.codec(z.iso.datetime(), z.date(), {
+  decode: (iso) => new Date(iso),
+  encode: (date) => date.toISOString(),
+});
+
+const jobTypes = createZodCodecJobTypes({
+  "send-reminder": {
+    entry: true,
+    input: z.object({ sendAt: zDate }),
+    output: z.object({ sent: z.boolean() }),
+  },
+});`}</Code>
+    <p>
+      <code>sendAt</code> is a <code>Date</code> in the handler and a string in the database. See
+      the <code>validation/codec-zod</code> example for the full chain.
+    </p>
+    <p>
+      When you'd rather not write a codec per type, one codec can serve every job type. The{" "}
+      <code>validation/codec-superjson</code> example declares job types as plain TypeScript types
+      holding a <code>Date</code>, <code>Map</code> or <code>bigint</code> and stores each value as
+      superjson's <code>{"{ json, meta }"}</code> envelope:
+    </p>
+    <Code lang="ts">{`const jobTypes = createSuperjsonJobTypes<{
+  "send-reminder": { entry: true; input: { sendAt: Date }; output: { sent: boolean } };
+}>({ "send-reminder": true });`}</Code>
 
     <h2>Define job types</h2>
     <Tabs syncKey="validation-library">
@@ -148,12 +190,6 @@ const Page = () => (
     </p>
     <FieldList title="JobTypes" idPrefix="method" items={boundaries()} />
 
-    <p>
-      A rejected value throws <code>JobTypeValidationError</code>; its codes and how it surfaces are
-      in <a href={siteHref("/guides/runtime-validation/#how-errors-surface")}>Runtime Validation</a>
-      .
-    </p>
-
     <h3>Codec calls</h3>
     <p>
       Each codec method takes the <code>typeName</code> and the value. An adapter whose schemas only
@@ -172,6 +208,44 @@ const Page = () => (
       dashboard page listing it — fail. Delete the chains of a job type before removing it, and
       change a schema in a way that still decodes rows written under the previous one.
     </Aside>
+
+    <h2 id="how-errors-surface">How errors surface</h2>
+    <p>
+      A failed validation throws <code>JobTypeValidationError</code>. A <code>code</code> identifies
+      which boundary rejected the value, and <code>typeName</code> identifies the job type:
+    </p>
+    <Code lang="ts">{`import { JobTypeValidationError } from "queuert";
+
+try {
+  await stateProvider.withTransaction(async (txCtx) =>
+    client.createChain({ ...txCtx, typeName: "send-email", input: untrusted }),
+  );
+} catch (err) {
+  if (err instanceof JobTypeValidationError && err.code === "invalid_input") {
+    // 400 to the caller — the payload was malformed
+  }
+}`}</Code>
+    <p>
+      Errors thrown by the underlying schema library (<code>ZodError</code>, <code>ValiError</code>,{" "}
+      <code>TypeBoxError</code>, ...) are caught and wrapped, so callers always handle a single
+      error type regardless of which library the adapter uses. The five codes are{" "}
+      <code>not_entry_point</code>, <code>invalid_input</code>, <code>invalid_output</code>,{" "}
+      <code>invalid_continuation</code>, and <code>invalid_blockers</code>. <code>details</code>{" "}
+      holds what failed validation (the input, output, continuation target or blockers), and{" "}
+      <code>cause</code> the error the validation function threw. When an encoder returns a value
+      that is not JSON-serializable, <code>details</code> holds that encoded value and the{" "}
+      <code>path</code> to the offending part, such as <code>["items", 1, "at"]</code>.
+    </p>
+    <p>
+      The client's <code>createChains</code> and <code>applyJobOutcomes</code>, and a batched
+      attempt handler's <code>applyJobOutcomes</code>, validate every item before throwing, and
+      throw <code>JobsTypeValidationError</code>: <code>itemIndexes</code> lists the position of
+      each rejected item in <code>items</code>, and <code>errors</code> holds its{" "}
+      <code>JobTypeValidationError</code>, in the same order. When items fail with different kinds
+      of errors, it lists the items of the first kind, and blockers are validated after the other
+      checks pass. How a validation error interacts with retries and chain failure is in{" "}
+      <a href={siteHref("/guides/error-handling/")}>Error Handling</a>.
+    </p>
 
     <h2>Conformance</h2>
     <p>

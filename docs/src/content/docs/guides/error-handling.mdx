@@ -1,17 +1,33 @@
 ---
-title: Error Handling
-description: Discriminated unions, compensation patterns, and rescheduling.
+title: Error handling
+description: Return errors as typed job outputs, compensate for failed steps and reschedule jobs.
 sidebar:
-  order: 7
+  order: 5
 ---
 
-import { Arrow, Diagram, Flow, Node } from "../../../components/diagram";
+import { Arrow, Diagram, Flow, Loop, Node, Rows } from "../../../components/diagram";
 
-Queuert provides only job completion — there is no built-in "failure" state. This is intentional: you control how errors are represented in your job outputs. There is no dead-letter queue either: a job that keeps throwing keeps being rescheduled, with its last error in [`lastAttemptError`](#lastattempterror).
+Queuert has no built-in "failure" state, only job completion, so you choose how errors are represented in your job outputs. There is no dead-letter queue either: a job that keeps throwing keeps being rescheduled, with its last error in [`lastAttemptError`](#lastattempterror).
 
-## Discriminated Union
+## Discriminated union
 
 Return error information in your output type. `process-payment` completes with either a transaction ID or the reason the payment was declined:
+
+<Diagram label="process-payment completes with success and a transactionId, or with a decline and an error">
+  <Flow>
+    <Node>process-payment</Node>
+    <Rows spine>
+      <Flow>
+        <Arrow label="success: true" />
+        <Node status="completed" sub="transactionId">output</Node>
+      </Flow>
+      <Flow>
+        <Arrow label="success: false" failure />
+        <Node status="completed" sub="error">output</Node>
+      </Flow>
+    </Rows>
+  </Flow>
+</Diagram>
 
 <ExampleCode example="guides" file="src/error-handling.ts" region="union-types" />
 
@@ -51,11 +67,21 @@ When the carrier rejects the order, the processor continues with the refund in t
 
 ## Rescheduling
 
-When a job throws an error, the job is rescheduled with exponential backoff; this is what other queues call a retry. The delay grows with `consecutiveFailures`, the number of attempts in a row that failed, so a job that rescheduled itself on purpose starts again from the initial delay when it later fails. `fetch-exchange-rate` lets the rate provider's error propagate, and a worker runs a new attempt after the delay its `backoffConfig` sets:
+A job that throws is rescheduled with backoff, which other queues call a retry; the [Worker runner](/queuert/how-it-works/worker-runner/#retry-and-backoff) owns the delay formula and `backoffConfig`. `fetch-exchange-rate` lets the rate provider's error propagate, and a worker runs a new attempt after the delay:
+
+<Diagram label="fetch-exchange-rate throws and is rescheduled with backoff until an attempt completes with the rate">
+  <Flow>
+    <Loop label="throws, rescheduled with backoff">
+      <Node>fetch-exchange-rate</Node>
+    </Loop>
+    <Arrow label="output" />
+    <Node status="completed">rate</Node>
+  </Flow>
+</Diagram>
 
 <ExampleCode example="guides" file="src/error-handling.ts" region="rescheduling" />
 
-For explicit control over when the next attempt runs, see [Rescheduling from a Handler](../scheduling/#rescheduling-from-a-handler).
+For explicit control over when the next attempt runs, see [Rescheduling from a handler](../scheduling/#rescheduling-from-a-handler).
 
 ## lastAttemptError
 
@@ -69,4 +95,4 @@ When the last attempt failed, `job.lastAttemptError` contains its serialized err
 
 Values are truncated to 10,000 characters.
 
-See [examples/guides/src/error-handling.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/error-handling.ts) for the runnable code. See also [Job Processing Reliability](../../how-it-works/processing-reliability/) for engine-level safety guarantees such as the handler's token-guarded `applyJobOutcome` and automatic reschedule, and [Timeouts](../timeouts/).
+The runnable code is in [examples/guides/src/error-handling.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/error-handling.ts). Related: [Job processing reliability](../../how-it-works/processing-reliability/) for engine-level safety guarantees such as the handler's token-guarded `applyJobOutcome` and automatic reschedule, and [Timeouts](../timeouts/).

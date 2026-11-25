@@ -1,4 +1,4 @@
-# SQLite State Adapter (MikroORM)
+# SQLite state adapter (MikroORM)
 
 SQLite state storage via `@queuert/sqlite` with MikroORM — job creation and completion inside `em.transactional`, with commit and rollback callbacks taken from MikroORM's transaction events, so calls take `{ em }` alone and no `txHooks`. MikroORM's SQLite driver runs on one better-sqlite3 connection through Kysely, which holds it for the whole transaction, so writers are serialized without an external lock.
 

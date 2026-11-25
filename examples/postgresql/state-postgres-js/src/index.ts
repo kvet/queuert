@@ -12,10 +12,8 @@ import {
 import { createMigrations } from "./migrations.ts";
 import { createPostgresJsStateProvider } from "./provider.ts";
 
-// Start PostgreSQL using testcontainers
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
-// Create database connection and schema
 await using drivers = new AsyncDisposableStack();
 const sql = drivers.adopt(postgres(pg.connectionString, { max: 10 }), async (sql) => sql.end());
 
@@ -27,16 +25,14 @@ await sql`
   )
 `;
 
-// Define job types
 const jobTypes = defineJobTypes<{
-  send_welcome_email: {
+  "send-welcome-email": {
     entry: true;
     input: { userId: number };
     output: { sentAt: string };
   };
 }>();
 
-// Create providers and adapters
 // #region adapter
 const stateProvider = createPostgresJsStateProvider({ sql });
 await using stateAdapter = createPgStateAdapter({ stateProvider });
@@ -84,14 +80,13 @@ await using workerRunner = createWorkerRunner({
     client,
     jobTypes,
     processors: {
-      send_welcome_email: {
+      "send-welcome-email": {
         attemptHandler: async ({ job, applyJobOutcome }) => {
           const [user] = await sql<{ id: number; name: string; email: string }[]>`
             SELECT id, name, email FROM users WHERE id = ${job.input.userId}
           `;
           if (!user) throw new Error(`User ${job.input.userId} not found`);
 
-          // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
           await withTxHooks(async (txHooks) =>
@@ -107,7 +102,6 @@ await using workerRunner = createWorkerRunner({
 
 await workerRunner.start();
 
-// Register a new user and queue welcome email atomically
 const chain = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) => {
     const [user] = (await txSql.unsafe(
@@ -118,13 +112,12 @@ const chain = await withTxHooks(async (txHooks) =>
     return client.createChain({
       txSql,
       txHooks,
-      typeName: "send_welcome_email",
+      typeName: "send-welcome-email",
       input: { userId: user.id },
     });
   }),
 );
 
-// Wait for the chain to complete
 const result = await client.awaitChain({ chain, timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);
 

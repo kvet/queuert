@@ -25,5 +25,5 @@ yarn add @queuert/ipc
 ## Documentation
 
 - [Notify Adapters Guide](https://kvet.github.io/queuert/integrations/notify-adapters/ipc/)
-- [API Reference](https://kvet.github.io/queuert/api/ipc/readme/)
-- [Full Documentation](https://kvet.github.io/queuert/)
+- [API reference](https://kvet.github.io/queuert/api/ipc/readme/)
+- [Full documentation](https://kvet.github.io/queuert/)

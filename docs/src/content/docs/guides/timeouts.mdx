@@ -1,18 +1,28 @@
 ---
 title: Timeouts
-description: Cooperative timeouts and the worker lease.
+description: Bound an attempt with a cooperative timeout, and know what the worker lease does and does not limit.
 sidebar:
-  order: 8
+  order: 6
 ---
+
+import { Arrow, Diagram, Flow, Node } from "../../../components/diagram";
+
+<Diagram label="A cooperative timeout: the handler passes job.signal combined with a timeout to the work; when the timeout fires it completes with a timedOut output, and any other error is rethrown so the job is rescheduled with backoff">
+  <Flow>
+    <Node status="running" sub="job.signal + AbortSignal.timeout">work</Node>
+    <Arrow label="timeout fires" />
+    <Node status="completed" sub="timedOut output">complete</Node>
+  </Flow>
+</Diagram>
 
 For cooperative timeouts, combine `job.signal` with `AbortSignal.timeout` and pass the combined signal to the work. When the timeout fires, the handler below completes with a `timedOut` output; on any other error, including `job.signal` aborting, it rethrows so the job is rescheduled with backoff:
 
 <ExampleCode example="guides" file="src/timeouts.ts" region="cooperative-timeout" />
 
-The worker's lease, set by `leaseConfig`, is not a runtime limit: it bounds how long a crashed worker's jobs wait before another worker picks them up. Each worker's heartbeat renews its lease every `heartbeatMs`, however many attempts it runs, so a handler may run far longer than the lease's `durationMs`. The lease only expires when the worker stops renewing it — it crashed, its event loop stalled, or it lost its database connection. On SQLite, a user transaction that holds an async provider's write lock, or blocks the thread with a synchronous provider, past the worker's local deadline also makes the worker give up its lease. Either way the jobs running under it are reclaimed and start a new attempt. Use the cooperative `job.signal` pattern above for real runtime limits.
+The worker's lease is not a runtime limit: it bounds how long a crashed worker's jobs wait before another worker picks them up, and a handler may run far longer than its `durationMs` because the heartbeat keeps renewing it. Use the cooperative `job.signal` pattern above for real runtime limits. The [Worker runner](/queuert/how-it-works/worker-runner/#worker-lease) owns the lease, its heartbeat and reclaim.
 
-The worker runner below holds a lease of 1000 ms, renewed every 300 ms, and `rebuild-search-index` waits for its `job.input.durationMs`, which the example sets to 3000 ms: it completes on its first attempt because the heartbeat keeps renewing the lease. `heartbeatMs` must stay below a third of the lease's `durationMs`.
+The worker runner below holds a lease of 1000 ms, renewed every 300 ms, and `rebuild-search-index` waits for its `job.input.durationMs`, which the example sets to 3000 ms: it completes on its first attempt because the heartbeat keeps renewing the lease.
 
 <ExampleCode example="guides" file="src/timeouts.ts" region="lease-config" />
 
-See [examples/guides/src/timeouts.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/timeouts.ts) for the runnable code. See also [Error Handling](../error-handling/) and the [Worker Lease](/queuert/how-it-works/worker-runner/#worker-lease) reference.
+The runnable code is in [examples/guides/src/timeouts.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/timeouts.ts). Related: [Error handling](../error-handling/) and the [Worker lease](/queuert/how-it-works/worker-runner/#worker-lease) reference.

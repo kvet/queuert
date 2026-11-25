@@ -5,16 +5,15 @@ import { comparedQueuertVersion } from "../../../data/comparison.ts";
 
 export const meta = {
   title: "pg-boss",
-  description:
-    "How Queuert relates to pg-boss — different tools for different shapes of background work.",
+  description: "How Queuert compares with pg-boss, a PostgreSQL-backed job queue.",
 };
 
 const Page = () => (
   <>
     <p>
       <a href="https://github.com/timgit/pg-boss">pg-boss</a> and Queuert both run background work
-      and both store it in Postgres. They aren't the same kind of tool, and choosing between them is
-      mostly a question of which kind you need.
+      and both store it in PostgreSQL. They aren't the same kind of tool, and choosing between them
+      is mostly a question of which kind you need.
     </p>
     <blockquote>
       <p>
@@ -25,23 +24,19 @@ const Page = () => (
     <CompareMatrix tools={["queuert", "pg-boss"]} />
     <h2>What pg-boss is</h2>
     <p>
-      pg-boss is a <strong>Postgres-backed job queue</strong>. The mental model is messages routed
+      pg-boss is a <strong>PostgreSQL-backed job queue</strong>. The mental model is messages routed
       through named queues, with rich policies attached to each queue (singleton, exclusive,
       strict-FIFO, throttling), retries with backoff, cron schedules, dead-letter queues, job
       dependency flows, and a supervisor that runs maintenance for you. In production since 2016,
-      polling by default with opt-in <code>LISTEN/NOTIFY</code>, on Postgres or a
-      Postgres-compatible database.
+      polling by default with opt-in <code>LISTEN/NOTIFY</code>, on PostgreSQL or a
+      PostgreSQL-compatible database.
     </p>
     <p>
-      You install it, point it at Postgres, create queues, and <code>send</code> jobs to them.
+      You install it, point it at PostgreSQL, create queues, and <code>send</code> jobs to them.
       Workers poll those queues and run handlers.
     </p>
     <QueuertSummary />
-    <h2>They aren't directly comparable</h2>
-    <p>
-      It's tempting to ask "does Queuert have a DLQ?" or "does pg-boss support transactional
-      outbox?" and conclude one of them is missing features. That framing doesn't fit:
-    </p>
+    <h2>Queues and chains</h2>
     <ul>
       <li>
         <strong>Queue concepts</strong> like DLQs, queue policies, named lanes, and rate limits are
@@ -56,10 +51,6 @@ const Page = () => (
         pg-boss is modeling queues, not chained execution.
       </li>
     </ul>
-    <p>
-      The narrow overlap is "both let you defer work into the background and persist it in Postgres
-      so it survives crashes." Beyond that, the shapes diverge.
-    </p>
     <h2>What pg-boss is good at</h2>
     <ul>
       <li>
@@ -95,38 +86,18 @@ const Page = () => (
         <strong>Maturity.</strong> In production since 2016, widely used, well-documented.
       </li>
     </ul>
+    <h2>Wakeup</h2>
     <p>
-      These are what a <em>queue</em> should be good at, and pg-boss invests heavily in them.
+      pg-boss polls every <code>pollingIntervalSeconds</code> (default 2s) unless you enable{" "}
+      <code>useListenNotify</code> and <code>notify</code> on a queue; it then wakes on{" "}
+      <code>LISTEN/NOTIFY</code> and keeps a slower poll as a backstop. With a notify adapter —{" "}
+      <code>LISTEN/NOTIFY</code>, Redis, or NATS — Queuert workers wake when a row commits,
+      typically within tens of milliseconds; without one, workers in other processes poll, every 60
+      s by default.
     </p>
-    <h2>Differences worth knowing about</h2>
-    <p>
-      A few practical differences are worth calling out — not as scorecard rows, but as things you'd
-      hit operationally:
-    </p>
-    <ul>
-      <li>
-        <strong>Wakeup mechanism.</strong> pg-boss polls every <code>pollingIntervalSeconds</code>{" "}
-        (default 2s) unless you enable <code>useListenNotify</code> and <code>notify</code> on a
-        queue; it then wakes on <code>LISTEN/NOTIFY</code> and keeps a slower poll as a backstop.
-        With a notify adapter — <code>LISTEN/NOTIFY</code>, Redis, or NATS — Queuert workers wake
-        when a row commits, typically within tens of milliseconds; without one, workers in other
-        processes poll, every 60 s by default.
-      </li>
-      <li>
-        <strong>Failure shape.</strong> In pg-boss, final failure routes the job to a dead-letter
-        queue (or its own <code>failed</code> set). In Queuert, the error stays on the job as{" "}
-        <code>lastAttemptError</code>; what happens next is an application decision. These are
-        direct consequences of "queue" vs. "job-chain library."
-      </li>
-      <li>
-        <strong>Storage backends.</strong> pg-boss runs on Postgres and Postgres-compatible
-        databases (CockroachDB, Citus, PGlite). Queuert works against Postgres, SQLite, or
-        MySQL/MariaDB and Redis (both experimental).
-      </li>
-    </ul>
     <h2>Transactional consistency, both ends</h2>
     <p>
-      Both pg-boss and Queuert store state in your Postgres, so the question isn't "is the state
+      Both pg-boss and Queuert store state in your PostgreSQL, so the question isn't "is the state
       nearby?" — it's "is the API wired to commit your domain write atomically with the queue's
       state mutation?" pg-boss offers it at both ends as options you turn on per call or per worker;
       in Queuert it is the only path.
@@ -224,7 +195,7 @@ const Page = () => (
       charge) still need idempotency keys — Queuert structurally fixes the DB half of at-least-once,
       not the network half. Cross-DB writes (handler writing to a separate microservice's database
       via API) still need an outbox at that boundary. For the chunk of your application where one
-      Postgres is the source of truth, both outboxes go away.
+      PostgreSQL is the source of truth, both outboxes go away.
     </p>
     <h2>Choosing between them</h2>
     <p>The decision is mostly about which shape of tool fits your problem:</p>

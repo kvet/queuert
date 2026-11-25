@@ -1,19 +1,31 @@
 ---
 title: Cleanup
-description: How to implement automatic cleanup of completed chains.
+description: Delete completed chains automatically with a recurring cleanup job.
 sidebar:
   order: 15
 ---
 
+import { Arrow, Diagram, Flow, Node, Rows, Transition } from "../../../components/diagram";
+
 Without cleanup, the job table grows unboundedly as completed chains accumulate. This guide shows how to implement cleanup as a regular Queuert job — listing completed chains older than a cutoff date, deleting them in batches using cursor pagination, and scheduling the next run.
 
-## Define a Cleanup Job Type
+<Diagram label="Completed chains age past the retention cutoff, the cleanup job deletes them in batches, then schedules its next run">
+  <Flow>
+    <Node status="completed" sub="completed before the cutoff">chains</Node>
+    <Arrow label="deleteChains" sub="in batches" />
+    <Node sub={<Transition from="running" to="completed" />}>queuert.cleanup</Node>
+    <Arrow label="schedule" sub="next run" dashed />
+    <Node sub={<Transition from="pending" to="running" />}>queuert.cleanup</Node>
+  </Flow>
+</Diagram>
+
+## Define a cleanup job type
 
 Cleanup is an entry job type with no input and no output; each run schedules the next one as a new chain:
 
 <ExampleCode example="guides" file="src/cleanup.ts" region="job-types" />
 
-## Write the Processor
+## Write the processor
 
 The processor lists the completed chains of every type in batches, deletes each batch in its own transaction, and completes by scheduling the next run:
 
@@ -36,7 +48,7 @@ Key patterns used:
 - **Complete before scheduling** — `applyJobOutcome({ output: null })` applies the completion inside the same transaction, so the next run is created against an already-completed chain and does not deduplicate against the one finishing
 - **`schedule`** — defers the next run by `CLEANUP_INTERVAL_MS`
 
-## Merge and Start
+## Merge and start
 
 Compose the cleanup slice with your application slices by passing arrays. The client takes both job type registries:
 
@@ -46,7 +58,7 @@ The worker runner takes both processor registries:
 
 <ExampleCode example="guides" file="src/cleanup.ts" region="merge-worker" />
 
-## Schedule the First Run
+## Schedule the first run
 
 Schedule the initial cleanup at application startup. Deduplication makes this idempotent: while a cleanup chain is running, including a next run that is scheduled but not yet started, calling it again returns that chain:
 
@@ -54,7 +66,7 @@ Schedule the initial cleanup at application startup. Deduplication makes this id
 
 After the first run completes, the cleanup job automatically schedules its next run.
 
-## Customization Ideas
+## Customization ideas
 
 Since this is your own job type, you can adapt the logic freely:
 
@@ -63,4 +75,4 @@ Since this is your own job type, you can adapt the logic freely:
 - **Metrics** — emit the number of deleted chains to your observability system
 - **Alerting** — when the deletion count exceeds a threshold, throw from the handler so the attempt is rescheduled, or emit an alert
 
-See [examples/guides/src/cleanup.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/cleanup.ts) for the runnable code. See also [Scheduling](../scheduling/) for recurring job patterns, [Chain Deletion](../chain-deletion/) for blocker safety, and [Feature Slices](../slices/) for merging registries.
+The runnable code is in [examples/guides/src/cleanup.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/cleanup.ts). Related: [Scheduling](../scheduling/) for recurring job patterns, [Chain deletion](../chain-deletion/) for blocker safety, and [Feature slices](../slices/) for merging registries.

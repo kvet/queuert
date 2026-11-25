@@ -4,8 +4,7 @@ import { comparedQueuertVersion } from "../../../data/comparison.ts";
 
 export const meta = {
   title: "Inngest",
-  description:
-    "How Queuert relates to Inngest — different categories that overlap on multi-step durable work.",
+  description: "How Queuert compares with Inngest, an event-driven durable execution platform.",
 };
 
 const Page = () => (
@@ -38,8 +37,7 @@ const Page = () => (
       your app and discovered by the server when it pings your endpoint.
     </p>
     <QueuertSummary />
-    <h2>Different tools — overlapping problem space</h2>
-    <p>Both can express multi-step durable work, but they start from different places:</p>
+    <h2>Events and transactions</h2>
     <ul>
       <li>
         <strong>Inngest</strong> starts from events. You publish events; functions subscribe to
@@ -54,10 +52,6 @@ const Page = () => (
         Workers in your process pull and execute jobs.
       </li>
     </ul>
-    <p>
-      Both can model "a 5-step background workflow." The difference shows up in (1) how it's
-      triggered, (2) where it executes, and (3) what runtime it requires.
-    </p>
     <h2>What Inngest is good at</h2>
     <ul>
       <li>
@@ -111,7 +105,7 @@ const Page = () => (
       </li>
       <li>
         <strong>Operational simplicity.</strong> No platform to depend on, no service to operate.
-        Your existing Postgres (or SQLite, or MySQL/MariaDB) is the entire backing store.
+        Your existing PostgreSQL (or SQLite, or MySQL/MariaDB) is the entire backing store.
       </li>
       <li>
         <strong>Database as the system of record.</strong> Chain state lives next to your domain
@@ -125,8 +119,7 @@ const Page = () => (
     <p>
       These are what a <em>job-chain library</em> should be good at.
     </p>
-    <h2>Differences worth knowing about</h2>
-    <p>A few practical differences:</p>
+    <h2>Execution, cost and consistency</h2>
     <ul>
       <li>
         <strong>Trigger model.</strong> Inngest is event-first: you{" "}
@@ -140,20 +133,11 @@ const Page = () => (
         pulled from the DB.
       </li>
       <li>
-        <strong>Where state lives.</strong> Inngest server (managed or self-hosted) owns step state
-        and event histories. Queuert keeps everything in your application's DB.
-      </li>
-      <li>
         <strong>Per-step cost.</strong> Each Inngest <code>step.run</code> is checkpointed to the
         Inngest server over the network (batchable with <code>bufferedSteps</code>), and retries and
         parallel steps fall back to server-driven re-invocation. Queuert commits each attempt's
         outcome in one DB transaction — yours; a chain of 5 jobs is 5 DB transactions plus the
         worker's single-statement bookkeeping, no platform RTT.
-      </li>
-      <li>
-        <strong>Long durable waits.</strong> Inngest's <code>step.sleep('30d')</code> and{" "}
-        <code>step.waitForEvent</code> survive crashes / deploys. Queuert can schedule the next
-        attempt for a future time, but doesn't carry an awaiting call-stack.
       </li>
       <li>
         <strong>Transactional consistency.</strong> Inngest state lives on the Inngest server — so

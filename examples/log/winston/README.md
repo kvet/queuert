@@ -1,4 +1,4 @@
-# Winston Logging Example
+# Winston logging example
 
 Winston integration for structured logging, with contextual loggers bound to each handler call's jobs, injected via `attemptMiddleware`.
 

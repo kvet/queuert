@@ -1,8 +1,8 @@
 ---
-title: Worker Runner
+title: Worker runner
 description: Worker runner lifecycle, concurrency, and attempt management.
 sidebar:
-  order: 4
+  order: 5
 ---
 
 import {
@@ -18,17 +18,11 @@ import {
   Transition,
 } from "../../../components/diagram";
 
-## Overview
+A worker runner, returned by `createWorkerRunner`, runs one worker at a time. A worker is a row in the `worker` table with an id and a lease. The runner's main loop acquires jobs for its slots; each slot runs one attempt handler call at a time, for one job or one batch of a [batched processor](/queuert/guides/batched-processors/).
 
-This document describes the worker runner design in Queuert: how worker runners coordinate job processing, manage concurrency, and handle failures.
+## Concurrency model
 
-A **worker runner**, returned by `createWorkerRunner`, runs one **worker** at a time. A worker is a row in the `worker` table with an id and a **lease**. The worker runner runs a main loop that coordinates job processing across multiple **slots**. Each slot runs one attempt handler call at a time — one job, or one batch of a [batched processor](/queuert/guides/batched-processors/); the worker runner manages concurrency and scaling.
-
-## Concurrency Model
-
-A worker runner processes jobs in parallel using slots. See `createWorkerRunner` TSDoc for configuration options. Default: single slot (`concurrency: 1`). Each slot has an index from 0 to `concurrency - 1`, which the attempt logs carry as `workerSlot` and the attempt span as `queuert.worker.slot`.
-
-### Architecture
+A worker runner processes jobs in parallel in slots, one by default (`concurrency: 1`; the `createWorkerRunner` TSDoc lists the options). Each slot has an index from 0 to `concurrency - 1`, which the attempt logs carry as `workerSlot` and the attempt span as `queuert.worker.slot`.
 
 <Diagram label="A worker runner with concurrency 3: the main loop acquires jobs for its idle slots in one startJobAttempts call and spawns a slot per job or batch, and each slot completes its own jobs in the database">
   <Flow direction="column">
@@ -56,23 +50,21 @@ A worker runner processes jobs in parallel using slots. See `createWorkerRunner`
   </Flow>
 </Diagram>
 
-**How it works:**
+1. The main loop acquires up to the idle slot count of jobs, or of batches for a batched processor, in one `startJobAttempts` call and spawns a slot per job or batch.
+2. Each slot processes its job or batch independently.
+3. When slots complete, the main loop acquires jobs for the freed slots.
+4. Worker runners compete for jobs through database-level locking (`FOR UPDATE SKIP LOCKED` on PostgreSQL).
 
-1. Main loop acquires up to the idle slot count of jobs, or of batches for a batched processor, in one `startJobAttempts` call and spawns a slot per job or batch
-2. Each slot processes its job or batch independently
-3. When slots complete, main loop acquires jobs for the freed slots
-4. Worker runners compete for jobs via database-level locking (`FOR UPDATE SKIP LOCKED` in PostgreSQL)
+## Worker lifecycle
 
-## Worker Lifecycle
-
-### Main Loop
+### Main loop
 
 The worker runner runs a single coordinating loop:
 
-1. **Fill**: Call `startJobAttempts` with the idle slot count as `limit` and each processor's `batchLimit` (1 without one), start each returned batch in its own slot, and repeat until a call returns fewer batches than its `limit` or all slots are busy. A type's claimed jobs are its oldest due ones, split into batches of its `batchLimit`, so a processor without one gets one job per slot. Each call atomically starts the attempts of up to `limit` batches under the worker's id, so filling `N` idle slots costs one round-trip, and an idle worker runner issues one acquisition per wake-up
-2. **Reclaim**: If any idle slots remain, reschedule the worker's own running jobs that no slot runs when due, then reclaim one expired worker (see [Reclaim](#reclaim)); if a worker was reclaimed, skip the wait and start the next iteration
-3. **Wait**: Listen for notification, poll timeout, or slot completion
-4. **Repeat**
+1. **Fill.** Call `startJobAttempts` with the idle slot count as `limit` and each processor's `batchLimit` (1 without one), start each returned batch in its own slot, and repeat until a call returns fewer batches than its `limit` or all slots are busy. A type's claimed jobs are its oldest due ones, split into batches of its `batchLimit`, so a processor without one gets one job per slot. Each call atomically starts the attempts of up to `limit` batches under the worker's id, so filling `N` idle slots costs one round-trip, and an idle worker runner issues one acquisition per wake-up.
+2. **Reclaim.** If any idle slots remain, reschedule the worker's own running jobs that no slot runs when due, then reclaim one expired worker (see [Reclaim](#reclaim)); if a worker was reclaimed, skip the wait and start the next iteration
+3. **Wait.** Listen for notification, poll timeout, or slot completion.
+4. **Repeat.**
 
 If an iteration throws, the worker runner emits `workerError` and sleeps per `recoveryBackoffConfig` before the next one. Failed registrations and restarts after a lost lease back off per `recoveryBackoffConfig` too. The delay grows with each failure since the worker runner last started a job, and resets once it starts one.
 
@@ -97,13 +89,13 @@ Stopping is cooperative: the attempt is still held, so handlers that check `job.
 
 A stopped worker runner can be started again under the same `workerId`. `close()` stops it if it is started and makes every later `start()` throw. A worker runner is async disposable: `[Symbol.asyncDispose]` calls `close()`, so one held with `await using` is closed when the scope ends, before the adapters declared ahead of it. `start()` returns once processing is started, so a top-level `await using` in a long-running process closes the worker runner as soon as the module finishes, so keep the scope open until shutdown.
 
-### Lost Lease
+### Lost lease
 
 When a worker loses its lease, the worker runner registers it again under the same id. The worker runner emits `workerLeaseLost`, aborts every attempt's `job.signal`, and stops claiming and renewing. Once every attempt ended it emits `workerStopped`, reports `WorkerLeaseLostError` through `workerError`, and registers again after the recovery backoff, keeping its row in the meantime. While that row is still live, the registration fails with `WorkerAlreadyLiveError` and backs off again; once it expired, the registration reclaims it and starts. A lease loss reads `workerLeaseLost` → `workerStopped` → `workerError` → `workerStarted`, all with the same `workerId`.
 
 A handler that ignores an aborted `job.signal` holds the worker runner until it returns. Its job can be reclaimed in the meantime, and its `applyJobOutcome` then writes nothing and throws.
 
-## Worker Identity
+## Worker identity
 
 A worker runner registers under one id for its whole life, across restarts. It is the `workerId` option, or else a new id from the state adapter's `generateWorkerId`, a random UUID by default, taken when the worker runner is created. `createWorkerRunner` checks it with `validateWorkerId` and throws `InvalidWorkerIdError` if it fails.
 
@@ -111,7 +103,7 @@ Two worker runners configured with the same id never hold the worker at the same
 
 The id is stored in `attemptBy` of every attempt the worker starts. The worker runner tracks active jobs internally and routes abort signals by job ID, not by slot: every write is tied to the attempt token the job got when this slot acquired it, so a slot whose attempt was reclaimed and re-acquired by another slot of the same worker runner fails with `JobTakenByAnotherWorkerError`.
 
-## Worker Lease
+## Worker lease
 
 A running job is live exactly while the worker named by its `attemptBy` holds a live lease. The `leaseConfig` option configures that lease:
 
@@ -151,16 +143,14 @@ A worker whose lease expired holds jobs no one runs. An idle worker runner recla
 3. Notifies `notifyJobsScheduled` for the reclaimed jobs' types, so the worker runners that process them wake up
 4. Skips the wait and claims again right away
 
-**Design decisions:**
-
-- **Integrated with main loop**: Runs once per idle iteration, no separate process needed.
-- **One worker at a time**: An iteration reclaims at most one expired worker, picked at random among the oldest expired ones, so idle worker runners spread the reclaims among themselves.
-- **Any job type**: A worker runner reclaims expired workers whatever job types they processed, so the jobs of a type whose workers all crashed are recovered by any worker runner that is still running.
-- **Concurrent-safe**: The reclaim waits for the expired worker's row lock rather than skipping it. When several worker runners pick the same expired worker, the first one reclaims it and the others find it gone. A claim racing the reclaim either commits first and its jobs are rescheduled with the rest, or claims nothing.
+- **Integrated with main loop.** Runs once per idle iteration, no separate process needed.
+- **One worker at a time.** An iteration reclaims at most one expired worker, picked at random among the oldest expired ones, so idle worker runners spread the reclaims among themselves.
+- **Any job type.** A worker runner reclaims expired workers whatever job types they processed, so the jobs of a type whose workers all crashed are recovered by any worker runner that is still running.
+- **Concurrent-safe.** The reclaim waits for the expired worker's row lock rather than skipping it. When several worker runners pick the same expired worker, the first one reclaims it and the others find it gone. A claim racing the reclaim either commits first and its jobs are rescheduled with the rest, or claims nothing.
 
 **Own jobs.** A write whose outcome the worker runner could not tell — a claim that committed but threw, or a failed attempt's reschedule that threw — can leave a job running under the worker with no slot running it. On the next idle iteration after an iteration or attempt that threw, and otherwise at most once every `heartbeatMs`, the worker runner locks its worker's row and, if it is still the row this registration created, reschedules in the same way the jobs running under it that no slot runs, so a finished job never stays leased. If another registration took the id, the worker loses its lease.
 
-## Retry and Backoff
+## Retry and backoff
 
 When a job handler throws before an `applyJobOutcome` commits, or returns without a committed `applyJobOutcome`, the worker runner reschedules it with exponential backoff, in one atomic write under the attempt token:
 
@@ -168,44 +158,30 @@ When a job handler throws before an `applyJobOutcome` commits, or returns withou
 delay = min(initialDelayMs * multiplier^(consecutiveFailures-1), maxDelayMs)
 ```
 
-`consecutiveFailures` counts the failed attempts in a row, including this one, so any other outcome — a handler's `applyJobOutcome({ reschedule })`, or the client's `applyJobOutcome` with `reschedule` — starts the next failure at `initialDelayMs` again. Example with defaults: 10s → 20s → 40s → 80s → 160s → 300s → 300s...
+`consecutiveFailures` counts the failed attempts in a row, including this one, so any other outcome — a handler's `applyJobOutcome({ reschedule })`, or the client's `applyJobOutcome` with `reschedule` — starts the next failure at `initialDelayMs` again. With the defaults the delays run 10s → 20s → 40s → 80s → 160s → 300s → 300s and so on.
 
-See [Job Processing](../job-processing/) for details on error handling and abort signals.
+`backoffConfig` takes `initialDelayMs` (default 10s), `multiplier` (default 2) and `maxDelayMs` (default 300s), and resolves from processor to registry to worker runner to the library default. There is no maximum attempt count: a job that keeps failing keeps being rescheduled, with its last error in `lastAttemptError`. See [Job processing](../job-processing/#errors-and-commit-detection) for how a failed attempt is detected, and [Error handling](/queuert/guides/error-handling/) for handling permanent failures.
 
 `createWorkerRunner` validates `concurrency`, `pollIntervalMs`, `recoveryBackoffConfig`, `leaseConfig` and its `backoffConfig`, including an unused one, and `createProcessors` validates its `backoffConfig` and every processor's `backoffConfig` and `batchLimit`; each throws a `TypeError` listing every invalid field. `concurrency` and `batchLimit` must be positive integers, `initialDelayMs` finite and non-negative, `maxDelayMs` non-negative (`Infinity` means no cap), and `pollIntervalMs`, `multiplier`, `durationMs` and `heartbeatMs` finite and positive, with `heartbeatMs` below a third of `durationMs`. Fractional values are allowed for the others.
 
-## Client-Based Construction
+## Client-based construction
 
-`createWorkerRunner` accepts a `client` instance and extracts infrastructure (`stateAdapter`, `notifyAdapter`, `observabilityAdapter`, `jobTypes`, `log`) from it internally. Worker runner options (`processors`, `workerId`, `concurrency`, `pollIntervalMs`, `recoveryBackoffConfig`, `leaseConfig`, `backoffConfig`, `requiredAttemptMiddleware`) remain separate parameters. The top-level `recoveryBackoffConfig` controls the worker runner's own retry behavior (e.g., recovery from database connection errors, failed registrations and restarts after a lost lease), and `leaseConfig` the worker's lease. Per-attempt configuration — `backoffConfig`, `attemptMiddleware` — lives on the processor registry; the worker runner's `backoffConfig` is the fallback for processors that don't set their own (resolution order: processor → registry → worker runner → library default). `requiredAttemptMiddleware` enforces that every slice merged into the worker runner includes a fixed set of middleware instances as an in-order subsequence — useful for guaranteeing cross-cutting concerns like auth or tracing are present on every slice. The worker runner only enforces presence; slices continue to run their own middleware chains.
-This is purely a construction convenience — no lifecycle coupling is introduced. The client and worker runner remain independent after construction.
+`createWorkerRunner` accepts a `client` instance and extracts infrastructure (`stateAdapter`, `notifyAdapter`, `observabilityAdapter`, `jobTypes`, `log`) from it internally. Worker runner options (`processors`, `workerId`, `concurrency`, `pollIntervalMs`, `recoveryBackoffConfig`, `leaseConfig`, `backoffConfig`, `requiredAttemptMiddleware`) remain separate parameters. The top-level `recoveryBackoffConfig` controls the worker runner's own retry behavior (for example, recovery from database connection errors, failed registrations and restarts after a lost lease), and `leaseConfig` the worker's lease. Per-attempt configuration — `backoffConfig`, `attemptMiddleware` — lives on the processor registry; the worker runner's `backoffConfig` is the fallback for processors that don't set their own (resolution order: processor → registry → worker runner → library default). `requiredAttemptMiddleware` enforces that every slice merged into the worker runner includes a fixed set of middleware instances as an in-order subsequence — which guarantees that cross-cutting concerns such as auth or tracing are present on every slice. The worker runner only enforces presence; slices run their own middleware chains.
+
+Construction from a client is a convenience only: the client and the worker runner stay independent afterwards.
 
 ## Extensibility
 
-### Multi-Type Worker Runners
+### Multi-type worker runners
 
 A single worker runner can handle multiple job types. The main loop acquires jobs of all registered types for its idle slots, and each slot processes the job or batch it was given. Per-type `backoffConfig` overrides the worker runner's.
 
-### Attempt Middlewares
+### Attempt middlewares
 
-Handler middleware wrap the attempt handler via `wrapHandler`, which can inject typed context into the handler through `next(ctx)`; `next` resolves once the handler returns. Middleware compose as an onion: the first middleware's "before" runs outermost. Middleware enable cross-cutting concerns like contextual logging, tracing spans, error classification, and resource injection. See [Job Attempt Middleware](../../guides/middleware/).
+Handler middleware wrap the attempt handler via `wrapHandler`, which can inject typed context into the handler through `next(ctx)`; `next` resolves once the handler returns. Middleware compose as an onion: the first middleware's "before" runs outermost. The [Job attempt middleware](../../guides/middleware/) guide covers contextual logging, tracing spans, error classification and resource injection.
 
 Middleware are declared on the processor registry via `createProcessors({ attemptMiddleware: [...] })`. Handler signatures inside that registry auto-infer their typed context from the middleware tuple. When multiple slices are passed as an array to `createWorkerRunner`, each processor keeps its slice's middleware chain. The same holds for registries narrowed with `pickProcessors` / `omitProcessors`. Slices in the array must not share job types: an overlap fails type-checking when the array's length is known at compile time, and throws `DuplicateJobTypeError` at runtime.
 
-To share middleware across multiple registries, list them inline at each `createProcessors` call — the tuple inference narrows without requiring `as const`. Each slice's middleware chain is the runtime source of truth; the worker runner simply dispatches to whichever processor matches the job's typeName.
+To share middleware across multiple registries, list them inline at each `createProcessors` call — the tuple inference narrows without requiring `as const`. Each slice's middleware chain is the runtime source of truth; the worker runner dispatches to whichever processor matches the job's typeName.
 
-## Summary
-
-The worker runner design emphasizes:
-
-1. **Simplicity**: Single main loop coordinating parallel slots
-2. **Efficiency**: Slots are self-contained, main loop just manages concurrency
-3. **Reliability**: Integrated reclaim of expired workers ensures recovery from failures
-4. **Flexibility**: Per-type configuration, multi-type worker runners
-5. **Extensibility**: Handler middleware enable cross-cutting concerns
-
-## See Also
-
-- [Job Processing](../job-processing/) — Attempt lifecycle, `applyJobOutcome`, abort signals
-- [Notify Adapters](/queuert/integrations/notify-adapters/) — Notification delivery
-- State provider ([PostgreSQL](/queuert/integrations/state-adapters/postgres/#state-provider), [SQLite](/queuert/integrations/state-adapters/sqlite/#state-provider), [MySQL / MariaDB](/queuert/integrations/state-adapters/mysql/#state-provider), [Redis](/queuert/integrations/state-adapters/redis/#state-provider)) — How a state provider bridges your database client
-- [`guides/src/signals.ts`](https://github.com/kvet/queuert/blob/main/examples/guides/src/signals.ts) — Runnable example: graceful shutdown with partial results, external completion via `client.applyJobOutcome`
+[Job processing](../job-processing/) covers the attempt lifecycle and abort signals, and [Notify adapters](/queuert/integrations/notify-adapters/) the notification delivery. A state provider bridges your database client: see [PostgreSQL](/queuert/integrations/state-adapters/postgres/#state-provider), [SQLite](/queuert/integrations/state-adapters/sqlite/#state-provider), [MySQL / MariaDB](/queuert/integrations/state-adapters/mysql/#state-provider) and [Redis](/queuert/integrations/state-adapters/redis/#state-provider). The runnable graceful shutdown is [`guides/src/signals.ts`](https://github.com/kvet/queuert/blob/main/examples/guides/src/signals.ts).

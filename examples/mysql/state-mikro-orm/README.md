@@ -1,4 +1,4 @@
-# MySQL State Adapter (MikroORM)
+# MySQL state adapter (MikroORM)
 
 MySQL state storage via `@queuert/mysql` with MikroORM — job creation and completion inside `em.transactional`, with commit and rollback callbacks taken from MikroORM's transaction events, so calls take `{ em }` alone and no `txHooks`.
 

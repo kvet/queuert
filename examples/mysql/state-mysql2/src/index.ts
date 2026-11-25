@@ -7,10 +7,8 @@ import { createClient, createWorkerRunner, createProcessors, defineJobTypes } fr
 import { createMigrations } from "./migrations.ts";
 import { createMysql2PoolStateProvider } from "./provider.ts";
 
-// Start MySQL using testcontainers
 await using mysql = await acquireMysql("mysql:26", import.meta.url);
 
-// Create database connection and schema
 await using drivers = new AsyncDisposableStack();
 const db = drivers.adopt(
   createPool({ ...mysql.connectionOptions, connectionLimit: 10 }),
@@ -25,39 +23,36 @@ await db.query(`
   )
 `);
 
-// Define job types
 const jobTypes = defineJobTypes<{
-  send_welcome_email: {
+  "send-welcome-email": {
     entry: true;
     input: { userId: number };
     output: { sentAt: string };
   };
 }>();
 
-// Create state provider for mysql2
 // #region adapter
 const stateProvider = createMysql2PoolStateProvider({ pool: db });
 await using stateAdapter = createMysqlStateAdapter({ stateProvider, dialect: "mysql" });
 await stateAdapter.migrateToLatest();
 // #endregion
 
-// Run the application's own migrations with the same migrator
 const { applied } = await createMysqlMigrator({
   stateProvider,
   migrations: createMigrations({ db }),
 }).migrateToLatest();
 console.log(`Applied app migrations: ${applied.join(", ")}`);
 
+// #region process
 const client = createClient({ stateAdapter, jobTypes });
 
-// Create and start worker runner
 await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
     jobTypes,
     processors: {
-      send_welcome_email: {
+      "send-welcome-email": {
         attemptHandler: async ({ job, applyJobOutcome }) => {
           const [rows] = await db.query<
             ({ id: number; name: string; email: string } & RowDataPacket)[]
@@ -65,7 +60,6 @@ await using workerRunner = createWorkerRunner({
           const user = rows[0];
           if (!user) throw new Error(`User ${job.input.userId} not found`);
 
-          // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
           await stateProvider.withTransaction(async (txCtx) =>
@@ -78,22 +72,22 @@ await using workerRunner = createWorkerRunner({
 });
 
 await workerRunner.start();
+// #endregion
 
-// Register a new user and queue welcome email atomically
+// #region create-chain
 const chain = await stateProvider.withTransaction(async (txCtx) => {
   const [insert] = await txCtx.connection.query<ResultSetHeader>(
     "INSERT INTO users (name, email) VALUES (?, ?)",
     ["Alice", "alice@example.com"],
   );
 
-  // Queue welcome email - if user creation fails, no email job is created
   return client.createChain({
     ...txCtx,
-    typeName: "send_welcome_email",
+    typeName: "send-welcome-email",
     input: { userId: insert.insertId },
   });
 });
+// #endregion
 
-// Wait for the chain to complete
 const result = await client.awaitChain({ chain, timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);

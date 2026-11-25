@@ -25,5 +25,5 @@ yarn add @queuert/mysql
 ## Documentation
 
 - [State Adapters Guide](https://kvet.github.io/queuert/integrations/state-adapters/mysql/)
-- [API Reference](https://kvet.github.io/queuert/api/mysql/readme/)
-- [Full Documentation](https://kvet.github.io/queuert/)
+- [API reference](https://kvet.github.io/queuert/api/mysql/readme/)
+- [Full documentation](https://kvet.github.io/queuert/)

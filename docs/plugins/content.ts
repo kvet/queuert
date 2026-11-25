@@ -38,7 +38,7 @@ export type SourcePage = {
   file: string;
   title: string;
   description: string | null;
-  layout: "default" | "wide";
+  layout: "default" | "wide" | "step";
   date: string | null;
   api: { package: string; kind: string | null; experimental: boolean; usedIn: string[] } | null;
 };
@@ -94,7 +94,10 @@ export const pagesFromSources = (sources: { file: string; source: string }[]): S
             ? apiSummary(source)
             : null
           : String(frontmatter.description),
-      layout: frontmatter.layout === "wide" ? "wide" : "default",
+      layout:
+        frontmatter.layout === "wide" || frontmatter.layout === "step"
+          ? frontmatter.layout
+          : "default",
       date: frontmatter.date === undefined ? null : String(frontmatter.date),
       api: apiMatch
         ? {

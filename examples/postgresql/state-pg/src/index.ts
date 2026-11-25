@@ -12,10 +12,8 @@ import {
 import { createMigrations } from "./migrations.ts";
 import { createPgPoolStateProvider } from "./provider.ts";
 
-// Start PostgreSQL using testcontainers
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
-// Create database connection and schema
 await using drivers = new AsyncDisposableStack();
 const db = drivers.adopt(
   new Pool({ connectionString: pg.connectionString, max: 10 }),
@@ -30,16 +28,14 @@ await db.query(`
   );
 `);
 
-// Define job types
 const jobTypes = defineJobTypes<{
-  send_welcome_email: {
+  "send-welcome-email": {
     entry: true;
     input: { userId: number };
     output: { sentAt: string };
   };
 }>();
 
-// Create state provider for pg
 // #region adapter
 const stateProvider = createPgPoolStateProvider({ pool: db });
 await using stateAdapter = createPgStateAdapter({
@@ -58,16 +54,16 @@ const { rows: invoices } = await db.query(
 );
 console.log("Invoices:", invoices);
 
+// #region process
 const client = createClient({ stateAdapter, jobTypes });
 
-// Create and start worker runner
 await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
     jobTypes,
     processors: {
-      send_welcome_email: {
+      "send-welcome-email": {
         attemptHandler: async ({ job, applyJobOutcome }) => {
           const { rows } = await db.query<{ id: number; name: string; email: string }>(
             "SELECT id, name, email FROM users WHERE id = $1",
@@ -76,7 +72,6 @@ await using workerRunner = createWorkerRunner({
           const user = rows[0];
           if (!user) throw new Error(`User ${job.input.userId} not found`);
 
-          // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
           await withTxHooks(async (txHooks) => {
@@ -103,8 +98,9 @@ await using workerRunner = createWorkerRunner({
 });
 
 await workerRunner.start();
+// #endregion
 
-// Register a new user and queue welcome email atomically
+// #region create-chain
 const chain = await withTxHooks(async (txHooks) => {
   const poolClient = await db.connect();
   try {
@@ -116,11 +112,10 @@ const chain = await withTxHooks(async (txHooks) => {
     );
     const user = userResult.rows[0];
 
-    // Queue welcome email - if user creation fails, no email job is created
     const result = await client.createChain({
       poolClient,
       txHooks,
-      typeName: "send_welcome_email",
+      typeName: "send-welcome-email",
       input: { userId: user.id },
     });
 
@@ -133,7 +128,7 @@ const chain = await withTxHooks(async (txHooks) => {
     poolClient.release();
   }
 });
+// #endregion
 
-// Wait for the chain to complete
 const result = await client.awaitChain({ chain, timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);

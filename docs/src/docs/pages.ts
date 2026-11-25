@@ -11,6 +11,13 @@ export type DocHeading = { depth: number; text: string; id: string };
 export type DocModule = {
   default: Component<{ components?: Record<string, unknown> }>;
   headings: DocHeading[];
+  exercise?: {
+    lesson: string;
+    start: string;
+    solution: string;
+    check: string;
+    html: string;
+  };
 };
 
 const modules = import.meta.glob<DocModule>("../content/docs/**/*.{tsx,md,mdx}");
@@ -94,7 +101,9 @@ export const trail = (page: DocPage): string[] => {
   for (const section of siteSections) {
     const group = section.groups.find((candidate) => candidate.slugs.includes(page.slug));
     if (group)
-      return group.label === section.label ? [section.label] : [section.label, group.label];
+      return group.label === section.label || group.label === ""
+        ? [section.label]
+        : [section.label, group.label];
   }
   return [];
 };

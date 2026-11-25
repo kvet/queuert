@@ -1,7 +1,6 @@
 import type { MysqlStateProvider } from "@queuert/mysql";
 import { type TxHooks, withTxHooks } from "queuert";
 
-// Prisma wraps a raw query's driver error; the MySQL error number is `originalCode` on its cause.
 type PrismaDriverAdapterError = {
   meta?: {
     driverAdapterError?: {
@@ -32,7 +31,6 @@ export const createPrismaMysqlStateProvider = <TPrisma extends PrismaLikeClient>
           isolationLevel: "ReadCommitted",
         }),
       ),
-    // Prisma hides `$connect` on the interactive transaction client.
     getTransaction: (txCtx) =>
       !("$connect" in txCtx.prisma) && txCtx.txHooks.isOpen ? txCtx.txHooks : undefined,
     onTransactionCommit: (txCtx, callback) => {
@@ -51,7 +49,6 @@ export const createPrismaMysqlStateProvider = <TPrisma extends PrismaLikeClient>
       const tableName = /Table '([^']+)' doesn't exist/.exec(String(cause.originalMessage))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
     },
-    // `id` not forwarded: Prisma decides itself how each raw query is sent.
     executeSql: async ({ txCtx, sql, params }) => {
       const prismaClient = (txCtx?.prisma ?? prisma) as PrismaLikeClient;
       return prismaClient.$queryRawUnsafe(sql, ...params);

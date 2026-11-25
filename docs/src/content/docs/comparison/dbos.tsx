@@ -5,14 +5,14 @@ import { comparedQueuertVersion } from "../../../data/comparison.ts";
 export const meta = {
   title: "DBOS",
   description:
-    "How Queuert relates to DBOS Transact — two Postgres-backed libraries for durable multi-step work with different programming models.",
+    "How Queuert compares with DBOS Transact, a PostgreSQL-backed library for durable workflows.",
 };
 
 const Page = () => (
   <>
     <p>
       <a href="https://www.dbos.dev">DBOS Transact</a> is the closest neighbor in this section. Both
-      are libraries, not servers; both keep durable state in your Postgres; both commit database
+      are libraries, not servers; both keep durable state in your PostgreSQL; both commit database
       work atomically with their own bookkeeping. They differ in the programming model: DBOS replays
       a workflow function, Queuert runs a typed chain of jobs.
     </p>
@@ -27,9 +27,9 @@ const Page = () => (
     <p>
       DBOS Transact is a <strong>durable workflow library</strong>, MIT-licensed, from DBOS, Inc. A
       workflow is a registered function made of steps. DBOS checkpoints the workflow's inputs, each
-      step's output, and its outcome to a Postgres system database (a separate database by default).
-      After a crash the workflow function runs again from the top, completed steps return their
-      recorded outputs, and execution resumes after the last completed step.
+      step's output, and its outcome to a PostgreSQL system database (a separate database by
+      default). After a crash the workflow function runs again from the top, completed steps return
+      their recorded outputs, and execution resumes after the last completed step.
     </p>
     <p>
       Transaction steps run through a datasource (Knex, Kysely, Drizzle, TypeORM, Prisma,
@@ -40,7 +40,7 @@ const Page = () => (
       distributed recovery, dashboards, retention, and automatic version upgrades.
     </p>
     <QueuertSummary />
-    <h2>Different tools — overlapping problem space</h2>
+    <h2>Functions and chains</h2>
     <ul>
       <li>
         <strong>DBOS</strong> models a workflow as one async function. Loops, branches, and waits
@@ -52,10 +52,6 @@ const Page = () => (
         stored as a row, so nothing is replayed and nothing has to be deterministic.
       </li>
     </ul>
-    <p>
-      Both express the same multi-step work. The choice is mostly whether you would rather write it
-      as one function under a determinism contract, or as typed steps that hand off to each other.
-    </p>
     <h2>What DBOS is good at</h2>
     <ul>
       <li>
@@ -110,12 +106,12 @@ const Page = () => (
         adapter ship as open-source packages.
       </li>
       <li>
-        <strong>More storage and wakeup options.</strong> Postgres, SQLite, or MySQL/MariaDB and
+        <strong>More storage and wakeup options.</strong> PostgreSQL, SQLite, or MySQL/MariaDB and
         Redis (both experimental), and workers that wake on <code>LISTEN/NOTIFY</code>, Redis, or
         NATS.
       </li>
     </ul>
-    <h2>Differences worth knowing about</h2>
+    <h2>Determinism, deploys and recovery</h2>
     <ul>
       <li>
         <strong>Determinism.</strong> The{" "}
@@ -156,11 +152,6 @@ const Page = () => (
         Queuert workers wake when a job commits: in the same process by default, across processes
         with a notify adapter; without one, workers in other processes poll.
       </li>
-      <li>
-        <strong>Durable in-code waits.</strong> DBOS waits inside the workflow with{" "}
-        <code>sleep</code>, <code>recv</code>, and <code>getEvent</code>. Queuert schedules the next
-        job for later, or blocks a chain on others.
-      </li>
     </ul>
     <h2>Choosing between them</h2>
     <p>
@@ -188,7 +179,7 @@ const Page = () => (
         application database.
       </li>
       <li>You want recovery, a dashboard, and telemetry without a paid tier.</li>
-      <li>You run on MySQL, MariaDB or SQLite, or wake workers through Redis or NATS.</li>
+      <li>You run on SQLite, MySQL or MariaDB, or wake workers through Redis or NATS.</li>
     </ul>
   </>
 );

@@ -5,7 +5,7 @@ import { comparedQueuertVersion } from "../../../data/comparison.ts";
 export const meta = {
   title: "Temporal",
   description:
-    "How Queuert relates to Temporal — different categories that overlap on multi-step durable work.",
+    "How Queuert compares with Temporal, a workflow platform with its own server cluster.",
 };
 
 const Page = () => (
@@ -35,13 +35,12 @@ const Page = () => (
     </p>
     <p>
       You operate (or rent via Temporal Cloud) a separate Temporal server cluster — frontend,
-      matching, history, and worker services backed by Cassandra, MySQL, or Postgres. Your
+      matching, history, and worker services backed by Cassandra, MySQL, or PostgreSQL. Your
       application contains an SDK that polls task queues over gRPC, executes workflow code in a
       sandbox VM, and runs activities directly.
     </p>
     <QueuertSummary />
-    <h2>Different tools — overlapping problem space</h2>
-    <p>Temporal and Queuert come from different starting points and end up at different shapes:</p>
+    <h2>Platform and library</h2>
     <ul>
       <li>
         <strong>Temporal</strong> is a workflow platform. It trades operational complexity (a server
@@ -51,8 +50,8 @@ const Page = () => (
       </li>
       <li>
         <strong>Queuert</strong> is a job-chain library. It trades those things away for "you just
-        have a Postgres" — no cluster to operate, no determinism constraint, no separate durability
-        tier — and wins back transactional enqueue and structural simplicity.
+        have a PostgreSQL" — no cluster to operate, no determinism constraint, no separate
+        durability tier — and wins back transactional enqueue and structural simplicity.
       </li>
     </ul>
     <p>
@@ -118,8 +117,8 @@ const Page = () => (
       </li>
       <li>
         <strong>Operational simplicity.</strong> No cluster to run, no separate persistence tier, no
-        bundling step. Your application's database (Postgres, SQLite or MySQL/MariaDB) is the entire
-        backing store.
+        bundling step. Your application's database (PostgreSQL, SQLite or MySQL/MariaDB) is the
+        entire backing store.
       </li>
       <li>
         <strong>Database as the system of record.</strong> Chain state lives next to your domain
@@ -129,14 +128,8 @@ const Page = () => (
     <p>
       These are what a <em>job-chain library</em> should be good at.
     </p>
-    <h2>Differences worth knowing about</h2>
-    <p>A few practical differences:</p>
+    <h2>Consistency, determinism and versioning</h2>
     <ul>
-      <li>
-        <strong>Where state lives.</strong> Temporal owns workflow state in its server cluster
-        (Cassandra / MySQL / Postgres). Queuert keeps chain state in your application's DB. This
-        affects everything downstream — backups, observability, joins, transactions.
-      </li>
       <li>
         <strong>Transactional consistency.</strong> Because Temporal state lives elsewhere, both
         ends require application discipline. <em>Enqueue:</em> starting a workflow is a gRPC call to
@@ -170,11 +163,6 @@ const Page = () => (
         plain TypeScript with no such constraint.
       </li>
       <li>
-        <strong>Long durable waits.</strong> Temporal can <code>await sleep('30 days')</code> and
-        survive crashes / deploys. Queuert can schedule the next attempt for a future time, but
-        doesn't carry an awaiting call-stack across that wait.
-      </li>
-      <li>
         <strong>Runtime interaction.</strong> Temporal's signals / queries / updates are
         first-class. Queuert exposes <code>client.applyJobOutcome</code> and locked reads but
         doesn't model an externally-interactive running process.
@@ -185,11 +173,6 @@ const Page = () => (
         running workflows to the worker deployment that started them at the cost of keeping old
         workers running until those workflows drain. In Queuert, deploying new code doesn't risk
         replay drift because there's no replay.
-      </li>
-      <li>
-        <strong>Operational footprint.</strong> Temporal: a multi-service cluster (frontend /
-        matching / history / worker) plus Cassandra-class persistence, or pay for Temporal Cloud.
-        Queuert: your existing database.
       </li>
     </ul>
     <h2>Choosing between them</h2>

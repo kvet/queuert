@@ -2,7 +2,7 @@ import { ExampleCode } from "../../../../components/ExampleCode.tsx";
 import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
-  title: "Custom Notify Adapter",
+  title: "Custom notify adapter",
   description:
     "Implement the NotifyAdapter interface for another message broker and validate it with Queuert's conformance suite.",
 };

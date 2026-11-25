@@ -1,4 +1,4 @@
-# MySQL State Adapter (Drizzle ORM)
+# MySQL state adapter (Drizzle ORM)
 
 MySQL state storage via `@queuert/mysql` with Drizzle ORM over a mysql2 pool — job creation and completion inside application transactions.
 

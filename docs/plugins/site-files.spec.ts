@@ -78,15 +78,15 @@ describe("llmsTxt", () => {
   it("links the pages of each sidebar group in sidebar order, then the API packages", () => {
     const text = llmsTxt([
       page("guides/scheduling", "Scheduling", "Deferred start."),
-      page("getting-started/introduction", "Introduction", null),
+      page("learn/what-is-queuert", "What is Queuert", null),
     ]);
 
     expect(text.startsWith("# Queuert\n\n> ")).toBe(true);
     expect(text).toContain(
-      "## Docs: Getting Started\n- [Introduction](https://kvet.github.io/queuert/getting-started/introduction/)\n\n",
+      "## Learn\n- [What is Queuert](https://kvet.github.io/queuert/learn/what-is-queuert/)\n\n",
     );
     expect(text).toContain(
-      "## Docs: Guides\n- [Scheduling](https://kvet.github.io/queuert/guides/scheduling/): Deferred start.\n\n",
+      "## Guides: Timing and load\n- [Scheduling](https://kvet.github.io/queuert/guides/scheduling/): Deferred start.\n\n",
     );
     expect(text).toContain(
       "- [queuert](https://kvet.github.io/queuert/api/core/readme/): Client, worker, job types and the in-process adapters.",

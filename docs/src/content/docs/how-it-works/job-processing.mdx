@@ -1,47 +1,19 @@
 ---
-title: Job Processing
+title: Job processing
 description: How an attempt runs, finishing in your own transaction, and attempt ownership.
 sidebar:
-  order: 2
+  order: 3
 ---
 
 import { Arrow, Diagram, Flow, Group, Node, Rows, Transition } from "../../../components/diagram";
 
-## Overview
+An attempt is one run of a job's handler. Queuert opens no transaction around it: the handler does its work, then opens its own transaction and ends the attempt with `applyJobOutcome` inside it. Ownership of the job is enforced by conditional writes, not by a lock held for the attempt.
 
-This document describes how Queuert processes jobs: the transactional design, how an attempt runs from acquisition to `applyJobOutcome`, and how ownership is enforced without holding a lock for the duration of the attempt.
+## Transactional design
 
-## Transactional Design
+Jobs are created inside the same transaction as your application state, the transactional outbox pattern. If the transaction rolls back, the job is never created, and the job always references state that exists. The [Chains in your transaction](/queuert/learn/chains-in-your-transaction/) lesson shows the call; the [dual-write problem](../../blog/dual-write-problem/) post explains what it replaces.
 
-Queuert's core design principle is that **jobs are created inside the same database transaction as your application state changes**. This follows the transactional outbox pattern:
-
-```typescript
-await withTxHooks(async (txHooks) =>
-  db.transaction(async (tx) => {
-    // Application state change
-    const image = await tx.images.create({ ... });
-
-    // Job creation in the same transaction
-    // The transaction context property name matches your StateProvider
-    await client.createChain({
-      tx,
-      txHooks,
-      typeName: "process-image",
-      input: { imageId: image.id },
-    });
-  }),
-);
-```
-
-### Why This Matters
-
-1. **Atomicity**: If the transaction rolls back, the job is never created. No orphaned jobs.
-2. **Consistency**: The job always references valid application state.
-3. **No dual-write problem**: You don't need to coordinate between your database and a separate job queue.
-
-### Extending to Job Processing
-
-The same principle extends to job processing. Queuert opens no transaction around an attempt: the handler does its work — reads, external API calls, long computations — and then opens its own transaction, writes its domain changes, and calls `applyJobOutcome` inside it. The outcome (an output that completes the chain, a `continueWith` that adds the next job, or a reschedule) commits or rolls back together with those domain writes.
+The same holds at the other end. The handler does its reads, external API calls and long computations first, then opens a transaction, writes its domain changes and calls `applyJobOutcome` in it. The outcome (an output that completes the chain, a `continueWith` that adds the next job, or a reschedule) commits or rolls back together with those writes:
 
 ```typescript
 attemptHandler: async ({ job, applyJobOutcome }) => {
@@ -56,9 +28,9 @@ attemptHandler: async ({ job, applyJobOutcome }) => {
 },
 ```
 
-`applyJobOutcome` registers its observability events and notifications through the state provider's `onTransactionCommit`, so they are released only after your transaction commits. If it rolls back, none of them is sent, apart from a wake-up for the pending jobs your transaction locked; see [Tx Hooks](../../guides/tx-hooks/).
+`applyJobOutcome` registers its observability events and notifications through the state provider's `onTransactionCommit`, so they are released only after your transaction commits. If it rolls back, none of them is sent, apart from a wake-up for the pending jobs your transaction locked; see [Tx hooks](../../guides/tx-hooks/).
 
-## The Attempt Lifecycle
+## The attempt lifecycle
 
 <Diagram label="An attempt: acquire is one atomic write gated on the worker's lease; the handler's work runs outside any transaction; applyJobOutcome() commits inside the handler's own transaction; afterwards the worker checks whether an applyJobOutcome() call committed, and otherwise runs one reschedule under the attempt token">
   <Flow direction="column">
@@ -88,9 +60,9 @@ attemptHandler: async ({ job, applyJobOutcome }) => {
   </Flow>
 </Diagram>
 
-1. **Acquire.** The worker starts an attempt under its id, which it holds while the worker's lease is live; see [Worker Runner](../worker-runner/#worker-lease).
+1. **Acquire.** The worker starts an attempt under its id, which it holds while the worker's lease is live; see [Worker runner](../worker-runner/#worker-lease).
 2. **Handler.** Your handler does its work, then opens a transaction and calls `applyJobOutcome` in it.
-3. **Commit detection.** The worker records the attempt as completed if the commit callbacks of an `applyJobOutcome` call ran, and otherwise fails it; see [Errors and Commit Detection](#errors-and-commit-detection).
+3. **Commit detection.** The worker records the attempt as completed if the commit callbacks of an `applyJobOutcome` call ran, and otherwise fails it; see [Errors and commit detection](#errors-and-commit-detection).
 
 ## `applyJobOutcome`
 
@@ -100,7 +72,7 @@ attemptHandler: async ({ job, applyJobOutcome }) => {
 - `applyJobOutcome({ ...txCtx, continueWith: { typeName, input, blockers?, schedule? } })` — completes the job and adds the next job to the chain.
 - `applyJobOutcome({ ...txCtx, reschedule: { afterMs } | { at }, reason? })` — returns the job to pending without counting the attempt as failed, setting `consecutiveFailures` to 0 and storing `reason` as `lastRescheduleReason`.
 
-The transaction context is required, including every field the provider's context type requires, such as the `txHooks` of a provider that carries them in its context. `applyJobOutcome` performs several writes (for example completing the chain and unblocking its dependents), so it always needs your transaction. It throws if the state adapter's `getTransaction` reports the context as outside an open transaction, for example when you pass a pool or the root ORM handle. On PostgreSQL it can run at any isolation level, and at REPEATABLE READ or SERIALIZABLE it can fail with a serialization failure that you retry; see [PostgreSQL State Adapter](/queuert/integrations/state-adapters/postgres/#isolation-level). On MySQL and MariaDB it can run at any isolation level, and can fail with a deadlock, or a snapshot conflict on MariaDB, that you retry; see [MySQL State Adapter](/queuert/integrations/state-adapters/mysql/#isolation-level). On SQLite with an async provider it must hold the provider's write lock; see [SQLite State Adapter](/queuert/integrations/state-adapters/sqlite/#asyncrwlock). On Redis it must be the context the adapter's `withTransaction` passed; see [Redis State Adapter](/queuert/integrations/state-adapters/redis/#transactions).
+The transaction context is required, including every field the provider's context type requires, such as the `txHooks` of a provider that carries them in its context. `applyJobOutcome` performs several writes (for example completing the chain and unblocking its dependents), so it always needs your transaction. It throws if the state adapter's `getTransaction` reports the context as outside an open transaction, for example when you pass a pool or the root ORM handle. On PostgreSQL it can run at any isolation level, and at REPEATABLE READ or SERIALIZABLE it can fail with a serialization failure that you retry; see [PostgreSQL state adapter](/queuert/integrations/state-adapters/postgres/#isolation-level). On SQLite with an async provider it must hold the provider's write lock; see [SQLite state adapter](/queuert/integrations/state-adapters/sqlite/#asyncrwlock). On MySQL and MariaDB it can run at any isolation level, and can fail with a deadlock, or a snapshot conflict on MariaDB, that you retry; see [MySQL / MariaDB state adapter](/queuert/integrations/state-adapters/mysql/#isolation-level). On Redis it must be the context the adapter's `withTransaction` passed; see [Redis state adapter](/queuert/integrations/state-adapters/redis/#transactions).
 
 **Await the transaction that calls `applyJobOutcome`.** The handler returns nothing: `await withTxHooks(async (txHooks) => db.transaction(async (tx) => applyJobOutcome({ tx, txHooks, output })))`. Whether the attempt completed is decided by [commit detection](#errors-and-commit-detection), and a handler that ends without a committed `applyJobOutcome` fails the attempt.
 
@@ -110,7 +82,7 @@ The transaction context is required, including every field the provider's contex
 
 **Each job of a batch has its own attempt.** A [batched processor](/queuert/guides/batched-processors/) settles the jobs of its batch with its handler's `applyJobOutcomes`, so the rules above hold per job.
 
-## Attempt Ownership
+## Attempt ownership
 
 Every write tied to an attempt is conditional on the job row: the job must be `running` and still hold the attempt token it was given when this attempt acquired it. Each acquisition gets a new token, so an earlier attempt, or one of a chain deleted and recreated under the same id, never matches. A conditional write that does not match writes nothing at all — no completed job, no chain update, no continuation. This is what makes `applyJobOutcome` safe without Queuert holding a lock for the duration of the attempt.
 
@@ -137,22 +109,22 @@ attemptHandler: async ({ job, fenceJob, applyJobOutcome }) => {
 
 When the attempt no longer owns the job, `fenceJob` throws `JobTakenByAnotherWorkerError`, `JobAlreadyCompletedError` or `JobNotFoundError` and aborts `job.signal`; let it propagate so the transaction rolls back. `fenceJob` writes nothing, so it can be called any number of times. In the transaction that calls `applyJobOutcome`, call it before `applyJobOutcome`: `applyJobOutcome` ends the attempt, so a later `fenceJob` treats it as lost. A batched handler's `fenceJobs({ ...txCtx, jobs })` does the same for the jobs it names, throwing `JobsTakenByAnotherWorkerError`, `JobsAlreadyCompletedError` or `JobsNotFoundError` that list each lost one. While a fenced transaction is open, reclaim, client writes to the chain and new chains that use it as a blocker wait for it, so keep fenced transactions short. On PostgreSQL, a fenced transaction that then locks other chains, for example by deleting them, can deadlock with a client call that locks the same chains in a different order; PostgreSQL aborts one of the two transactions, and a handler that lets the error propagate is rescheduled. Transactions without `fenceJob` are not checked against ownership: their writes can commit after the attempt was lost, so keep them idempotent.
 
-## Errors and Commit Detection
+## Errors and commit detection
 
 The attempt counts as completed once a successful `applyJobOutcome` call's commit callbacks run, which the state provider's `onTransactionCommit` does after your transaction commits, so a successful attempt needs no extra database round-trip. If no `applyJobOutcome` call's commit callbacks ran — the handler threw before committing, or returned without calling `applyJobOutcome` — the attempt fails: the worker runs one reschedule under the attempt token, which reschedules the job with backoff while the attempt still owns it and matches nothing if an `applyJobOutcome` committed or the attempt was lost. An error thrown after a committed `applyJobOutcome` does not roll the completion back; it is reported as a `workerError`. For a [batched processor](/queuert/guides/batched-processors/), each job's attempt counts as completed once the commit callbacks of the handler's `applyJobOutcomes` call that names it run.
 
 Commit callbacks stand for a committed write only when the state provider meets these requirements:
 
 - **Commit callbacks run only after COMMIT.** A provider that carries `TxHooks` in its context creates them with `withTxHooks` around the transaction, so they flush after COMMIT; created inside the transaction, they would flush before COMMIT, and a COMMIT that then fails leaves nothing written. When you open the transaction yourself for such a provider, wrap it the same way.
-- **Callbacks follow savepoints.** An `applyJobOutcome` inside a database savepoint that rolls back must have its commit callbacks dropped with it. A provider with transaction events does this itself; with `TxHooks` in the context, pair the database savepoint with `txHooks.withSavepoint` (or a `createSavepoint` handle rolled back alongside it) and pass the savepoint's hooks to `applyJobOutcome`. See [Tx Hooks](../../guides/tx-hooks/#savepoints).
-- **A try the driver reruns drops its callbacks.** When the driver reruns the transaction callback, the rolled-back try's `applyJobOutcome` must not count. With `TxHooks`, wrap the rerun callback in `txHooks.retryBoundary`. See [Tx Hooks](../../guides/tx-hooks/#drivers-that-rerun-the-callback).
-- **A rolled-back transaction is reported as rolled back.** A knex transaction resolves after a bare `trx.rollback()`, which `withTxHooks` takes for a commit, unless it is given `{ doNotRejectOnRollback: false }`. See [Tx Hooks](../../guides/tx-hooks/#a-resolved-transaction-counts-as-committed). MikroORM fires no rollback event when PostgreSQL answers COMMIT with ROLLBACK after a caught statement error, so let statement errors propagate out of `em.transactional`.
+- **Callbacks follow savepoints.** An `applyJobOutcome` inside a database savepoint that rolls back must have its commit callbacks dropped with it. A provider with transaction events does this itself; with `TxHooks` in the context, pair the database savepoint with `txHooks.withSavepoint` (or a `createSavepoint` handle rolled back alongside it) and pass the savepoint's hooks to `applyJobOutcome`. See [Tx hooks](../../guides/tx-hooks/#savepoints).
+- **A try the driver reruns drops its callbacks.** When the driver reruns the transaction callback, the rolled-back try's `applyJobOutcome` must not count. With `TxHooks`, wrap the rerun callback in `txHooks.retryBoundary`. See [Tx hooks](../../guides/tx-hooks/#drivers-that-rerun-the-callback).
+- **A rolled-back transaction is reported as rolled back.** A knex transaction resolves after a bare `trx.rollback()`, which `withTxHooks` takes for a commit, unless it is given `{ doNotRejectOnRollback: false }`. See [Tx hooks](../../guides/tx-hooks/#a-resolved-transaction-counts-as-committed). MikroORM fires no rollback event when PostgreSQL answers COMMIT with ROLLBACK after a caught statement error, so let statement errors propagate out of `em.transactional`.
 
-If any of them is broken, the worker can count the attempt as completed although nothing was written. The job then stays `running` until the worker is next idle and reclaims it as a failed attempt; see [Worker Runner](../worker-runner/#reclaim).
+If any of them is broken, the worker can count the attempt as completed although nothing was written. The job then stays `running` until the worker is next idle and reclaims it as a failed attempt; see [Worker runner](../worker-runner/#reclaim).
 
-See [Job Processing Reliability](../processing-reliability/) for each scenario with code examples, and [Error Handling](../../guides/error-handling/) for handling permanently failing jobs.
+[Job processing reliability](../processing-reliability/) walks through each scenario with code, and [Error handling](../../guides/error-handling/) covers jobs that fail permanently.
 
-## Abort Signal
+## Abort signal
 
 Every job an attempt handler receives carries a `job.signal` that aborts when the worker is stopping, when its worker lost its lease, or when the job's attempt is lost (taken by another worker, deleted, or completed externally). Your own committed outcome never aborts it. On abort, stop working and commit an `applyJobOutcome` — with partial output or `{ reschedule }` — or throw, which fails the attempt: it adds to `consecutiveFailures` and reschedules with backoff. A worker that is only stopping, as on every deploy, is no fault of the job, so a handler that expects it reschedules with `applyJobOutcome({ reschedule })` instead of throwing. If the attempt was lost, `applyJobOutcome` and `fenceJob` write nothing and throw. A handler that returns without a committed `applyJobOutcome` fails the attempt.
 
@@ -168,11 +140,4 @@ A payment webhook completes the job with `client.applyJobOutcome` while the hand
 
 <ExampleCode example="guides" file="src/signals.ts" region="external-completion" />
 
-## See Also
-
-- [Job Processing Reliability](../processing-reliability/) — What happens when a handler throws, before and after `applyJobOutcome`
-- [Client API](/queuert/api/core/type-aliases/client/) — Mutation methods, query methods, awaitChain
-- [Worker Runner](../worker-runner/) — Worker lifecycle, worker lease, reclaim
-- [State Adapters — the transaction context](/queuert/integrations/state-adapters/#transaction-context) — what the transaction context represents and how it is passed
-- [`guides/src/timeouts.ts`](https://github.com/kvet/queuert/blob/main/examples/guides/src/timeouts.ts) — Runnable example: work that outlasts the worker lease while the heartbeat renews it, then `applyJobOutcome` in your own transaction
-- [`guides/src/signals.ts`](https://github.com/kvet/queuert/blob/main/examples/guides/src/signals.ts) — Runnable example: external completion via `client.applyJobOutcome`, graceful shutdown with partial results
+The runnable code is in [`guides/src/timeouts.ts`](https://github.com/kvet/queuert/blob/main/examples/guides/src/timeouts.ts) (work that outlasts the worker lease while the heartbeat renews it) and [`guides/src/signals.ts`](https://github.com/kvet/queuert/blob/main/examples/guides/src/signals.ts). The [client API](/queuert/api/core/type-aliases/client/) lists the mutation and query methods, and [State adapters](/queuert/integrations/state-adapters/#transaction-context) explains the transaction context.

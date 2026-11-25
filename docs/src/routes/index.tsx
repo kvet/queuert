@@ -1,7 +1,8 @@
-import { Box, type IconProps } from "@queuert/ui/components";
+import { Box } from "@queuert/ui/components";
 import type { JSX } from "@solidjs/web";
 import { For, Show } from "solid-js";
 
+import { BenchmarkHighlights } from "../components/BenchmarkHighlights.tsx";
 import { CopyButton } from "../components/CopyButton.tsx";
 import {
   Arrow,
@@ -12,80 +13,14 @@ import {
   Transition,
 } from "../components/diagrams/flow/Diagram.tsx";
 import { ExampleCode } from "../components/ExampleCode.tsx";
-import {
-  ArrowRightIcon,
-  BoltIcon,
-  ChainIcon,
-  ClockIcon,
-  DatabaseIcon,
-  GitHubIcon,
-  KeyIcon,
-  MergeIcon,
-  ScaleIcon,
-  ShieldIcon,
-  TransactionIcon,
-} from "../components/icons.tsx";
-import { CodeTour, CodeTourStep } from "../components/landing/CodeTour.tsx";
-import { LiveChain } from "../components/landing/LiveChain.tsx";
-import { LinkCard } from "../components/mdx/Cards.tsx";
+import { ArrowRightIcon, GitHubIcon } from "../components/icons.tsx";
+import { FirstChain } from "../components/landing/FirstChain.tsx";
+import { HeroSquares } from "../components/landing/HeroSquares.tsx";
 import { PageMeta } from "../components/PageMeta.tsx";
-import { compareNeighbors } from "../data/comparison.ts";
 import { siteHref } from "../docs/href.ts";
 import { siteDescription } from "../docs/site.ts";
 
 const github = "https://github.com/kvet/queuert";
-
-const features: {
-  title: string;
-  body: string;
-  icon: (props: IconProps) => JSX.Element;
-}[] = [
-  {
-    title: "Transactional, both ends",
-    body: "Enqueue commits inside your DB transaction; completion and the next continueWith commit with your domain writes. No outbox, no idempotency-key ritual.",
-    icon: TransactionIcon,
-  },
-  {
-    title: "Typed job chains",
-    body: "Inputs, outputs, continuations and blockers infer end-to-end via defineJobTypes. Refactoring is compiler-checked.",
-    icon: ChainIcon,
-  },
-  {
-    title: "Lives in your database",
-    body: "Postgres, SQLite, MySQL/MariaDB or Redis. No workflow server, no separate persistence tier to operate.",
-    icon: DatabaseIcon,
-  },
-  {
-    title: "Sub-second wakeup",
-    body: "Workers wake right after the commit: in-process by default, and across processes with a notify adapter (LISTEN/NOTIFY, Redis or NATS).",
-    icon: BoltIcon,
-  },
-  {
-    title: "Fan-in via blockers",
-    body: "“Wait for these N chains, then run X” is a typed primitive, not glue code.",
-    icon: MergeIcon,
-  },
-  {
-    title: "Schedule for later",
-    body: "Start a chain at a time or after a delay. A handler can reschedule its job, and failed attempts retry with backoff.",
-    icon: ClockIcon,
-  },
-  {
-    title: "Deduplication",
-    body: "Pass a deduplication key to createChain. A matching chain is returned instead of a new one, until it completes or for good.",
-    icon: KeyIcon,
-  },
-  {
-    title: "Lean and battle-tested",
-    body: "Zero runtime dependencies. Thousands of tests and a conformance suite every adapter must pass.",
-    icon: ShieldIcon,
-  },
-  {
-    title: "MIT licensed",
-    body: "No vendor lock-in. No enterprise tier. Own your stack.",
-    icon: ScaleIcon,
-  },
-];
 
 const integrations: {
   title: string;
@@ -116,11 +51,12 @@ const integrations: {
     items: [
       "pg",
       "postgres.js",
-      "Bun.SQL",
+      "Bun SQL",
       "better-sqlite3",
       "node:sqlite",
       "bun:sqlite",
       "mysql2",
+      "mariadb",
     ],
     href: "/integrations/state-adapters/",
     custom: "provider",
@@ -156,23 +92,13 @@ const integrations: {
 ];
 
 const Section = (props: { id: string; eyebrow: string; title: string; children: JSX.Element }) => (
-  <section id={props.id} class="mx-auto max-w-300 px-4 py-16 sm:px-6 lg:py-20">
+  <section id={props.id} class="mx-auto max-w-300 px-4 py-8 sm:px-6 lg:py-10">
     <p class="text-xs font-semibold font-mono tracking-wider text-brand-fg uppercase">
       {props.eyebrow}
     </p>
     <h2 class="mt-2 max-w-2xl text-lg font-semibold sm:text-xl">{props.title}</h2>
-    <div class="mt-10">{props.children}</div>
+    <div class="mt-6">{props.children}</div>
   </section>
-);
-
-const FeatureCard = (props: (typeof features)[number]) => (
-  <div class="flex flex-col rounded-xs border border-border bg-bg p-4">
-    <span class="grid size-8 place-items-center rounded-xs border border-border bg-surface text-brand">
-      <props.icon size={16} />
-    </span>
-    <span class="mt-4 font-semibold text-fg">{props.title}</span>
-    <span class="mt-1.5 text-[13px] leading-6 text-fg-muted">{props.body}</span>
-  </div>
 );
 
 const Home = () => (
@@ -183,12 +109,13 @@ const Home = () => (
       path="/"
     />
 
-    <div class="border-b border-border">
-      <div class="mx-auto grid max-w-300 grid-cols-1 items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:py-24">
-        <div>
+    <div class="relative overflow-hidden border-b border-border">
+      <HeroSquares />
+      <div class="relative mx-auto grid max-w-300 grid-cols-1 items-start gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-12 lg:py-6">
+        <div class="lg:pt-8">
           <p class="font-mono inline-flex items-center gap-2 rounded-xs border border-border bg-surface px-2 py-1 text-xs text-fg-muted">
             <span class="inline-block size-2 rounded-xs bg-brand" />
-            Postgres · MySQL · SQLite · zero runtime deps
+            PostgreSQL · SQLite · MySQL · Redis
           </p>
           <h1 class="mt-6 text-3xl leading-tight font-semibold tracking-tight sm:text-4xl">
             Durable job chains that commit with your <span class="text-brand">transactions</span>.
@@ -199,11 +126,17 @@ const Home = () => (
           </p>
           <div class="mt-8 flex flex-wrap items-center gap-3">
             <a
-              href={siteHref("/getting-started/introduction/")}
+              href={siteHref("/learn/")}
               class="inline-flex h-10 items-center gap-2 rounded-xs bg-fg px-4 font-medium text-bg hover:opacity-90"
             >
-              Get started
+              Start learning
               <ArrowRightIcon size={14} />
+            </a>
+            <a
+              href={siteHref("/learn/use-it-in-your-app/")}
+              class="inline-flex h-10 items-center gap-2 rounded-xs border border-border-strong bg-surface px-4 hover:bg-surface-2"
+            >
+              Install
             </a>
             <a
               href={github}
@@ -221,15 +154,13 @@ const Home = () => (
             </div>
           </div>
         </div>
-        <LiveChain />
+        <FirstChain>
+          <ExampleCode example="tutorial" file="src/hero.ts" title="index.ts" />
+        </FirstChain>
       </div>
     </div>
 
-    <Section
-      id="architecture"
-      eyebrow="How it works"
-      title="A thin library over the database you already run."
-    >
+    <Section id="architecture" eyebrow="How it works" title="Architecture">
       <Diagram label="Architecture: the client enqueues and workers acquire and complete jobs through your database; an optional pub/sub carries notifications from the client to workers">
         <Flow align="stretch">
           <Node sub="app process">client</Node>
@@ -239,7 +170,7 @@ const Home = () => (
               <Node
                 sub={
                   <>
-                    Postgres · MySQL · SQLite · your own
+                    PostgreSQL · SQLite · MySQL · Redis · your own
                     <Transition from="pending" via="running" to="completed" />
                   </>
                 }
@@ -250,7 +181,7 @@ const Home = () => (
             </Flow>
             <Flow>
               <Arrow label="notify" dashed />
-              <Node variant="ghost" sub="Postgres · Redis · NATS · in-process">
+              <Node variant="ghost" sub="PostgreSQL · Redis · NATS · IPC · in-process">
                 your pub/sub (optional)
               </Node>
               <Arrow label="wake" dashed />
@@ -268,40 +199,24 @@ const Home = () => (
       </a>
     </Section>
 
-    <Section
-      id="tour"
-      eyebrow="See it in action"
-      title="Typed from the first enqueue to the last step."
-    >
-      <CodeTour>
-        <CodeTourStep
-          label="Define"
-          caption="Each step's input, output and continuation are inferred."
+    <Section id="performance" eyebrow="Performance" title="Benchmarks">
+      <BenchmarkHighlights />
+      <p class="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-fg-muted">
+        <a
+          href={siteHref("/comparison/#benchmarks")}
+          class="inline-flex items-center gap-1.5 hover:text-fg"
         >
-          <ExampleCode example="postgresql/onboarding" file="src/index.ts" region="define" />
-        </CodeTourStep>
-        <CodeTourStep
-          label="Enqueue"
-          caption="Start the chain inside your transaction. Roll back, and it never existed."
-        >
-          <ExampleCode example="postgresql/onboarding" file="src/index.ts" region="create-chain" />
-        </CodeTourStep>
-        <CodeTourStep
-          label="Process"
-          caption="Complete in the same transaction as your writes, and continue with the next step."
-        >
-          <ExampleCode example="postgresql/onboarding" file="src/index.ts" region="process" />
-        </CodeTourStep>
-      </CodeTour>
+          All benchmarks
+          <ArrowRightIcon size={12} />
+        </a>
+        <a href={siteHref("/comparison/")} class="inline-flex items-center gap-1.5 hover:text-fg">
+          Compare with other tools
+          <ArrowRightIcon size={12} />
+        </a>
+      </p>
     </Section>
 
-    <Section id="why" eyebrow="Why Queuert" title="The guarantees are structural, not ceremonial.">
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <For each={features}>{(feature) => <FeatureCard {...feature} />}</For>
-      </div>
-    </Section>
-
-    <Section id="integrations" eyebrow="Integrations" title="Bring the stack you already run.">
+    <Section id="integrations" eyebrow="Integrations" title="Supported tools">
       <div class="grid gap-x-5 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
         <For each={integrations}>
           {(group) => (
@@ -340,24 +255,6 @@ const Home = () => (
                 </span>
               </Show>
             </Box>
-          )}
-        </For>
-      </div>
-    </Section>
-
-    <Section
-      id="compare"
-      eyebrow="Already using something else?"
-      title="How Queuert relates to the tools you know."
-    >
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <For each={compareNeighbors}>
-          {(neighbor) => (
-            <LinkCard
-              title={`vs. ${neighbor.name}`}
-              href={`${import.meta.env.BASE_URL}${neighbor.href.slice(1)}`}
-              description={neighbor.summary}
-            />
           )}
         </For>
       </div>

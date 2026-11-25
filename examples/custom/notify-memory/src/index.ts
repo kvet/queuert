@@ -11,7 +11,6 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-// Create the state adapter
 await using stateAdapter = createMemoryStateAdapter();
 
 // #region setup
@@ -41,8 +40,6 @@ await using workerRunner = createWorkerRunner({
   }),
 });
 
-// The worker runner polls only once a minute, so it picks up the job as soon as it is
-// woken by the notify adapter
 await workerRunner.start();
 
 console.log("Requesting sales report...");

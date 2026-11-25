@@ -3,7 +3,6 @@ import type { NotifyAdapter } from "queuert";
 type Listener = () => void;
 
 // #region adapter
-/** Creates a notify adapter that delivers notifications to listeners in the same process. */
 export const createMemoryNotifyAdapter = (): NotifyAdapter<"async"> => {
   const channels = new Map<string, Set<Listener>>();
   let closed = false;
@@ -25,13 +24,10 @@ export const createMemoryNotifyAdapter = (): NotifyAdapter<"async"> => {
   };
 
   const publish = (channel: string): void => {
-    // Iterate a copy so a listener can subscribe or unsubscribe while it is being called
     for (const listener of Array.from(channels.get(channel) ?? [])) {
       try {
         listener();
-      } catch {
-        // A throwing listener must not keep the others from hearing the notification
-      }
+      } catch {}
     }
   };
 

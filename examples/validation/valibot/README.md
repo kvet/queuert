@@ -1,4 +1,4 @@
-# Runtime Validation with Valibot
+# Runtime validation with Valibot
 
 Custom validation adapter backed by Valibot — covers nominal (by type name) and structural (by input shape) reference validation.
 

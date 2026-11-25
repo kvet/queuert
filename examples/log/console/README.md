@@ -1,4 +1,4 @@
-# Console Logging Example
+# Console logging example
 
 Queuert's built-in `createConsoleLog()` for simple console output.
 

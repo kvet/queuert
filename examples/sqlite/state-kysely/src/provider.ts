@@ -4,10 +4,6 @@ import { type TxHooks, withTxHooks } from "queuert";
 
 export type KyselySqliteContext<TDatabase> = { db: Kysely<TDatabase>; txHooks: TxHooks };
 
-// Kysely's dialect for better-sqlite3 uses a pool of size 1 and holds that
-// connection for the duration of `db.transaction().execute()`. Non-tx queries
-// block on `acquireConnection` until the tx releases it, so no extra lock is
-// needed to serialize writers.
 export const createKyselySqliteStateProvider = <TDatabase>({
   db,
 }: {
@@ -32,9 +28,6 @@ export const createKyselySqliteStateProvider = <TDatabase>({
       )?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
     },
-    // `id` not forwarded: Kysely's better-sqlite3 dialect re-prepares every raw
-    // query; no hook to cache through the dialect. Bypass Kysely for statement
-    // caching (see sqlite/state-better-sqlite3).
     executeSql: async ({ txCtx, sql, params }) => {
       const database = txCtx?.db ?? db;
       const result = await database.executeQuery(CompiledQuery.raw(sql, params));

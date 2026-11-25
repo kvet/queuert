@@ -14,23 +14,19 @@ import {
 import { type InvoicesTable, createMigrations } from "./migrations.ts";
 import { createKyselySqliteStateProvider } from "./provider.ts";
 
-// Create in-memory SQLite database
 const sqliteDb = new BetterSqlite3(":memory:");
 
-// Define Kysely database schema
 type Database = {
   users: { id: Generated<number>; name: string; email: string };
   invoices: InvoicesTable;
 };
 
-// Create Kysely database connection
 await using db = new Kysely<Database>({
   dialect: new SqliteDialect({
     database: sqliteDb,
   }),
 });
 
-// Create users table
 await sql`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,16 +35,14 @@ await sql`
   )
 `.execute(db);
 
-// Define job types
 const jobTypes = defineJobTypes<{
-  send_welcome_email: {
+  "send-welcome-email": {
     entry: true;
     input: { userId: number };
     output: { sentAt: string };
   };
 }>();
 
-// Create state provider for Kysely
 // #region adapter
 const stateProvider = createKyselySqliteStateProvider({ db });
 await using stateAdapter = createSqliteStateAdapter({
@@ -70,14 +64,13 @@ assert.deepEqual(
 
 const client = createClient({ stateAdapter, jobTypes });
 
-// Create worker runner with job type processors
 await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
     jobTypes,
     processors: {
-      send_welcome_email: {
+      "send-welcome-email": {
         attemptHandler: async ({ job, applyJobOutcome }) => {
           const user = await db
             .selectFrom("users")
@@ -85,11 +78,8 @@ await using workerRunner = createWorkerRunner({
             .where("id", "=", job.input.userId)
             .executeTakeFirstOrThrow();
 
-          // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
-          // Kysely holds its single SQLite connection for the whole transaction, so the
-          // worker's own statements cannot run inside it.
           await withTxHooks(async (txHooks) =>
             db.transaction().execute(async (txDb) =>
               applyJobOutcome({
@@ -107,7 +97,6 @@ await using workerRunner = createWorkerRunner({
 
 await workerRunner.start();
 
-// Register a new user and queue welcome email atomically
 // #region create-chain
 const chain = await withTxHooks(async (txHooks) =>
   db.transaction().execute(async (txDb) => {
@@ -117,17 +106,15 @@ const chain = await withTxHooks(async (txHooks) =>
       .returning("id")
       .executeTakeFirstOrThrow();
 
-    // Queue welcome email - if user creation fails, no email job is created
     return client.createChain({
       db: txDb,
       txHooks,
-      typeName: "send_welcome_email",
+      typeName: "send-welcome-email",
       input: { userId: user.id },
     });
   }),
 );
 // #endregion
 
-// Wait for the chain to complete
 const result = await client.awaitChain({ chain, timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);

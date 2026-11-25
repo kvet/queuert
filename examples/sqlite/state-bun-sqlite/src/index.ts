@@ -13,10 +13,8 @@ import {
 import { createMigrations } from "./migrations.ts";
 import { createBunSqliteStateProvider } from "./provider.ts";
 
-// Create in-memory SQLite database
 using db = new Database(":memory:");
 
-// Create application schema
 db.run(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,23 +23,20 @@ db.run(`
   );
 `);
 
-// Define job types
 const jobTypes = defineJobTypes<{
-  send_welcome_email: {
+  "send-welcome-email": {
     entry: true;
     input: { userId: number };
     output: { sentAt: string };
   };
 }>();
 
-// Create providers and adapters
 // #region adapter
 const stateProvider = createBunSqliteStateProvider({ db });
 using stateAdapter = createSqliteStateAdapter({ stateProvider });
 stateAdapter.migrateToLatest();
 // #endregion
 
-// Run the application's own migrations through the same provider
 const migrator = createSqliteMigrator({
   stateProvider,
   migrations: createMigrations({ db }),
@@ -61,7 +56,7 @@ await using workerRunner = createWorkerRunner({
     client,
     jobTypes,
     processors: {
-      send_welcome_email: {
+      "send-welcome-email": {
         attemptHandler: async ({ job, applyJobOutcome }) => {
           const user = db
             .query<{ id: number; name: string; email: string }, [number]>(
@@ -70,7 +65,6 @@ await using workerRunner = createWorkerRunner({
             .get(job.input.userId);
           if (!user) throw new Error(`User ${job.input.userId} not found`);
 
-          // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
           withTxHooks((txHooks) =>
@@ -86,7 +80,6 @@ await using workerRunner = createWorkerRunner({
 
 await workerRunner.start();
 
-// Register a new user and queue welcome email atomically
 // #region create-chain
 const chain = withTxHooks((txHooks) =>
   db.transaction(() => {
@@ -100,13 +93,12 @@ const chain = withTxHooks((txHooks) =>
     return client.createChain({
       db,
       txHooks,
-      typeName: "send_welcome_email",
+      typeName: "send-welcome-email",
       input: { userId: user.id },
     });
   })(),
 );
 // #endregion
 
-// Wait for the chain to complete
 const result = await client.awaitChain({ chain, timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);

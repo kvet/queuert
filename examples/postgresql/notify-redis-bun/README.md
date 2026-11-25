@@ -1,4 +1,4 @@
-# Redis Notify Adapter (Bun Redis)
+# Redis notify adapter (Bun Redis)
 
 Redis pub/sub notifications via `@queuert/redis` using Bun's built-in [`RedisClient`](https://bun.com/docs/runtime/redis) — no external Redis dependencies.
 

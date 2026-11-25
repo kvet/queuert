@@ -104,7 +104,16 @@ export const FieldList = (props: {
   proseNames?: boolean;
   class?: string;
 }) => (
-  <Box title={props.title} actions={props.actions} class={`my-6 ${props.class ?? ""}`} bodyClass="">
+  <Box
+    title={
+      props.title === undefined ? undefined : (
+        <span class="tracking-normal normal-case">{props.title}</span>
+      )
+    }
+    actions={props.actions}
+    class={`my-6 ${props.class ?? ""}`}
+    bodyClass=""
+  >
     <ul class="row-list divide-y divide-border">
       <For each={props.items}>
         {(item) => <FieldRow item={item} idPrefix={props.idPrefix} proseNames={props.proseNames} />}

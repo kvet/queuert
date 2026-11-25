@@ -66,8 +66,6 @@ export const createDrizzleMysqlStateProvider = <TSchema extends Record<string, u
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
     },
     executeSql: async ({ txCtx, id, sql, params }) =>
-      // Inside transaction: the connection Drizzle's session checked out of the pool
-      // Outside transaction (migrations): db.$client (the pool)
       exec(txCtx ? (txCtx.tx as any).session.client : db.$client, id, sql, params),
   };
 };

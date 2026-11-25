@@ -1,6 +1,8 @@
 import { ExampleCode } from "../../../components/ExampleCode.tsx";
 import { ExampleRows } from "../../../components/ExampleList.tsx";
 import { type FieldItem, FieldList } from "../../../components/FieldList.tsx";
+import { FoldGroup } from "../../../components/integrations/FoldGroup.tsx";
+import { Details } from "../../../components/mdx/Details.tsx";
 import { TabItem, Tabs } from "../../../components/mdx/Tabs.tsx";
 import { siteHref } from "../../../docs/href.ts";
 
@@ -130,19 +132,31 @@ const Page = () => (
       items={[
         {
           name: "type",
-          meta: "string",
+          chips: [{ label: "string", mono: true }],
           description: (
             <>
               Machine-readable event identifier (e.g. <code>job_created</code>).
             </>
           ),
         },
-        { name: "level", meta: '"info" | "warn" | "error"', description: "Log level." },
-        { name: "message", meta: "string", description: "Human-readable description." },
-        { name: "data", meta: "object", description: "Structured data specific to the event." },
+        {
+          name: "level",
+          chips: [{ label: '"info" | "warn" | "error"', mono: true }],
+          description: "Log level.",
+        },
+        {
+          name: "message",
+          chips: [{ label: "string", mono: true }],
+          description: "Human-readable description.",
+        },
+        {
+          name: "data",
+          chips: [{ label: "object", mono: true }],
+          description: "Structured data specific to the event.",
+        },
         {
           name: "error",
-          meta: "unknown · optional",
+          chips: [{ label: "unknown", mono: true }, "optional"],
           description: "Present only on error/warn entries that carry an error.",
         },
       ]}
@@ -159,18 +173,32 @@ const Page = () => (
       <code>error</code> is the top-level field, and a trailing <code>?</code> marks a key that can
       be absent.
     </p>
-    <h3>Worker lifecycle</h3>
-    <FieldList items={workerEntries} idPrefix="log" />
-    <h3>Job lifecycle</h3>
-    <FieldList items={jobEntries} idPrefix="log" />
-    <h3>Attempt lifecycle</h3>
-    <FieldList items={attemptEntries} idPrefix="log" />
-    <h3>Chain lifecycle</h3>
-    <FieldList items={chainEntries} idPrefix="log" />
-    <h3>Adapter errors</h3>
-    <FieldList items={adapterEntries} idPrefix="log" />
-    <h3>Validation errors</h3>
-    <FieldList items={validationEntries} idPrefix="log" />
+    <FoldGroup>
+      <Details summary={<span id="worker-lifecycle">Worker log entries</span>} hint="4 entries">
+        <FieldList items={workerEntries} idPrefix="log" />
+      </Details>
+      <Details summary={<span id="job-lifecycle">Job log entries</span>} hint="5 entries">
+        <FieldList items={jobEntries} idPrefix="log" />
+      </Details>
+      <Details summary={<span id="attempt-lifecycle">Attempt log entries</span>} hint="5 entries">
+        <FieldList items={attemptEntries} idPrefix="log" />
+      </Details>
+      <Details summary={<span id="chain-lifecycle">Chain log entries</span>} hint="3 entries">
+        <FieldList items={chainEntries} idPrefix="log" />
+      </Details>
+      <Details
+        summary={<span id="adapter-errors">Adapter error log entries</span>}
+        hint="2 entries"
+      >
+        <FieldList items={adapterEntries} idPrefix="log" />
+      </Details>
+      <Details
+        summary={<span id="validation-errors">Validation error log entry</span>}
+        hint="1 entry"
+      >
+        <FieldList items={validationEntries} idPrefix="log" />
+      </Details>
+    </FoldGroup>
 
     <h2>Examples</h2>
     <ExampleRows title="Loggers" names={["log/console", "log/pino", "log/winston"]} />

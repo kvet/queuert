@@ -122,7 +122,7 @@ export const llmsTxt = (pages: SourcePage[]): string =>
   [
     `# ${siteName}`,
     `> ${siteDescription}`,
-    `The whole documentation (Docs, Integrations, Examples, Compare, Benchmarks and Blog) as one file: ${siteUrl}llms-full.txt`,
+    `The whole documentation (Learn, Guides, Concepts, Integrations, Compare with Benchmarks, and Blog) as one file: ${siteUrl}llms-full.txt`,
     ...guidePages(pages).map((group) =>
       [
         `## ${group.label}`,
@@ -130,7 +130,7 @@ export const llmsTxt = (pages: SourcePage[]): string =>
       ].join("\n"),
     ),
     [
-      "## API Reference",
+      "## API reference",
       ...apiEntryPoints.map((entryPoint) =>
         linkLine(entryPoint.label, `/api/${entryPoint.slug}/readme/`, entryPoint.summary),
       ),

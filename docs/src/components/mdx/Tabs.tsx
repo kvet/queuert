@@ -47,7 +47,14 @@ const isTabItem = (item: unknown): item is TabItemProps =>
 export const TabItem = (props: TabItemProps) => props as unknown as JSX.Element;
 
 /** `syncKey` keeps every Tabs with the same key on the selected label, across pages and visits. */
-export const Tabs = (props: { syncKey?: string; children: JSX.Element }) => {
+export const Tabs = (props: {
+  syncKey?: string;
+  /** Selects this label, when a tab has it, over `syncKey` and the reader's clicks. */
+  value?: string;
+  /** Hides the tab bar when other controls with the same `syncKey` (such as `ClientTiles`) pick the tab. */
+  pickedElsewhere?: boolean;
+  children: JSX.Element;
+}) => {
   const resolved = children(() => props.children);
   const items = () => (resolved.toArray() as unknown[]).filter(isTabItem);
   const [local, setLocal] = createSignal<string>();
@@ -56,6 +63,7 @@ export const Tabs = (props: { syncKey?: string; children: JSX.Element }) => {
 
   const selected = () => {
     const labels = items().map((item) => item.label);
+    if (props.value !== undefined && labels.includes(props.value)) return props.value;
     const synced = props.syncKey === undefined ? undefined : syncedTab(props.syncKey);
     if (synced !== undefined && labels.includes(synced)) return synced;
     return local() ?? labels[0];
@@ -69,7 +77,11 @@ export const Tabs = (props: { syncKey?: string; children: JSX.Element }) => {
 
   return (
     <TabsPrimitive class="my-5" value={selected()} onChange={select}>
-      <TabsPrimitive.List class="flex flex-wrap gap-1 border-b border-border pb-2">
+      <TabsPrimitive.List
+        class={
+          props.pickedElsewhere ? "sr-only" : "flex flex-wrap gap-1 border-b border-border pb-2"
+        }
+      >
         <For each={items()}>
           {(item) => (
             <TabsPrimitive.Trigger

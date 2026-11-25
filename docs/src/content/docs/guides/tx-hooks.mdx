@@ -1,14 +1,36 @@
 ---
-title: Tx Hooks
+title: Tx hooks
 description: Run side effects only after your database transaction commits.
 sidebar:
-  order: 1
+  order: 17
 ---
 
 import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/diagram";
 
 Queuert writes chains and jobs in your transaction, and the side effects of those writes (notify events that wake workers, observability events) must not leak out of a transaction that rolls back. The state provider owns this: it implements `onTransactionCommit(txCtx, callback)`, which runs `callback` after the transaction commits and before the call that opened it settles, and `onTransactionRollback(txCtx, callback)`, which runs `callback` when the transaction, or the savepoint `txCtx` belongs to, rolls back, also before the call that opened it settles. The client and the worker register every side effect through these two members, and collect a transaction's notify events under the object the state adapter's [`getTransaction`](/queuert/integrations/state-adapters/) returns to send them once, so what you pass to a mutating call or to `applyJobOutcome` is your transaction context and nothing else.
+
+<Diagram label="During the transaction, hooks buffer side effects; on commit they flush, on rollback they are discarded">
+  <Flow>
+    <Group title="transaction" dashed>
+      <Flow>
+        <Node>BEGIN</Node>
+        <Arrow />
+        <Node sub={"registers commit\ncallbacks"}>client.createChain(…)</Node>
+      </Flow>
+    </Group>
+    <Rows spine columns="minmax(6rem, auto) auto">
+      <Flow>
+        <Arrow label="COMMIT" />
+        <Node sub="side effects fire">flush()</Node>
+      </Flow>
+      <Flow>
+        <Arrow label="ROLLBACK" failure />
+        <Node variant="ghost" sub="nothing leaks">discard()</Node>
+      </Flow>
+    </Rows>
+  </Flow>
+</Diagram>
 
 ## Two kinds of providers
 
@@ -98,29 +120,7 @@ const stateProvider: PgStateProvider<PostgresJsContext> = {
 
 A transaction opened through `stateProvider.withTransaction` already carries its hooks, so you spread its context as it is: `stateProvider.withTransaction(async (txCtx) => client.createChain({ ...txCtx, typeName, input }))`.
 
-## How It Works
-
-<Diagram label="During the transaction, hooks buffer side effects; on commit they flush, on rollback they are discarded">
-  <Flow>
-    <Group title="transaction" dashed>
-      <Flow>
-        <Node>BEGIN</Node>
-        <Arrow />
-        <Node sub={"registers commit\ncallbacks"}>client.createChain(…)</Node>
-      </Flow>
-    </Group>
-    <Rows spine columns="minmax(6rem, auto) auto">
-      <Flow>
-        <Arrow label="COMMIT" />
-        <Node sub="side effects fire">flush()</Node>
-      </Flow>
-      <Flow>
-        <Arrow label="ROLLBACK" failure />
-        <Node variant="ghost" sub="nothing leaks">discard()</Node>
-      </Flow>
-    </Rows>
-  </Flow>
-</Diagram>
+## How it works
 
 `TxHooks` knows nothing about Queuert itself. Queuert registers its notifications and observability events through the provider's `onTransactionCommit` and `onTransactionRollback`, and your code can register side effects the same way, through `stateProvider.onTransactionCommit(txCtx, callback)` with any provider, or on the `txHooks` in your context:
 
@@ -138,7 +138,7 @@ await withTxHooks(async (txHooks) =>
 
 One `TxHooks` instance serves one transaction: once it is flushed or discarded, registering another callback throws, so a call that reuses it fails instead of buffering side effects that never run.
 
-The rest of this page is the `TxHooks` toolkit for a provider that carries the hooks in its context, and for code that opens transactions for such a provider. Whatever the provider, it must run commit callbacks only after COMMIT, follow savepoints, and drop the callbacks of a try its driver reruns; [Errors and Commit Detection](../../how-it-works/job-processing/#errors-and-commit-detection) explains why.
+The rest of this page is the `TxHooks` toolkit for a provider that carries the hooks in its context, and for code that opens transactions for such a provider. Whatever the provider, it must run commit callbacks only after COMMIT, follow savepoints, and drop the callbacks of a try its driver reruns; [Errors and commit detection](../../how-it-works/job-processing/#errors-and-commit-detection) explains why.
 
 ## Drivers that rerun the callback
 

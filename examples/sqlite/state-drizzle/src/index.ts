@@ -16,13 +16,11 @@ import {
 import { createMigrations, invoices } from "./migrations.ts";
 import { createDrizzleSqliteStateProvider } from "./provider.ts";
 
-// Create in-memory SQLite database
 using drivers = new DisposableStack();
 const sqlite = drivers.adopt(new Database(":memory:"), (sqlite) => {
   sqlite.close();
 });
 
-// Define Drizzle schema
 const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
@@ -31,7 +29,6 @@ const users = sqliteTable("users", {
 
 const schema = { users };
 
-// Create Drizzle database connection
 const db = drizzle(sqlite, { schema });
 
 db.run(sql`
@@ -42,23 +39,20 @@ db.run(sql`
   )
 `);
 
-// Define job types
 const jobTypes = defineJobTypes<{
-  send_welcome_email: {
+  "send-welcome-email": {
     entry: true;
     input: { userId: number };
     output: { sentAt: string };
   };
 }>();
 
-// Create state provider for Drizzle with better-sqlite3
 // #region adapter
 const stateProvider = createDrizzleSqliteStateProvider({ db: sqlite });
 using stateAdapter = createSqliteStateAdapter({ stateProvider });
 stateAdapter.migrateToLatest();
 // #endregion
 
-// Run the application's own migrations through the same provider
 const migrator = createSqliteMigrator({
   stateProvider,
   migrations: createMigrations({ db }),
@@ -78,12 +72,11 @@ await using workerRunner = createWorkerRunner({
     client,
     jobTypes,
     processors: {
-      send_welcome_email: {
+      "send-welcome-email": {
         attemptHandler: async ({ job, applyJobOutcome }) => {
           const user = db.select().from(users).where(eq(users.id, job.input.userId)).get();
           if (!user) throw new Error(`User ${job.input.userId} not found`);
 
-          // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
           withTxHooks((txHooks) =>
@@ -101,31 +94,26 @@ await using workerRunner = createWorkerRunner({
   }),
 });
 
-// Start worker runner
 await workerRunner.start();
 
-// Register a new user and queue welcome email atomically
 // #region create-chain
 const chain = withTxHooks((txHooks) =>
   db.transaction((tx) => {
-    // Use Drizzle to insert the user
     const [user] = tx
       .insert(users)
       .values({ name: "Alice", email: "alice@example.com" })
       .returning({ id: users.id })
       .all();
 
-    // Queue welcome email - if user creation fails, no email job is created
     return client.createChain({
       db: sqlite,
       txHooks,
-      typeName: "send_welcome_email",
+      typeName: "send-welcome-email",
       input: { userId: user.id },
     });
   }),
 );
 // #endregion
 
-// Wait for the chain to complete
 const result = await client.awaitChain({ chain, timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);

@@ -1,6 +1,6 @@
 export type CompareMark = "yes" | "partial" | "no";
 
-export const comparedQueuertVersion = "0.17.0";
+export const comparedQueuertVersion = "0.18.0";
 
 type CompareCell = { mark?: CompareMark; text: string; footnote?: number };
 
@@ -126,7 +126,7 @@ export const compareTools: CompareTool[] = [
     name: "pg-boss",
     category: "job queue",
     href: "/comparison/pg-boss/",
-    summary: "A Postgres job queue with dependency flows and opt-in transactional workers.",
+    summary: "A PostgreSQL job queue with dependency flows and opt-in transactional workers.",
     version: "v12.38.0",
     cells: {
       storage: { text: "PostgreSQL, CockroachDB, Citus or PGlite" },
@@ -150,7 +150,7 @@ export const compareTools: CompareTool[] = [
     name: "Graphile Worker",
     category: "job queue",
     href: "/comparison/graphile-worker/",
-    summary: "A SQL-native Postgres job queue. Transactional enqueue, separate completion.",
+    summary: "A SQL-native PostgreSQL job queue. Transactional enqueue, separate completion.",
     version: "v0.18.0",
     cells: {
       storage: { text: "PostgreSQL" },
@@ -174,7 +174,7 @@ export const compareTools: CompareTool[] = [
     name: "BullMQ",
     category: "job queue",
     href: "/comparison/bullmq/",
-    summary: "A Redis or Postgres job queue. Enqueue runs outside your transaction.",
+    summary: "A Redis or PostgreSQL job queue. Enqueue runs outside your transaction.",
     version: "v6.7.0",
     cells: {
       storage: { text: "Redis, or PostgreSQL since v6" },
@@ -198,7 +198,7 @@ export const compareTools: CompareTool[] = [
     name: "DBOS",
     category: "durable workflow library",
     href: "/comparison/dbos/",
-    summary: "A Postgres durable-workflow library. Replayed functions instead of typed chains.",
+    summary: "A PostgreSQL durable-workflow library. Replayed functions instead of typed chains.",
     version: "TS SDK v5.4.0",
     cells: {
       storage: { text: "PostgreSQL, a system database by default" },

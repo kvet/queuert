@@ -41,7 +41,15 @@ export const Code = (
           : `code-html ${props.scroll ? "code-scroll" : ""}`
       }
       title={
-        props.title ?? (props.signature ? "Signature" : (langLabels[props.lang] ?? props.lang))
+        props.title === undefined ? (
+          props.signature ? (
+            "Signature"
+          ) : (
+            (langLabels[props.lang] ?? props.lang)
+          )
+        ) : (
+          <span class="normal-case">{props.title}</span>
+        )
       }
       actions={
         <>

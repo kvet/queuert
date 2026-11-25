@@ -1,4 +1,4 @@
-# MySQL State Adapter (Kysely)
+# MySQL state adapter (Kysely)
 
 MySQL state storage via `@queuert/mysql` with Kysely's `MysqlDialect` over a mysql2 pool — job creation and completion inside application transactions.
 

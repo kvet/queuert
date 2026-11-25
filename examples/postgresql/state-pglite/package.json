@@ -1,0 +1,27 @@
+{
+  "name": "example-postgresql-state-pglite",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating the PostgreSQL state adapter with PGlite.",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "exports": {
+    "./provider": "./src/provider.ts"
+  },
+  "scripts": {
+    "start": "node src/index.ts",
+    "test": "vitest --run",
+    "typecheck": "tsrs --noEmit"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.16",
+    "@queuert/postgres": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
+    "queuert": "workspace:*"
+  }
+}

@@ -1,0 +1,34 @@
+---
+title: Errors and retries
+description: Retry a job that throws, with backoff, until an attempt succeeds.
+layout: step
+---
+
+import { Arrow, Diagram, Flow, Node } from "../../../components/diagram";
+
+When a job throws, nothing is lost: the worker puts it back to pending and runs it again after a delay, until an attempt succeeds.
+
+<Diagram label="A job runs and throws, waits in pending for the backoff delay, runs again and completes">
+  <Flow>
+    <Node status="running" sub="attempt 1">sync-to-crm</Node>
+    <Arrow label="throws" failure />
+    <Node status="pending" sub="waits for the backoff">sync-to-crm</Node>
+    <Arrow />
+    <Node status="running" sub="attempt 2">sync-to-crm</Node>
+    <Arrow label="succeeds" />
+    <Node status="completed">sync-to-crm</Node>
+  </Flow>
+</Diagram>
+
+Each run of the handler is an attempt. An attempt that throws, or ends without committing `applyJobOutcome`, fails: the job returns to `pending`, its `attempt` count goes up and the error is kept as `lastAttemptError`. The chain stays open, and a job that keeps throwing keeps being retried; there is no dead-letter state.
+
+The delay before the next attempt is the backoff. It starts at `initialDelayMs`, grows by `multiplier` after every failure in a row, and stops growing at `maxDelayMs`. The defaults start at 10 seconds, which suits a real outage and is far too slow for a lesson. Set `backoffConfig` on a processor to choose its own delays; [Retry and backoff](../../how-it-works/worker-runner/#retry-and-backoff) has the formula.
+
+The `sync-to-crm` job below calls a CRM that is down for its first two attempts. With the default backoff the retries come too late for the lesson's three-second wait, so the chain never finishes. The output shows each attempt and the error that failed it.
+
+<TryIt lesson="errors-and-retries">give `sync-to-crm` a `backoffConfig` with an `initialDelayMs` of `20` and a `maxDelayMs` of `200`, so its third attempt runs within moments.</TryIt>
+
+## Related guides
+
+- [Error handling](../../guides/error-handling/): return domain errors as outputs, compensate with a follow-up job, and read `lastAttemptError`.
+- [Timeouts](../../guides/timeouts/): stop an attempt that runs too long so it fails and retries.

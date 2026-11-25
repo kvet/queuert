@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import * as benchmarks from "./benchmarks.ts";
-import { instantiationGroups, seriesOf, typeGroups } from "./benchmarks.ts";
+import {
+  benchmarkSummary,
+  benchmarkSummaryColumns,
+  instantiationGroups,
+  seriesOf,
+  typeGroups,
+} from "./benchmarks.ts";
 
 describe("benchmark groups", () => {
   it("read a number for every row and series from the benchmarks' results.md", () => {
@@ -35,5 +41,15 @@ describe("seriesOf", () => {
     const linear = typeGroups[0].rows.find((row) => row.label === "Linear: 100 types")!;
     const ts7 = seriesOf(typeGroups, 1)[0].rows.find((row) => row.label === "Linear: 100 types");
     expect(ts7?.values).toEqual([linear.values[1]]);
+  });
+});
+
+describe("benchmarkSummary", () => {
+  it("reads creation and completion throughput for each listed state adapter", () => {
+    expect(benchmarkSummary.map((row) => row.label)).toContain("PostgreSQL (pg)");
+    for (const row of benchmarkSummary) {
+      expect(row.values).toHaveLength(benchmarkSummaryColumns.length);
+      for (const value of row.values) expect(value).toBeGreaterThan(0);
+    }
   });
 });

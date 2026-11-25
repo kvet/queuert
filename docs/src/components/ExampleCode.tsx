@@ -20,6 +20,8 @@ export const ExampleCode = (props: {
   package?: string;
   file: string;
   region?: string;
+  /** `"imports"` collapses multi-line named imports to `{…}` at build time, as the editor shows them. */
+  fold?: "imports";
   title?: string;
   lang?: string;
   code?: string;

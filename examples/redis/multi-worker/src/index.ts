@@ -8,35 +8,6 @@ import { createNodeRedisStateProvider } from "example-redis-state-redis/provider
 import { createClient, defineJobTypes } from "queuert";
 import { createClient as createRedisClient } from "redis";
 
-// ============================================================================
-// Multi-Worker Order Processing Example (with Child Processes)
-// ============================================================================
-//
-// This example demonstrates multiple worker processes sharing one Redis
-// instance for both job state and notifications.
-//
-// Architecture:
-//
-//   ┌──────────────────────────────────────────────────────────────────┐
-//   │                              Redis                               │
-//   │  ┌─────────────────────────────────────────────────────────────┐ │
-//   │  │                     {queuert}:* keys                        │ │
-//   │  │   (optimistic transactions; one worker claims each job)     │ │
-//   │  └─────────────────────────────────────────────────────────────┘ │
-//   │  ┌─────────────────────────────────────────────────────────────┐ │
-//   │  │                    Pub/Sub Channels                         │ │
-//   │  │     (real-time notifications when new jobs are queued)      │ │
-//   │  └─────────────────────────────────────────────────────────────┘ │
-//   └──────────────────────────────────────────────────────────────────┘
-//                │                  │                  │
-//                ▼                  ▼                  ▼
-//         ┌──────────┐       ┌──────────┐       ┌──────────┐
-//         │ Process 1│       │ Process 2│       │ Process 3│
-//         │ (alpha)  │       │  (beta)  │       │ (gamma)  │
-//         └──────────┘       └──────────┘       └──────────┘
-//
-// ============================================================================
-
 const WORKER_COUNT = 3;
 const JOBS_TO_PROCESS = 12;
 

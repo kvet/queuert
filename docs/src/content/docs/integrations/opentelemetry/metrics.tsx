@@ -1,11 +1,12 @@
 import { type FieldItem, FieldList } from "../../../../components/FieldList.tsx";
 import { TraceWaterfall } from "../../../../components/integrations/observability/TraceWaterfall.tsx";
 import { Code } from "../../../../components/mdx/Code.tsx";
+import { Details } from "../../../../components/mdx/Details.tsx";
 import { onboardingDurations } from "../../../../data/traces.ts";
 import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
-  title: "OpenTelemetry Metrics",
+  title: "OpenTelemetry metrics",
   description: "OpenTelemetry counters, histograms, and gauges.",
 };
 
@@ -255,19 +256,31 @@ const Page = () => (
     <h2>Counters</h2>
     <p>The row under each metric lists its attributes; worker counters have none.</p>
     <h3>Worker lifecycle</h3>
-    <FieldList items={workerCounters()} idPrefix="metric" />
+    <Details summary="Worker counters" hint="4 metrics">
+      <FieldList items={workerCounters()} idPrefix="metric" />
+    </Details>
     <h3>Job lifecycle</h3>
-    <FieldList items={jobCounters()} idPrefix="metric" />
+    <Details summary="Job counters" hint="5 metrics">
+      <FieldList items={jobCounters()} idPrefix="metric" />
+    </Details>
     <h3>Attempt lifecycle</h3>
-    <FieldList items={attemptCounters()} idPrefix="metric" />
+    <Details summary="Attempt counters" hint="5 metrics">
+      <FieldList items={attemptCounters()} idPrefix="metric" />
+    </Details>
     <h3>Chain lifecycle</h3>
-    <FieldList items={chainCounters()} idPrefix="metric" />
+    <Details summary="Chain counters" hint="3 metrics">
+      <FieldList items={chainCounters()} idPrefix="metric" />
+    </Details>
     <h3>Adapter errors</h3>
-    <FieldList items={adapterCounters()} idPrefix="metric" />
+    <Details summary="Adapter error counters" hint="2 metrics">
+      <FieldList items={adapterCounters()} idPrefix="metric" />
+    </Details>
 
     <h2>Histograms</h2>
     <p>Histograms track duration distributions at three levels. Unit is seconds.</p>
-    <FieldList title="Durations" items={histograms} idPrefix="metric" />
+    <Details summary="Duration histograms" hint="3 metrics">
+      <FieldList items={histograms} idPrefix="metric" />
+    </Details>
     <p>
       These form a hierarchy — chain duration encompasses job durations (plus wait time between
       continuations), and job duration encompasses attempt durations (plus wait time between
@@ -292,7 +305,9 @@ const Page = () => (
     <FieldList title="Gauges" items={upDownCounters} idPrefix="metric" />
 
     <h2>Metric attributes</h2>
-    <FieldList title="Metric attributes" items={attributes()} idPrefix="attribute" />
+    <Details summary="Metric attributes" hint="4 attributes">
+      <FieldList items={attributes()} idPrefix="attribute" />
+    </Details>
   </>
 );
 

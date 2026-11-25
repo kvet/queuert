@@ -1,4 +1,4 @@
-import { For, Show, createSignal, onSettled } from "solid-js";
+import { For, Show } from "solid-js";
 
 import {
   type CompareMark,
@@ -8,7 +8,6 @@ import {
   compareRows,
   compareTools,
 } from "../data/comparison.ts";
-import { siteHref } from "../docs/href.ts";
 
 const markLabels = {
   yes: "built in",
@@ -43,50 +42,8 @@ const toolTint = (id: CompareToolId) => (id === "queuert" ? "bg-surface" : "bg-b
 const labelCell =
   "sticky left-0 z-10 border-border bg-bg px-2.5 py-1.5 font-mono text-[11px] leading-4 tracking-wide text-fg-muted uppercase";
 
-const neighborIds = compareTools.flatMap((tool) => (tool.id === "queuert" ? [] : [tool.id]));
-
-const parsePicked = (value: string | null): CompareToolId[] | undefined => {
-  if (value === null) return undefined;
-  const names = new Set(value.split(","));
-  const picked = neighborIds.filter((id) => names.has(id));
-  return picked.length === 0 ? undefined : picked;
-};
-
-const pickedSearch = (picked: CompareToolId[]) => {
-  const url = new URL(window.location.href);
-  if (picked.length === neighborIds.length) url.searchParams.delete("with");
-  else url.searchParams.set("with", picked.join(","));
-  return `${url.pathname}${url.search}${url.hash}`;
-};
-
-const toggleClass =
-  "inline-flex items-center rounded-xs border border-border px-2 py-0.5 text-xs text-fg-muted hover:border-border-strong hover:text-fg aria-pressed:border-border-strong aria-pressed:bg-surface-2 aria-pressed:text-fg";
-
-export const CompareMatrix = (props: { tools?: CompareToolId[]; selectable?: boolean }) => {
-  const [picked, setPicked] = createSignal<CompareToolId[]>(neighborIds);
-  onSettled(() => {
-    if (props.selectable !== true) return;
-    const fromUrl = parsePicked(new URL(window.location.href).searchParams.get("with"));
-    if (fromUrl !== undefined) setPicked(fromUrl);
-  });
-  const pick = (selection: CompareToolId[]) => {
-    const next = selection.length === 0 ? neighborIds : selection;
-    setPicked(next);
-    window.history.replaceState(window.history.state, "", pickedSearch(next));
-  };
-  const toggle = (id: CompareToolId) => {
-    pick(
-      picked().length === neighborIds.length
-        ? [id]
-        : picked().includes(id)
-          ? picked().filter((pickedId) => pickedId !== id)
-          : neighborIds.filter((neighborId) => neighborId === id || picked().includes(neighborId)),
-    );
-  };
-  const tools = () =>
-    props.tools === undefined
-      ? compareTools.filter((tool) => tool.id === "queuert" || picked().includes(tool.id))
-      : compareTools.filter((tool) => props.tools?.includes(tool.id));
+export const CompareMatrix = (props: { tools: CompareToolId[] }) => {
+  const tools = () => compareTools.filter((tool) => props.tools.includes(tool.id));
   const footnotes = () => {
     const used = new Set(
       tools().flatMap((tool) => compareRows.flatMap((row) => tool.cells[row.id]?.footnote ?? [])),
@@ -95,48 +52,9 @@ export const CompareMatrix = (props: { tools?: CompareToolId[]; selectable?: boo
   };
   const footnoteNumber = (id: number) =>
     footnotes().findIndex((footnote) => footnote.id === id) + 1;
-  const wide = () => tools().length > 2;
 
   return (
     <div class="my-8">
-      <Show when={props.selectable}>
-        <div
-          role="group"
-          aria-label="Tools to compare with Queuert"
-          class="mb-4 flex flex-wrap items-center gap-1.5"
-        >
-          <span class="mr-1 text-xs text-fg-muted">Compare Queuert with</span>
-          <For each={compareTools.filter((tool) => tool.id !== "queuert")}>
-            {(tool) => (
-              <button
-                type="button"
-                class={toggleClass}
-                aria-pressed={
-                  picked().length < neighborIds.length && picked().includes(tool.id)
-                    ? "true"
-                    : "false"
-                }
-                onClick={() => {
-                  toggle(tool.id);
-                }}
-              >
-                {tool.name}
-              </button>
-            )}
-          </For>
-          <Show when={picked().length < neighborIds.length}>
-            <button
-              type="button"
-              class="ml-1 text-xs text-accent-fg hover:underline"
-              onClick={() => {
-                pick(neighborIds);
-              }}
-            >
-              Show all
-            </button>
-          </Show>
-        </div>
-      </Show>
       <p class="m-0 mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-fg-muted">
         <For each={Object.entries(markLabels) as [CompareMark, string][]}>
           {([mark, label]) => (
@@ -146,11 +64,6 @@ export const CompareMatrix = (props: { tools?: CompareToolId[]; selectable?: boo
             </span>
           )}
         </For>
-        <Show when={wide()}>
-          <span class="text-fg-subtle min-[1440px]:hidden">
-            Scroll sideways to see every tool →
-          </span>
-        </Show>
       </p>
       <div class="relative w-0 min-w-full overflow-x-auto rounded-xs border border-border scrollbar-thin">
         <div
@@ -158,7 +71,7 @@ export const CompareMatrix = (props: { tools?: CompareToolId[]; selectable?: boo
           aria-label="Feature comparison"
           class="grid text-[13px] leading-[1.125rem]"
           style={{
-            "grid-template-columns": `minmax(6rem, 9rem) repeat(${tools().length}, minmax(${wide() ? "8.5rem" : "7rem"}, 1fr))`,
+            "grid-template-columns": `minmax(6rem, 9rem) repeat(${tools().length}, minmax(7rem, 1fr))`,
           }}
         >
           <div role="row" class="contents">
@@ -171,22 +84,9 @@ export const CompareMatrix = (props: { tools?: CompareToolId[]; selectable?: boo
                   role="columnheader"
                   class={`${toolTint(tool.id)} border-b border-l border-border px-2.5 py-2`}
                 >
-                  <div class="flex items-baseline gap-1.5">
-                    <span class="font-mono text-xs font-semibold tracking-wider text-fg uppercase">
-                      {tool.name}
-                    </span>
-                    <Show when={props.tools === undefined ? tool.href : undefined}>
-                      {(href) => (
-                        <a
-                          href={siteHref(href())}
-                          class="unstyled text-xs text-accent-fg hover:underline"
-                          aria-label={`Queuert vs ${tool.name}`}
-                        >
-                          →
-                        </a>
-                      )}
-                    </Show>
-                  </div>
+                  <span class="font-mono text-xs font-semibold tracking-wider text-fg uppercase">
+                    {tool.name}
+                  </span>
                   <div class="mt-0.5 text-[11px] leading-4 text-fg-subtle">
                     {tool.category} · {tool.version ?? `v${comparedQueuertVersion}`}
                   </div>

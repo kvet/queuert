@@ -1,4 +1,4 @@
-# PostgreSQL Notify Adapter (Bun.SQL)
+# PostgreSQL notify adapter (Bun.SQL)
 
 PostgreSQL LISTEN/NOTIFY via `@queuert/postgres` using Bun's built-in [`SQL`](https://bun.com/docs/runtime/sql) client — no external PostgreSQL dependencies.
 

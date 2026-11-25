@@ -4,8 +4,7 @@ import { comparedQueuertVersion } from "../../../data/comparison.ts";
 
 export const meta = {
   title: "BullMQ",
-  description:
-    "How Queuert relates to BullMQ — different tools for different shapes of background work.",
+  description: "How Queuert compares with BullMQ, a Redis and PostgreSQL job queue.",
 };
 
 const Page = () => (
@@ -35,12 +34,11 @@ const Page = () => (
       producer) that share the same scripts.
     </p>
     <p>
-      You install it, point it at Redis or Postgres, create queues, and <code>add</code> jobs.
+      You install it, point it at Redis or PostgreSQL, create queues, and <code>add</code> jobs.
       Workers either run in your process or in sandboxed child processes.
     </p>
     <QueuertSummary />
-    <h2>They aren't directly comparable</h2>
-    <p>BullMQ and Queuert model different problems:</p>
+    <h2>Queues and chains</h2>
     <ul>
       <li>
         <strong>Queue concepts</strong> like priority, rate limiting, sandboxed processors, and
@@ -52,19 +50,15 @@ const Page = () => (
         <strong>Chain concepts</strong> like typed continuations, blocker DAGs, and transactional
         enqueue tied to your DB are central to Queuert because Queuert is a job-chain library that
         lives in your DB. They're absent from BullMQ because BullMQ runs every operation on its own
-        connection — in Redis, or in Postgres but outside your transactions.
+        connection — in Redis, or in PostgreSQL but outside your transactions.
       </li>
     </ul>
-    <p>
-      The narrow overlap is "both let you defer work into the background," possibly in the same
-      Postgres. Beyond that, the shapes diverge.
-    </p>
     <h2>What BullMQ is good at</h2>
     <ul>
       <li>
         <strong>Speed.</strong> On Redis, lists/sorted sets and Lua-script atomicity make BullMQ the
         fastest path among Node queue libraries on raw throughput and wakeup latency.{" "}
-        <code>BZPOPMIN</code> typically wakes in sub-millisecond. BullMQ's docs put the Postgres
+        <code>BZPOPMIN</code> typically wakes in sub-millisecond. BullMQ's docs put the PostgreSQL
         backend at roughly 1.5–2× lower processing throughput.
       </li>
       <li>
@@ -90,26 +84,25 @@ const Page = () => (
       These are what a <em>high-throughput queue</em> should be good at, and BullMQ invests heavily
       in them.
     </p>
-    <h2>Differences worth knowing about</h2>
-    <p>A few practical differences:</p>
+    <h2>Storage, wakeup and isolation</h2>
     <ul>
       <li>
         <strong>Storage tier.</strong> On Redis, BullMQ's durability depends on your Redis
-        configuration (RDB / AOF / fsync settings); its Postgres backend keeps jobs in a{" "}
-        <code>bullmq</code> schema in your database. Queuert uses Postgres or SQLite, or
+        configuration (RDB / AOF / fsync settings); its PostgreSQL backend keeps jobs in a{" "}
+        <code>bullmq</code> schema in your database. Queuert uses PostgreSQL or SQLite, or
         MySQL/MariaDB or Redis through its experimental state adapters; durability is whatever that
         database gives you.
       </li>
       <li>
         <strong>Wakeup mechanism.</strong> On Redis, BullMQ's <code>BZPOPMIN</code> blocking pop
-        wakes in sub-millisecond; on Postgres it uses <code>LISTEN/NOTIFY</code>. Queuert's{" "}
+        wakes in sub-millisecond; on PostgreSQL it uses <code>LISTEN/NOTIFY</code>. Queuert's{" "}
         <code>LISTEN/NOTIFY</code> (or Redis pub/sub, or NATS) wakes in tens of milliseconds.
       </li>
       <li>
         <strong>Transactional consistency.</strong> BullMQ runs every operation on its own
-        connection — Redis, or its own <code>pg</code> pool on the Postgres backend — so both ends
+        connection — Redis, or its own <code>pg</code> pool on the PostgreSQL backend — so both ends
         require application discipline. <em>Enqueue:</em> <code>add</code> can't join your DB
-        transaction, even when the jobs live in the same Postgres. <em>Processing:</em>{" "}
+        transaction, even when the jobs live in the same PostgreSQL. <em>Processing:</em>{" "}
         <a href="https://docs.bullmq.io/">BullMQ's docs</a> describe at-least-once delivery: a job
         whose worker crashes or loses its lock can be processed again, so processors must be
         idempotent. With Queuert, both halves commit inside your DB transaction; for DB-bound work,
@@ -124,11 +117,6 @@ const Page = () => (
         <strong>Cross-language workers.</strong> BullMQ has SDKs in several languages sharing the
         same stored state. Queuert workers are TypeScript, on Node.js or Bun.
       </li>
-      <li>
-        <strong>Failure shape.</strong> BullMQ's <code>failed</code> sorted set acts as the
-        dead-letter queue; you re-process via <code>job.retry()</code>. Queuert leaves the error on
-        the job as <code>lastAttemptError</code> and lets the application decide what to do next.
-      </li>
     </ul>
     <h2>Choosing between them</h2>
     <p>
@@ -137,7 +125,7 @@ const Page = () => (
     <ul>
       <li>
         You already operate Redis and accept it as durable storage, or want BullMQ's queue features
-        on the Postgres you already run.
+        on the PostgreSQL you already run.
       </li>
       <li>You need sub-millisecond wakeup latency and high raw throughput.</li>
       <li>
@@ -164,11 +152,6 @@ const Page = () => (
         NATS) is enough.
       </li>
     </ul>
-    <p>
-      If you genuinely need both — high-throughput queue work <em>and</em> chain-shaped sequences
-      tied to your DB — those are different concerns and deserve different tools. They aren't
-      substitutes.
-    </p>
   </>
 );
 

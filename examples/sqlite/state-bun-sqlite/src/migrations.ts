@@ -4,8 +4,6 @@ import type { Migration } from "@queuert/sqlite";
 
 import type { BunSqliteContext } from "./provider.ts";
 
-// Transactional migrations run inside the provider's synchronous transaction; non-transactional
-// ones run outside a transaction, one synchronous statement at a time.
 export const createMigrations = ({
   db,
 }: {

@@ -3,6 +3,7 @@ import { fileRoutes } from "@solidjs/router/fs";
 import { Loading, onSettled } from "solid-js";
 import { pageRoutes } from "virtual:file-routes";
 
+import { Footer } from "./components/Footer.tsx";
 import { restoreSyncedTabs } from "./components/mdx/Tabs.tsx";
 import { SearchDialog } from "./components/Search.tsx";
 import { TopBar } from "./components/TopBar.tsx";
@@ -29,6 +30,7 @@ const App = () => {
         <>
           <TopBar />
           <Loading>{props.children}</Loading>
+          <Footer />
           <SearchDialog />
         </>
       )}

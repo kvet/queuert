@@ -1,7 +1,8 @@
+/** A group with an empty label is listed first without a heading. */
 type SiteGroup = { label: string; slugs: string[] };
 
 export type SiteSection = {
-  id: "docs" | "integrations" | "api" | "compare" | "benchmarks" | "blog" | "changelog";
+  id: "learn" | "guides" | "concepts" | "integrations" | "api" | "compare" | "blog" | "changelog";
   label: string;
   href: string;
   groups: SiteGroup[];
@@ -9,47 +10,75 @@ export type SiteSection = {
 
 export const siteSections: SiteSection[] = [
   {
-    id: "docs",
-    label: "Docs",
-    href: "/getting-started/introduction/",
+    id: "learn",
+    label: "Learn",
+    href: "/learn/",
     groups: [
       {
-        label: "Getting Started",
+        label: "Learn",
         slugs: [
-          "getting-started/introduction",
-          "getting-started/installation",
-          "getting-started/core-concepts",
+          "learn",
+          "learn/what-is-queuert",
+          "learn/first-chain",
+          "learn/chains-in-your-transaction",
+          "learn/continuing-a-chain",
+          "learn/branching",
+          "learn/errors-and-retries",
+          "learn/use-it-in-your-app",
         ],
       },
+    ],
+  },
+  {
+    id: "guides",
+    label: "Guides",
+    href: "/guides/",
+    groups: [
+      { label: "", slugs: ["guides"] },
       {
-        label: "Building Blocks",
-        slugs: ["guides/tx-hooks", "guides/application-migrations"],
-      },
-      {
-        label: "Guides",
+        label: "Shape workflows",
         slugs: [
           "guides/chain-patterns",
           "guides/job-blockers",
-          "guides/error-handling",
-          "guides/timeouts",
+          "guides/batched-processors",
+          "guides/slices",
+        ],
+      },
+      { label: "Handle failure", slugs: ["guides/error-handling", "guides/timeouts"] },
+      {
+        label: "Timing and load",
+        slugs: [
           "guides/scheduling",
           "guides/deduplication",
-          "guides/chain-awaiting",
-          "guides/workerless-outcomes",
-          "guides/chain-deletion",
-          "guides/queries",
-          "guides/cleanup",
-          "guides/slices",
-          "guides/horizontal-scaling",
-          "guides/batched-processors",
           "guides/prioritization",
-          "guides/middleware",
-          "guides/runtime-validation",
+          "guides/horizontal-scaling",
         ],
       },
       {
-        label: "How It Works",
+        label: "Data and lifecycle",
         slugs: [
+          "guides/chain-awaiting",
+          "guides/workerless-outcomes",
+          "guides/queries",
+          "guides/chain-deletion",
+          "guides/cleanup",
+        ],
+      },
+      {
+        label: "Extend",
+        slugs: ["guides/middleware", "guides/tx-hooks", "guides/application-migrations"],
+      },
+    ],
+  },
+  {
+    id: "concepts",
+    label: "Concepts",
+    href: "/how-it-works/glossary/",
+    groups: [
+      {
+        label: "Concepts",
+        slugs: [
+          "how-it-works/glossary",
           "how-it-works/chain-model",
           "how-it-works/job-processing",
           "how-it-works/processing-reliability",
@@ -64,9 +93,9 @@ export const siteSections: SiteSection[] = [
     label: "Integrations",
     href: "/integrations/",
     groups: [
-      { label: "Overview", slugs: ["integrations"] },
+      { label: "", slugs: ["integrations"] },
       {
-        label: "State Adapters",
+        label: "State adapters",
         slugs: [
           "integrations/state-adapters",
           "integrations/state-adapters/postgres",
@@ -78,7 +107,7 @@ export const siteSections: SiteSection[] = [
         ],
       },
       {
-        label: "Notify Adapters",
+        label: "Notify adapters",
         slugs: [
           "integrations/notify-adapters",
           "integrations/notify-adapters/postgres",
@@ -116,10 +145,19 @@ export const siteSections: SiteSection[] = [
     label: "Compare",
     href: "/comparison/",
     groups: [
+      { label: "", slugs: ["comparison"] },
       {
-        label: "Compare",
+        label: "Benchmarks",
         slugs: [
-          "comparison",
+          "benchmarks/processing-capacity",
+          "benchmarks/query-performance",
+          "benchmarks/type-complexity",
+          "benchmarks/runtime-performance",
+        ],
+      },
+      {
+        label: "Alternatives",
+        slugs: [
           "comparison/pg-boss",
           "comparison/graphile-worker",
           "comparison/bullmq",
@@ -131,28 +169,11 @@ export const siteSections: SiteSection[] = [
     ],
   },
   {
-    id: "benchmarks",
-    label: "Benchmarks",
-    href: "/benchmarks/",
-    groups: [
-      { label: "Overview", slugs: ["benchmarks"] },
-      {
-        label: "Suites",
-        slugs: [
-          "benchmarks/processing-capacity",
-          "benchmarks/query-performance",
-          "benchmarks/type-complexity",
-          "benchmarks/runtime-performance",
-        ],
-      },
-    ],
-  },
-  {
     id: "blog",
     label: "Blog",
     href: "/blog/",
     groups: [
-      { label: "Overview", slugs: ["blog"] },
+      { label: "", slugs: ["blog"] },
       {
         label: "Posts",
         slugs: [
@@ -176,8 +197,14 @@ export const siteSections: SiteSection[] = [
 export const sectionById = (id: SiteSection["id"]): SiteSection =>
   siteSections.find((section) => section.id === id)!;
 
-/** The sections the top bar lists. The changelog is reached from the version badge instead. */
-export const topBarSections = siteSections.filter((section) => section.id !== "changelog");
+/** The sections the top bar lists before the search box. The changelog is reached from the version badge instead. */
+export const topBarSections = siteSections.filter(
+  (section) => section.id !== "changelog" && section.id !== "blog",
+);
+
+export const blogSection = sectionById("blog");
+
+export const drawerSections = [...topBarSections, blogSection];
 
 export const sectionForPath = (pathname: string): SiteSection | undefined => {
   const path = pathname.replace(/^\/+/, "");

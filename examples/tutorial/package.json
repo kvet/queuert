@@ -1,0 +1,16 @@
+{
+  "name": "example-tutorial",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/hero.ts && for lesson in src/*/solution/index.ts; do node \"$lesson\" || exit 1; done",
+    "typecheck": "tsrs --noEmit"
+  },
+  "dependencies": {
+    "queuert": "workspace:*"
+  },
+  "devDependencies": {
+    "@queuert/tsconfig": "workspace:*"
+  }
+}

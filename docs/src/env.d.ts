@@ -9,3 +9,9 @@ declare module "virtual:changelog" {
   const changelog: import("../plugins/changelog.ts").Changelog;
   export default changelog;
 }
+
+declare module "virtual:tutorial-types" {
+  // oxlint-disable-next-line typescript/consistent-type-imports -- ambient module declarations cannot import relative modules
+  const types: import("../plugins/tutorial-types.ts").TutorialTypes;
+  export default types;
+}

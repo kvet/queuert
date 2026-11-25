@@ -1,4 +1,4 @@
-# SQLite State Adapter (bun:sqlite)
+# SQLite state adapter (bun:sqlite)
 
 SQLite state storage via `@queuert/sqlite` using Bun's built-in [`bun:sqlite`](https://bun.com/docs/runtime/sqlite) module — no external SQLite dependencies. Its provider is synchronous (marked with `sync: true`), so `createSqliteStateAdapter` returns a sync adapter and `createClient` returns plain values, with job creation and completion inside bun:sqlite's `db.transaction` and no lock.
 

@@ -30,7 +30,7 @@ await using orm = await MikroORM.init({
 await orm.schema.create();
 
 const jobTypes = defineJobTypes<{
-  send_welcome_email: {
+  "send-welcome-email": {
     entry: true;
     input: { userId: number };
     output: { sentAt: string };
@@ -53,7 +53,7 @@ await using workerRunner = createWorkerRunner({
     client,
     jobTypes,
     processors: {
-      send_welcome_email: {
+      "send-welcome-email": {
         attemptHandler: async ({ job, applyJobOutcome }) => {
           const user = await orm.em.fork().findOneOrFail(User, { id: job.input.userId });
 
@@ -77,7 +77,7 @@ const chain = await orm.em.transactional(async (em) => {
 
   return client.createChain({
     em,
-    typeName: "send_welcome_email",
+    typeName: "send-welcome-email",
     input: { userId: user.id },
   });
 });
@@ -96,7 +96,7 @@ await orm.em.transactional(async (em) => {
       await client.createChain({
         em,
         id: cancelledChainId,
-        typeName: "send_welcome_email",
+        typeName: "send-welcome-email",
         input: { userId: user.id },
       });
       throw new Error("Bob's signup was cancelled");

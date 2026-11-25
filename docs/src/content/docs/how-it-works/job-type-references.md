@@ -1,19 +1,17 @@
 ---
-title: Job Type References
+title: Job type references
 description: Job type definition patterns and type hierarchy.
 sidebar:
-  order: 5
+  order: 6
 ---
 
-## Overview
+A job type can reference other job types in two ways, by name or by input shape, and the two combine freely.
 
-This document describes the model for how job types reference each other. Instead of referencing other job types by name only, the system supports two reference modes that can be combined flexibly.
+## Reference modes
 
-## Reference Modes
+### Nominal reference (by typeName)
 
-### Nominal Reference (by typeName)
-
-Explicitly reference job types by their name. Supports union of names for flexibility:
+A nominal reference names the job type, or a union of names:
 
 ```typescript
 {
@@ -21,27 +19,27 @@ Explicitly reference job types by their name. Supports union of names for flexib
 }
 ```
 
-### Structural Reference (by input)
+### Structural reference (by input)
 
-Reference job types by their input type signature. This matches **all** job types whose input matches the given structure:
+A structural reference names an input shape and matches every job type whose input matches it:
 
 ```typescript
 { input: { b: boolean } | { c: string } }
 ```
 
-When multiple job types match, the user decides which one to use at runtime.
+When several job types match, the caller picks one at runtime.
 
 ## Application
 
 ### Continuation (`continueWith`)
 
-Defines what job types a job can continue to. References can use either mode or combine them with unions:
+`continueWith` lists the job types a job can continue to, using either mode or a union of both:
 
 ```typescript
 continueWith: { typeName: 'step2' | 'step2_alt' } | { input: { c: boolean } }
 ```
 
-Structural references enable loose coupling — a router doesn't need to know every handler by name:
+Structural references loosen the coupling: a router does not need to know every handler by name.
 
 ```ts
 const jobTypes = defineJobTypes<{
@@ -59,21 +57,19 @@ const jobTypes = defineJobTypes<{
     output: { resultB: number };
   };
 }>();
-
-// continueWith accepts either "handler-a" or "handler-b" — both match the input shape
 ```
 
 ### Blockers
 
-Defines job types that must complete before this job can run. Blockers are an ordered array supporting two slot types:
+`blockers` lists the job types that must complete before the job runs. It is an ordered array with two kinds of slot.
 
-**Fixed slots**: Each position requires exactly one blocker matching the reference.
+A fixed slot takes exactly one blocker matching the reference:
 
 ```typescript
 blockers: [{ typeName: "auth" }, { typeName: "validate" }];
 ```
 
-**Rest/variadic slots**: Zero or more blockers matching the reference.
+A rest slot takes zero or more blockers matching the reference:
 
 ```typescript
 blockers: [
@@ -82,7 +78,7 @@ blockers: [
 ]
 ```
 
-Structural references allow any entry job type with a matching input shape to satisfy a blocker slot:
+With a structural reference, any entry job type with a matching input shape fills the slot. Here `aggregate` accepts any number of blockers whose input has `{ url: string }`, so both `fetch-a` and `fetch-b` qualify:
 
 ```ts
 const jobTypes = defineJobTypes<{
@@ -103,17 +99,11 @@ const jobTypes = defineJobTypes<{
     blockers: [...{ input: { url: string } }[]];
   };
 }>();
-
-// aggregate accepts any number of blockers whose input has { url: string }
-// — both "fetch-a" and "fetch-b" qualify
 ```
 
-### Blocker Output Typing
+### Blocker output typing
 
-When accessing `job.blockers`, outputs are typed based on the reference:
-
-- **Nominal reference**: Output type of the named job type(s)
-- **Structural reference**: Union of output types from all matching job types
+`job.blockers` outputs are typed from the reference: a nominal reference gives the output type of the named job types, a structural one the union of the output types of every match. Below, `auth.output` is `{ userId: string }` and `validate.output` is `{ valid: boolean }`:
 
 ```ts
 const jobTypes = defineJobTypes<{
@@ -142,8 +132,6 @@ const processors = createProcessors({
     process: {
       attemptHandler: async ({ job, applyJobOutcome }) => {
         const [auth, validate] = job.blockers;
-        // auth.output is { userId: string }
-        // validate.output is { valid: boolean }
         await withTxHooks(async (txHooks) =>
           db.transaction(async (tx) =>
             applyJobOutcome({
@@ -159,17 +147,12 @@ const processors = createProcessors({
 });
 ```
 
-## Structural Matching Semantics
+## Structural matching semantics
 
-When using `{ input: Type }`, the system finds all job types whose input matches that type. This enables abstraction — multiple implementations can share an input contract — and runtime flexibility — the caller chooses the specific implementation when calling `continueWith`.
+`{ input: Type }` finds every job type whose input matches. Several implementations can share an input contract, and the caller chooses the implementation when it calls `continueWith`.
 
 ## Validation
 
-With `defineJobTypes`, references are checked at compile time only; with `createJobTypes`, they are also validated at runtime and invalid references throw `JobTypeValidationError`. See [Runtime Validation](/queuert/guides/runtime-validation/).
+With `defineJobTypes`, references are checked at compile time only; with `createJobTypes` they are also validated at runtime, and an invalid reference throws `JobTypeValidationError` ([Validation](/queuert/integrations/validation/)).
 
-## See Also
-
-- [Chain Patterns](/queuert/guides/chain-patterns/) — Continuation patterns (linear, branched, loops, go-to)
-- [Job Blockers](/queuert/guides/job-blockers/) — Fan-out/fan-in dependencies
-- [Chain Model](../chain-model/) — Chain structure, Promise analogy
-- [Job Processing](../job-processing/) — Handler lifecycle, `applyJobOutcome`, and the worker lease
+Continuation patterns are in [Chain patterns](/queuert/guides/chain-patterns/) and fan-out and fan-in in [Job blockers](/queuert/guides/job-blockers/); [Chain model](../chain-model/) covers the chain structure.

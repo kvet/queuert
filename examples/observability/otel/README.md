@@ -1,4 +1,4 @@
-# OpenTelemetry Observability Example
+# OpenTelemetry observability example
 
 `@queuert/otel` wiring for distributed tracing and metrics, viewed in otel-tui.
 

@@ -1,4 +1,4 @@
-# Runtime Validation with Zod
+# Runtime validation with Zod
 
 Custom validation adapter backed by Zod — covers nominal (by type name) and structural (by input shape) reference validation.
 

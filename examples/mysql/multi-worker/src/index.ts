@@ -7,32 +7,6 @@ import { createMysql2PoolStateProvider } from "example-mysql-state-mysql2/provid
 import { createPool } from "mysql2/promise";
 import { createClient, defineJobTypes } from "queuert";
 
-// ============================================================================
-// Multi-Worker Order Processing Example (with Child Processes)
-// ============================================================================
-//
-// This example demonstrates multiple worker processes sharing the same MySQL
-// database, competing for jobs via database-level locking. MySQL has no
-// notify adapter, so every process polls for new jobs and finished chains.
-//
-// Architecture:
-//
-//   ┌──────────────────────────────────────────────────────────────────┐
-//   │                          MySQL Database                          │
-//   │  ┌─────────────────────────────────────────────────────────────┐ │
-//   │  │                    Job Queue Table                          │ │
-//   │  │  (workers use FOR UPDATE SKIP LOCKED for job acquisition)  │ │
-//   │  └─────────────────────────────────────────────────────────────┘ │
-//   └──────────────────────────────────────────────────────────────────┘
-//                ▲                  ▲                  ▲
-//                │ poll             │ poll             │ poll
-//         ┌──────────┐       ┌──────────┐       ┌──────────┐
-//         │ Process 1│       │ Process 2│       │ Process 3│
-//         │ (alpha)  │       │  (beta)  │       │ (gamma)  │
-//         └──────────┘       └──────────┘       └──────────┘
-//
-// ============================================================================
-
 const WORKER_COUNT = 3;
 const JOBS_TO_PROCESS = 12;
 const POLL_INTERVAL_MS = 500;
@@ -118,8 +92,6 @@ const orders = Array.from({ length: JOBS_TO_PROCESS }, (_, i) => ({
   total: Math.floor(Math.random() * 200) + 20,
 }));
 
-// Orders and their jobs are created in one transaction — workers only ever see
-// orders that were committed
 const chains = await stateProvider.withTransaction(async (txCtx) => {
   for (const order of orders) {
     await txCtx.connection.query("INSERT INTO orders (id, items, total) VALUES (?, ?, ?)", [

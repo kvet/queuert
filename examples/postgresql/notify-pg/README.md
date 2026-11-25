@@ -1,4 +1,4 @@
-# PostgreSQL Notify Adapter (pg)
+# PostgreSQL notify adapter (pg)
 
 PostgreSQL LISTEN/NOTIFY via `@queuert/postgres` with the pg (node-postgres) client.
 

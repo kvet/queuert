@@ -1,4 +1,4 @@
-# MySQL State Adapter (Bun.SQL)
+# MySQL state adapter (Bun.SQL)
 
 MySQL state storage via `@queuert/mysql` using Bun's built-in [`SQL`](https://bun.com/docs/runtime/sql) client — job creation and completion inside application transactions, no external MySQL dependencies.
 

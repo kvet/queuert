@@ -1,4 +1,4 @@
-# PostgreSQL State Adapter (pg)
+# PostgreSQL state adapter (pg)
 
 PostgreSQL state storage via `@queuert/postgres` with the pg (node-postgres) driver — job creation and completion inside application transactions.
 

@@ -30,9 +30,6 @@ export const createKyselyPgStateProvider = <TDatabase>({
       const tableName = /relation "([^"]+)" does not exist/.exec(String(driverError.message))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
     },
-    // `id` not forwarded: Kysely's CompiledQuery.raw has no name field; the pg
-    // dialect calls `client.query(sql, params)` unprepared. Bypass Kysely for
-    // server-side prepared statements (see postgresql/state-pg).
     executeSql: async ({ txCtx, sql, params }) => {
       if (txCtx && !txCtx.db.isTransaction) {
         throw new Error("Provided context is not in a transaction");

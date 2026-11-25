@@ -1,4 +1,4 @@
-# SQLite State Adapter (node:sqlite)
+# SQLite state adapter (node:sqlite)
 
 SQLite state storage via `@queuert/sqlite` using Node's built-in `node:sqlite` module — no external SQLite dependencies. Its provider is synchronous (marked with `sync: true`), so `createSqliteStateAdapter` returns a sync adapter and `createClient` returns plain values, with job creation and completion inside a `BEGIN`/`COMMIT` transaction and no lock.
 

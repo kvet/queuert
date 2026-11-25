@@ -1,4 +1,4 @@
-# PostgreSQL State Adapter (Multi-Worker)
+# PostgreSQL state adapter (multi-worker)
 
 Three worker processes (forked from the main process) share the same PostgreSQL database and compete for jobs — the main process creates orders and their chains in one transaction, and each order is processed by whichever worker acquires its job first.
 

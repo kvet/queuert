@@ -6,12 +6,10 @@ import { createPgPoolStateProvider } from "example-postgresql-state-pg/provider"
 import { Pool } from "pg";
 import { createClient, createWorkerRunner, createProcessors, defineJobTypes } from "queuert";
 
-// Start NATS using testcontainers
 console.log("Starting NATS...");
 await using natsContainer = await acquireNats("nats:2");
 const connectionOptions = natsContainer.connectionOptions;
 
-// Define job types
 const jobTypes = defineJobTypes<{
   generate_report: {
     entry: true;
@@ -20,7 +18,6 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-// Create the state adapter
 console.log("Starting PostgreSQL...");
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
 await using drivers = new AsyncDisposableStack();
@@ -34,17 +31,14 @@ await using stateAdapter = createPgStateAdapter({
 await stateAdapter.migrateToLatest();
 
 // #region setup
-// Create NATS connection
 await using nc = await connect(connectionOptions);
 
-// Create the notify adapter
 await using notifyAdapter = createNatsNotifyAdapter({
   nc,
   subjectPrefix: "queuert.example",
 });
 // #endregion
 
-// Create client and worker runner
 const client = createClient({
   stateAdapter,
   notifyAdapter,
@@ -60,7 +54,6 @@ await using workerRunner = createWorkerRunner({
       generate_report: {
         attemptHandler: async ({ job, applyJobOutcome }) => {
           console.log(`Generating ${job.input.reportType} report...`);
-          // Simulate report generation work
           await new Promise((r) => setTimeout(r, 500));
           const rowCount = Math.floor(Math.random() * 1000) + 100;
           console.log(`Report generated with ${rowCount} rows`);
@@ -79,7 +72,6 @@ await using workerRunner = createWorkerRunner({
   }),
 });
 
-// Start worker runner and queue a job
 await workerRunner.start();
 
 console.log("Requesting sales report...");
@@ -91,14 +83,12 @@ const chain = await stateAdapter.withTransaction(async (ctx) =>
   }),
 );
 
-// Main thread continues with other work while job processes
 console.log("Report queued! Continuing with other work...");
 console.log("Preparing email template...");
 await new Promise((resolve) => setTimeout(resolve, 100));
 console.log("Loading recipient list...");
 await new Promise((resolve) => setTimeout(resolve, 100));
 
-// Now wait for the report to be ready
 console.log("Waiting for report...");
 const result = await client.awaitChain({ chain, timeoutMs: 5000 });
 console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.rowCount}`);

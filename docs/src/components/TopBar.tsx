@@ -15,7 +15,7 @@ import corePackage from "queuert/package.json";
 import { For, Show, createEffect, createSignal } from "solid-js";
 
 import { siteHref } from "../docs/href.ts";
-import { sectionForPath, topBarSections } from "../docs/sections.ts";
+import { blogSection, drawerSections, sectionForPath, topBarSections } from "../docs/sections.ts";
 import { theme } from "../theme.ts";
 import { GitHubIcon } from "./icons.tsx";
 import { openSearch } from "./Search.tsx";
@@ -26,7 +26,7 @@ export const TopBar = () => {
   const [menuOpen, setMenuOpen] = createSignal(false);
   const activeSection = () =>
     sectionForPath(location.pathname.slice(import.meta.env.BASE_URL.length - 1));
-  const [drawerSection, setDrawerSection] = createSignal(() => activeSection()?.id ?? "docs");
+  const [drawerSection, setDrawerSection] = createSignal(() => activeSection()?.id ?? "learn");
 
   createEffect(
     () => location.pathname,
@@ -47,7 +47,7 @@ export const TopBar = () => {
                   class="mb-5 flex flex-wrap gap-1 border-b border-border pb-3"
                   aria-label="Sections"
                 >
-                  <For each={topBarSections}>
+                  <For each={drawerSections}>
                     {(section) => (
                       <Tabs.Trigger
                         value={section.id}
@@ -58,7 +58,7 @@ export const TopBar = () => {
                     )}
                   </For>
                 </Tabs.List>
-                <For each={topBarSections}>
+                <For each={drawerSections}>
                   {(section) => (
                     <Tabs.Content value={section.id}>
                       <SectionNav section={section.id} />
@@ -106,6 +106,14 @@ export const TopBar = () => {
         </For>
       </nav>
       <span class="flex-1" />
+      <nav class="hidden items-center lg:flex" aria-label="Blog">
+        <TopBarNavLink
+          href={siteHref(blogSection.href)}
+          active={activeSection()?.id === blogSection.id}
+        >
+          {blogSection.label}
+        </TopBarNavLink>
+      </nav>
       <button
         type="button"
         class="hidden h-8 w-56 items-center gap-2 rounded-xs border border-border bg-surface px-2.5 text-left text-sm text-fg-subtle hover:border-border-strong hover:text-fg-muted sm:flex lg:w-64"

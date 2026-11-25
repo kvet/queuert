@@ -1,8 +1,8 @@
 ---
-title: Chain Patterns
-description: Linear, branched, loop, and go-to patterns.
+title: Chain patterns
+description: Build linear, branched, loop and go-to chains with continueWith.
 sidebar:
-  order: 5
+  order: 1
 ---
 
 import { Arrow, Diagram, Flow, Loop, Node, Rows } from "../../../components/diagram";
@@ -15,6 +15,28 @@ Chains support various execution patterns via `continueWith`:
 - [Go-to](#go-to) — `continueWith` jumps to a different type, skipping intermediates
 
 A subscription lifecycle uses all four. Each job type lists the types it may continue with, and a type that declares `output` can end the chain:
+
+<Diagram label="A subscription lifecycle: activate-trial continues with trial-decision, which branches to expire-trial or charge-billing; charge-billing loops on itself and can jump to cancel-subscription">
+  <Flow>
+    <Node>activate-trial</Node>
+    <Arrow />
+    <Node>trial-decision</Node>
+    <Rows spine stack="columns" columns="minmax(3.5rem, auto) auto minmax(3.5rem, auto) auto">
+      <Flow>
+        <Arrow />
+        <Node>expire-trial</Node>
+      </Flow>
+      <Flow>
+        <Arrow />
+        <Loop label="loop">
+          <Node>charge-billing</Node>
+        </Loop>
+        <Arrow label="jump" />
+        <Node>cancel-subscription</Node>
+      </Flow>
+    </Rows>
+  </Flow>
+</Diagram>
 
 <ExampleCode example="guides" file="src/chain-patterns.ts" region="types" />
 
@@ -56,7 +78,7 @@ Jobs execute one after another: `activate-trial` marks the subscription as on tr
 
 ## Loops
 
-<Diagram label="Loop: charge-billing continues with itself until it returns an output">
+<Diagram label="Loop: charge-billing continues with itself until it completes with an output">
   <Flow>
     <Loop label="continueWith itself">
       <Node>charge-billing</Node>
@@ -86,8 +108,8 @@ Because `charge-billing` also lists `cancel-subscription`, any cycle can jump ou
 
 <ExampleCode example="guides" file="src/chain-patterns.ts" region="go-to" />
 
-## Continuation References
+## Continuation references
 
-All examples above use **nominal references** — `{ typeName: "..." }`. Queuert also supports **structural references** (`{ input: {...} }`) that match any job type with a compatible input shape, enabling loose coupling. See [Job Type References](/queuert/how-it-works/job-type-references/) for details and examples.
+All examples above use **nominal references** — `{ typeName: "..." }`. Queuert also supports **structural references** (`{ input: {...} }`) that match any job type with a compatible input shape, enabling loose coupling. See [Job type references](/queuert/how-it-works/job-type-references/) for details and examples.
 
-See [examples/guides/src/chain-patterns.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/chain-patterns.ts) for the runnable code. See also [Job Blockers](../job-blockers/) for parallel dependencies and [Chain Model](/queuert/how-it-works/chain-model/) for how chains and their jobs are modelled.
+The runnable code is in [examples/guides/src/chain-patterns.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/chain-patterns.ts). Related: [Job blockers](../job-blockers/) for parallel dependencies and [Chain model](/queuert/how-it-works/chain-model/) for how chains and their jobs are modelled.

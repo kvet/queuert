@@ -1,4 +1,4 @@
-# MariaDB State Adapter (mariadb)
+# MariaDB state adapter (mariadb)
 
 MariaDB state storage via `@queuert/mysql` with the official [`mariadb`](https://github.com/mariadb-corporation/mariadb-connector-nodejs) connector — job creation and completion inside application transactions.
 

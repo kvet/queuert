@@ -1,8 +1,8 @@
 ---
 title: Prioritization
-description: Reserve worker capacity for urgent workloads by partitioning job types across workers.
+description: Reserve worker capacity for urgent workloads by splitting job types across workers.
 sidebar:
-  order: 19
+  order: 9
 ---
 
 import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/diagram";
@@ -35,7 +35,7 @@ Queuert has no built-in `priority` field. Prioritization is a consequence of **p
   </Flow>
 </Diagram>
 
-## Workloads and Capacity
+## Workloads and capacity
 
 A worker provides a fixed amount of capacity — up to `concurrency` attempt handler calls in flight at once, each one job or one batch of a [batched processor](/queuert/guides/batched-processors/). By default, every job type in its processor registry competes for those same slots. If one worker registers every type, a long-running bulk workload can occupy every slot and stall urgent work behind it.
 
@@ -49,7 +49,7 @@ The transactional worker gets three slots and registers `email.transactional`; t
 
 Each worker's acquisition query filters to its own `typeNames`, so the transactional worker never observes the marketing backlog and picks urgent work up the moment it's enqueued. In the example, three transactional emails enqueued after five marketing emails all complete before the first marketing email does.
 
-## Tradeoffs vs. a Shared Pool
+## Tradeoffs vs. a shared pool
 
 Partitioning reserves capacity: a workload with its own worker always has slots available.
 
@@ -75,7 +75,7 @@ A chain's `continueWith` can target any job type, so a single chain can start on
 
 Decide which workload a job belongs to before enqueueing, then submit to exactly one type. Don't rely on the dedup key alone to collapse duplicates across workloads.
 
-## One Client vs. Multiple Clients
+## One client vs. multiple clients
 
 One `createClient` owns one `jobTypes`. Two ways to split workloads across workers:
 
@@ -84,4 +84,4 @@ One `createClient` owns one `jobTypes`. Two ways to split workloads across worke
 
 Start with one client. Split only when a concrete resource constraint forces it.
 
-See [examples/guides/src/prioritization.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/prioritization.ts) for the runnable code. See also [Horizontal Scaling](../horizontal-scaling/) and [Feature Slices](../slices/).
+The runnable code is in [examples/guides/src/prioritization.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/prioritization.ts). Related: [Horizontal scaling](../horizontal-scaling/) and [Feature slices](../slices/).

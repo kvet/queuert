@@ -1,15 +1,17 @@
 ---
-title: Batched Processors
-description: Process many jobs of one type in one handler call, settling them together in one transaction or each on its own.
+title: Batched processors
+description: Process many jobs of one type in one handler call, settling them together or each on its own.
 sidebar:
-  order: 18
+  order: 3
 ---
 
 A processor with a `batchLimit` above 1 receives up to that many jobs of its type in one handler call, so it can do its side of the work in bulk — one API call, one query — and settle the jobs together or one by one. Processors without `batchLimit`, or with `batchLimit: 1`, receive one job per call.
 
+Settling a batch in one transaction pays the database round trip once per batch instead of once per job: on PostgreSQL, batches of 100 complete about an order of magnitude more jobs per second than single-job attempts (see [batched completion](/queuert/benchmarks/processing-capacity/#batched-completion)).
+
 The handler receives `jobs`, `applyJobOutcomes` and `fenceJobs`. Every job of the batch has its own attempt and its own `job.signal`, and settles once an `applyJobOutcomes` call that names it commits. Each item of `applyJobOutcomes` names a job of the batch as `job` next to one outcome: `output`, `continueWith`, `reschedule` (with an optional `reason`), or `fail`. It returns the committed jobs in the order of its items, each typed by its own item's outcome.
 
-## Settling a Batch Together
+## Settling a batch together
 
 When the work is one bulk call, settle the whole batch in one transaction with one `applyJobOutcomes` call. `send-welcome-email` sends every message of the batch at once and settles each job with the result of its message:
 
@@ -19,7 +21,7 @@ Jobs settled by one call share its transaction: if any of them was lost — recl
 
 `{ fail: error }` fails one job: its `consecutiveFailures` goes up, `error` becomes its `lastAttemptError`, and it is rescheduled with the processor's backoff, while the other jobs named in the same call take their own outcomes in the same write.
 
-## Settling Each Job on Its Own
+## Settling each job on its own
 
 When each job is its own piece of work, give each its own transaction, so one job's failure or loss leaves the others untouched. `sync-to-crm` upserts every job's contact concurrently, passing each its own `job.signal`, and settles each job as soon as its call returns, with `{ fail: error }` when it threw:
 
@@ -27,19 +29,19 @@ When each job is its own piece of work, give each its own transaction, so one jo
 
 `Promise.allSettled` keeps the handler running until every job's work ended: with `Promise.all`, the first rejection ends the handler while the other jobs are still in flight, and their later `applyJobOutcomes` calls throw.
 
-## Per-Job Attempts
+## Per-job attempts
 
 - `job.signal` aborts when that job's attempt is lost, and every job's signal aborts when the worker is stopping or lost its lease.
 - Each job settles at most once. A call whose transaction rolls back does not count for its jobs, so they can be settled again.
 - Jobs without a committed outcome when the handler ends, whether it returned or threw, fail: each counts a failed attempt and is rescheduled with backoff, with the handler's error as its `lastAttemptError`, or, when the handler returned, an error saying it returned without a committed `applyJobOutcomes` call for the job. Settled jobs keep their outcome.
 - Await every transaction that calls `applyJobOutcomes` before the handler returns: a call still running when the handler ends races the failure of its jobs.
 - To hand a job back for another attempt without a failure, settle it with `{ reschedule: { afterMs: 0 } }`.
-- `fenceJobs({ ...txCtx, jobs })` locks and checks the named jobs, for writes the handler makes in a transaction that does not settle them; see [Job Processing](/queuert/how-it-works/job-processing/#fencejob).
+- `fenceJobs({ ...txCtx, jobs })` locks and checks the named jobs, for writes the handler makes in a transaction that does not settle them; see [Job processing](/queuert/how-it-works/job-processing/#fencejob).
 
-## How Batches Form
+## How batches form
 
 The worker runner never waits for a batch to fill. It takes up to `batchLimit` jobs of the type that are due when it looks, so a quiet queue runs small batches and a backlog runs full ones. All jobs of a batch have one type, and a batch takes one slot of the worker runner's `concurrency` until its handler returns: `concurrency: 4` with `batchLimit: 50` runs up to four handlers and 200 jobs at once. Each job of a batch still gets its own attempt log entries, which carry the slot as `workerSlot`, and its own `start job-attempt.{type}` span, which carries it as `queuert.worker.slot`.
 
 A `batchLimit` typed as a plain `number`, read from configuration for example, may be 1 at runtime, so its handler receives either shape: `jobs` and `applyJobOutcomes`, or `job` and `applyJobOutcome`. Check `jobs` before using either.
 
-[Attempt middleware](/queuert/guides/middleware/) wraps the whole handler call: `wrapHandler` receives every job in `jobs`.
+[Job attempt middleware](/queuert/guides/middleware/) wraps the whole handler call: `wrapHandler` receives every job in `jobs`.

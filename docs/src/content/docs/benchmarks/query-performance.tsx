@@ -6,8 +6,8 @@ import { Code } from "../../../components/mdx/Code.tsx";
 import { StackFilter } from "../../../components/StackFilter.tsx";
 import {
   benchmarkContainers,
-  benchmarkServers,
   benchmarkMachine,
+  benchmarkServers,
   benchmarkSourceUrl,
   chainJobsGroups,
   discoveryGroups,
@@ -18,7 +18,7 @@ import {
 } from "../../../data/benchmarks.ts";
 
 export const meta = {
-  title: "Query Performance",
+  title: "Query performance",
   description:
     "Median latency of every state-adapter query on PostgreSQL, SQLite, MySQL, MariaDB, Redis and the synchronous in-process adapter.",
 };

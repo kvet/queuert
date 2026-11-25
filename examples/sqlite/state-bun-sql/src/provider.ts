@@ -12,8 +12,6 @@ export const createBunSqlSqliteStateProvider = ({
   lock: AsyncRwLock;
 }): SqliteStateProvider<BunSqlSqliteContext> => {
   return {
-    // Bun.SQL runs SQLite on a single connection and does not queue transactions on it,
-    // so serialize them with the lock.
     withTransaction: async (fn) =>
       withTxHooks(async (txHooks) => {
         using _h = await lock.acquireWrite();

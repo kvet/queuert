@@ -34,9 +34,7 @@ export const createKnexMysqlStateProvider = ({
       const tableName = /Table '([^']+)' doesn't exist/.exec(String(driverError.sqlMessage))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
     },
-    // `id` not forwarded: knex sends every `raw` call unprepared.
     executeSql: async ({ txCtx, sql, params }) => {
-      // Knex rejects `undefined` bindings outright; mysql2 treats them as NULL.
       const bindings = params.map((param) => (param ?? null) as Knex.RawBinding);
       const [rows] = await (txCtx?.trx ?? knex).raw(sql, bindings);
       return Array.isArray(rows) ? rows : [];

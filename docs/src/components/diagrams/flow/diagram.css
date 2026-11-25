@@ -241,6 +241,10 @@
   align-items: stretch;
 }
 
+.q-d-rows > .q-d-flow:has(> .q-d-loop) > .q-d-node {
+  align-self: center;
+}
+
 .q-d-rows > :not(.q-d-flow) {
   grid-column: 1 / -1;
 }

@@ -13,7 +13,7 @@ import {
 } from "../../../data/benchmarks.ts";
 
 export const meta = {
-  title: "Type Complexity",
+  title: "Type complexity",
   description:
     "TypeScript type-checking cost of job type definitions across chain shapes and sizes.",
 };

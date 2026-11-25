@@ -10,9 +10,6 @@ import {
 
 const jobTypes = defineJobTypes<{
   // #region union-types
-  /*
-   * process-payment --> output { success: true, transactionId } | { success: false, error }
-   */
   "process-payment": {
     entry: true;
     input: { orderId: string; amountCents: number };
@@ -20,11 +17,6 @@ const jobTypes = defineJobTypes<{
   };
   // #endregion
   // #region compensation-types
-  /*
-   * charge-card --> ship-order --> output { shipped }
-   *                     |
-   *                     +-- (carrier rejects) --> refund-charge --> output { refunded }
-   */
   "charge-card": {
     entry: true;
     input: { orderId: string; amountCents: number };
@@ -40,14 +32,6 @@ const jobTypes = defineJobTypes<{
     output: { refunded: true; refundId: string };
   };
   // #endregion
-  /*
-   * fetch-exchange-rate <--+ (throw --> rescheduled with backoff)
-   *        |               |
-   *        +---------------+
-   *        |
-   *        v
-   *   output { rate }
-   */
   "fetch-exchange-rate": {
     entry: true;
     input: { currency: string };

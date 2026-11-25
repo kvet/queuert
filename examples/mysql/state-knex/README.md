@@ -1,4 +1,4 @@
-# MySQL State Adapter (Knex)
+# MySQL state adapter (Knex)
 
 MySQL state storage via `@queuert/mysql` with Knex over the mysql2 driver — job creation and completion inside application transactions.
 

@@ -1,11 +1,25 @@
 ---
-title: Job, Chain & Worker Queries
-description: Read-only methods for inspecting jobs, chains and workers.
+title: Job, chain and worker queries
+description: Inspect jobs, chains and workers with read-only queries.
 sidebar:
-  order: 14
+  order: 13
 ---
 
+import { Arrow, Diagram, Flow, Node, Rows } from "../../../components/diagram";
+
 The client provides read-only methods for inspecting chains, jobs and workers. The examples below query an order workflow: a `reserve-stock` chain blocks a `process-order` chain, which continues to `ship-order`.
+
+<Diagram label="The client's read-only query API: lookups, lists, counts, blockers and worker queries read chains, jobs and workers from the database">
+  <Flow>
+    <Node sub={"getChain · listChains\nlistChainJobs · getJobBlockers\ngetWorkers · type counts"}>client query API</Node>
+    <Arrow label="read" />
+    <Rows spine columns="auto">
+      <Node sub="reserve-stock · process-order">chains</Node>
+      <Node sub="ship-order · blockers">jobs</Node>
+      <Node>workers</Node>
+    </Rows>
+  </Flow>
+</Diagram>
 
 ## Lookups
 
@@ -19,13 +33,13 @@ Query methods called without `lock` accept an optional transaction context in wh
 
 <ExampleCode example="guides" file="src/queries.ts" region="in-transaction" />
 
-## Types and Counts
+## Types and counts
 
 Discover which chain and job types exist in the data, and get per-status counts for specific types:
 
 <ExampleCode example="guides" file="src/queries.ts" region="type-counts" />
 
-## Paginated Lists
+## Paginated lists
 
 `listChains` and `listJobs` require `typeName` and filter by it. Pass the previous page's `nextCursor` to read the next page:
 
@@ -33,13 +47,13 @@ Discover which chain and job types exist in the data, and get per-status counts 
 
 `listChains` and `listJobs` route queries to status-specific indexes based on the `status` and `orderBy` combination. Each status has a natural default sort order — for example, completed chains default to `completedAt` descending, pending and blocked jobs to `scheduledAt` descending. Pass `orderBy: "createdAt"` to override.
 
-## Chain Jobs
+## Chain jobs
 
 `listChainJobs` lists the jobs within a chain in chain order. A chain's tail job is its latest job in chain order, and the head job while the chain has not continued; `getChainTailJobs` returns one entry per requested chain ID, `undefined` for a missing chain:
 
 <ExampleCode example="guides" file="src/queries.ts" region="chain-jobs" />
 
-## Locked Reads
+## Locked reads
 
 `getChain`, `getChains`, `getJob`, `getJobs`, `getChainTailJob` and `getChainTailJobs` take `lock: "exclusive"`, which locks the rows they match until the transaction ends: a chain read locks the chain's head job, a job read locks the job and its chain's head job, and a tail read locks the chain's head job and its tail job. Inside one transaction, read with a lock, check the result, then write with [`applyJobOutcome`](../workerless-outcomes/), and no worker or other caller changes or deletes those rows in between: another caller that locks the same rows waits for your transaction to end. A tail read that waits on a transaction that continues the chain returns the continuation. On PostgreSQL at REPEATABLE READ or SERIALIZABLE, a locked read of a row another transaction changed after your transaction's snapshot fails with a serialization failure for you to retry; see [Isolation level](/queuert/integrations/state-adapters/postgres/#isolation-level). On MySQL and MariaDB, a locked read can fail with a deadlock or a lock wait timeout; see [Lock errors](/queuert/integrations/state-adapters/mysql/#lock-errors). On Redis nothing waits: the transaction that commits second runs again; see [Locks](/queuert/integrations/state-adapters/redis/#locks).
 
@@ -61,4 +75,4 @@ Look up workers by ID (`undefined` for a worker with no row), count live and exp
 
 `listWorkers` orders workers by `startedAt` and optionally keeps only those processing a `typeName`; `listWorkerJobs` orders jobs by `attemptAt`. Both sort by that column, then id, ascending unless `orderDirection` says otherwise, and take no `orderBy`.
 
-See [examples/guides/src/queries.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/queries.ts) for the runnable code. See also the [Client API](/queuert/api/core/type-aliases/client/) reference and [Dashboard](/queuert/integrations/dashboard/).
+The runnable code is in [examples/guides/src/queries.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/queries.ts). Related: the [client API](/queuert/api/core/type-aliases/client/) reference and the [dashboard](/queuert/integrations/dashboard/).

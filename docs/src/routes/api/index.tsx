@@ -26,12 +26,12 @@ const ApiOverview = () => (
   <DocsShell section="api">
     <ArticleLayout wide>
       <PageMeta
-        title="API Reference · Queuert"
+        title="API reference · Queuert"
         description="Generated reference for every exported symbol of the Queuert packages."
         path="/api/"
       />
       <p class="text-xs text-fg-subtle">API</p>
-      <h1 class="mt-3 text-xl font-semibold tracking-tight sm:text-2xl">API Reference</h1>
+      <h1 class="mt-3 text-xl font-semibold tracking-tight sm:text-2xl">API reference</h1>
       <p class="mt-3 max-w-2xl text-[15px] leading-7 text-fg-muted">
         Every exported function, class and type, generated from the TSDoc in the source. Start with{" "}
         <a

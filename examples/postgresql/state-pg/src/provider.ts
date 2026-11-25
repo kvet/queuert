@@ -9,13 +9,6 @@ export const createPgPoolStateProvider = ({
   prepareStatements = true,
 }: {
   pool: Pool;
-  /**
-   * When true (default), queries that arrive with an `id` are sent as named
-   * prepared statements (`name = id`), letting pg cache the parsed plan per
-   * connection. The adapter folds template variants into `id`, so it uniquely
-   * identifies the resolved SQL. Set to `false` for transaction-mode poolers
-   * (PgBouncer, Supavisor) where named statements break across pooled sessions.
-   */
   prepareStatements?: boolean;
 }): PgStateProvider<PgPoolContext> => {
   const exec = async (

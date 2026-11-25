@@ -4,9 +4,6 @@ import { type TxHooks, withTxHooks } from "queuert";
 
 export type BunSqlContext = { txSql: TransactionSQL; txHooks: TxHooks };
 
-// Bun caches a statement whose prepare failed on the connection and replays the error on every
-// later run, even after the table exists, so a statement that hit a missing table is sent with a
-// new comment to prepare it again. The count is kept per client, as its connections hold the cache.
 const missingTableFailuresByClient = new WeakMap<SQL, Map<string, number>>();
 
 export const createBunSqlStateProvider = ({
@@ -28,8 +25,6 @@ export const createBunSqlStateProvider = ({
   };
 
   return {
-    // MySQL's START TRANSACTION takes no isolation level, so the level is set on a reserved
-    // connection just before `begin` opens the transaction on it.
     withTransaction: async (cb) =>
       withTxHooks(async (txHooks) => {
         using reserved = await sql.reserve();

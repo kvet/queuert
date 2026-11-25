@@ -1,7 +1,6 @@
 import type { PgStateProvider } from "@queuert/postgres";
 import { type TxHooks, withTxHooks } from "queuert";
 
-// Prisma wraps a raw query's driver error; the SQLSTATE is `originalCode` on its cause.
 type PrismaDriverAdapterError = {
   meta?: {
     driverAdapterError?: {
@@ -31,7 +30,6 @@ export const createPrismaPgStateProvider = <TPrisma extends PrismaLikeClient>({
       withTxHooks(async (txHooks) =>
         prisma.$transaction(async (prisma: TPrisma) => cb({ prisma, txHooks })),
       ),
-    // Prisma hides `$connect` on the interactive transaction client.
     getTransaction: (txCtx) =>
       !("$connect" in txCtx.prisma) && txCtx.txHooks.isOpen ? txCtx.txHooks : undefined,
     onTransactionCommit: (txCtx, callback) => {
@@ -52,14 +50,10 @@ export const createPrismaPgStateProvider = <TPrisma extends PrismaLikeClient>({
           : /relation "([^"]+)" does not exist/.exec(String(cause.originalMessage))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
     },
-    // `id` not forwarded: Prisma's engine caches plans by SQL text per connection.
     executeSql: async ({ txCtx, sql, params, columnTypes }) => {
       const prismaClient = (txCtx?.prisma ?? prisma) as PrismaLikeClient;
       const result = await prismaClient.$queryRawUnsafe(sql, ...params);
 
-      // Prisma returns BigInt for PostgreSQL bigint/count columns; narrow back
-      // to number only for columns declared as numeric so string/json values
-      // pass through.
       const numericColumns = Object.entries(columnTypes)
         .filter(([, type]) => type === "number" || type === "number?")
         .map(([name]) => name);

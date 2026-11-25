@@ -33,7 +33,6 @@ export const createPrismaSqliteStateProvider = <TPrisma extends PrismaLikeClient
     onTransactionRollback: (txCtx, callback) => {
       txCtx.txHooks.onRollback(callback);
     },
-    // Prisma wraps a raw query's driver error and reports a missing table on its cause.
     classifyError: ({ error }) => {
       const cause = (error as PrismaDriverAdapterError | undefined)?.meta?.driverAdapterError
         ?.cause;
@@ -41,7 +40,6 @@ export const createPrismaSqliteStateProvider = <TPrisma extends PrismaLikeClient
         ? { kind: "undefined_table", tableName: cause.table }
         : undefined;
     },
-    // `id` not forwarded: Prisma's engine caches plans by SQL text per connection.
     executeSql: async ({ txCtx, sql, params, columnTypes, readOnly }) => {
       const runQuery = async (): Promise<unknown[]> => {
         const prismaClient = (txCtx?.prisma ?? prisma) as PrismaLikeClient;
@@ -56,8 +54,6 @@ export const createPrismaSqliteStateProvider = <TPrisma extends PrismaLikeClient
         result = await runQuery();
       }
 
-      // Prisma returns BigInt for SQLite INTEGER columns; narrow back to number
-      // only for columns declared as numeric so string/json values pass through.
       const numericColumns = Object.entries(columnTypes)
         .filter(([, type]) => type === "number" || type === "number?")
         .map(([name]) => name);

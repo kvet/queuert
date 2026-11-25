@@ -1,4 +1,4 @@
-# PostgreSQL State Adapter (Bun.SQL)
+# PostgreSQL state adapter (Bun.SQL)
 
 PostgreSQL state storage via `@queuert/postgres` using Bun's built-in [`SQL`](https://bun.com/docs/runtime/sql) client — job creation and completion inside application transactions, no external PostgreSQL dependencies.
 

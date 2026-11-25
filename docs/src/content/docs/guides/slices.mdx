@@ -1,15 +1,42 @@
 ---
-title: Feature Slices
+title: Feature slices
 description: Organize job types and processors into independent feature modules.
 sidebar:
-  order: 16
+  order: 4
 ---
 
 import { FileTree, Aside } from "@astrojs/starlight/components";
+import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/diagram";
 
 As your application grows, defining all job types and processors in a single file becomes unwieldy. Feature slices let you split them by domain — each slice owns its type definitions and processor handlers, composed together at the application level.
 
-## Defining a Slice
+<Diagram label="Each slice's definitions and processors are composed into the client's job types and the worker runner's processors">
+  <Flow>
+    <Rows>
+      <Group title="notifications slice">
+        <Flow>
+          <Node>definitions</Node>
+          <Arrow />
+          <Node>processors</Node>
+        </Flow>
+      </Group>
+      <Group title="orders slice">
+        <Flow>
+          <Node>definitions</Node>
+          <Arrow />
+          <Node>processors</Node>
+        </Flow>
+      </Group>
+    </Rows>
+    <Arrow label="merged" />
+    <Rows>
+      <Node sub="jobTypes">createClient</Node>
+      <Node sub="processors">createWorkerRunner</Node>
+    </Rows>
+  </Flow>
+</Diagram>
+
+## Defining a slice
 
 A slice consists of two files: definitions and processors.
 
@@ -33,7 +60,7 @@ A slice consists of two files: definitions and processors.
 
 `createProcessors` type-checks each handler against the slice's own definitions (plus any external defs it declares), then returns a `Processors` that's plugged into `createWorkerRunner`.
 
-## Composing Slices
+## Composing slices
 
 At the application level, pass an array of slices to `createClient`:
 
@@ -50,7 +77,7 @@ Both fields accept a single slice or an array of slices. When an array is passed
 
 To run a slice's job types on different workers, split its registry with `pickProcessors` / `omitProcessors` — see [Splitting a Registry](../horizontal-scaling/#splitting-a-registry).
 
-## Cross-Slice References
+## Cross-slice references
 
 When a slice needs to reference job types from another slice — here, `orders.confirm-order` waits for a notification from the notifications slice — use the optional `TExternal` type parameter on `defineJobTypes`:
 
@@ -67,7 +94,7 @@ Processors that reference types from another slice need nothing special: the cli
 
 <ExampleCode example="guides-slices" file="src/slice-orders-processors.ts" />
 
-## Naming Convention
+## Naming convention
 
 <Aside type="note">
   Prefix job type names with the slice name to avoid collisions and make logs and dashboards easy
@@ -80,4 +107,4 @@ orders.confirm-order
 notifications.send-notification
 ```
 
-See [examples/guides-slices](https://github.com/kvet/queuert/tree/main/examples/guides-slices/src) for the runnable code. See also [Chain Patterns](../chain-patterns/) for continuation patterns and the [API reference](/queuert/api/core/readme/) for `defineJobTypes`, `createJobTypes`, `createProcessors`, `pickProcessors` and `omitProcessors`.
+The runnable code is in [examples/guides-slices](https://github.com/kvet/queuert/tree/main/examples/guides-slices/src). Related: [Chain patterns](../chain-patterns/) for continuation patterns and the [API reference](/queuert/api/core/readme/) for `defineJobTypes`, `createJobTypes`, `createProcessors`, `pickProcessors` and `omitProcessors`.

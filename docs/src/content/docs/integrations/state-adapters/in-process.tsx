@@ -8,7 +8,7 @@ import { Code } from "../../../../components/mdx/Code.tsx";
 import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
-  title: "In-Process State Adapter",
+  title: "In-Process state adapter",
   description:
     "Keep chains and jobs in memory, for tests and single-process scripts that don't need persistence.",
 };

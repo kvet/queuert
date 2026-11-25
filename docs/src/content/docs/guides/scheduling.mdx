@@ -1,11 +1,25 @@
 ---
 title: Scheduling
-description: Deferred start and recurring job patterns.
+description: Start a chain later, reschedule a job from or outside its handler, and run recurring jobs.
 sidebar:
-  order: 9
+  order: 7
 ---
 
-## Deferred Start
+import { Arrow, Diagram, Flow, Node } from "../../../components/diagram";
+
+Jobs start at a time you choose: a chain starts later, a handler pushes its own job back, a recurring job schedules its next run.
+
+<Diagram label="A scheduled job stays pending until its run time, becomes due, then a worker runs it">
+  <Flow>
+    <Node status="pending" sub="scheduledAt in the future">send-reminder</Node>
+    <Arrow label="run time reached" />
+    <Node status="pending" sub="due">send-reminder</Node>
+    <Arrow label="worker claims" />
+    <Node status="running">send-reminder</Node>
+  </Flow>
+</Diagram>
+
+## Deferred start
 
 Jobs can be scheduled to start at a future time using the `schedule` option. The chain is created transactionally but its first job isn't processed until the specified time. Pass `{ at }` for a specific time, as this reminder does, or `{ afterMs }` for a delay from now:
 
@@ -19,7 +33,7 @@ The same `schedule` option works with `continueWith` for deferred continuations.
 Combine `schedule` with `deduplication: { key, scope }` to prevent duplicate future jobs — for example, ensuring only one reminder is queued per user even if the trigger fires multiple times. See [Deduplication](../deduplication/).
 :::
 
-## Rescheduling from a Handler
+## Rescheduling from a handler
 
 When a handler needs to defer work without treating it as a failure — for example, a rate-limited API saying "come back later" — use `applyJobOutcome({ reschedule })`. The handler below waits as long as the API asks before calling it again, and says why in `reason`:
 
@@ -27,7 +41,7 @@ When a handler needs to defer work without treating it as a failure — for exam
 
 `applyJobOutcome({ reschedule })` is a normal outcome, not an error: no failure event, no error span. It sets `consecutiveFailures` to 0, so if the job later fails for real, backoff starts again from its initial delay. The optional `reason` is stored on the job as `lastRescheduleReason`, where the next attempt and the dashboard can read it; keep it short, since longer reasons are truncated to 10,000 characters. `reschedule` takes the same `{ afterMs }` or `{ at }` as `schedule`.
 
-## Rescheduling from Outside a Handler
+## Rescheduling from outside a handler
 
 A scheduled job is just a pending job with a future `scheduledAt`. Use `client.applyJobOutcome` with a `reschedule` outcome to change when it runs. Pass `{ at }` or `{ afterMs }`, and optionally a `reason` — here the reminder moves to two hours from now. A chain id names the chain's first job, so `{ id: reminder.id }` reaches the reminder only until its chain continues:
 
@@ -37,14 +51,14 @@ Pass `{ afterMs: 0 }` to run it immediately — useful for admin "run now" actio
 
 <ExampleCode example="guides" file="src/scheduling.ts" region="run-now" />
 
-On a pending or blocked job, a client reschedule works like a handler reschedule: it sets `consecutiveFailures` to 0, restarting backoff, and sets `lastRescheduleReason` to its `reason`, or `null` without one. It keeps `lastAttemptError`, so a job run again by hand still shows why it last failed. A blocked job keeps its status: its `scheduledAt` moves, and it runs no earlier than that once its blockers complete. A running job returns to pending and its attempt is lost, and a completed job throws `JobAlreadyCompletedError`. A blocked job that runs now still waits for its blockers. `applyJobOutcomes` reschedules a batch all or nothing, and also takes the other outcomes, as [Workerless Outcomes](../workerless-outcomes/#how-it-works) explains.
+On a pending or blocked job, a client reschedule works like a handler reschedule: it sets `consecutiveFailures` to 0, restarting backoff, and sets `lastRescheduleReason` to its `reason`, or `null` without one. It keeps `lastAttemptError`, so a job run again by hand still shows why it last failed. A blocked job keeps its status: its `scheduledAt` moves, and it runs no earlier than that once its blockers complete. A running job returns to pending and its attempt is lost, and a completed job throws `JobAlreadyCompletedError`. A blocked job that runs now still waits for its blockers. `applyJobOutcomes` reschedules a batch all or nothing, and also takes the other outcomes, as [Workerless outcomes](../workerless-outcomes/#how-it-works) explains.
 
-## Recurring Jobs
+## Recurring jobs
 
 Queuert has no cron syntax. For periodic tasks like daily digests, health checks, or billing cycles, start a new independent chain from within the handler instead of using `continueWith`. This keeps each execution as its own short-lived chain rather than building an ever-growing chain history. The digest below completes its job, then schedules the next digest a day later in the same transaction while the user is still subscribed:
 
 <ExampleCode example="guides" file="src/scheduling.ts" region="recurring" />
 
-Each occurrence is its own chain, so the next digest can be pushed back or run now with the client's `applyJobOutcome` like any other scheduled job. To make sure only one occurrence is ever queued, add a deduplication key and keep the handler's `applyJobOutcome` ahead of `createChain`, as [Self-Scheduling Recurring Chains](../deduplication/#self-scheduling-recurring-chains) explains.
+Each occurrence is its own chain, so the next digest can be pushed back or run now with the client's `applyJobOutcome` like any other scheduled job. To make sure only one occurrence is ever queued, add a deduplication key and keep the handler's `applyJobOutcome` ahead of `createChain`, as [Self-scheduling recurring chains](../deduplication/#self-scheduling-recurring-chains) explains.
 
-See [examples/guides/src/scheduling.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/scheduling.ts) for the runnable code. See also [Deduplication](../deduplication/) and [Tx Hooks](../tx-hooks/).
+The runnable code is in [examples/guides/src/scheduling.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/scheduling.ts). Related: [Deduplication](../deduplication/) and [Tx hooks](../tx-hooks/).

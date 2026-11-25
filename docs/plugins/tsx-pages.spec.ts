@@ -183,6 +183,29 @@ describe("ExampleCode", () => {
     expect(code).toContain('code={"const script = 1;"}');
   });
 
+  it('collapses multi-line named imports with fold="imports"', async () => {
+    writeFileSync(
+      join(examplesDirectory, "state-demo/src/imports.ts"),
+      'import {\n  a,\n  b,\n} from "queuert";\n\nconst x = a + b;\n',
+    );
+    const { code } = await transformPage(
+      page('    <ExampleCode example="state-demo" file="src/imports.ts" fold="imports" />'),
+      file,
+      { examplesDirectory },
+    );
+    expect(code).toContain('code={"import {…} from \\"queuert\\";\\n\\nconst x = a + b;"}');
+  });
+
+  it("rejects an unknown fold", async () => {
+    await expect(
+      transformPage(
+        page('    <ExampleCode example="state-demo" file="src/index.ts" fold="types" />'),
+        file,
+        { examplesDirectory },
+      ),
+    ).rejects.toThrow('fold="types"');
+  });
+
   it("reads an example nested in a stack directory", async () => {
     mkdirSync(join(examplesDirectory, "postgresql/state-demo/src"), { recursive: true });
     writeFileSync(

@@ -1,8 +1,8 @@
 ---
-title: Job Blockers
-description: Fan-out/fan-in job dependencies.
+title: Job blockers
+description: Make a job wait for other chains to complete, and read their outputs when it runs.
 sidebar:
-  order: 6
+  order: 2
 ---
 
 import { Arrow, Diagram, Flow, Node, Rows, Transition } from "../../../components/diagram";
@@ -41,7 +41,7 @@ Once every blocker completes, the processor reads their typed outputs from `job.
 
 <ExampleCode example="guides" file="src/job-blockers.ts" region="fan-out-process" />
 
-## Passing Blockers by ID
+## Passing blockers by ID
 
 Often the blocker chain was created earlier and only its ID was saved. Think of an entity that works like a state machine: an order in the `awaiting_payment` state stores the ID of the `capture-payment` chain that moves it forward, and that chain clears it when it marks the order `paid`. Shipping reads the order in the same transaction and waits on the stored ID only while payment is still pending:
 
@@ -49,12 +49,12 @@ Often the blocker chain was created earlier and only its ID was saved. Think of 
 
 Only keep the ID while the chain is still running: a completed chain can be removed by [cleanup](/queuert/guides/cleanup/), and a missing blocker chain throws [`ChainNotFoundError`](/queuert/api/core/classes/chainnotfounderror/), or [`ChainsNotFoundError`](/queuert/api/core/classes/chainsnotfounderror/) listing every missing chain from `createChains` and `applyJobOutcomes`.
 
-## Blocker References
+## Blocker references
 
-The first example uses **nominal references** — `{ typeName: "fetch-data" }`. Blockers also support fixed tuple slots, variadic rest slots, and **structural references** (`{ input: {...} }`) that match any entry job type with a compatible input shape. Blocker outputs are fully typed in the processor based on the reference. See [Job Type References](/queuert/how-it-works/job-type-references/) for details and examples.
+The first example uses **nominal references** — `{ typeName: "fetch-data" }`. Blockers also support fixed tuple slots, variadic rest slots, and **structural references** (`{ input: {...} }`) that match any entry job type with a compatible input shape. Blocker outputs are fully typed in the processor based on the reference. See [Job type references](/queuert/how-it-works/job-type-references/) for details and examples.
 
-## Blocker Limit
+## Blocker limit
 
 A single job may declare at most **100** blocker chains by default. Declaring more throws [`JobBlockerLimitExceededError`](/queuert/api/core/classes/jobblockerlimitexceedederror/) before any state is written, or [`JobsBlockerLimitExceededError`](/queuert/api/core/classes/jobsblockerlimitexceedederror/) from `createChains` and `applyJobOutcomes`, with the `itemIndexes` of every offending item. The limit belongs to the state adapter — pass `maxBlockersPerJob` to the state adapter factory to raise or lower it. Keep it bounded: the blocker model is built for fan-in of a bounded set of dependencies, not millions per job.
 
-See [examples/guides/src/job-blockers.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/job-blockers.ts) for the runnable code. See also [Tx Hooks](../tx-hooks/) and [Chain Patterns](../chain-patterns/).
+The runnable code is in [examples/guides/src/job-blockers.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/job-blockers.ts). Related: [Tx hooks](../tx-hooks/) and [Chain patterns](../chain-patterns/).

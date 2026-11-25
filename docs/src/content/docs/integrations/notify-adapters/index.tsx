@@ -4,7 +4,7 @@ import { Aside } from "../../../../components/mdx/Aside.tsx";
 import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
-  title: "Notify Adapters",
+  title: "Notify adapters",
   description:
     "Wake workers in other processes the moment jobs are scheduled instead of polling, and the NotifyAdapter interface every backend implements.",
 };

@@ -1,8 +1,8 @@
 ---
 title: Deduplication
-description: Prevent duplicate chains with deduplication keys.
+description: Keep a repeated trigger from creating the same chain twice, using deduplication keys.
 sidebar:
-  order: 10
+  order: 8
 ---
 
 import { Arrow, Diagram, Flow, Node, Rows } from "../../../components/diagram";
@@ -33,7 +33,7 @@ Both calls below pass the same key while the first chain is still running, so th
 
 <ExampleCode example="guides" file="src/deduplication.ts" region="deduplicate" />
 
-## Deduplication Modes
+## Deduplication modes
 
 The required `scope` option controls what chains to check for duplicates, and a missing or unknown value throws a `TypeError`:
 
@@ -44,7 +44,7 @@ The `sync-user` chains above use `running`: once the first sync completes, the s
 
 <ExampleCode example="guides" file="src/deduplication.ts" region="scope-any" />
 
-## Self-Scheduling Recurring Chains
+## Self-scheduling recurring chains
 
 A recurring chain schedules its next occurrence from its own terminal job. Under `scope: "running"` the ordering matters: complete **first**, then create the next chain in the same transaction. `applyJobOutcome({ output: ... })` applies the completion inside your transaction, so by the time `createChain` runs, the chain being completed already reads as completed and cannot match itself.
 
@@ -52,4 +52,4 @@ A recurring chain schedules its next occurrence from its own terminal job. Under
 
 Scheduling _before_ completing matches the still-running chain and silently suppresses the next occurrence, ending the recurrence. The same applies to scheduling from a mid-chain job: that chain is genuinely still running, so schedule from the terminal job. Because the next occurrence is always the running chain under the key, starting the same health check from outside while its next occurrence is scheduled returns that running chain rather than starting a second recurrence.
 
-See [examples/guides/src/deduplication.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/deduplication.ts) for the runnable code. See also [Scheduling](../scheduling/) and [Tx Hooks](../tx-hooks/).
+The runnable code is in [examples/guides/src/deduplication.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/deduplication.ts). Related: [Scheduling](../scheduling/) and [Tx hooks](../tx-hooks/).

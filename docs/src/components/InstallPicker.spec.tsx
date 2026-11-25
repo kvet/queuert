@@ -1,7 +1,8 @@
 import { renderToString } from "@solidjs/web";
 import { describe, expect, it } from "vitest";
 
-import { InstallPicker } from "./InstallPicker.tsx";
+import { InstallPicker, PickedTabs, pickStack } from "./InstallPicker.tsx";
+import { TabItem } from "./mdx/Tabs.tsx";
 
 describe("InstallPicker", () => {
   const html = renderToString(() => <InstallPicker />);
@@ -38,5 +39,38 @@ describe("InstallPicker", () => {
     ]) {
       expect(html).toContain(`href="${link}"`);
     }
+  });
+
+  it("prerenders the default stack's tab in PickedTabs", () => {
+    const tabs = renderToString(() => (
+      <PickedTabs pick="notify">
+        <TabItem label="None">
+          <p>none</p>
+        </TabItem>
+        <TabItem label="PostgreSQL LISTEN/NOTIFY">
+          <p>listen</p>
+        </TabItem>
+      </PickedTabs>
+    ));
+    const panels = tabs.match(/<[^>]*role="tabpanel"[^>]*>/g) ?? [];
+    expect(panels.map((tag) => /\shidden(\s|>|=)/.test(tag))).toEqual([true, false]);
+  });
+});
+
+describe("pickStack", () => {
+  const picks = (values: Record<string, string>) => pickStack((syncKey) => values[syncKey]);
+
+  it("defaults to the first option of each pick", () => {
+    const stack = picks({});
+    expect([stack.state.label, stack.notify.label, stack.manager.label]).toEqual([
+      "PostgreSQL",
+      "PostgreSQL LISTEN/NOTIFY",
+      "npm",
+    ]);
+  });
+
+  it("falls back to the state adapter's first notify option when the picked one does not fit", () => {
+    expect(picks({ state: "SQLite", notify: "Redis" }).notify.label).toBe("IPC");
+    expect(picks({ state: "MySQL / MariaDB", notify: "NATS" }).notify.label).toBe("NATS");
   });
 });

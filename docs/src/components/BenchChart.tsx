@@ -49,24 +49,41 @@ export const BenchChart = (props: {
   approximate?: boolean;
   decimals?: number;
   scalePerGroup?: boolean;
+  logScale?: boolean;
 }) => {
   const picked = createPickedStack();
   /**
    * Bars scale to the rows and series the reader's stack shows, so a narrowed chart stays
    * readable; with `scalePerGroup`, each group (measured under its own conditions) has its own.
    */
-  const max = (scaled: BenchGroup) =>
-    Math.max(
-      ...(props.scalePerGroup ? [scaled] : props.groups).flatMap((group) =>
-        group.rows
-          .filter((row) => shownInStack(row.backend, picked()))
-          .flatMap((row) =>
-            row.values.filter((_, index) =>
-              shownInStack(seriesBackend(props.series[index]), picked()),
-            ),
+  const scaled = (scope: BenchGroup) =>
+    (props.scalePerGroup ? [scope] : props.groups).flatMap((group) =>
+      group.rows
+        .filter((row) => shownInStack(row.backend, picked()))
+        .flatMap((row) =>
+          row.values.filter((_, index) =>
+            shownInStack(seriesBackend(props.series[index]), picked()),
           ),
-      ),
+        ),
     );
+  const barShare = (value: number, scope: BenchGroup) => {
+    const values = scaled(scope);
+    const max = Math.max(...values);
+    if (!props.logScale) return value / max;
+    const floor = 10 ** Math.floor(Math.log10(Math.min(...values)));
+    return max === floor ? 1 : Math.log(value / floor) / Math.log(max / floor);
+  };
+  const barSpan = "min(74%, 100% - 5.5rem)";
+  const decades = (scope: BenchGroup) => {
+    if (!props.logScale) return [];
+    const values = scaled(scope);
+    if (values.length === 0) return [];
+    const floor = 10 ** Math.floor(Math.log10(Math.min(...values)));
+    const max = Math.max(...values);
+    const marks: number[] = [];
+    for (let mark = floor * 10; mark <= max; mark *= 10) marks.push(mark);
+    return marks;
+  };
   const shades = () => seriesShades[props.series.length - 1] ?? seriesShades[0];
   const format = (value: number) =>
     `${props.approximate ? "~" : ""}${value.toLocaleString("en-US", {
@@ -85,7 +102,12 @@ export const BenchChart = (props: {
   return (
     <Box
       title={props.title}
-      actions={<span class="text-fg-subtle">{props.unit}</span>}
+      actions={
+        <span class="text-fg-subtle">
+          {props.logScale ? "log scale · " : ""}
+          {props.unit}
+        </span>
+      }
       class="my-6"
       bodyClass=""
     >
@@ -151,11 +173,22 @@ export const BenchChart = (props: {
                                 {seriesLabel(props.series[index()])}
                               </span>{" "}
                             </Show>
-                            <div class="flex min-w-0 flex-1 items-center gap-2">
+                            <div class="relative flex min-w-0 flex-1 items-center gap-2">
+                              <For each={decades(group)}>
+                                {(mark) => (
+                                  <span
+                                    aria-hidden="true"
+                                    class="absolute inset-y-0 w-px bg-border/60"
+                                    style={{
+                                      left: `calc(${barShare(mark, group)} * ${barSpan})`,
+                                    }}
+                                  />
+                                )}
+                              </For>
                               <span
                                 class={`reveal-bar h-2 shrink-0 rounded-r-xs ${shades()[index()]}`}
                                 style={{
-                                  width: `max(2px, ${(value / max(group)) * 74}%)`,
+                                  width: `max(2px, calc(${barShare(value, group)} * ${barSpan}))`,
                                   "--reveal-delay": `${index() * 120}ms`,
                                 }}
                               />{" "}

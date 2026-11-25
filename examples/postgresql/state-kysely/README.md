@@ -1,4 +1,4 @@
-# PostgreSQL State Adapter (Kysely)
+# PostgreSQL state adapter (Kysely)
 
 PostgreSQL state storage via `@queuert/postgres` with Kysely — job creation and completion inside application transactions.
 

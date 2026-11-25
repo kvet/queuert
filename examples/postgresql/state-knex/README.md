@@ -1,4 +1,4 @@
-# PostgreSQL State Adapter (Knex)
+# PostgreSQL state adapter (Knex)
 
 PostgreSQL state storage via `@queuert/postgres` with Knex — job creation and completion inside application transactions.
 

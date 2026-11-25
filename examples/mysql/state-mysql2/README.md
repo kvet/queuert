@@ -1,4 +1,4 @@
-# MySQL State Adapter (mysql2)
+# MySQL state adapter (mysql2)
 
 MySQL state storage via `@queuert/mysql` with the mysql2 driver — job creation and completion inside application transactions.
 

@@ -10,15 +10,6 @@ import {
 
 // #region types
 const jobTypes = defineJobTypes<{
-  /*
-   * activate-trial --> trial-decision --+--> expire-trial
-   *                                     |
-   *                                     +--> charge-billing <--+
-   *                                               |            |
-   *                                               +---(loop)---+
-   *                                               |
-   *                                               +--> cancel-subscription
-   */
   "activate-trial": {
     entry: true;
     input: { subscriptionId: string };

@@ -1,4 +1,4 @@
-# Redis Notify Adapter (ioredis)
+# Redis notify adapter (ioredis)
 
 Redis pub/sub notifications via `@queuert/redis` with the ioredis client.
 

@@ -182,7 +182,6 @@ export const createMemoryStateAdapter = (
   };
   let committed = emptyState();
 
-  // Transactions run one at a time: each starts from the committed state and replaces it on commit
   let queue: Promise<unknown> = Promise.resolve();
   const serialized = async <T>(fn: () => Promise<T>): Promise<T> => {
     const turn = queue.then(fn);
@@ -209,8 +208,6 @@ export const createMemoryStateAdapter = (
     query: (state: MemoryState) => T,
   ): Promise<T> => structuredClone(query(txCtx?.transaction?.state ?? committed));
 
-  // A write without a transaction context runs in a transaction of its own. Every write changes a
-  // copy, so a batch that throws midway leaves nothing behind even if the caller goes on to commit
   const write = async <T>(
     txCtx: MemoryTxContext | undefined,
     change: (state: MemoryState) => T,

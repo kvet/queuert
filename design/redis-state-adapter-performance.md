@@ -4,7 +4,7 @@ Where the Redis state adapter stands, what still behaves differently from the SQ
 
 ## Where it stands
 
-All numbers are from an Apple M1 Pro with Redis in Docker Desktop, measured while other test containers were running, so treat them as rough.
+All numbers are from an Apple M5 Pro with Redis in Docker Desktop, measured while other test containers were running, so treat them as rough.
 
 - **Queries** (`benchmarks/query-performance/results.md`, scale 100): every case runs under 2 ms at p50 and within about 1.5 ms of PostgreSQL. The widest gaps are chain listings with a cursor or the `blocking: false` filter and worker listings filtered by status.
 - **Processing** (`benchmarks/processing-capacity`, the numbers in `docs/src/data/benchmarks.ts`): about 3.2–3.4k chains/s single, 25–26k batched, and 5.1–6.3k jobs/s completion at concurrency 16 (node-redis and ioredis).

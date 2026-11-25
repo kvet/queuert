@@ -144,4 +144,4 @@ The dual-write problem was never really about queues. It is about two systems th
 
 There is one more kind of side effect that fits none of these: work that should follow a commit but is fine to lose, like a notification that wakes the next worker. That is [Side effects after commit](../post-commit-side-effects/).
 
-In Queuert, a handler calls `applyJobOutcome` in its own transaction; [Job Processing](../../how-it-works/job-processing/) covers the attempt lifecycle, ownership and `fenceJob`.
+In Queuert, a handler calls `applyJobOutcome` in its own transaction; [Job processing](../../how-it-works/job-processing/) covers the attempt lifecycle, ownership and `fenceJob`.

@@ -3,8 +3,6 @@ import type { SQL } from "bun";
 
 import type { BunSqlSqliteContext } from "./provider.ts";
 
-// Transactional migrations run inside the provider's transaction, which already holds the write
-// lock; non-transactional ones run outside a transaction and take the lock like the rest of the app.
 export const createMigrations = ({
   sql,
   lock,

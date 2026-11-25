@@ -314,7 +314,6 @@
   .code-scroll pre {
     max-height: 48rem;
     overflow-y: auto;
-    overscroll-behavior: contain;
     padding-block: 0.5rem;
   }
   .code-signature pre {

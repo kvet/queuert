@@ -1,0 +1,156 @@
+---
+title: Use it in your app
+description: Install Queuert with your database, migrate the schema and run chains against a real state adapter.
+sidebar:
+  order: 8
+---
+
+import { TabItem } from "@astrojs/starlight/components";
+
+import { InstallPicker, PickedTabs } from "../../../components/InstallPicker.tsx";
+
+The lessons ran on the in-process state adapter. In your app the same Queuert code runs against your own database; the state adapter and the transaction you pass in change.
+
+## Requirements
+
+- Node.js 24 or later
+- TypeScript 5.2+ (the examples use `await using`)
+
+## Install
+
+Pick one state adapter, optionally a notify adapter and any extras; the command below installs the core `queuert` package together with them, and the code on this page follows your picks. Your picks are saved in this browser.
+
+<InstallPicker />
+
+The command covers Queuert and its adapters, not your database client. Install the driver the code below uses the same way, or pick another one on the adapter's page.
+
+## Connect and migrate
+
+Create the state adapter from your database client through a state provider, and call `migrateToLatest` once at startup to create or upgrade Queuert's tables.
+
+<PickedTabs pick="state">
+  <TabItem label="PostgreSQL">
+    `db` is a `pg` pool. The provider comes from the [PostgreSQL state adapter](/queuert/integrations/state-adapters/postgres/) page, which has one for each driver and ORM.
+
+    <ExampleCode example="postgresql/state-pg" file="src/index.ts" region="adapter" />
+
+  </TabItem>
+  <TabItem label="SQLite">
+    `db` is a `better-sqlite3` database, whose calls run synchronously. The provider comes from the [SQLite state adapter](/queuert/integrations/state-adapters/sqlite/) page, which has one for each driver and ORM.
+
+    <ExampleCode example="sqlite/state-better-sqlite3" file="src/index.ts" region="adapter" />
+
+  </TabItem>
+  <TabItem label="MySQL / MariaDB">
+    `db` is a `mysql2` pool. The provider comes from the [MySQL / MariaDB state adapter](/queuert/integrations/state-adapters/mysql/) page, which has one for each driver and ORM.
+
+    <ExampleCode example="mysql/state-mysql2" file="src/index.ts" region="adapter" />
+
+  </TabItem>
+  <TabItem label="Redis">
+    Queuert's state lives in Redis, apart from your application database. The provider comes from the [Redis state adapter](/queuert/integrations/state-adapters/redis/) page.
+
+    <ExampleCode example="redis/state-redis" file="src/index.ts" region="adapter" />
+
+  </TabItem>
+</PickedTabs>
+
+## Process
+
+Declare job types with `defineJobTypes` and write processors as in the lessons. Each handler commits its outcome through `applyJobOutcome` inside a transaction.
+
+<PickedTabs pick="state">
+  <TabItem label="PostgreSQL">
+    The transaction is one of your own `pg` client. `withTxHooks` collects the work Queuert schedules during it, such as notifying workers, and runs it after the commit; see [Tx hooks](/queuert/guides/tx-hooks/).
+
+    <ExampleCode example="postgresql/state-pg" file="src/index.ts" region="process" />
+
+  </TabItem>
+  <TabItem label="SQLite">
+    The transaction is one of your own `better-sqlite3` database. `withTxHooks` collects the work Queuert schedules during it, such as notifying workers, and runs it after the commit; see [Tx hooks](/queuert/guides/tx-hooks/).
+
+    <ExampleCode example="sqlite/state-better-sqlite3" file="src/index.ts" region="process" />
+
+  </TabItem>
+  <TabItem label="MySQL / MariaDB">
+    The provider's `withTransaction` opens the transaction on your pool and passes its context to `applyJobOutcome`.
+
+    <ExampleCode example="mysql/state-mysql2" file="src/index.ts" region="process" />
+
+  </TabItem>
+  <TabItem label="Redis">
+    The state adapter's `withTransaction` opens the transaction in Redis and passes its context to `applyJobOutcome`.
+
+    <ExampleCode example="redis/state-redis" file="src/index.ts" region="process" />
+
+  </TabItem>
+</PickedTabs>
+
+## Start a chain
+
+<PickedTabs pick="state">
+  <TabItem label="PostgreSQL">
+    `createChain` takes the transaction of your own write, here an insert into a `users` table, so the chain exists only if the write commits.
+
+    <ExampleCode example="postgresql/state-pg" file="src/index.ts" region="create-chain" />
+
+  </TabItem>
+  <TabItem label="SQLite">
+    `createChain` takes the transaction of your own write, here an insert into a `users` table, so the chain exists only if the write commits.
+
+    <ExampleCode example="sqlite/state-better-sqlite3" file="src/index.ts" region="create-chain" />
+
+  </TabItem>
+  <TabItem label="MySQL / MariaDB">
+    `createChain` takes the transaction of your own write, here an insert into a `users` table, so the chain exists only if the write commits.
+
+    <ExampleCode example="mysql/state-mysql2" file="src/index.ts" region="create-chain" />
+
+  </TabItem>
+  <TabItem label="Redis">
+    `createChain` takes a Redis transaction of the state adapter. It does not commit together with writes to your application database.
+
+    <ExampleCode example="redis/state-redis" file="src/index.ts" region="transaction" />
+
+  </TabItem>
+</PickedTabs>
+
+## Notify workers
+
+Without a notify adapter, the client wakes its own worker runners in memory and workers in other processes poll the database. A notify adapter wakes them as soon as a chain is created; pass it to `createClient` as `notifyAdapter`.
+
+<PickedTabs pick="notify">
+  <TabItem label="PostgreSQL LISTEN/NOTIFY">
+    See the [PostgreSQL notify adapter](/queuert/integrations/notify-adapters/postgres/) page for other drivers.
+
+    <ExampleCode example="postgresql/notify-pg" file="src/index.ts" region="setup" />
+
+  </TabItem>
+  <TabItem label="Redis">
+    See the [Redis notify adapter](/queuert/integrations/notify-adapters/redis/) page for other clients and Redis Cluster.
+
+    <ExampleCode example="postgresql/notify-redis-redis" file="src/index.ts" region="setup" />
+
+  </TabItem>
+  <TabItem label="NATS">
+    See the [NATS notify adapter](/queuert/integrations/notify-adapters/nats/) page.
+
+    <ExampleCode example="postgresql/notify-nats" file="src/index.ts" region="setup" />
+
+  </TabItem>
+  <TabItem label="IPC">
+    For processes on one host that share a SQLite file. See the [IPC notify adapter](/queuert/integrations/notify-adapters/ipc/) page.
+
+    <ExampleCode example="ipc/notify" file="src/index.ts" region="setup" />
+
+  </TabItem>
+  <TabItem label="None">
+    No code to add. See [Without a notify adapter](/queuert/integrations/notify-adapters/#default) for the polling interval.
+  </TabItem>
+</PickedTabs>
+
+## Where to go next
+
+- [Integrations](/queuert/integrations/): adapter setup, driver options, provider interfaces and observability.
+- [Guides](/queuert/guides/): task-oriented recipes for chains, failure, timing and lifecycle.
+- [Glossary](/queuert/how-it-works/glossary/): the terms used across the docs.

@@ -5,17 +5,16 @@ import { comparedQueuertVersion } from "../../../data/comparison.ts";
 
 export const meta = {
   title: "Graphile Worker",
-  description:
-    "How Queuert relates to Graphile Worker — a SQL-native Postgres job queue and a job-chain library.",
+  description: "How Queuert compares with Graphile Worker, a SQL-native PostgreSQL job queue.",
 };
 
 const Page = () => (
   <>
     <p>
       <a href="https://worker.graphile.org">Graphile Worker</a> and Queuert both run background work
-      stored in Postgres, and both let you enqueue inside your own transaction. They differ in what
-      happens after enqueue: Graphile Worker runs single jobs as fast as Postgres allows; Queuert
-      runs typed chains whose every step commits with your data.
+      stored in PostgreSQL, and both let you enqueue inside your own transaction. They differ in
+      what happens after enqueue: Graphile Worker runs single jobs as fast as PostgreSQL allows;
+      Queuert runs typed chains whose every step commits with your data.
     </p>
     <blockquote>
       <p>
@@ -26,18 +25,18 @@ const Page = () => (
     <CompareMatrix tools={["queuert", "graphile-worker"]} />
     <h2>What Graphile Worker is</h2>
     <p>
-      Graphile Worker is a <strong>SQL-native Postgres job queue</strong> for Node.js, in use since
-      2019, MIT-licensed and sponsor-funded, with a paid, source-available Worker Pro preset. Jobs
-      are rows added by the <code>graphile_worker.add_job()</code> SQL function — from your
+      Graphile Worker is a <strong>SQL-native PostgreSQL job queue</strong> for Node.js, in use
+      since 2019, MIT-licensed and sponsor-funded, with a paid, source-available Worker Pro preset.
+      Jobs are rows added by the <code>graphile_worker.add_job()</code> SQL function — from your
       application, a trigger, or a database function — and executed by task functions in a Node
       worker that wakes on <code>LISTEN/NOTIFY</code>.
     </p>
     <p>
-      You install it, point it at Postgres, write a task file per job name, and run the worker in
+      You install it, point it at PostgreSQL, write a task file per job name, and run the worker in
       its own process or inside your server.
     </p>
     <QueuertSummary />
-    <h2>They aren't directly comparable</h2>
+    <h2>Queues and chains</h2>
     <ul>
       <li>
         <strong>Queue concepts</strong> like named serial queues, <code>job_key</code> replace /
@@ -53,7 +52,7 @@ const Page = () => (
       </li>
     </ul>
     <p>
-      The overlap is "both defer work into Postgres, inside your transaction, and can wake workers
+      The overlap is "both defer work into PostgreSQL, inside your transaction, and can wake workers
       with <code>LISTEN/NOTIFY</code>." That overlap is larger than with most neighbors.
     </p>
     <h2>What Graphile Worker is good at</h2>
@@ -79,11 +78,11 @@ const Page = () => (
         the failed items are retried.
       </li>
       <li>
-        <strong>Small footprint.</strong> Node.js and Postgres, nothing else; the worker can run
+        <strong>Small footprint.</strong> Node.js and PostgreSQL, nothing else; the worker can run
         inside your existing server process.
       </li>
     </ul>
-    <h2>Differences worth knowing about</h2>
+    <h2>Crash recovery and types</h2>
     <ul>
       <li>
         <strong>Crash recovery.</strong> Graphile Worker documents that jobs held by a crashed
@@ -93,19 +92,9 @@ const Page = () => (
         lease expired.
       </li>
       <li>
-        <strong>Failure shape.</strong> After <code>max_attempts</code> (25 by default) a Graphile
-        Worker job stays in the table as permanently failed, and the docs advise writing tasks so
-        that no job permafails. Queuert keeps the error on the job as <code>lastAttemptError</code>{" "}
-        and leaves what happens next to the application.
-      </li>
-      <li>
         <strong>Types.</strong> Graphile Worker task payloads are <code>unknown</code> unless you
         declare the global <code>GraphileWorker.Tasks</code> interface. Queuert infers inputs,
         outputs, continuations, and blockers from <code>defineJobTypes</code>.
-      </li>
-      <li>
-        <strong>Storage backends.</strong> Graphile Worker is Postgres-only. Queuert works against
-        Postgres, SQLite, or MySQL/MariaDB and Redis (both experimental).
       </li>
     </ul>
     <h2>Transactional consistency</h2>
@@ -152,7 +141,7 @@ const Page = () => (
       <strong>Reach for Graphile Worker when:</strong>
     </p>
     <ul>
-      <li>Your work is single jobs, and you want the fastest Postgres queue with low latency.</li>
+      <li>Your work is single jobs, and you want the fastest PostgreSQL queue with low latency.</li>
       <li>You want to enqueue from triggers, stored functions, or other languages through SQL.</li>
       <li>
         You want a crontab, priority, serial named queues, and job-key deduplication built in.

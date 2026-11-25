@@ -1,32 +1,21 @@
 ---
-title: Job Processing Reliability
+title: Job processing reliability
 description: How Queuert keeps jobs safe when errors occur — transactional completion, automatic rollback, and rescheduling.
 sidebar:
-  order: 3
+  order: 4
 ---
 
-When your code throws during job processing, your transaction rolls back any partial work and the worker reschedules the job with backoff. This happens automatically — no defensive error handling is needed inside your handler.
+When a handler throws, its transaction rolls back any partial work and the worker reschedules the job with [backoff](/queuert/how-it-works/worker-runner/#retry-and-backoff). Once an `applyJobOutcome` has committed, the outcome stands, wherever the error occurs. The scenarios below show each case; [Error handling](../../guides/error-handling/) covers jobs that fail permanently and [Errors and commit detection](/queuert/how-it-works/job-processing/#errors-and-commit-detection) how the worker tells a committed attempt from a failed one.
 
-This page covers the engine's safety guarantees. For user-level error strategies (discriminated unions, compensation, rescheduling), see [Error Handling](../../guides/error-handling/). For the architectural overview, see [Job Processing](/queuert/how-it-works/job-processing/#errors-and-commit-detection).
+## Error before the transaction
 
-## The Short Version
-
-1. Your handler opens a transaction with your database client and calls `applyJobOutcome` inside it.
-2. If anything throws before that transaction commits, your database client **rolls back** your SQL together with the job's completion.
-3. If no `applyJobOutcome` committed, the worker **reschedules** the job with exponential backoff.
-4. This works regardless of _where_ the error occurs — before your transaction or inside it. Once `applyJobOutcome` has committed, the outcome stands.
-
-The rest of this page walks through each scenario with code examples.
-
-## Error Before the Transaction
-
-Work before your transaction — reads, external API calls — runs without a transaction. If it throws, nothing was written and the job is rescheduled using the first `backoffConfig` set on the processor, its processor registry or the worker, or else the default exponential backoff.
+Work before your transaction — reads, external API calls — runs without a transaction. If it throws, nothing was written and the job is rescheduled with [backoff](/queuert/how-it-works/worker-runner/#retry-and-backoff).
 
 <ExampleCode example="guides" file="src/error-recovery.ts" region="before-transaction" />
 
-Because the external call runs before the transaction, the next attempt runs it again. Make external side effects idempotent: the payment API above receives `job.id` as its idempotency key, so the order is charged once however many attempts run.
+The next attempt runs the external call again, so make its side effects idempotent: the payment API above receives `job.id` as its idempotency key, so the order is charged once however many attempts run.
 
-## Error Inside the Transaction
+## Error inside the transaction
 
 If your transaction callback throws, your database client rolls the transaction back — undoing any SQL you executed, the job completion, and any continuation jobs created via `continueWith` — and the job is rescheduled with backoff. In the example, `updateBalance` stands for an `UPDATE` guarded by a `CHECK (balance >= 0)` constraint: it throws when the balance would go negative, and its earlier writes in the transaction roll back.
 
@@ -36,30 +25,30 @@ While the source account lacks the funds, every attempt credits the target accou
 
 The same holds for a throw after `applyJobOutcome` returned but before the transaction commits: the completion is part of your transaction, so it rolls back together with your writes.
 
-## Intermediate Transactions
+## Intermediate transactions
 
 A handler can commit work in its own transactions before the one that calls `applyJobOutcome`. Those transactions are not tied to the attempt unless they call [`fenceJob`](/queuert/how-it-works/job-processing/#fencejob): if an error occurs after one commits (typically a failed external API call), the job is rescheduled with backoff, its side-effects persist, and the next attempt runs it again. Here the first transaction counts the sync start, so a failed external call leaves the item with two starts once the next attempt completes:
 
 <ExampleCode example="guides" file="src/error-recovery.ts" region="intermediate-transaction" />
 
-> **Note:** Intermediate transactions without `fenceJob` commit even if the attempt is later lost to another worker. Call [`fenceJob`](/queuert/how-it-works/job-processing/#fencejob) at the start of one to commit it only while the attempt owns the job, and design its side-effects to be safe to keep when the job is rescheduled.
+Intermediate transactions without `fenceJob` commit even if the attempt is later lost to another worker. Call [`fenceJob`](/queuert/how-it-works/job-processing/#fencejob) at the start of one to commit it only while the attempt owns the job, and design its side-effects to be safe to keep when the job is rescheduled.
 
-## Error After `applyJobOutcome` Committed
+## Error after `applyJobOutcome` committed
 
 Once the transaction that called `applyJobOutcome` has committed, the outcome is final. If the handler throws afterwards, the error is reported as a worker error (`workerError`), but the completion is not rolled back and the job is not rescheduled. When the notification API below fails, the job stays completed on its first attempt:
 
 <ExampleCode example="guides" file="src/error-recovery.ts" region="after-commit" />
 
-Keep work that must succeed for the job to count as done inside the transaction (or before it). Work after the commit is your responsibility.
+Work that must succeed for the job to count as done belongs inside the transaction or before it; work after the commit is yours to handle.
 
-## What This Means in Practice
+## Guarantees
 
-- **Any unhandled error before the commit → reschedule with backoff.** Whether the error occurs before your transaction or inside it — the job is always rescheduled. Backoff follows the first `backoffConfig` set on the processor, its processor registry or the worker, or else the default, which starts at 10s, doubles with each failure in a row and caps at 300s. A handler that returns without a committed `applyJobOutcome` is rescheduled the same way.
-- **No corrupted state.** Your transaction ensures that partial SQL work is never committed when an error occurs.
-- **No orphaned continuations.** If `applyJobOutcome` was called with `continueWith` and the transaction throws afterward, both the continuation job and the completion are rolled back.
-- **Blocked jobs stay blocked.** If a blocker job's completion is rolled back, dependent jobs remain correctly blocked.
-- **No lost-attempt writes.** `applyJobOutcome` only writes while this attempt still owns the job. If the attempt was reclaimed and another worker took the job, or the job was completed or deleted elsewhere, `applyJobOutcome` writes nothing and throws `JobTakenByAnotherWorkerError`, `JobAlreadyCompletedError` or `JobNotFoundError`, so your transaction rolls back. Writes in your other transactions get the same guarantee when they call [`fenceJob`](/queuert/how-it-works/job-processing/#fencejob) first.
-- **No defensive `try/catch` needed.** Let exceptions propagate naturally — the worker handles them.
-- **Jobs are rescheduled indefinitely.** There is no maximum attempt count. Use [discriminated unions or compensation patterns](../../guides/error-handling/) to handle permanently failing jobs.
+- **Reschedule before the commit.** An error before your transaction or inside it reschedules the job with the [backoff](/queuert/how-it-works/worker-runner/#retry-and-backoff) delay, and so does a handler that returns without a committed `applyJobOutcome`.
+- **No partial state.** Your transaction never commits partial SQL work when an error occurs.
+- **No orphaned continuations.** When the transaction throws after `applyJobOutcome` was called with `continueWith`, the continuation job and the completion roll back together.
+- **Blocked jobs stay blocked.** When a blocker's completion rolls back, its dependents stay blocked.
+- **No lost-attempt writes.** `applyJobOutcome` only writes while this attempt still owns the job. If the attempt was reclaimed and another worker took the job, or the job was completed or deleted elsewhere, it writes nothing and throws `JobTakenByAnotherWorkerError`, `JobAlreadyCompletedError` or `JobNotFoundError`, so your transaction rolls back. Writes in your other transactions get the same guarantee when they call [`fenceJob`](/queuert/how-it-works/job-processing/#fencejob) first.
+- **No `try/catch` needed.** Let exceptions propagate; the worker handles them.
+- **No attempt limit.** A job that keeps failing keeps being rescheduled; [Error handling](../../guides/error-handling/) shows how to end it.
 
-See [examples/guides/src/error-recovery.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/error-recovery.ts) for the runnable code. See also [Error Handling](../../guides/error-handling/) for user-level error strategy, [Timeouts](../../guides/timeouts/) for the worker lease, and [Job Processing](/queuert/how-it-works/job-processing/) for the processing model.
+The runnable code is [examples/guides/src/error-recovery.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/error-recovery.ts). [Timeouts](../../guides/timeouts/) covers the worker lease.

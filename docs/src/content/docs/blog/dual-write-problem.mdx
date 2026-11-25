@@ -148,4 +148,4 @@ Moving the queue into the database moves its load there too, and it is worth bei
 
 None of this solves the whole problem yet. The enqueue now commits with the business write, but the job still has to *finish*, and a handler that writes to the database and then reports "done" to the queue is a dual write running in the other direction. That half is [Finishing a job](../finishing-a-job/).
 
-Queuert is built on this design; [Job Processing](../../how-it-works/job-processing/#transactional-design) describes how it applies it.
+Queuert is built on this design; [Job processing](../../how-it-works/job-processing/#transactional-design) describes how it applies it.

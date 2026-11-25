@@ -3,7 +3,7 @@ import { FieldList, type FieldItem } from "../../../../components/FieldList.tsx"
 import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
-  title: "Custom State Adapter",
+  title: "Custom state adapter",
   description:
     "Implement the StateAdapter interface for another database engine and validate it with the conformance suite.",
 };

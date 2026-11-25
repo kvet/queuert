@@ -1,0 +1,34 @@
+---
+title: Your first chain
+layout: step
+description: Define a job type, start a chain with the client and let a worker process it, all in your browser.
+---
+
+import { Arrow, Diagram, Flow, Node, Transition } from "../../../components/diagram";
+
+A chain is Queuert's unit of work: your code creates it, a worker processes it, and you can wait for its result.
+
+<Diagram label="The client creates a chain whose job is pending; a worker picks it up and the job completes; awaitChain returns its output">
+  <Flow>
+    <Node sub="client.createChain">your code</Node>
+    <Arrow />
+    <Node status="pending" sub="send-welcome-email">job</Node>
+    <Arrow />
+    <Node sub={<Transition from="pending" to="running" />}>worker</Node>
+    <Arrow />
+    <Node status="completed" sub="client.awaitChain">job</Node>
+  </Flow>
+</Diagram>
+
+A job type names a kind of work and the shapes of its input and output. `defineJobTypes` declares them once, and both the client that starts chains and the worker that processes them read the same definitions, so a wrong input is a compile error. An `entry` type can start a chain.
+
+`client.createChain` starts a chain of that type, and the first job lands as `pending` in your state adapter. A worker runner picks it up, runs the type's `attemptHandler` and completes the job through `applyJobOutcome` with its output. `client.awaitChain` waits for the chain and returns that output.
+
+The code below already defines `send-welcome-email`, keeps its state in memory with the in-process state adapter, and starts a worker runner that processes it. Nothing happens yet, because no chain asks for the work.
+
+<TryIt lesson="first-chain">create a `send-welcome-email` chain for user `"ada"` with `client.createChain`, wait for it with `client.awaitChain`, and log the chain's output.</TryIt>
+
+## Related guides
+
+- [Awaiting chains](../../guides/chain-awaiting/): wait for one or several chains, with timeouts and abort.
+- [Chain patterns](../../guides/chain-patterns/): sequential, branching and looping chain shapes.

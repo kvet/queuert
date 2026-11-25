@@ -23,7 +23,7 @@ Architectural documentation published as part of the docs site. These cover desi
 
 ### Docs Site (`docs/src/content/docs/`)
 
-User-facing pages: the home page (`docs/src/routes/index.tsx`), `getting-started/`, `guides/`, `integrations/` (adapter setup and options), `benchmarks/` (numbers in `docs/src/data/benchmarks.ts`), and `comparison/` (feature data in `docs/src/data/comparison.ts`). Page conventions are in `docs-style.md`.
+User-facing pages: the home page (`docs/src/routes/index.tsx`), `learn/`, `guides/`, `integrations/` (adapter setup and options), `benchmarks/` (numbers in `docs/src/data/benchmarks.ts`), and `comparison/` (feature data in `docs/src/data/comparison.ts`). Page conventions are in `docs-style.md`.
 
 ### Package READMEs
 

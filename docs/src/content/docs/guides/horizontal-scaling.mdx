@@ -1,8 +1,8 @@
 ---
-title: Horizontal Scaling
-description: Deploy multiple workers sharing the same database.
+title: Horizontal scaling
+description: Run several workers against the same database.
 sidebar:
-  order: 17
+  order: 10
 ---
 
 import { Arrow, Diagram, Flow, Node, Rows } from "../../../components/diagram";
@@ -13,7 +13,7 @@ Deploy multiple worker processes sharing the same database for horizontal scalin
   label="Identical workers: pub/sub wakes all three; they race to claim the job and FOR UPDATE SKIP LOCKED lets only one win"
 >
   <Flow align="stretch">
-    <Node sub={"Postgres LISTEN · Redis\nNATS · in-process"}>your pub/sub</Node>
+    <Node sub={"PostgreSQL LISTEN · Redis\nNATS · in-process"}>your pub/sub</Node>
     <Rows spine stack="columns" columns="minmax(4rem, auto) auto minmax(7rem, auto)">
       <Flow>
         <Arrow label="1 · wake" dashed />
@@ -35,116 +35,49 @@ Deploy multiple worker processes sharing the same database for horizontal scalin
   </Flow>
 </Diagram>
 
-## Identical Workers
+## Identical workers
 
 The simplest approach: deploy the same worker configuration on multiple machines or processes.
 
-```ts
-const workerRunner = createWorkerRunner({
-  client,
-  concurrency: 10,
-  processors: createProcessors({ client, jobTypes, processors: { ... } }),
-});
-```
+<ExampleCode example="guides" file="src/horizontal-scaling.ts" region="identical" />
 
-Each worker runner registers under a new id from the state adapter's `generateWorkerId`, a random UUID by default, so processes running the same code never share an id. A restarted process registers under a new id, and once the lease of its previous registration expires, an idle worker runner reclaims the jobs that registration left behind. To keep a stable id per process (a pod name, for example), pass `workerId`; a process restarting under it waits until the previous registration's lease expires, then reclaims it and starts. Worker runners compete for available jobs — when one acquires a job, others skip it. The notify adapter (Redis, PostgreSQL LISTEN/NOTIFY, etc.) ensures worker runners wake up immediately when new jobs are queued.
+Each worker runner here passes a stable `workerId`, such as a pod name; a process restarting under it waits until the previous registration's lease expires, then reclaims it and starts. Without `workerId`, a worker runner registers under a new id from the state adapter's `generateWorkerId`, a random UUID by default, so processes running the same code never share an id; a restarted process then registers under a new id, and once the lease of its previous registration expires, an idle worker runner reclaims the jobs that registration left behind. Worker runners compete for available jobs — when one acquires a job, others skip it. The notify adapter (PostgreSQL LISTEN/NOTIFY, Redis, etc.) ensures worker runners wake up immediately when new jobs are queued.
 
-## Specialized Workers
+## Specialized workers
 
 A worker only processes the job types in its processor registry. This lets you run different worker topologies optimized for different workloads — a worker that doesn't define a processor for a job type simply ignores it. The same mechanism powers [prioritization](../prioritization/): reserve capacity for an urgent workload by giving it a worker of its own.
 
-For CPU-heavy work, spawn each worker in its own thread so they get true parallelism. Each thread creates its own client, state adapter, and worker — they share nothing except the database:
-
-```ts title="image-worker-thread.ts"
-// Each thread runs independently with its own database connection
-const stateAdapter = createPgStateAdapter({ stateProvider });
-const client = createClient({
-  stateAdapter,
-  notifyAdapter,
-  jobTypes: imageJobTypes,
-});
-
-const workerRunner = createWorkerRunner({
-  client,
-  concurrency: 1,
-  processors: createProcessors({
-    client,
-    jobTypes,
-    processors: {
-      "images.resize": { attemptHandler: resizeHandler },
-      "images.transcode": { attemptHandler: transcodeHandler },
-    },
-  }),
-});
-await workerRunner.start();
-```
-
-```ts title="main.ts"
-import { Worker } from "node:worker_threads";
-
-// 10 threads for CPU-heavy image processing
-for (let i = 0; i < 10; i++) {
-  new Worker("./image-worker-thread.ts");
-}
-
-// Lightweight async I/O — single worker in main thread, high concurrency
-const notificationWorkerRunner = createWorkerRunner({
-  client,
-  concurrency: 100,
-  processors: createProcessors({
-    client,
-    jobTypes,
-    processors: {
-      "notifications.send-email": { attemptHandler: emailHandler },
-      "notifications.send-sms": { attemptHandler: smsHandler },
-    },
-  }),
-});
-```
-
-This works because chains are stored in the database, not in worker memory. A chain that starts with `images.resize` (picked up by an image worker thread) can `continueWith` to `notifications.send-email` (picked up by the notification worker in the main thread) — the handoff happens through the database.
+For CPU-heavy work, run each worker in its own thread or process so they get true parallelism. Each one creates its own client, state adapter and worker — they share nothing except the database. This works because chains are stored in the database, not in worker memory: a chain that starts with `images.resize` (picked up by an image worker) can `continueWith` to `notifications.send-email` (picked up by the default worker) — the handoff happens through the database.
 
 You can also combine slices when a single worker should handle multiple domains:
 
-```ts
-const workerRunner = createWorkerRunner({
-  client,
-  processors: [orderProcessors, notificationProcessors],
-});
-```
+<ExampleCode example="guides" file="src/cleanup.ts" region="merge-worker" />
 
-See [Feature Slices](../slices/) for organizing job types and processors into independent modules.
+See [Feature slices](../slices/) for organizing job types and processors into independent modules.
 
-### Splitting a Registry
+### Splitting a registry
 
 When one `createProcessors` registry (`appProcessors` below) holds the processors for every job type, split it across workers with `pickProcessors` and `omitProcessors`. `pickProcessors` keeps only the listed job types; `omitProcessors` keeps everything else, so the two together cover every job type. Each processor keeps its handler, its slice's middleware chain, and its `backoffConfig`:
 
-```ts
-import { omitProcessors, pickProcessors } from "queuert";
+<Details summary="The registry" hint="3 processors">
 
-const imageJobTypeNames = ["images.resize", "images.transcode"] as const;
+<ExampleCode example="guides" file="src/horizontal-scaling.ts" region="registry" />
 
-const imageWorkerRunner = createWorkerRunner({
-  client,
-  concurrency: 1,
-  processors: pickProcessors(appProcessors, imageJobTypeNames),
-});
+</Details>
 
-const defaultWorkerRunner = createWorkerRunner({
-  client,
-  concurrency: 100,
-  processors: omitProcessors(appProcessors, imageJobTypeNames),
-});
-```
+The image worker takes the image job types and the default worker takes everything else:
+
+<ExampleCode example="guides" file="src/horizontal-scaling.ts" region="split" />
 
 Job type names are type-checked against the registry, and both functions throw on a name the registry has no processor for. Neither accepts a selection that leaves no processors. To pick from several slices, pick from each one and pass the results as an array: `processors: [pickProcessors(orderProcessors, [...]), pickProcessors(billingProcessors, [...])]`.
 
-## See Also
+## Examples
 
+- [examples/guides/src/horizontal-scaling.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/horizontal-scaling.ts) — the runnable code above
 - [examples/postgresql/multi-worker](https://github.com/kvet/queuert/tree/main/examples/postgresql/multi-worker) — multiple workers sharing a PostgreSQL database
 - [examples/sqlite/multi-worker](https://github.com/kvet/queuert/tree/main/examples/sqlite/multi-worker) — worker processes on one host sharing a SQLite database file, notified over IPC
 - [examples/mysql/multi-worker](https://github.com/kvet/queuert/tree/main/examples/mysql/multi-worker) — worker processes sharing a MySQL database, polling for new jobs
 - [examples/redis/multi-worker](https://github.com/kvet/queuert/tree/main/examples/redis/multi-worker) — worker processes sharing Redis for state, notified over Redis pub/sub
 - [Prioritization](../prioritization/) — reserving worker capacity for urgent workloads
-- [Worker Runner](/queuert/how-it-works/worker-runner/) — worker lifecycle and configuration
-- [State Adapters](/queuert/integrations/state-adapters/) — database adapter setup
+- [Worker runner](/queuert/how-it-works/worker-runner/) — worker lifecycle and configuration
+- [State adapters](/queuert/integrations/state-adapters/) — database adapter setup

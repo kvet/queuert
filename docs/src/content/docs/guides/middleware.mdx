@@ -1,19 +1,37 @@
 ---
-title: Job Attempt Middleware
-description: Wrap attempt handler calls with cross-cutting logic — tracing, resource injection, audit, contextual logging.
+title: Job attempt middleware
+description: Wrap attempt handler calls with cross-cutting logic such as tracing, resource injection, audit and contextual logging.
 sidebar:
-  order: 20
+  order: 16
 ---
 
+import { Arrow, Diagram, Flow, Group, Node } from "../../../components/diagram";
+
 `AttemptMiddleware` wraps an **attempt handler call** — from the moment the worker acquires its jobs until the handler returns. Middleware lets you add cross-cutting logic (tracing spans, contextual loggers, audit trails, shared resources) without touching each individual handler.
+
+<Diagram label="The worker acquires the jobs, middleware wraps the attempt handler call, and the handler runs inside it">
+  <Flow>
+    <Node>worker</Node>
+    <Arrow label="acquires jobs" />
+    <Group title="middleware · wrapHandler">
+      <Flow>
+        <Node sub="next(ctx)">before</Node>
+        <Arrow />
+        <Node>attempt handler</Node>
+        <Arrow />
+        <Node sub="handler returned or threw">after</Node>
+      </Flow>
+    </Group>
+  </Flow>
+</Diagram>
 
 A middleware has a single hook, `wrapHandler`, which wraps the whole attempt handler. It receives the handler call's `jobs` — one job, or every job of the batch for a [batched processor](/queuert/guides/batched-processors/) — and a `next(ctx)` call that yields the inner layer; the object passed to `next` is merged into the `attemptHandler` options, and its type flows into the handler signature. `next` resolves once the handler returns and rejects with the handler's error; each job's attempt counts as completed once the attempt handler's `applyJobOutcome` or `applyJobOutcomes` call that settles it commits.
 
 See the [`AttemptMiddleware` API reference](/queuert/api/core/type-aliases/attemptmiddleware/) for the full type definition.
 
-## Use Cases
+## Use cases
 
-### Cross-Cutting Around the Whole Handler Call
+### Cross-cutting around the whole handler call
 
 Use for concerns that span the whole handler call: tracing spans, contextual loggers, per-job resources, error classification. `tracing` gives each handler call a trace ID and records a span with its outcome:
 
@@ -21,7 +39,7 @@ Use for concerns that span the whole handler call: tracing spans, contextual log
 
 A handler's error propagates through `next()` — the middleware can observe, log, or enrich the error. After the middleware chain unwinds, the engine catches it, fails every job of the call without a committed outcome, and returns normally. Always re-throw the error: swallowing it still fails every job of the call without a committed outcome, but records an "Attempt handler returned without a committed …" error as their `lastAttemptError` in place of the handler's error.
 
-### Load Shared Data Before the Handler
+### Load shared data before the handler
 
 Use when you want to load a resource once per handler call and make it available to the handler. `loadTenant` reads the tenant of every job of the handler call before its handler runs and injects `tenantOf`, which returns a job's tenant. The middleware runs outside any transaction, so it reads through your database client directly.
 
@@ -29,7 +47,7 @@ Use when you want to load a resource once per handler call and make it available
 
 Middleware is not tied to a job type, so `job.input` is `unknown` — narrow it (or validate it) before use.
 
-### Inject Helpers Used in the Handler's Transaction
+### Inject helpers used in the handler's transaction
 
 Use to inject helpers that write alongside the handler's `applyJobOutcome` or `applyJobOutcomes` — audit recorders, usage meters. The handler owns the transaction, so the helper takes the transaction context from the handler. `audit` records an event for the job it is given through that transaction:
 
@@ -41,7 +59,7 @@ The handler receives every injected value typed: `traceId`, `tenantOf` and `audi
 
 Because the helper writes through the handler's transaction, its rows commit with the job — and roll back with it if `applyJobOutcome` throws or the transaction fails. In the example the first attempt fails to write the invoice, so its audit event rolls back too, and the next attempt records the event once.
 
-## Composition and Order
+## Composition and order
 
 Middleware is declared on the processor registry, not the worker. Multiple middlewares compose as an onion; the first middleware's "before" runs outermost:
 
@@ -49,7 +67,7 @@ Middleware is declared on the processor registry, not the worker. Multiple middl
 
 For an `issue-invoice` attempt the order is `tracing` before → `loadTenant` before → `audit` before → handler → `audit` after → `loadTenant` after → `tracing` after. Each `next(ctx)` call accumulates ctx for inner layers. The handler's final ctx is the intersection of all injected ctxs.
 
-## Sharing Middleware Across Registries
+## Sharing middleware across registries
 
 To share a common set of middleware across multiple registries (e.g. multiple [slices](/queuert/guides/slices/) merged into one worker), list them inline at each call site, as `billingProcessors` and `notificationProcessors` above do with `tracing` and `loadTenant`. The worker runs both registries:
 
@@ -57,4 +75,4 @@ To share a common set of middleware across multiple registries (e.g. multiple [s
 
 Per slice, handler ctx types reflect the actual middleware list for that registry — so `audit` is visible in billing handlers but not notification handlers. Inline literals narrow tuple inference automatically; no `as const` is required.
 
-See [examples/guides/src/middleware.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/middleware.ts) for the runnable code. See also [Feature Slices](/queuert/guides/slices/) for splitting workflows across registries and the [`AttemptMiddleware` API reference](/queuert/api/core/type-aliases/attemptmiddleware/).
+The runnable code is in [examples/guides/src/middleware.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/middleware.ts). Related: [Feature slices](/queuert/guides/slices/) for splitting workflows across registries and the [`AttemptMiddleware` API reference](/queuert/api/core/type-aliases/attemptmiddleware/).

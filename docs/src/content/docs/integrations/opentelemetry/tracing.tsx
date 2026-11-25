@@ -2,6 +2,7 @@ import type { JSX } from "@solidjs/web";
 
 import { type FieldItem, FieldList } from "../../../../components/FieldList.tsx";
 import { TraceWaterfall } from "../../../../components/integrations/observability/TraceWaterfall.tsx";
+import { Details } from "../../../../components/mdx/Details.tsx";
 import { Steps } from "../../../../components/mdx/Steps.tsx";
 import {
   approveRefundTrace,
@@ -12,7 +13,7 @@ import {
 import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
-  title: "OpenTelemetry Tracing",
+  title: "OpenTelemetry tracing",
   description: "OpenTelemetry span hierarchy, span kinds and attributes.",
 };
 
@@ -218,7 +219,9 @@ const Page = () => (
       The row under each span lists its attributes, defined under{" "}
       <a href="#span-attributes">Span attributes</a>.
     </p>
-    <FieldList title="Spans" items={spans()} />
+    <Details summary="Spans" hint="6 spans">
+      <FieldList items={spans()} />
+    </Details>
 
     <h2>Blocker relationships</h2>
     <p>
@@ -312,7 +315,9 @@ const Page = () => (
     />
 
     <h2>Span attributes</h2>
-    <FieldList title="Span attributes" items={attributes()} idPrefix="attribute" />
+    <Details summary="Span attributes" hint="14 attributes">
+      <FieldList items={attributes()} idPrefix="attribute" />
+    </Details>
   </>
 );
 

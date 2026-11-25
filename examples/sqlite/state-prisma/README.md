@@ -1,4 +1,4 @@
-# SQLite State Adapter (Prisma)
+# SQLite state adapter (Prisma)
 
 SQLite state storage via `@queuert/sqlite` with Prisma ORM — job creation and completion inside application transactions, with `createAsyncRwLock()` for write serialization: the handler holds the same lock around the transaction it passes to `applyJobOutcome`.
 

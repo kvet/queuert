@@ -3,10 +3,6 @@ import type { AsyncRwLock, Migration } from "@queuert/sqlite";
 import type { Prisma, PrismaClient } from "../prisma/generated/prisma/client.ts";
 import type { PrismaSqliteContext } from "./provider.ts";
 
-// `invoices` is not in schema.prisma, so these migrations use raw queries and need no regenerated
-// client. Transactional migrations run inside the provider's transaction, which already holds the
-// write lock; non-transactional ones run outside a transaction and take the lock like the rest of
-// the app.
 export const createMigrations = ({
   db,
   lock,

@@ -72,7 +72,7 @@ Skip this step if no pending changeset is `major` and the notes have no breaking
 
 Write `$BUNDLE/MIGRATION.md`: a guide from the last release to this one that a user can follow top to bottom.
 
-1. Read the breaking changesets, then the source for each change (`git diff <last-tag>..HEAD -- packages/*/src` for the relevant files), and the docs pages that describe the area — [How It Works](docs/src/content/docs/how-it-works/) and the [Integrations](docs/src/content/docs/integrations/) page of each affected adapter.
+1. Read the breaking changesets, then the source for each change (`git diff <last-tag>..HEAD -- packages/*/src` for the relevant files), and the docs pages that describe the area — [Concepts](docs/src/content/docs/how-it-works/) and the [Integrations](docs/src/content/docs/integrations/) page of each affected adapter.
 2. Order the guide the way a user meets the changes:
    - **Before you upgrade** — anything that has to happen before new code runs (for example stopping every process on the old version before a schema migration).
    - **Update dependencies** — install all `queuert` packages from the bundle together; adapters peer-depend on the exact `queuert` prerelease version.

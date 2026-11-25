@@ -273,8 +273,9 @@ pnpm check      # Run all checks together
 
 Examples are grouped by the stack a reader runs, because a PostgreSQL user should find everything for PostgreSQL in one place and nothing else:
 
-- `examples/<stack>/` holds a stack's state examples (`state-<driver>`), its notify examples (`notify-<broker>-<client>`, kept with the state database they run on) and `multi-worker`. The stacks are `postgresql/`, `sqlite/`, `mysql/`, `redis/`, `ipc/` (the IPC notify adapter) and `custom/` (adapters written from scratch). `postgresql/onboarding` holds the code tour of the home page.
+- `examples/<stack>/` holds a stack's state examples (`state-<driver>`), its notify examples (`notify-<broker>-<client>`, kept with the state database they run on) and `multi-worker`. The stacks are `postgresql/`, `sqlite/`, `mysql/`, `redis/`, `ipc/` (the IPC notify adapter) and `custom/` (adapters written from scratch).
 - `examples/guides/` is one package with one file per guide (`src/job-blockers.ts`), small enough to read in one sitting, embedded by the guide it belongs to. A guide that cannot run there gets its own `examples/guides-xxx/` package (`guides-slices`, whose subject is a multi-file layout). Application migrations are part of the state examples: each runs a few in `src/migrations.ts`, and the Application Migrations guide embeds `postgresql/state-postgres-js`, which also runs two migrators at once, an `after` script and a revert.
+- `examples/tutorial/` is one package with a directory per tutorial lesson (`src/first-chain/`: `start/`, `solution/`, `check.ts`), embedded by its Learn step with `<TryIt lesson="…">` and run in the browser, so it keeps its state in the in-process state adapter and imports nothing but `queuert` and the lesson's own files. Its `start` script runs `src/hero.ts`, the example of the home page hero, and then every solution under Node.
 - Examples not tied to a stack are grouped by concern: `log/` (`console`, `pino`, `winston`), `validation/` (`zod`, `valibot`, `typebox`, `arktype` for schema libraries whose stored form equals the runtime form, and `codec-zod`, `codec-superjson` for codecs whose runtime form differs from the stored form) and `observability/` (`otel`, `dashboard`).
 
 A package is named `example-` plus its path with `/` replaced by `-` (`examples/postgresql/state-pg` is `example-postgresql-state-pg`), and the docs registry (`docs/src/data/examples.ts`) names it by its path (`postgresql/state-pg`).
@@ -286,7 +287,6 @@ Each example demonstrates **one integration concern**:
 - **State examples** other than `multi-worker` pass no notify adapter, so the client's in-process default wakes their worker runner. Each SQL driver example creates a chain in the same transaction as an application write and completes its job inside a transaction opened with its own client
 - **Notify examples** keep their state in the PostgreSQL state example of the same client (`example-postgresql-state-pg/provider`, `example-postgresql-state-postgres-js/provider` or, under Bun, `example-postgresql-state-bun-sql/provider`) and wait for results with `awaitChain`. `ipc/notify` is the exception: its adapter is a `NotifyAdapter<"sync">` that connects processes on one host, so its processes share a SQLite file through `example-sqlite-state-better-sqlite3/provider`. `custom/notify-memory` is the other exception: its adapter reaches only the current process, so it keeps its state in the custom state adapter of `example-custom-state-memory/state-adapter`
 - **Guide examples** keep their state in the in-process state adapter with `mode: "async"`, so they need no database and their code reads like the asynchronous drivers readers use
-- **`postgresql/onboarding`** keeps its state in PostgreSQL through `example-postgresql-state-drizzle/provider`, the stack of the home page tour
 - **Every other example** keeps its state in an in-memory SQLite database through `example-sqlite-state-better-sqlite3/provider` with `createSqliteStateAdapter` and `createClient`
 
 This ensures users can copy-paste relevant code without untangling unrelated integrations.
@@ -304,6 +304,7 @@ postgresql/state-prisma       # Prisma
 postgresql/state-knex         # Knex
 postgresql/state-mikro-orm    # MikroORM
 postgresql/state-bun-sql      # Bun.SQL
+postgresql/state-pglite       # PGlite, PostgreSQL in WebAssembly
 postgresql/multi-worker       # worker processes sharing one database, PostgreSQL notify
 
 sqlite/state-better-sqlite3   # better-sqlite3

@@ -9,8 +9,10 @@ import {
   packageManagers,
   stateInstallOptions,
 } from "../data/installation.tsx";
+import { siteHref } from "../docs/href.ts";
+import { commandHtml } from "./commandHtml.ts";
 import { Code } from "./mdx/Code.tsx";
-import { createSyncedTabs, selectSyncedTab } from "./mdx/Tabs.tsx";
+import { Tabs, createSyncedTabs, selectSyncedTab } from "./mdx/Tabs.tsx";
 
 /** One pick per option; the synced tab store keeps it across pages and visits. */
 const Choice = (props: {
@@ -67,20 +69,31 @@ const allNotifyOptions = [...new Set(stateInstallOptions.flatMap((state) => stat
 const pick = <T extends { label: string }>(options: T[], label: string | undefined): T =>
   options.find((option) => option.label === label) ?? options[0];
 
-/** Highlights the command the way Shiki's bash grammar does: the program, then string words. */
-const commandHtml = (command: string) => {
-  const [manager, ...words] = command.split(" ");
-  return `<pre class="shiki queuert" style="background-color:var(--shiki-background);color:var(--shiki-foreground)"><code><span class="line"><span style="color:var(--shiki-token-function)">${manager}</span>${words
-    .map((word) => `<span style="color:var(--shiki-token-string)"> ${word}</span>`)
-    .join("")}</span></code></pre>`;
+export const pickStack = (picked: (syncKey: string) => string | undefined) => {
+  const state = pick(stateInstallOptions, picked("state"));
+  return {
+    state,
+    notify: pick(state.notify, picked("notify")),
+    manager: pick(packageManagers, picked("pkg")),
+  };
+};
+
+/** Shows the `TabItem` labelled with the state or notify adapter picked in the `InstallPicker`. */
+export const PickedTabs = (props: { pick: "state" | "notify"; children: JSX.Element }) => {
+  const picked = createSyncedTabs();
+  return (
+    <Tabs value={pickStack(picked)[props.pick].label} pickedElsewhere>
+      {props.children}
+    </Tabs>
+  );
 };
 
 /** Builds the single install command for the reader's state adapter, notify adapter and extras. */
 export const InstallPicker = () => {
   const picked = createSyncedTabs();
-  const state = () => pick(stateInstallOptions, picked("state"));
-  const notify = () => pick(state().notify, picked("notify"));
-  const manager = () => pick(packageManagers, picked("pkg"));
+  const state = () => pickStack(picked).state;
+  const notify = () => pickStack(picked).notify;
+  const manager = () => pickStack(picked).manager;
   const [extras, setExtras] = createSignal<string[]>([]);
 
   const command = () =>
@@ -137,7 +150,7 @@ export const InstallPicker = () => {
                 </>
               )}
             </For>
-            . Covered in <a href="/queuert/integrations/observability/">Observability</a>.
+            . Covered in <a href={siteHref("/integrations/observability/")}>Observability</a>.
           </p>
         </Field>
         <Field label="Package manager">

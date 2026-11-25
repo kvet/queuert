@@ -2,7 +2,7 @@ import { ExampleCode } from "../../../../components/ExampleCode.tsx";
 import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
-  title: "Custom Validation Adapter",
+  title: "Custom validation adapter",
   description:
     "Wrap any schema library into a JobTypes registry and check it with the conformance suite.",
 };

@@ -1,4 +1,4 @@
-# Pino Logging Example
+# Pino logging example
 
 Pino integration for structured logging, with contextual loggers bound to each handler call's jobs, injected via `attemptMiddleware`.
 

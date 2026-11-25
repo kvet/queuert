@@ -1,4 +1,4 @@
-# PostgreSQL State Adapter (Prisma)
+# PostgreSQL state adapter (Prisma)
 
 PostgreSQL state storage via `@queuert/postgres` with Prisma ORM — job creation and completion inside application transactions.
 

@@ -36,7 +36,10 @@ const GroupedNav = (props: { section: SiteSection }) => {
         {(group) => (
           <div>
             <Show
-              when={sectionGroups(props.section).length > 1 || group.label !== props.section.label}
+              when={
+                group.label !== "" &&
+                (sectionGroups(props.section).length > 1 || group.label !== props.section.label)
+              }
             >
               <h2 class={groupLabel}>{group.label}</h2>
             </Show>
@@ -119,7 +122,7 @@ const ApiNav = () => {
         class={linkClass}
         aria-current={current.path().endsWith("/api/") ? "page" : undefined}
       >
-        Overview
+        API reference
       </a>
       <h2 class={`${groupLabel} mt-4`}>Packages</h2>
       <For each={apiPackageTree}>

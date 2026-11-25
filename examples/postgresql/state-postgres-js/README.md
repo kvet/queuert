@@ -1,4 +1,4 @@
-# PostgreSQL State Adapter (postgres.js)
+# PostgreSQL state adapter (postgres.js)
 
 PostgreSQL state storage via `@queuert/postgres` with postgres.js — job creation and completion inside application transactions.
 

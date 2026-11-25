@@ -12,6 +12,10 @@ import { mdxComponents } from "../components/mdx/components.ts";
 import { NotFound } from "../components/NotFound.tsx";
 import { PageMeta } from "../components/PageMeta.tsx";
 import { Toc } from "../components/Toc.tsx";
+import { Stepper } from "../components/tutorial/Stepper.tsx";
+import { MarkAsRead } from "../components/tutorial/StepProgress.tsx";
+import { TaskPanel, TaskProvider } from "../components/tutorial/TryIt.tsx";
+import { learnStepSlug, learnSteps } from "../data/learn.ts";
 import { formatDate } from "../docs/dates.ts";
 import { siteHref } from "../docs/href.ts";
 import {
@@ -93,11 +97,30 @@ const contentFor = (page: DocPage): DocModule["default"] => {
   return content;
 };
 
-const Article = (props: { page: DocPage }) => {
+const hasTask = (page: DocPage) => page.layout === "step";
+
+const Pager = (props: { page: DocPage }) => {
   const pager = () => neighbors(props.page);
+  return (
+    <footer class="mt-12 flex flex-col gap-3 sm:flex-row">
+      <Show when={pager().previous} fallback={<span class="flex-1" />}>
+        {(previous) => <PagerLink page={previous()} direction="previous" />}
+      </Show>
+      <Show when={pager().next} fallback={<span class="flex-1" />}>
+        {(next) => <PagerLink page={next()} direction="next" />}
+      </Show>
+    </footer>
+  );
+};
+
+const Article = (props: { page: DocPage }) => {
   const pkg = () => apiEntryOf(props.page);
   const isPackageIndex = () => props.page.slug.endsWith("/readme") && pkg() !== undefined;
   const Content = contentFor(props.page);
+  const isLanding = () => {
+    const crumbs = trail(props.page);
+    return crumbs.length === 1 && crumbs[0].toLowerCase() === props.page.title.toLowerCase();
+  };
 
   return (
     <article>
@@ -106,18 +129,20 @@ const Article = (props: { page: DocPage }) => {
         description={isPackageIndex() ? pkg()!.summary : props.page.description}
         path={pageHref(props.page)}
       />
-      <nav class="mb-4 flex items-center gap-1.5 text-xs text-fg-subtle" aria-label="Breadcrumb">
-        <For each={trail(props.page)}>
-          {(crumb, index) => (
-            <>
-              <Show when={index() > 0}>
-                <ChevronRightIcon size={11} />
-              </Show>
-              <span>{crumb}</span>
-            </>
-          )}
-        </For>
-      </nav>
+      <Show when={!hasTask(props.page) && !isLanding()}>
+        <nav class="mb-4 flex items-center gap-1.5 text-xs text-fg-subtle" aria-label="Breadcrumb">
+          <For each={trail(props.page)}>
+            {(crumb, index) => (
+              <>
+                <Show when={index() > 0}>
+                  <ChevronRightIcon size={11} />
+                </Show>
+                <span>{crumb}</span>
+              </>
+            )}
+          </For>
+        </nav>
+      </Show>
       <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h1 class="min-w-0 text-xl font-semibold tracking-tight wrap-anywhere sm:text-2xl">
           {isPackageIndex() ? pkg()!.label : props.page.title}
@@ -158,15 +183,11 @@ const Article = (props: { page: DocPage }) => {
           <ApiPackageIndex pkg={pkg()!} />
         </Show>
       </div>
+      <Show when={learnSteps.find((step) => learnStepSlug(step) === props.page.slug)}>
+        {(step) => <MarkAsRead id={step().id} />}
+      </Show>
       <UsedIn page={props.page} />
-      <footer class="mt-16 flex flex-col gap-3 sm:flex-row">
-        <Show when={pager().previous} fallback={<span class="flex-1" />}>
-          {(previous) => <PagerLink page={previous()} direction="previous" />}
-        </Show>
-        <Show when={pager().next} fallback={<span class="flex-1" />}>
-          {(next) => <PagerLink page={next()} direction="next" />}
-        </Show>
-      </footer>
+      <Pager page={props.page} />
     </article>
   );
 };
@@ -185,14 +206,24 @@ const headingsOf = async (page: DocPage): Promise<DocHeading[]> => {
 
 const ArticlePage = (props: { page: DocPage }) => {
   const headings = createMemo(async () => headingsOf(props.page));
+  const exercise = createMemo(async () => (await loadPage(props.page)).exercise);
+  const step = () => learnSteps.find((candidate) => learnStepSlug(candidate) === props.page.slug);
 
   return (
-    <ArticleLayout
-      wide={props.page.layout === "wide"}
-      aside={props.page.layout === "wide" ? undefined : <Toc headings={headings()} />}
-    >
-      <Article page={props.page} />
-    </ArticleLayout>
+    <>
+      <Show when={props.page.layout === "step" ? step() : undefined}>
+        {(step) => <Stepper current={step().id} />}
+      </Show>
+      <TaskProvider exercise={exercise} step={hasTask(props.page)}>
+        <ArticleLayout
+          wide={props.page.layout === "wide"}
+          panel={hasTask(props.page) ? <TaskPanel /> : undefined}
+          aside={props.page.layout === "default" ? <Toc headings={headings()} /> : undefined}
+        >
+          <Article page={props.page} />
+        </ArticleLayout>
+      </TaskProvider>
+    </>
   );
 };
 
@@ -208,7 +239,10 @@ const DocsRoute = () => {
   return (
     <Show when={page()} fallback={<MissingPage />}>
       {(page) => (
-        <DocsShell section={sectionForPath(pageHref(page()))?.id ?? "docs"}>
+        <DocsShell
+          section={sectionForPath(pageHref(page()))?.id ?? "learn"}
+          sidebar={page().layout !== "step"}
+        >
           <Loading>
             <Show when={page()} keyed>
               {(current) => <ArticlePage page={current} />}

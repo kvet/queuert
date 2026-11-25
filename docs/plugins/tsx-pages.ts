@@ -15,6 +15,7 @@ import {
 } from "oxc-parser";
 import type { Plugin } from "vite";
 
+import { foldImports } from "../src/components/tutorial/fold.ts";
 import { highlight } from "./highlight.ts";
 
 type PageHeading = { depth: number; text: string; id: string };
@@ -259,20 +260,25 @@ export const readExampleCode = (
       `${page}: <ExampleCode> needs a static file and exactly one of example or package`,
     );
   }
+  const fold = attribute("fold");
+  if (fold !== undefined && fold !== "imports") {
+    throw new Error(`${page}: <ExampleCode fold="${fold}"> must be "imports"`);
+  }
+  const source = readExampleSource(
+    {
+      root:
+        example === undefined
+          ? { kind: "package", name: packageName! }
+          : { kind: "example", name: example },
+      file,
+      region: attribute("region"),
+      lang: attribute("lang"),
+    },
+    directories,
+  );
   return {
     title: attribute("title"),
-    source: readExampleSource(
-      {
-        root:
-          example === undefined
-            ? { kind: "package", name: packageName! }
-            : { kind: "example", name: example },
-        file,
-        region: attribute("region"),
-        lang: attribute("lang"),
-      },
-      directories,
-    ),
+    source: fold === "imports" ? { ...source, code: foldImports(source.code) } : source,
   };
 };
 

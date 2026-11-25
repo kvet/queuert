@@ -1,4 +1,4 @@
-# SQLite State Adapter (Drizzle ORM)
+# SQLite state adapter (Drizzle ORM)
 
 SQLite state storage via `@queuert/sqlite` with Drizzle ORM through a synchronous provider (marked with `sync: true`), so `createSqliteStateAdapter` returns a sync adapter and `createClient` returns plain values — job creation and completion inside Drizzle's synchronous transaction over better-sqlite3, with no lock.
 

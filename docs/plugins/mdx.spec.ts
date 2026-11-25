@@ -73,11 +73,11 @@ describe("mdxOptions", () => {
   it("links a top-level index page without a doubled slash", async () => {
     const output = await compilePage(
       "guides/a.md",
-      "[Home](../index.md) and [Compare](../comparison/index.md#at-a-glance)",
+      "[Home](../index.md) and [Compare](../comparison/index.md#benchmarks)",
     );
 
     expect(output).toContain('href="/queuert/"');
-    expect(output).toContain('href="/queuert/comparison/#at-a-glance"');
+    expect(output).toContain('href="/queuert/comparison/#benchmarks"');
   });
 
   it("leaves absolute and external links alone", async () => {
@@ -379,5 +379,52 @@ describe("ExampleCode in MDX", () => {
     await expect(
       compileWithExamples('<ExampleCode example="guides" file="src/queries.ts" {...snippet} />'),
     ).rejects.toThrow("<ExampleCode> takes only string attributes");
+  });
+});
+
+describe("TryIt in MDX", () => {
+  const compileTryIt = async (value: string) => {
+    const examplesDirectory = mkdtempSync(join(tmpdir(), "tutorial-"));
+    for (const folder of ["start", "solution"]) {
+      mkdirSync(join(examplesDirectory, "tutorial/src/lesson", folder), { recursive: true });
+      writeFileSync(
+        join(examplesDirectory, "tutorial/src/lesson", folder, "index.ts"),
+        `export const ${folder} = 1;\n`,
+      );
+    }
+    writeFileSync(
+      join(examplesDirectory, "tutorial/src/lesson/check.ts"),
+      "export const check = 1;\n",
+    );
+    return String(
+      await compile(
+        new VFile({ path: `${contentDirectory}/tutorial/a.mdx`, value }),
+        mdxOptions({ contentDirectory, base: "/queuert/", examplesDirectory }),
+      ),
+    );
+  };
+
+  it("keeps only the lesson on the line and exports the lesson's files from the page", async () => {
+    const output = await compileTryIt('<TryIt lesson="lesson">start a chain</TryIt>');
+
+    expect(output).toContain('"lesson": "lesson"');
+    expect(output).toMatch(/export const exercise\b/);
+    expect(output).toContain('"start":');
+    expect(output).toContain('"solution":');
+    expect(output).toContain('"check":');
+    expect(output).toContain('"html":');
+    expect(output).not.toMatch(/<TryIt[^>]*\bstart=/);
+  });
+
+  it("rejects a second TryIt on a page", async () => {
+    await expect(
+      compileTryIt('<TryIt lesson="lesson">a</TryIt>\n\n<TryIt lesson="lesson">b</TryIt>'),
+    ).rejects.toThrow("a page takes one <TryIt>");
+  });
+
+  it("rejects attributes other than the lesson", async () => {
+    await expect(compileTryIt('<TryIt lesson="lesson" extra="1">x</TryIt>')).rejects.toThrow(
+      "<TryIt> takes only a string lesson attribute",
+    );
   });
 });

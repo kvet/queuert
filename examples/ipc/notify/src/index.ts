@@ -12,7 +12,6 @@ import { createClient } from "queuert";
 
 import { jobTypes } from "./job-types.ts";
 
-// Both processes share one SQLite file and one IPC directory
 using drivers = new DisposableStack();
 const directory = drivers.adopt(mkdtempSync(join(tmpdir(), "queuert-notify-ipc-")), (path) => {
   rmSync(path, { recursive: true, force: true });
@@ -21,7 +20,7 @@ const databasePath = join(directory, "queuert.db");
 const ipcDirectory = join(directory, "ipc");
 
 // #region setup
-// Create the state adapter
+// #hide
 const db = drivers.adopt(new Database(databasePath), (database) => {
   database.close();
 });
@@ -31,19 +30,18 @@ using stateAdapter = createSqliteStateAdapter({
   stateProvider: createBetterSqlite3StateProvider({ db }),
 });
 stateAdapter.migrateToLatest();
+// #endhide
 
-// Create the notify adapter: every process passing the same directory reaches the others
 using notifyAdapter = createIpcNotifyAdapter({
   directory: ipcDirectory,
   onError: (error) => {
     console.error("IPC notify adapter error", error);
   },
 });
-
-const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
 // #endregion
 
-// Start the worker in a separate process
+const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
+
 console.log("Starting worker process...");
 const worker = fork(join(import.meta.dirname, "worker.ts"), [], {
   env: { ...process.env, DATABASE_PATH: databasePath, IPC_DIRECTORY: ipcDirectory },
@@ -59,19 +57,16 @@ const chain = stateAdapter.withTransaction((ctx) =>
   }),
 );
 
-// Main process continues with other work while the worker process runs the job
 console.log("Report queued! Continuing with other work...");
 console.log("Preparing email template...");
 await new Promise((resolve) => setTimeout(resolve, 100));
 console.log("Loading recipient list...");
 await new Promise((resolve) => setTimeout(resolve, 100));
 
-// Now wait for the report to be ready
 console.log("Waiting for report...");
 const result = await client.awaitChain({ chain, timeoutMs: 5000 });
 console.log(`Report ready! ID: ${result.output.reportId}, Rows: ${result.output.rowCount}`);
 
-// Stop the worker process; the adapters and the database close when the scope ends
 worker.send("stop");
 await once(worker, "exit");
 console.log("Done!");

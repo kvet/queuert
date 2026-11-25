@@ -5,8 +5,6 @@ import type { KnexSqliteContext } from "./provider.ts";
 
 export type Invoice = { id: number; customer: string; status: string | null };
 
-// Every query of a transactional migration goes through `txCtx.trx`: the outer `db` waits for
-// the single connection the migration transaction holds.
 export const createMigrations = ({ db }: { db: Knex }): Migration<KnexSqliteContext>[] => [
   {
     name: "create_invoices",

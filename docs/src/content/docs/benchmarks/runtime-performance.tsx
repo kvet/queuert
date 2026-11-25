@@ -6,20 +6,20 @@ import { type KeyValueItem, KeyValueList } from "../../../components/KeyValueLis
 import { Code } from "../../../components/mdx/Code.tsx";
 import { StackFilter } from "../../../components/StackFilter.tsx";
 import {
+  allocationGroups,
   benchmarkContainers,
-  benchmarkServers,
   benchmarkMachine,
+  benchmarkServers,
   benchmarkSourceUrl,
   cpuGroups,
-  allocationGroups,
   memoryGroups,
-  validationAllocationGroups,
   seriesOf,
+  validationAllocationGroups,
   validationCpuGroups,
 } from "../../../data/benchmarks.ts";
 
 export const meta = {
-  title: "Runtime Performance",
+  title: "Runtime performance",
   description:
     "Heap held by each package across a full lifecycle, and the CPU time and allocations each job costs.",
 };

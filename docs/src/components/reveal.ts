@@ -7,7 +7,11 @@
  */
 export const revealOnView = (element: HTMLElement | undefined): (() => void) | undefined => {
   if (element === undefined) return;
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  try {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  } catch {
+    return;
+  }
   const rect = element.getBoundingClientRect();
   if (rect.top < window.innerHeight && rect.bottom > 0) return;
   element.dataset.reveal = "pending";

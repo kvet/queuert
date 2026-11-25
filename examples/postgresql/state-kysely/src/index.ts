@@ -16,10 +16,8 @@ import type { Database } from "./database.ts";
 import { createMigrations } from "./migrations.ts";
 import { createKyselyPgStateProvider } from "./provider.ts";
 
-// Start PostgreSQL using testcontainers
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
-// Create database connection and schema
 await using db = new Kysely<Database>({
   dialect: new PostgresDialect({
     pool: new Pool({
@@ -39,16 +37,14 @@ await db.executeQuery(
   `),
 );
 
-// Define job types
 const jobTypes = defineJobTypes<{
-  send_welcome_email: {
+  "send-welcome-email": {
     entry: true;
     input: { userId: number };
     output: { sentAt: string };
   };
 }>();
 
-// Create state provider for Kysely
 // #region adapter
 const stateProvider = createKyselyPgStateProvider({ db });
 await using stateAdapter = createPgStateAdapter({
@@ -74,14 +70,13 @@ assert.deepEqual(
 
 const client = createClient({ stateAdapter, jobTypes });
 
-// Create worker runner with job type processors
 await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
     jobTypes,
     processors: {
-      send_welcome_email: {
+      "send-welcome-email": {
         attemptHandler: async ({ job, applyJobOutcome }) => {
           const user = await db
             .selectFrom("users")
@@ -89,7 +84,6 @@ await using workerRunner = createWorkerRunner({
             .where("id", "=", job.input.userId)
             .executeTakeFirstOrThrow();
 
-          // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
           await withTxHooks(async (txHooks) =>
@@ -107,7 +101,6 @@ await using workerRunner = createWorkerRunner({
 
 await workerRunner.start();
 
-// Register a new user and queue welcome email atomically
 const chain = await withTxHooks(async (txHooks) =>
   db.transaction().execute(async (db) => {
     const user = await db
@@ -116,16 +109,14 @@ const chain = await withTxHooks(async (txHooks) =>
       .returning("id")
       .executeTakeFirstOrThrow();
 
-    // Queue welcome email - if user creation fails, no email job is created
     return client.createChain({
       db,
       txHooks,
-      typeName: "send_welcome_email",
+      typeName: "send-welcome-email",
       input: { userId: user.id },
     });
   }),
 );
 
-// Wait for the chain to complete
 const result = await client.awaitChain({ chain, timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);

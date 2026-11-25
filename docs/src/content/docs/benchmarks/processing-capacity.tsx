@@ -3,19 +3,22 @@ import { For } from "solid-js";
 import { BenchChart } from "../../../components/BenchChart.tsx";
 import { type KeyValueItem, KeyValueList } from "../../../components/KeyValueList.tsx";
 import { Code } from "../../../components/mdx/Code.tsx";
+import { Details } from "../../../components/mdx/Details.tsx";
 import { StackFilter } from "../../../components/StackFilter.tsx";
 import {
+  batchedCompletionGroups,
   benchmarkContainers,
-  benchmarkServers,
   benchmarkMachine,
+  benchmarkServers,
   benchmarkSourceUrl,
   completionGroups,
   creationGroups,
   seriesOf,
 } from "../../../data/benchmarks.ts";
+import { siteHref } from "../../../docs/href.ts";
 
 export const meta = {
-  title: "Processing Capacity",
+  title: "Processing capacity",
   description: "Chain creation and job completion throughput for every state and notify adapter.",
 };
 
@@ -37,17 +40,29 @@ const setup = [
 
 const Page = () => (
   <>
-    <p>
-      Throughput along two separate axes. When the state adapter varies, notify is a no-op, so only
-      the state adapter is measured; when the notify adapter varies, state stays in-process. Each
-      chart is one scenario, with the two axes as separate groups on their own scales. The SQLite
-      rows run the synchronous adapter, a <code>SqliteStateAdapter</code> in the <code>"sync"</code>{" "}
-      mode. The In-process rows run the in-process adapters synchronously, and IPC, a synchronous
-      notify adapter, runs over the synchronous in-process state adapter, while the other notify
-      adapters run over the asynchronous one, so compare IPC with the In-process row rather than
-      with them. A deployment's steady-state throughput is bounded by the lower of its creation and
-      completion rates.
-    </p>
+    <p>Bars use a log scale, so slower adapters stay visible next to in-process ones.</p>
+    <Details summary="How to read these charts" hint="4 notes">
+      <ul>
+        <li>
+          When the state adapter varies, notify is a no-op; when the notify adapter varies, state
+          stays in-process. Each chart holds the two as separate groups, each on its own scale.
+        </li>
+        <li>
+          The SQLite rows run the synchronous adapter, a <code>SqliteStateAdapter</code> in the{" "}
+          <code>"sync"</code> mode, and the In-process rows run the in-process adapters
+          synchronously.
+        </li>
+        <li>
+          IPC, a synchronous notify adapter, runs over the synchronous in-process state adapter,
+          while the other notify adapters run over the asynchronous one, so compare IPC with the
+          In-process row rather than with them.
+        </li>
+        <li>
+          A deployment's steady-state throughput is bounded by the lower of its creation and
+          completion rates.
+        </li>
+      </ul>
+    </Details>
     <StackFilter
       backends={["postgres", "sqlite", "mysql", "mariadb", "redis", "nats", "ipc", "in-process"]}
     />
@@ -66,6 +81,7 @@ const Page = () => (
           unit="chains/s"
           approximate
           scalePerGroup
+          logScale
           series={[scenario]}
           groups={seriesOf(creationGroups, index())}
         />
@@ -85,8 +101,29 @@ const Page = () => (
           unit="jobs/s"
           approximate
           scalePerGroup
+          logScale
           series={[scenario]}
           groups={seriesOf(completionGroups, index())}
+        />
+      )}
+    </For>
+    <h2 id="batched-completion">Completion, batched no-op handler</h2>
+    <p>
+      The same seeded queue, drained by a processor with <code>batchLimit: 100</code>: each attempt
+      takes up to 100 jobs and applies them with one <code>applyJobOutcomes</code> call in one
+      transaction, so the round trip is paid per batch instead of per job. See{" "}
+      <a href={siteHref("/guides/batched-processors/")}>Batched processors</a>.
+    </p>
+    <For each={["1 slot", "4 slots", "16 slots"]}>
+      {(scenario, index) => (
+        <BenchChart
+          title={`Batched completion, ${scenario}`}
+          unit="jobs/s"
+          approximate
+          scalePerGroup
+          logScale
+          series={[scenario]}
+          groups={seriesOf(batchedCompletionGroups, index())}
         />
       )}
     </For>

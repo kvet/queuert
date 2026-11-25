@@ -13,10 +13,8 @@ import {
 import { createMigrations } from "./migrations.ts";
 import { createBunSqlSqliteStateProvider } from "./provider.ts";
 
-// Create in-memory SQLite database
 await using sql = new SQL("sqlite://:memory:");
 
-// Create application schema
 await sql`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,16 +23,14 @@ await sql`
   )
 `;
 
-// Define job types
 const jobTypes = defineJobTypes<{
-  send_welcome_email: {
+  "send-welcome-email": {
     entry: true;
     input: { userId: number };
     output: { sentAt: string };
   };
 }>();
 
-// Create providers and adapters
 // #region adapter
 const lock = createAsyncRwLock();
 const stateProvider = createBunSqlSqliteStateProvider({ sql, lock });
@@ -42,7 +38,6 @@ await using stateAdapter = createSqliteStateAdapter({ stateProvider });
 await stateAdapter.migrateToLatest();
 // #endregion
 
-// Run the application's own migrations through the same provider
 const migrator = createSqliteMigrator({
   stateProvider,
   migrations: createMigrations({ sql, lock }),
@@ -66,7 +61,7 @@ await using workerRunner = createWorkerRunner({
     client,
     jobTypes,
     processors: {
-      send_welcome_email: {
+      "send-welcome-email": {
         attemptHandler: async ({ job, applyJobOutcome }) => {
           let user: { id: number; name: string; email: string } | undefined;
           {
@@ -75,12 +70,9 @@ await using workerRunner = createWorkerRunner({
           }
           if (!user) throw new Error(`User ${job.input.userId} not found`);
 
-          // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
           await withTxHooks(async (txHooks) => {
-            // The handler's transaction holds the provider's write lock, so the worker's
-            // autocommit statements on this connection cannot run inside it.
             using _h = await lock.acquireWrite();
             return await sql.begin(async (txSql) =>
               applyJobOutcome({ txSql, txHooks, output: { sentAt: new Date().toISOString() } }),
@@ -94,8 +86,6 @@ await using workerRunner = createWorkerRunner({
 
 await workerRunner.start();
 
-// Register a new user and queue welcome email atomically
-// Bun.SQL does not queue SQLite transactions on its single connection, so take the same lock
 // #region create-chain
 const chain = await withTxHooks(async (txHooks) => {
   using _h = await lock.acquireWrite();
@@ -107,13 +97,12 @@ const chain = await withTxHooks(async (txHooks) => {
     return client.createChain({
       txSql,
       txHooks,
-      typeName: "send_welcome_email",
+      typeName: "send-welcome-email",
       input: { userId: user.id },
     });
   });
 });
 // #endregion
 
-// Wait for the chain to complete
 const result = await client.awaitChain({ chain, timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);

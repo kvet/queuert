@@ -1,4 +1,4 @@
-# PostgreSQL Notify Adapter (postgres-js)
+# PostgreSQL notify adapter (postgres-js)
 
 PostgreSQL LISTEN/NOTIFY via `@queuert/postgres` with the postgres-js client.
 

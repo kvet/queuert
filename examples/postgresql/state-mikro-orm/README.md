@@ -1,4 +1,4 @@
-# PostgreSQL State Adapter (MikroORM)
+# PostgreSQL state adapter (MikroORM)
 
 PostgreSQL state storage via `@queuert/postgres` with MikroORM — job creation and completion inside `em.transactional`, with commit and rollback callbacks taken from MikroORM's transaction events, so calls take `{ em }` alone and no `txHooks`.
 

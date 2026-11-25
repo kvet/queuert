@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
 
 import { pageSlug } from "../../plugins/mdx.ts";
-import { sectionForPath, siteSections, topBarSections } from "./sections.ts";
+import { drawerSections, sectionForPath, siteSections, topBarSections } from "./sections.ts";
 
 const contentDirectory = fileURLToPath(new URL("../content/docs", import.meta.url));
 
@@ -23,10 +23,8 @@ const handWrittenSlugs = async () => (await contentFiles()).map(pageSlug).sort()
 const listedSlugs = () =>
   siteSections.flatMap((section) => section.groups.flatMap((group) => group.slugs));
 
-const docsGroup = (label: string) =>
-  siteSections
-    .find((section) => section.id === "docs")!
-    .groups.find((group) => group.label === label)!.slugs;
+const sectionSlugs = (id: string) =>
+  siteSections.find((section) => section.id === id)!.groups.flatMap((group) => group.slugs);
 
 const sidebarOrder = async (directory: string) => {
   const pages: { slug: string; order: number; title: string }[] = [];
@@ -64,13 +62,47 @@ describe("siteSections", () => {
   });
 
   it.each([
-    ["Building Blocks", "guides"],
-    ["Guides", "guides"],
-    ["How It Works", "how-it-works"],
-  ])("orders the %s group by sidebar.order, then title", async (label, directory) => {
-    const group = docsGroup(label);
+    ["guides", "guides"],
+    ["concepts", "how-it-works"],
+  ])("orders the %s section by sidebar.order, then title", async (id, directory) => {
+    const slugs = sectionSlugs(id).filter((slug) => slug !== directory);
 
-    expect(group).toEqual((await sidebarOrder(directory)).filter((slug) => group.includes(slug)));
+    expect(slugs).toEqual((await sidebarOrder(directory)).filter((slug) => slugs.includes(slug)));
+  });
+
+  it("opens Guides, Compare, Integrations and the Blog with their overview, listed without a heading", () => {
+    for (const [id, overview] of [
+      ["guides", "guides"],
+      ["compare", "comparison"],
+      ["integrations", "integrations"],
+      ["blog", "blog"],
+    ] as const) {
+      const [first] = siteSections.find((section) => section.id === id)!.groups;
+
+      expect(first).toEqual({ label: "", slugs: [overview] });
+    }
+  });
+
+  it("lists the Learn pages in lesson order", () => {
+    expect(sectionSlugs("learn")).toEqual([
+      "learn",
+      "learn/what-is-queuert",
+      "learn/first-chain",
+      "learn/chains-in-your-transaction",
+      "learn/continuing-a-chain",
+      "learn/branching",
+      "learn/errors-and-retries",
+      "learn/use-it-in-your-app",
+    ]);
+  });
+
+  it("starts Concepts with the glossary and ends Guides with application migrations", () => {
+    expect(sectionSlugs("concepts")[0]).toBe("how-it-works/glossary");
+    expect(sectionSlugs("guides").at(-1)).toBe("guides/application-migrations");
+  });
+
+  it("lists the benchmarks inside Compare", () => {
+    expect(sectionSlugs("compare")).toContain("benchmarks/runtime-performance");
   });
 });
 
@@ -101,10 +133,13 @@ describe("blog", () => {
 
 describe("sectionForPath", () => {
   it("finds the section of a listed page, with or without the trailing slash", () => {
-    expect(sectionForPath("/guides/scheduling/")?.id).toBe("docs");
+    expect(sectionForPath("/learn/")?.id).toBe("learn");
+    expect(sectionForPath("/guides/")?.id).toBe("guides");
+    expect(sectionForPath("/guides/scheduling/")?.id).toBe("guides");
+    expect(sectionForPath("/how-it-works/glossary/")?.id).toBe("concepts");
     expect(sectionForPath("/comparison/pg-boss")?.id).toBe("compare");
     expect(sectionForPath("/integrations/state-adapters/postgres/")?.id).toBe("integrations");
-    expect(sectionForPath("/benchmarks/")?.id).toBe("benchmarks");
+    expect(sectionForPath("/benchmarks/processing-capacity/")?.id).toBe("compare");
     expect(sectionForPath("/blog/dual-write-problem/")?.id).toBe("blog");
   });
 
@@ -121,14 +156,18 @@ describe("sectionForPath", () => {
 });
 
 describe("topBarSections", () => {
-  it("lists every section but the changelog", () => {
+  it("lists every section but the blog and the changelog", () => {
     expect(topBarSections.map((section) => section.id)).toEqual([
-      "docs",
+      "learn",
+      "guides",
+      "concepts",
       "integrations",
       "api",
       "compare",
-      "benchmarks",
-      "blog",
     ]);
+  });
+
+  it("adds the blog to the drawer", () => {
+    expect(drawerSections.map((section) => section.id).at(-1)).toBe("blog");
   });
 });

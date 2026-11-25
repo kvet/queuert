@@ -9,8 +9,6 @@ export const createBunSqlStateProvider = ({
 }: {
   sql: SQL;
 }): PgStateProvider<BunSqlContext> => {
-  // Bun infers each parameter's type from its JS value and has no per-parameter OID override,
-  // so dates, JSON, and arrays are sent as text and the explicit casts in the adapter's SQL coerce them.
   type ArrayElement = string | number | boolean | bigint | Date | null | undefined;
 
   const toText = (value: ArrayElement): string | null => {
@@ -19,7 +17,6 @@ export const createBunSqlStateProvider = ({
     return String(value);
   };
 
-  // Bun's `sql.array()` encodes `null` elements as the string "null", so build the literal by hand.
   const toArrayLiteral = (values: (string | null)[]): string =>
     `{${values
       .map((value) =>

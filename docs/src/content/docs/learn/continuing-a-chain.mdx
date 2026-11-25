@@ -1,0 +1,32 @@
+---
+title: Continuing a chain
+layout: step
+description: Hand a chain from one job to the next with continueWith, and let the last job's output complete it.
+---
+
+import { Arrow, Diagram, Flow, Node } from "../../../components/diagram";
+
+A chain can run more than one job: a job hands the chain on to the next job type, and the chain completes with the output of its last job.
+
+<Diagram label="Chain: provision-account continues with send-welcome-email, and the chain completes">
+  <Flow>
+    <Node status="completed">provision-account</Node>
+    <Arrow label="continueWith" />
+    <Node status="completed">send-welcome-email</Node>
+    <Arrow label="output" />
+    <Node status="completed">chain completed</Node>
+  </Flow>
+</Diagram>
+
+A handler ends its job through `applyJobOutcome` in one of two ways: with an `output`, which completes the chain, or with `continueWith`, the next `typeName` and that job's `input`, which creates the next job in the same transaction as the one that finished. The chain keeps its identity across jobs, so `client.awaitChain` resolves once the last job completes, with that job's output.
+
+Types spell this out in `defineJobTypes`. A job type lists the types it may continue with in `continueWith` instead of declaring an `output`, and a type reachable only through a chain drops `entry`, so `createChain` refuses it. The compiler then checks every `continueWith` against the declared type and its input.
+
+This lesson spans two files: `job-types.ts` holds the definitions and `index.ts` the processors. Switch between them with the file buttons above the editor.
+
+<TryIt lesson="continuing-a-chain">in `job-types.ts`, give `provision-account` a `continueWith` of `send-welcome-email` instead of an output, and remove `entry` from `send-welcome-email`; then pass `continueWith` to `applyJobOutcome` in the `provision-account` handler in `index.ts`.</TryIt>
+
+## Related guides
+
+- [Chain patterns](../../guides/chain-patterns/): linear, branched, loop and go-to continuations.
+- [Job blockers](../../guides/job-blockers/): make a job wait for other chains before it runs.

@@ -1,4 +1,4 @@
-# SQLite State Adapter (better-sqlite3)
+# SQLite state adapter (better-sqlite3)
 
 SQLite state storage via `@queuert/sqlite` with the better-sqlite3 driver through a synchronous provider (marked with `sync: true`), so `createSqliteStateAdapter` returns a sync adapter and `createClient` returns plain values — job creation and completion inside better-sqlite3's own `db.transaction`, with no lock.
 

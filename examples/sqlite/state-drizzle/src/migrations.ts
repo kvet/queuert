@@ -11,8 +11,6 @@ export const invoices = sqliteTable("invoices", {
   status: text("status"),
 });
 
-// Transactional migrations run inside the provider's synchronous transaction; non-transactional
-// ones run outside a transaction, one synchronous statement at a time.
 export const createMigrations = ({
   db,
 }: {

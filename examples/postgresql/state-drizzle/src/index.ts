@@ -18,10 +18,8 @@ import { createDrizzlePgStateProvider } from "./provider.ts";
 import * as schema from "./schema.ts";
 import { invoices, users } from "./schema.ts";
 
-// Start PostgreSQL using testcontainers
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
-// Create database connection and schema
 await using drivers = new AsyncDisposableStack();
 const pool = drivers.adopt(
   new Pool({ connectionString: pg.connectionString, max: 10 }),
@@ -38,16 +36,14 @@ await db.execute(sql`
   )
 `);
 
-// Define job types
 const jobTypes = defineJobTypes<{
-  send_welcome_email: {
+  "send-welcome-email": {
     entry: true;
     input: { userId: number };
     output: { sentAt: string };
   };
 }>();
 
-// Create state provider for Drizzle
 // #region adapter
 const stateProvider = createDrizzlePgStateProvider({ db });
 await using stateAdapter = createPgStateAdapter({
@@ -77,12 +73,11 @@ await using workerRunner = createWorkerRunner({
     client,
     jobTypes,
     processors: {
-      send_welcome_email: {
+      "send-welcome-email": {
         attemptHandler: async ({ job, applyJobOutcome }) => {
           const [user] = await db.select().from(users).where(eq(users.id, job.input.userId));
           if (!user) throw new Error(`User ${job.input.userId} not found`);
 
-          // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
           await withTxHooks(async (txHooks) =>
@@ -96,10 +91,8 @@ await using workerRunner = createWorkerRunner({
   }),
 });
 
-// Start worker runner
 await workerRunner.start();
 
-// Register a new user and queue welcome email atomically
 const chain = await withTxHooks(async (txHooks) =>
   db.transaction(async (tx) => {
     const [user] = await tx
@@ -107,16 +100,14 @@ const chain = await withTxHooks(async (txHooks) =>
       .values({ name: "Alice", email: "alice@example.com" })
       .returning({ id: users.id });
 
-    // Queue welcome email - if user creation fails, no email job is created
     return client.createChain({
       tx,
       txHooks,
-      typeName: "send_welcome_email",
+      typeName: "send-welcome-email",
       input: { userId: user.id },
     });
   }),
 );
 
-// Wait for the chain to complete
 const result = await client.awaitChain({ chain, timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);

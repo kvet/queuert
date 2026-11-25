@@ -21,6 +21,8 @@ import remarkGfm from "remark-gfm";
 import { SKIP, visit } from "unist-util-visit";
 import type { VFile } from "vfile";
 
+import { foldImports } from "../src/components/tutorial/fold.ts";
+import { readExercise } from "./exercise.ts";
 import { highlight } from "./highlight.ts";
 import { exampleCodeProps, readExampleCode } from "./tsx-pages.ts";
 
@@ -178,6 +180,15 @@ const remarkImageImports = () => (tree: MdastRoot) => {
   tree.children.unshift(...(imports as unknown as RootContent[]));
 };
 
+const pageExercise = (file: VFile) => file.data as { exercise?: Record<string, string> };
+
+/** The example and lesson files a page embeds, collected by the remark steps that read them. */
+const embeddedSources = (file: VFile): string[] => {
+  const data = file.data as { embeddedSources?: string[] };
+  data.embeddedSources ??= [];
+  return data.embeddedSources;
+};
+
 /**
  * Fills each `<ExampleCode example|package file region />` with the file's code and highlighted
  * html, the same way the tsx-pages plugin does for `.tsx` pages, and reports the files it read.
@@ -217,7 +228,54 @@ const remarkExampleCode =
         ([name, value]) => attribute(name, value),
       );
     }
-    options.onExampleSources?.(file.path, sources);
+    embeddedSources(file).push(...sources);
+  };
+
+/**
+ * Reads the lesson of a page's one `<TryIt lesson>` from `examples/tutorial/src/<lesson>/` and
+ * exports its start and solution files (as JSON), its check and the highlighted start files from the
+ * page module as `exercise`, for the task panel. The `<TryIt>` line keeps only its lesson.
+ */
+const remarkTryIt =
+  (options: { examplesDirectory?: string }) => async (tree: MdastRoot, file: VFile) => {
+    const elements: (MdxJsxFlowElement | MdxJsxTextElement)[] = [];
+    visit(tree, ["mdxJsxFlowElement", "mdxJsxTextElement"], (node) => {
+      if ((node as MdxJsxFlowElement).name === "TryIt") {
+        elements.push(node as MdxJsxFlowElement | MdxJsxTextElement);
+      }
+    });
+    if (elements.length > 1) throw new Error(`${file.path}: a page takes one <TryIt>`);
+    const [element] = elements;
+    if (element === undefined) return;
+    const [only, ...rest] = element.attributes;
+    if (
+      only?.type !== "mdxJsxAttribute" ||
+      only.name !== "lesson" ||
+      typeof only.value !== "string" ||
+      rest.length > 0
+    ) {
+      throw new Error(`${file.path}: <TryIt> takes only a string lesson attribute`);
+    }
+    const exercise = readExercise(only.value, options.examplesDirectory);
+    const html: Record<string, string> = {};
+    for (const [name, code] of Object.entries(exercise.start)) {
+      html[name] = await highlight(foldImports(code), "ts");
+    }
+    pageExercise(file).exercise = {
+      lesson: exercise.lesson,
+      start: JSON.stringify(exercise.start),
+      solution: JSON.stringify(exercise.solution),
+      check: exercise.check,
+      html: JSON.stringify(html),
+    };
+    element.attributes = [attribute("lesson", exercise.lesson)];
+    embeddedSources(file).push(...exercise.sources);
+  };
+
+const remarkReportSources =
+  (options: { onExampleSources?: (page: string, sources: string[]) => void }) =>
+  (_: MdastRoot, file: VFile) => {
+    options.onExampleSources?.(file.path, embeddedSources(file));
   };
 
 const headingText = (node: RootContent | undefined): string | undefined =>
@@ -627,7 +685,7 @@ const exportConst = (name: string, value: unknown): MdxjsEsmHast => {
   return { type: "mdxjsEsm", value: "", data: { estree } };
 };
 
-const rehypeHeadings = () => (tree: HastRoot) => {
+const rehypeHeadings = () => (tree: HastRoot, file: VFile) => {
   const slugger = new GithubSlugger();
   const headings: { depth: number; text: string; id: string }[] = [];
   visit(tree, "element", (node) => {
@@ -650,6 +708,8 @@ const rehypeHeadings = () => (tree: HastRoot) => {
     });
   });
   tree.children.unshift(exportConst("headings", headings));
+  const { exercise } = pageExercise(file);
+  if (exercise !== undefined) tree.children.unshift(exportConst("exercise", exercise));
 };
 
 const codeLang = (code: Element): string => {
@@ -718,9 +778,9 @@ const recmaIntrinsicElements = () => (tree: Program) => {
 export const mdxOptions = (options: {
   contentDirectory: string;
   base: string;
-  /** Overrides `examples/` for `<ExampleCode example>`, for tests. */
+  /** Overrides `examples/` for `<ExampleCode example>` and `<TryIt>`, for tests. */
   examplesDirectory?: string;
-  /** Called on every compile of `page` with the example and package files its `<ExampleCode>`s read. */
+  /** Called on every compile of `page` with the files its `<ExampleCode>`s and `<TryIt>` read. */
   onExampleSources?: (page: string, sources: string[]) => void;
 }): CompileOptions => ({
   jsx: true,
@@ -735,6 +795,8 @@ export const mdxOptions = (options: {
     [remarkTables, options],
     remarkImageImports,
     [remarkExampleCode, options],
+    [remarkTryIt, options],
+    [remarkReportSources, options],
     remarkStripTitle,
     [remarkRelativeLinks, options],
   ],

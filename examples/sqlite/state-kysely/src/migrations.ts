@@ -7,8 +7,6 @@ export type InvoicesTable = { id: number; customer: string; status: string | nul
 
 type Database = { invoices: InvoicesTable };
 
-// Every query of a transactional migration goes through `txCtx.db`: the outer `db` waits for the
-// single connection the migration transaction holds.
 export const createMigrations = ({
   db,
 }: {

@@ -37,25 +37,25 @@ const valuesOf = (table: ResultsTable, label: string, columns: string[]): number
 };
 
 const stateAdapters = [
-  { label: "In-process", backend: "in-process" },
-  { label: "SQLite (better-sqlite3)", backend: "sqlite" },
-  { label: "SQLite (node:sqlite)", backend: "sqlite" },
   { label: "PostgreSQL (postgres-js)", backend: "postgres" },
   { label: "PostgreSQL (pg)", backend: "postgres" },
+  { label: "SQLite (better-sqlite3)", backend: "sqlite" },
+  { label: "SQLite (node:sqlite)", backend: "sqlite" },
   { label: "MySQL (mysql2)", backend: "mysql" },
   { label: "MariaDB (mysql2)", backend: "mariadb" },
   { label: "Redis (redis)", backend: "redis" },
   { label: "Redis (ioredis)", backend: "redis" },
+  { label: "In-process", backend: "in-process" },
 ] satisfies { label: string; backend: Backend }[];
 
 const notifyAdapters = [
-  { label: "In-process", backend: "in-process" },
-  { label: "Redis (redis)", backend: "redis" },
-  { label: "Redis (ioredis)", backend: "redis" },
   { label: "PostgreSQL (pg)", backend: "postgres" },
   { label: "PostgreSQL (postgres-js)", backend: "postgres" },
+  { label: "Redis (redis)", backend: "redis" },
+  { label: "Redis (ioredis)", backend: "redis" },
   { label: "NATS", backend: "nats" },
   { label: "IPC", backend: "ipc" },
+  { label: "In-process", backend: "in-process" },
 ] satisfies { label: string; backend: Backend }[];
 
 const capacityGroups = (title: string, columns: string[]): BenchGroup[] =>
@@ -80,6 +80,11 @@ export const completionGroups = capacityGroups("Completion, no-op handler (jobs/
   "4 slots",
   "16 slots",
 ]);
+
+export const batchedCompletionGroups = capacityGroups(
+  "Completion, batched no-op handler (100 per batch, jobs/s)",
+  ["1 slot", "4 slots", "16 slots"],
+);
 
 const runtimeMeasurements: { label: string; backend?: Backend }[] = [
   { label: "notify-redis", backend: "redis" },
@@ -241,7 +246,7 @@ export const workerGroups = [
 ] satisfies BenchGroup[];
 
 export const benchmarkMachine = [
-  { label: "Machine", value: "Apple M1 Pro" },
+  { label: "Machine", value: "Apple M5 Pro" },
   { label: "Runtime", value: "Node.js v24" },
 ] satisfies KeyValueItem[];
 
@@ -265,3 +270,36 @@ export const seriesOf = (groups: BenchGroup[], index: number): BenchGroup[] =>
 
 export const benchmarkSourceUrl = (suite: string) =>
   `https://github.com/kvet/queuert/tree/main/benchmarks/${suite}`;
+
+export const benchmarkSummaryColumns = [
+  { label: "Create", detail: "single", unit: "chains/s" },
+  { label: "Create", detail: "batch of 100", unit: "chains/s" },
+  { label: "Complete", detail: "single", unit: "jobs/s" },
+  { label: "Complete", detail: "batch of 100", unit: "jobs/s" },
+];
+
+const summaryAdapters = [
+  "PostgreSQL (pg)",
+  "SQLite (better-sqlite3)",
+  "MySQL (mysql2)",
+  "MariaDB (mysql2)",
+  "Redis (redis)",
+  "In-process",
+];
+
+const stateRow = (groups: BenchGroup[], label: string) =>
+  groups[0].rows.find((row) => row.label === label)!;
+
+/** Each state adapter's creation and completion throughput, completion by one worker with 16 slots. */
+export const benchmarkSummary = summaryAdapters.map((label) => {
+  const creation = stateRow(creationGroups, label);
+  return {
+    label,
+    values: [
+      creation.values[0],
+      creation.values[1],
+      stateRow(completionGroups, label).values[2],
+      stateRow(batchedCompletionGroups, label).values[2],
+    ],
+  };
+});

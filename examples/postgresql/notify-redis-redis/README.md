@@ -1,4 +1,4 @@
-# Redis Notify Adapter (node-redis)
+# Redis notify adapter (node-redis)
 
 Redis pub/sub notifications via `@queuert/redis` with the node-redis client.
 

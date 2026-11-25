@@ -19,11 +19,6 @@ export const createDrizzlePgStateProvider = <TSchema extends Record<string, unkn
   prepareStatements = true,
 }: {
   db: NodePgDatabase<TSchema>;
-  /**
-   * When true (default), queries that arrive with an `id` are sent as named
-   * prepared statements via the underlying pg client (`name = id`). Set to
-   * `false` for transaction-mode poolers (PgBouncer, Supavisor).
-   */
   prepareStatements?: boolean;
 }): PgStateProvider<DrizzlePgContext<TSchema>> => {
   return {
@@ -54,8 +49,6 @@ export const createDrizzlePgStateProvider = <TSchema extends Record<string, unkn
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
     },
     executeSql: async ({ txCtx, id, sql, params }) => {
-      // Inside transaction: access Drizzle's internal pg client
-      // Outside transaction (migrations): use db.$client (the pool)
       const client = txCtx ? (txCtx.tx as any).session.client : (db as any).$client;
       if (id !== undefined && prepareStatements) {
         const result = await client.query({ name: id, text: sql, values: params });

@@ -1,4 +1,4 @@
-# Redis State Adapter (ioredis)
+# Redis state adapter (ioredis)
 
 Experimental Redis state storage via `@queuert/redis` with the ioredis client — a chain created in an optimistic transaction, with its side effect in `onTransactionCommit` because the transaction callback may run more than once.
 

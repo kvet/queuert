@@ -13,10 +13,8 @@ import {
 import { createMigrations } from "./migrations.ts";
 import { createNodeSqliteStateProvider } from "./provider.ts";
 
-// Create in-memory SQLite database
 using db = new DatabaseSync(":memory:");
 
-// Create application schema
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,23 +23,20 @@ db.exec(`
   );
 `);
 
-// Define job types
 const jobTypes = defineJobTypes<{
-  send_welcome_email: {
+  "send-welcome-email": {
     entry: true;
     input: { userId: number };
     output: { sentAt: string };
   };
 }>();
 
-// Create state provider for node:sqlite
 // #region adapter
 const stateProvider = createNodeSqliteStateProvider({ db });
 using stateAdapter = createSqliteStateAdapter({ stateProvider });
 stateAdapter.migrateToLatest();
 // #endregion
 
-// Run the application's own migrations through the same provider
 const migrator = createSqliteMigrator({
   stateProvider,
   migrations: createMigrations({ db }),
@@ -56,21 +51,19 @@ assert.deepEqual(
 
 const client = createClient({ stateAdapter, jobTypes });
 
-// Create and start worker runner
 await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
     jobTypes,
     processors: {
-      send_welcome_email: {
+      "send-welcome-email": {
         attemptHandler: async ({ job, applyJobOutcome }) => {
           const user = db
             .prepare("SELECT id, name, email FROM users WHERE id = ?")
             .get(job.input.userId) as { id: number; name: string; email: string } | undefined;
           if (!user) throw new Error(`User ${job.input.userId} not found`);
 
-          // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
           withTxHooks((txHooks) => {
@@ -95,7 +88,6 @@ await using workerRunner = createWorkerRunner({
 
 await workerRunner.start();
 
-// Register a new user and queue welcome email atomically
 // #region create-chain
 const chain = withTxHooks((txHooks) => {
   db.exec("BEGIN");
@@ -103,11 +95,10 @@ const chain = withTxHooks((txHooks) => {
     const insertStmt = db.prepare("INSERT INTO users (name, email) VALUES (?, ?) RETURNING id");
     const user = insertStmt.get("Alice", "alice@example.com") as { id: number };
 
-    // Queue welcome email - if user creation fails, no email job is created
     const result = client.createChain({
       db,
       txHooks,
-      typeName: "send_welcome_email",
+      typeName: "send-welcome-email",
       input: { userId: user.id },
     });
 
@@ -120,6 +111,5 @@ const chain = withTxHooks((txHooks) => {
 });
 // #endregion
 
-// Wait for the chain to complete
 const result = await client.awaitChain({ chain, timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);

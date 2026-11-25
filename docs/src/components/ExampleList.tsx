@@ -77,6 +77,9 @@ const FileLinks = (props: { example: Example }) => (
   </span>
 );
 
+const guideLabel = (title: string) =>
+  title.endsWith("adapter") ? `${title} →` : `${title} guide →`;
+
 const commonGuide = (items: Example[]) => {
   const guides = items.flatMap((example) => (example.guide ? [example.guide] : []));
   return guides.find(
@@ -85,16 +88,26 @@ const commonGuide = (items: Example[]) => {
   );
 };
 
-export const ExampleRows = (props: { names: string[]; title: JSX.Element }) => {
-  const items = props.names.map(findExample);
+/** `page` is the href of the page the rows sit on; guide links to it are left out. `commandsShownFor` names an example whose commands the page already shows. */
+export const ExampleRows = (props: {
+  names: string[];
+  title: JSX.Element;
+  page?: string;
+  commandsShownFor?: string;
+}) => {
+  const items = props.names
+    .map(findExample)
+    .map((example) =>
+      example.guide?.href === props.page ? { ...example, guide: undefined } : example,
+    );
   const listGuide = commonGuide(items);
   return (
     <Box
-      title={props.title}
+      title={<span class="normal-case">{props.title}</span>}
       actions={
         listGuide && (
           <a href={siteHref(listGuide.href)} class="unstyled text-accent-fg hover:underline">
-            {listGuide.title} guide →
+            {guideLabel(listGuide.title)}
           </a>
         )
       }
@@ -122,14 +135,14 @@ export const ExampleRows = (props: { names: string[]; title: JSX.Element }) => {
                     <>
                       {" "}
                       <a href={siteHref(guide().href)} class={`${linkClass} whitespace-nowrap`}>
-                        {guide().title} guide →
+                        {guideLabel(guide().title)}
                       </a>
                     </>
                   )}
                 </Show>
               </SubLine>
               <SubLine class="flex flex-col gap-1.5 pt-1">
-                <For each={exampleCommands(example)}>
+                <For each={example.name === props.commandsShownFor ? [] : exampleCommands(example)}>
                   {(command) => <Command command={command.command} label={command.label} />}
                 </For>
                 <FileLinks example={example} />

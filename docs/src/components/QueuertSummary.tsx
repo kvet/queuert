@@ -10,7 +10,7 @@ export const QueuertSummary = () => (
       <code>continueWith</code> creates the next; chains start and complete inside your database
       transactions, so the work that follows a write commits or rolls back with it. A one-job chain
       is a queue; a multi-step chain with blockers is closer to a workflow.{" "}
-      <a href={siteHref("/getting-started/introduction/")}>Introduction →</a>
+      <a href={siteHref("/learn/what-is-queuert/")}>What is Queuert →</a>
     </p>
   </Box>
 );

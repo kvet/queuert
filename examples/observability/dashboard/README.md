@@ -1,4 +1,4 @@
-# Dashboard Example
+# Dashboard example
 
 `@queuert/dashboard` embedded as a `fetch` handler with Node's built-in HTTP server. Run the populator to generate chains, jobs and workers, browse them through the web UI.
 

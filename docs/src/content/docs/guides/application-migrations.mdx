@@ -1,29 +1,50 @@
 ---
-title: Application Migrations
-description: Run your application's own schema migrations with the migrator from @queuert/postgres, @queuert/sqlite and @queuert/mysql.
+title: Application migrations
+description: Run your application's own schema migrations with the migrator from @queuert/postgres, @queuert/sqlite or @queuert/mysql.
 sidebar:
-  order: 22
+  order: 18
 ---
 
 :::caution[Experimental]
 The migrator API (`createPgMigrator`, `createSqliteMigrator`, `createMysqlMigrator`, `Migration`, `MigrationScript` and `Migrator`, including their `"sync"` mode such as `Migrator<"sync">`) is experimental: it may change in a minor release.
 :::
 
-## Overview
+import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/diagram";
 
 `@queuert/postgres`, `@queuert/sqlite` and `@queuert/mysql` export the migrator they run Queuert's own schema with, so your application can run its migrations the same way. It is built for migrating on boot from many processes at once: one process migrates while the others wait, then find nothing left to do. Migrations run in the order of their list, can be reverted, and are functions that use your own query builder.
 
-## Create a Migrator
+<Diagram label="The migrator takes the lease, runs transactional migrations inside a transaction and non-transactional ones outside, then releases the lease">
+  <Flow>
+    <Node>migrator</Node>
+    <Arrow label="takes" />
+    <Node sub="migration_lock">lease</Node>
+    <Arrow />
+    <Group title="pending migrations, in order">
+      <Rows>
+        <Flow>
+          <Node sub="up + history record">transactional</Node>
+          <Arrow label="one transaction" />
+        </Flow>
+        <Flow>
+          <Node sub="record after it resolves">non-transactional</Node>
+          <Arrow label="no transaction" />
+        </Flow>
+      </Rows>
+    </Group>
+  </Flow>
+</Diagram>
+
+## Create a migrator
 
 The migrator runs through the same state provider you pass to the [PostgreSQL state adapter](/queuert/integrations/state-adapters/postgres/), here the postgres.js one:
 
 <ExampleCode example="postgresql/state-postgres-js" file="src/index.ts" region="create-migrator" />
 
-`lock` sets the timing of the lease described in [Several Processes](#several-processes), and `after` is a script that runs once the migrations have run, described in [Before and After](#before-and-after); both are optional. `migrator.migrateToLatest()` applies the pending migrations and resolves with what it `applied`, what it `skipped` and the `unrecognized` names described in [Order](#order).
+`lock` sets the timing of the lease described in [Several processes](#several-processes), and `after` is a script that runs once the migrations have run, described in [Before and After](#before-and-after); both are optional. `migrator.migrateToLatest()` applies the pending migrations and resolves with what it `applied`, what it `skipped` and the `unrecognized` names described in [Order](#order).
 
 It creates its tables on the first run, if they are missing: `migration` for the history and `migration_lock` for the lease, in the `public` schema. `schema` (created if missing), `migrationTableName` and `lockTableName` rename them. With SQLite, `createSqliteMigrator` takes the same options without `schema`. With MySQL or MariaDB, `createMysqlMigrator` puts them in the connection's database, and `schema` names another database, which must exist.
 
-## Define Migrations
+## Define migrations
 
 Every migration has a unique `name`, an `up` and a `down`. `Migration` takes the provider's transaction context type, `PostgresJsContext` for postgres.js. This list, from the postgres.js state example, creates an `invoices` table, indexes it without locking writes, backfills its `status` in batches and numbers every invoice:
 
@@ -47,7 +68,7 @@ Migrations run in the order of the list, and names only need to be unique. Appen
 
 `migrateToLatest` reports applied migrations the code doesn't know in `unrecognized` and keeps going, so an older release still boots against a database a newer release migrated.
 
-## Several Processes
+## Several processes
 
 Every run first claims a lease row in the lock table. One process migrates and extends the lease while it works; the others poll until it is released and then skip what it applied. A process that dies leaves the lease to expire, and the next process takes over. Two migrators over one database stand in for two processes booting at once; one resolves with every migration `applied`, the other with them all `skipped`:
 
@@ -59,7 +80,7 @@ The `lock` passed to both migrators sets the lease timing, with `heartbeatInterv
 
 With SQLite, claiming and extending the lease write to the database, so they wait for SQLite's write lock while another process runs a migration transaction. Set the driver's busy timeout longer than your longest migration transaction; otherwise a waiting process fails with `SQLITE_BUSY` instead of waiting its turn.
 
-## Synchronous SQLite Drivers
+## Synchronous SQLite drivers
 
 With a [synchronous provider](/queuert/integrations/state-adapters/sqlite/#synchronous-providers) (better-sqlite3, node:sqlite, bun:sqlite), `createSqliteMigrator` returns a `Migrator<"sync">`. It takes the same options except `lock`, and its migrations, `before` and `after` are synchronous: `up` and `down` return nothing, and `migrateToLatest` and `migrateTo` return their result directly. It takes no lease. Each transactional migration still writes to the lock table first, so processes migrating at once apply it once, but a non-transactional migration can run in two of them; migrate from one process when you have those.
 
@@ -71,7 +92,7 @@ With a [synchronous provider](/queuert/integrations/state-adapters/sqlite/#synch
 
 Before reverting anything, it refuses if the database has applied migrations the code doesn't know. A migration that cannot be reverted throws from its `down`: the revert stops there, and that migration stays recorded. A `transactional` revert removes the record in the same transaction as its `down`; a `non-transactional` one removes it after its `down`, which must then be safe to run again.
 
-## Before and After
+## Before and after
 
 `before` and `after` run under the lease: `before` on every run, after the migrator has created its tables and before the history is read, and `after` once the migrations have run, unless one failed. They record nothing, and are a `MigrationScript`, taking the same `{ assertLockHeld }` argument as a `non-transactional` migration. The `after` passed to the migrators above logs every run in a table of its own, including a run with nothing to do; the lease keeps the other process out while it creates the table:
 
@@ -79,7 +100,7 @@ Before reverting anything, it refuses if the database has applied migrations the
 
 A `before` is passed to `createPgMigrator` the same way.
 
-## An Existing History Table
+## An existing history table
 
 To take over from another migration tool, copy the names it recorded into the migrator's history in `before`, which runs after the migrator has created its tables and before it reads the history. For Kysely's `kysely_migration` table:
 
@@ -97,7 +118,7 @@ const migrator = createPgMigrator({
 
 The copied migrations count as applied when their names match, and the copy is a no-op on later runs. Keep the previous tool's migrator from running once the migrator has taken over: the two don't share a lock.
 
-## Testing a Provider
+## Testing a provider
 
 `@queuert/postgres/conformance` exports `createPgMigratorConformanceCases`, and `@queuert/sqlite/conformance` and `@queuert/mysql/conformance` the SQLite and MySQL equivalents. It returns the cases, ready to run, that check the migrator over your state provider: history, transactional and non-transactional migrations, reverts and the lease. Over a synchronous SQLite provider, the cases from `createSqliteMigratorConformanceCases` run synchronously, and the lease cases pass without running. Register one test per case with any test runner:
 

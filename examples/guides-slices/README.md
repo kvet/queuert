@@ -1,4 +1,4 @@
-# Feature Slices Guide
+# Feature slices guide
 
 The runnable code behind the [Feature Slices](https://kvet.github.io/queuert/guides/slices/) guide. Each feature slice owns a definitions file and a processors file, and `src/client.ts` and `src/index.ts` merge the slices into one client and one worker. State lives in the in-process state adapter, so it runs with no database.
 

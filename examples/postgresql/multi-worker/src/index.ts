@@ -9,35 +9,6 @@ import { createPostgresJsStateProvider } from "example-postgresql-state-postgres
 import postgres from "postgres";
 import { createClient, defineJobTypes, withTxHooks } from "queuert";
 
-// ============================================================================
-// Multi-Worker Order Processing Example (with Child Processes)
-// ============================================================================
-//
-// This example demonstrates multiple worker processes sharing the same PostgreSQL
-// database, competing for jobs via database-level locking.
-//
-// Architecture:
-//
-//   ┌──────────────────────────────────────────────────────────────────┐
-//   │                       PostgreSQL Database                        │
-//   │  ┌─────────────────────────────────────────────────────────────┐ │
-//   │  │                    Job Queue Table                          │ │
-//   │  │  (workers use FOR UPDATE SKIP LOCKED for job acquisition)  │ │
-//   │  └─────────────────────────────────────────────────────────────┘ │
-//   │  ┌─────────────────────────────────────────────────────────────┐ │
-//   │  │                 LISTEN/NOTIFY Channels                      │ │
-//   │  │     (real-time notifications when new jobs are queued)      │ │
-//   │  └─────────────────────────────────────────────────────────────┘ │
-//   └──────────────────────────────────────────────────────────────────┘
-//                │                  │                  │
-//                ▼                  ▼                  ▼
-//         ┌──────────┐       ┌──────────┐       ┌──────────┐
-//         │ Process 1│       │ Process 2│       │ Process 3│
-//         │ (alpha)  │       │  (beta)  │       │ (gamma)  │
-//         └──────────┘       └──────────┘       └──────────┘
-//
-// ============================================================================
-
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const WORKER_COUNT = 3;
@@ -132,8 +103,6 @@ const orders = Array.from({ length: JOBS_TO_PROCESS }, (_, i) => {
   };
 });
 
-// Orders and their jobs are created in one transaction — workers only ever see
-// orders that were committed
 const chains = await withTxHooks(async (txHooks) =>
   sql.begin(async (txSql) => {
     for (const order of orders) {

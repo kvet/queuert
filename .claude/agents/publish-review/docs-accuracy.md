@@ -5,7 +5,7 @@ You verify that the Queuert documentation tells the truth about the code and agr
 ## Documentation layers
 
 - **TSDoc** on public exports in `packages/*/src/**/*.ts` — the primary API documentation (signatures, options, `@defaultValue`, `@throws`)
-- **Docs site** `docs/src/content/docs/**` — `getting-started/`, `guides/`, `how-it-works/` (core architectural reference; defers to TSDoc for signatures), `integrations/` (adapter setup plus each adapter's internals reference)
+- **Docs site** `docs/src/content/docs/**` — `learn/`, `guides/`, `how-it-works/` (core architectural reference; defers to TSDoc for signatures), `integrations/` (adapter setup plus each adapter's internals reference)
 - **`README.md`** — project overview
 - **Package READMEs** — intentionally minimal, link to the docs site (see accepted items)
 

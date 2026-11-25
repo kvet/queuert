@@ -9,7 +9,7 @@ console.log("Starting Redis...");
 await using redisContainer = await acquireRedis("redis:8");
 
 const jobTypes = defineJobTypes<{
-  send_welcome_email: {
+  "send-welcome-email": {
     entry: true;
     input: { email: string };
     output: { sentAt: string };
@@ -31,6 +31,7 @@ await using stateAdapter = createRedisStateAdapter({
 await stateAdapter.migrateToLatest();
 // #endregion
 
+// #region process
 const client = createClient({ stateAdapter, jobTypes });
 
 await using workerRunner = createWorkerRunner({
@@ -39,7 +40,7 @@ await using workerRunner = createWorkerRunner({
     client,
     jobTypes,
     processors: {
-      send_welcome_email: {
+      "send-welcome-email": {
         attemptHandler: async ({ job, applyJobOutcome }) => {
           console.log(`Sending welcome email to ${job.input.email}`);
           await stateAdapter.withTransaction(async (txCtx) =>
@@ -52,12 +53,13 @@ await using workerRunner = createWorkerRunner({
 });
 
 await workerRunner.start();
+// #endregion
 
 // #region transaction
 const chain = await stateAdapter.withTransaction(async (txCtx) => {
   const created = await client.createChain({
     ...txCtx,
-    typeName: "send_welcome_email",
+    typeName: "send-welcome-email",
     input: { email: "alice@example.com" },
   });
   stateAdapter.onTransactionCommit(txCtx, () => {

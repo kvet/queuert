@@ -14,10 +14,8 @@ import {
 import { type Invoice, createMigrations } from "./migrations.ts";
 import { createKnexPgStateProvider } from "./provider.ts";
 
-// Start PostgreSQL using testcontainers
 await using pg = await acquirePostgres("postgres:18", import.meta.url);
 
-// Create database connection
 await using drivers = new AsyncDisposableStack();
 const knex = drivers.adopt(
   knexFactory({
@@ -28,7 +26,6 @@ const knex = drivers.adopt(
   async (knex) => knex.destroy(),
 );
 
-// Create application schema
 await knex.raw(`
   CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
@@ -37,16 +34,14 @@ await knex.raw(`
   );
 `);
 
-// Define job types
 const jobTypes = defineJobTypes<{
-  send_welcome_email: {
+  "send-welcome-email": {
     entry: true;
     input: { userId: number };
     output: { sentAt: string };
   };
 }>();
 
-// Create state provider for Knex
 // #region adapter
 const stateProvider = createKnexPgStateProvider({ knex });
 await using stateAdapter = createPgStateAdapter({
@@ -67,21 +62,19 @@ assert.deepEqual(
 
 const client = createClient({ stateAdapter, jobTypes });
 
-// Create worker runner with job type processors
 await using workerRunner = createWorkerRunner({
   client,
   processors: createProcessors({
     client,
     jobTypes,
     processors: {
-      send_welcome_email: {
+      "send-welcome-email": {
         attemptHandler: async ({ job, applyJobOutcome }) => {
           const user = await knex<{ id: number; name: string; email: string }>("users")
             .where({ id: job.input.userId })
             .first();
           if (!user) throw new Error(`User ${job.input.userId} not found`);
 
-          // Simulate sending email (in real app, call email service here)
           console.log(`Sending welcome email to ${user.email} for ${user.name}`);
 
           await withTxHooks(async (txHooks) =>
@@ -99,7 +92,6 @@ await using workerRunner = createWorkerRunner({
 
 await workerRunner.start();
 
-// Register a new user and queue welcome email atomically
 const chain = await withTxHooks(async (txHooks) =>
   knex.transaction(
     async (trx) => {
@@ -107,11 +99,10 @@ const chain = await withTxHooks(async (txHooks) =>
         .insert({ name: "Alice", email: "alice@example.com" })
         .returning(["id"]);
 
-      // Queue welcome email - if user creation fails, no email job is created
       return client.createChain({
         trx,
         txHooks,
-        typeName: "send_welcome_email",
+        typeName: "send-welcome-email",
         input: { userId: user.id },
       });
     },
@@ -119,6 +110,5 @@ const chain = await withTxHooks(async (txHooks) =>
   ),
 );
 
-// Wait for the chain to complete
 const result = await client.awaitChain({ chain, timeoutMs: 5000 });
 console.log(`Welcome email sent at: ${result.output.sentAt}`);

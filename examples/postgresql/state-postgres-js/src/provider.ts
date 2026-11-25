@@ -22,13 +22,6 @@ export const createPostgresJsStateProvider = ({
   prepareStatements = true,
 }: {
   sql: postgres.Sql;
-  /**
-   * When true (default), queries that arrive with an `id` are sent with
-   * `{ prepare: true }` so postgres.js caches the parsed plan per connection.
-   * Set to `false` for transaction-mode connection poolers (PgBouncer < 1.21,
-   * Supavisor without per-client tracking) where server-side prepared statements
-   * break across pooled sessions.
-   */
   prepareStatements?: boolean;
 }): PgStateProvider<PostgresJsContext> => {
   const typed = sql.typed.bind(sql);

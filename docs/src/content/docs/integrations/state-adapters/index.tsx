@@ -3,7 +3,7 @@ import { type OptionCard, OptionCards } from "../../../../components/integration
 import { siteHref } from "../../../../docs/href.ts";
 
 export const meta = {
-  title: "State Adapters",
+  title: "State adapters",
   description:
     "Where Queuert keeps chains, jobs and workers, and the StateAdapter interface every backend implements.",
 };
@@ -245,6 +245,34 @@ const Page = () => (
         <code>startJobAttempts</code> sets anew on every claim.
       </li>
     </ul>
+
+    <h2 id="write-fence">Write fence</h2>
+    <p>
+      Every insert, update or delete of a job, a blocker or a worker is fenced by the adapter's
+      schema version. A breaking migration, such as <code>002_schema_v2</code>, removes the fence of
+      older versions, so code older than the schema fails each write with{" "}
+      <code>SchemaFencedError</code> and changes nothing, instead of corrupting state. Reads still
+      work, and older workers report the error through <code>workerError</code> and keep retrying.
+      Stop them once you have deployed the newer version. What the fence is differs by backend: see
+      the Write fence section of each adapter's page.
+    </p>
+
+    <h2 id="testing-your-provider">Testing your provider</h2>
+    <p>
+      Each database-backed adapter package exports a <code>/conformance</code> entry, such as{" "}
+      <code>@queuert/postgres/conformance</code>, that checks a provider you write: a function
+      returns the cases, ready to run, which cover every case a state adapter must pass, the
+      backend's concurrency cases and checks of the schema write fence. It takes a{" "}
+      <code>createStateProvider</code> factory and a <code>withNonTransactionContext</code> that
+      runs a callback with a context outside any transaction, and migrates the schema once, before
+      the first case. An optional <code>withSavepoint</code> runs a callback in a savepoint of a
+      transaction, opened the way your application opens one, and passes it the savepoint's context;
+      when you give it, the cases check that <code>onTransactionCommit</code> and{" "}
+      <code>onTransactionRollback</code> follow savepoints. Each case then builds its own adapter
+      over a new provider from your factory, with the tables cleared, and closes both when it ends.
+      The suite drives no test runner: your test file owns the database in its own hooks and
+      registers one test per case, as each example does. A backend's page lists what its cases add.
+    </p>
 
     <h2>Transaction context</h2>
     <p>
