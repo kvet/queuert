@@ -392,9 +392,9 @@ const Page = () => (
           SERIALIZABLE, set as the session default or per transaction, and transactions at different
           levels can work on the same jobs at once. Whenever one transaction acts on what another
           may be changing, both write or lock the same row, and every read that decides such a write
-          is a locking read, which sees the latest committed row at any level: attaching a dependent
-          and completing its blocker both lock the blocker's head job, and deleting a chain
-          share-locks the blocker rows that reference it.
+          is a locking read, which sees the latest committed row at any level: attaching a
+          dependent, completing its blocker and deleting the blocker all lock the blocker's head
+          job.
         </p>
         <ul>
           <li>

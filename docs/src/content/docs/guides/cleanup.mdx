@@ -38,7 +38,7 @@ Key patterns used:
 - **Retention cutoff** — `CLEANUP_RETENTION_MS` controls how long completed chains are kept before deletion
 - **Per-type iteration** — iterates over all chain type names so each type's completed chains are cleaned up independently
 - **Status-filtered listing** — `status: "completed"` with `orderBy: "completedAt"` pushes filtering to the database and orders by completion time, so the oldest-completed chains are deleted first
-- **Non-blocking chains only** — `blocking: false` skips chains that a job in another chain still references as a blocker, which [`deleteChains` rejects](../chain-deletion/#blocker-safety)
+- **Non-blocking chains only** — `blocking: false` skips chains that a job still references as a blocker, which [`deleteChains` rejects](../chain-deletion/#blocker-safety)
 - **Cursor pagination** — processes chains in bounded batches using `listChains` cursor, preventing unbounded memory usage
 - **Stabilization loop** — repeats the full pass until a round deletes zero chains, so chains that stop blocking after their dependents are removed get cleaned up in subsequent rounds
 - **Batched transactions** — each batch of deletions runs in its own short transaction, so the handler never holds a single long-lived transaction

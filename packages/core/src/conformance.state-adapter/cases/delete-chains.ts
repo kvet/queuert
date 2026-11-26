@@ -6,7 +6,6 @@ import { dynamicSyncAsync, syncAsync, resource, step } from "@queuert/sync-async
 
 import { runInModeOf } from "../../conformance/adapters.ts";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
-import type { StateBlockedJob, StateChain } from "../../state-adapter/state-adapter.ts";
 import type { StateAdapterConformanceContext } from "../types.ts";
 
 const LOCK_BLOCK_OBSERVATION_MS = 100;
@@ -39,7 +38,7 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
           ),
         );
 
-        const deletedChain = deleted as StateChain;
+        const deletedChain = deleted!;
         assert.equal(deletedChain.id, stateChain.id);
         assert.equal(deletedChain.head.id, stateChain.head.id);
         assert.equal(deletedChain.tail, undefined);
@@ -125,7 +124,7 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
           ),
         );
 
-        const deletedChain = deleted as StateChain;
+        const deletedChain = deleted!;
         assert.equal(deletedChain.id, stateChain.id);
         assert.equal(deletedChain.head.id, stateChain.id);
         assert.equal(deletedChain.tail?.id, continuationId);
@@ -173,7 +172,7 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
             stateAdapter.deleteChains({ txCtx, chainIds: [mainChain.id] }),
           ),
         );
-        assert.equal((deletedMain as StateChain).id, mainChain.id);
+        assert.equal(deletedMain!.id, mainChain.id);
 
         const blockedJobs = yield* step(
           stateAdapter.listBlockedJobs({
@@ -197,11 +196,11 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
             stateAdapter.deleteChains({ txCtx, chainIds: [blockerChain.id] }),
           ),
         );
-        assert.equal((deletedBlocker as StateChain).id, blockerChain.id);
+        assert.equal(deletedBlocker!.id, blockerChain.id);
       }),
     },
     {
-      name: "deletes nothing and returns the referencing blocker rows when a chain is an outside blocker",
+      name: "deletes a blocker chain together with the chain that waits on it",
       run: dynamicSyncAsync(function* ({ createStateAdapter }) {
         const stateAdapter = yield* resource(createStateAdapter());
 
@@ -234,23 +233,6 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
           ),
         );
 
-        const [blockerResult] = yield* step(
-          stateAdapter.withTransaction((txCtx) =>
-            stateAdapter.deleteChains({ txCtx, chainIds: [blockerChain.head.chainId] }),
-          ),
-        );
-        assert.equal(Array.isArray(blockerResult), true);
-        const references = blockerResult as StateBlockedJob[];
-        assert.equal(references.length, 1);
-        assert.equal(references[0].jobId, mainChain.head.id);
-        assert.equal(references[0].blockedByChainId, blockerChain.id);
-        assert.equal(references[0].job.id, mainChain.head.id);
-
-        const [blockerStillThere] = yield* step(
-          stateAdapter.getJobs({ jobIds: [blockerChain.head.id] }),
-        );
-        assert.equal(blockerStillThere?.id, blockerChain.head.id);
-
         const results = yield* step(
           stateAdapter.withTransaction((txCtx) =>
             stateAdapter.deleteChains({
@@ -261,8 +243,8 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
         );
 
         assert.equal(results.length, 2);
-        assert.equal((results[0] as StateChain).id, mainChain.id);
-        assert.equal((results[1] as StateChain).id, blockerChain.id);
+        assert.equal(results[0]!.id, mainChain.id);
+        assert.equal(results[1]!.id, blockerChain.id);
       }),
     },
     {
@@ -323,7 +305,7 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
                       }),
                     );
                     assert.deepEqual(
-                      results.map((result) => (result as StateChain).id),
+                      results.map((result) => result!.id),
                       [stateChain.id, stateChain.id],
                     );
                     throw new Error("rollback after deleting a repeated id");
@@ -382,70 +364,12 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
           ),
         );
         assert.deepEqual(
-          results.map((result) => (result as StateChain).id),
+          results.map((result) => result!.id),
           [stateChain.id, stateChain.id],
         );
         assert.deepEqual(
           yield* step(stateAdapter.getJobs({ jobIds: [stateChain.id, continuationId] })),
           [undefined, undefined],
-        );
-      }),
-    },
-    {
-      name: "reports undefined for a chain batched with an outside-referenced one and deletes neither",
-      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
-        const stateAdapter = yield* resource(createStateAdapter());
-
-        const [blockerChain, mainChain, freeChain] = yield* step(
-          stateAdapter.withTransaction((txCtx) =>
-            stateAdapter.createJobs({
-              txCtx,
-              jobs: [
-                {
-                  id: stateAdapter.config.generateJobId(),
-                  typeName: "mixed-delete-blocker",
-                  input: null,
-                },
-                {
-                  id: stateAdapter.config.generateJobId(),
-                  typeName: "mixed-delete-main",
-                  input: null,
-                },
-                {
-                  id: stateAdapter.config.generateJobId(),
-                  typeName: "mixed-delete-free",
-                  input: null,
-                },
-              ],
-            }),
-          ),
-        );
-        yield* step(
-          stateAdapter.withTransaction((txCtx) =>
-            stateAdapter.addJobsBlockers({
-              txCtx,
-              jobBlockers: [{ jobId: mainChain.id, blockedByChainIds: [blockerChain.id] }],
-            }),
-          ),
-        );
-
-        const [blockerResult, freeResult] = yield* step(
-          stateAdapter.withTransaction((txCtx) =>
-            stateAdapter.deleteChains({ txCtx, chainIds: [blockerChain.id, freeChain.id] }),
-          ),
-        );
-
-        assert.deepEqual(
-          (blockerResult as StateBlockedJob[]).map((reference) => reference.jobId),
-          [mainChain.id],
-        );
-        assert.equal(freeResult, undefined);
-        const chains = yield* step(
-          stateAdapter.getChains({ chainIds: [blockerChain.id, freeChain.id] }),
-        );
-        assert.deepEqual(
-          chains.map((chain) => chain?.id),
-          [blockerChain.id, freeChain.id],
         );
       }),
     },
@@ -476,7 +400,7 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
           ),
         );
 
-        assert.equal((deleted as StateChain).id, stateChain.id);
+        assert.equal(deleted!.id, stateChain.id);
         assert.equal(missing, undefined);
         assert.deepEqual(yield* step(stateAdapter.getJobs({ jobIds: [stateChain.id] })), [
           undefined,
@@ -786,8 +710,8 @@ export const deleteChainsGroup: ConformanceGroup<StateAdapterConformanceContext>
             stateAdapter.deleteChains({ txCtx, chainIds: [blockerChain.id, dependentChain.id] }),
           ),
         );
-        assert.equal((deletedBlocker as StateChain).blocking, false);
-        assert.equal((deletedDependent as StateChain).blocking, false);
+        assert.equal(deletedBlocker!.blocking, false);
+        assert.equal(deletedDependent!.blocking, false);
       }),
     },
   ],
@@ -975,48 +899,6 @@ export const deleteChainsConcurrentTransactionsGroup: ConformanceGroup<StateAdap
         },
       },
       {
-        name: "concurrent deletes of chains that block each other across the calls do not deadlock",
-        run: async ({ createStateAdapter }) => {
-          await using stateAdapter = await createStateAdapter();
-
-          await Promise.all(
-            Array.from({ length: 10 }, async () => {
-              const [rootChain, middleChain, leafChain] = await stateAdapter.withTransaction(
-                (txCtx) =>
-                  stateAdapter.createJobs({
-                    txCtx,
-                    jobs: ["root", "middle", "leaf"].map((typeName) => ({
-                      id: stateAdapter.config.generateJobId(),
-                      typeName,
-                      input: null,
-                    })),
-                  }),
-              );
-              await stateAdapter.withTransaction((txCtx) =>
-                stateAdapter.addJobsBlockers({
-                  txCtx,
-                  jobBlockers: [
-                    { jobId: middleChain.head.id, blockedByChainIds: [rootChain.id] },
-                    { jobId: leafChain.head.id, blockedByChainIds: [middleChain.id] },
-                  ],
-                }),
-              );
-
-              const [leafAndRoot, middle] = await Promise.all([
-                stateAdapter.withTransaction((txCtx) =>
-                  stateAdapter.deleteChains({ txCtx, chainIds: [leafChain.id, rootChain.id] }),
-                ),
-                stateAdapter.withTransaction((txCtx) =>
-                  stateAdapter.deleteChains({ txCtx, chainIds: [middleChain.id] }),
-                ),
-              ]);
-              assert.equal(Array.isArray(leafAndRoot[1]), true);
-              assert.equal(Array.isArray(middle[0]), true);
-            }),
-          );
-        },
-      },
-      {
         name: "concurrent deletes and completions across a blocker graph neither deadlock nor leave blocking stale",
         run: async ({ createStateAdapter }) => {
           await using stateAdapter = await createStateAdapter();
@@ -1099,20 +981,27 @@ export const deleteChainsConcurrentTransactionsLockWaitGroup: ConformanceGroup<S
     name: "deleteChains",
     cases: [
       {
-        name: "sees a blocker reference committed while it waited on the head lock",
+        name: "keeps blocking on a blocker chain whose new reference committed while it waited on the blocker's head",
         run: async ({ createStateAdapter }) => {
           await using stateAdapter = await createStateAdapter();
 
-          const [blockerChain] = await stateAdapter.withTransaction((txCtx) =>
+          const [blockerChain, dependentChain] = await stateAdapter.withTransaction((txCtx) =>
             stateAdapter.createJobs({
               txCtx,
               jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "late-blocker", input: null },
                 {
                   id: stateAdapter.config.generateJobId(),
-                  typeName: "late-reference-blocker",
+                  typeName: "late-dependent",
                   input: null,
                 },
               ],
+            }),
+          );
+          await stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [{ jobId: dependentChain.id, blockedByChainIds: [blockerChain.id] }],
             }),
           );
 
@@ -1121,23 +1010,23 @@ export const deleteChainsConcurrentTransactionsLockWaitGroup: ConformanceGroup<S
           const { promise: adderGate, resolve: releaseAdder } = Promise.withResolvers<void>();
 
           const adderTx = stateAdapter.withTransaction(async (txCtx) => {
-            const [blockedChain] = await stateAdapter.createJobs({
+            const [lateChain] = await stateAdapter.createJobs({
               txCtx,
               jobs: [
                 {
                   id: stateAdapter.config.generateJobId(),
-                  typeName: "late-reference-blocked",
+                  typeName: "late-dependent",
                   input: null,
                 },
               ],
             });
             await stateAdapter.addJobsBlockers({
               txCtx,
-              jobBlockers: [{ jobId: blockedChain.head.id, blockedByChainIds: [blockerChain.id] }],
+              jobBlockers: [{ jobId: lateChain.head.id, blockedByChainIds: [blockerChain.id] }],
             });
             signalBlockerAdded();
             await adderGate;
-            return blockedChain;
+            return lateChain;
           });
 
           await blockerAdded;
@@ -1145,7 +1034,7 @@ export const deleteChainsConcurrentTransactionsLockWaitGroup: ConformanceGroup<S
           let deleteSettled = false;
           const deleteTx = Promise.resolve(
             stateAdapter.withTransaction((txCtx) =>
-              stateAdapter.deleteChains({ txCtx, chainIds: [blockerChain.id] }),
+              stateAdapter.deleteChains({ txCtx, chainIds: [dependentChain.id] }),
             ),
           ).finally(() => {
             deleteSettled = true;
@@ -1157,21 +1046,26 @@ export const deleteChainsConcurrentTransactionsLockWaitGroup: ConformanceGroup<S
           } finally {
             releaseAdder();
           }
-          const blockedChain = await adderTx;
+          const lateChain = await adderTx;
 
-          const [result] = await deleteTx;
-          assert.equal(Array.isArray(result), true);
+          const [deleted] = await deleteTx;
+          assert.equal(deleted?.id, dependentChain.id);
+
+          const [blockerRead] = await stateAdapter.getChains({ chainIds: [blockerChain.id] });
+          assert.equal(blockerRead!.blocking, true);
+          const blockedJobs = await stateAdapter.listBlockedJobs({
+            chainId: blockerChain.id,
+            orderDirection: "asc",
+            page: { limit: 10 },
+          });
           assert.deepEqual(
-            (result as StateBlockedJob[]).map((ref) => ref.jobId),
-            [blockedChain.head.id],
+            blockedJobs.items.map((job) => job.id),
+            [lateChain.id],
           );
-
-          const [blockerStillThere] = await stateAdapter.getChains({ chainIds: [blockerChain.id] });
-          assert.equal(blockerStillThere?.id, blockerChain.id);
         },
       },
       {
-        name: "deletes a continuation committed while it waited on the head lock",
+        name: "deletes a continuation committed while the caller waited on the chain lock",
         run: async ({ createStateAdapter }) => {
           await using stateAdapter = await createStateAdapter();
 
@@ -1214,9 +1108,14 @@ export const deleteChainsConcurrentTransactionsLockWaitGroup: ConformanceGroup<S
 
           let deleteSettled = false;
           const deleteTx = Promise.resolve(
-            stateAdapter.withTransaction((txCtx) =>
-              stateAdapter.deleteChains({ txCtx, chainIds: [stateChain.id] }),
-            ),
+            stateAdapter.withTransaction(async (txCtx) => {
+              await stateAdapter.getChainTails({
+                txCtx,
+                chainIds: [stateChain.id],
+                lock: "exclusive",
+              });
+              return stateAdapter.deleteChains({ txCtx, chainIds: [stateChain.id] });
+            }),
           ).finally(() => {
             deleteSettled = true;
           });
@@ -1230,7 +1129,7 @@ export const deleteChainsConcurrentTransactionsLockWaitGroup: ConformanceGroup<S
           const continuation = await continuerTx;
 
           const [deleted] = await deleteTx;
-          assert.equal((deleted as StateChain).tail?.id, continuation.id);
+          assert.equal(deleted?.tail?.id, continuation.id);
           assert.deepEqual(
             await stateAdapter.getJobs({ jobIds: [stateChain.head.id, continuation.id] }),
             [undefined, undefined],

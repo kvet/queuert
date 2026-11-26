@@ -102,6 +102,13 @@ export const WarningIcon = (props: IconProps) => (
   </Icon>
 );
 
+export const ClockIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <circle cx="8" cy="8" r="6" />
+    <path d="M8 4.5V8l2.5 1.5" />
+  </Icon>
+);
+
 export const ArrowLeftIcon = (props: IconProps) => (
   <Icon {...props}>
     <path d="M13 8H3M7 4 3 8l4 4" />

@@ -7,8 +7,7 @@ import { Details } from "../../../components/mdx/Details.tsx";
 import { StackFilter } from "../../../components/StackFilter.tsx";
 import {
   batchedCompletionGroups,
-  benchmarkContainers,
-  benchmarkMachine,
+  benchmarkEnvironment,
   benchmarkServers,
   benchmarkSourceUrl,
   completionGroups,
@@ -23,8 +22,7 @@ export const meta = {
 };
 
 const setup = [
-  ...benchmarkMachine,
-  benchmarkContainers,
+  ...benchmarkEnvironment("processing-capacity"),
   benchmarkServers,
   {
     label: "Window",

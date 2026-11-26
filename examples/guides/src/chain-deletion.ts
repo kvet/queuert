@@ -110,10 +110,12 @@ await assert.rejects(deleteBlockerOnly, BlockerReferenceError);
 // #region co-delete
 const deletedWithBlockers = await stateAdapter.withTransaction(async (txCtx) => {
   const blockerChains = await client.getJobBlockers({ ...txCtx, jobId: reportChain.id });
-  return client.deleteChains({
+  const deletedReports = await client.deleteChains({ ...txCtx, ids: [reportChain.id] });
+  const deletedBlockers = await client.deleteChains({
     ...txCtx,
-    ids: [reportChain.id, ...blockerChains.map((blocker) => blocker.id)],
+    ids: blockerChains.map((blocker) => blocker.id),
   });
+  return [...deletedReports, ...deletedBlockers];
 });
 // #endregion
 

@@ -171,6 +171,11 @@ type TransactionTxContextParam<TTxContext extends BaseTxContext> = { txCtx: TTxC
  * reported as `undefined` in the result position it belongs to, and the caller decides which
  * error the user sees. Adapters still throw for driver errors and connection loss.
  *
+ * A chain's head row is its lock. An adapter whose methods wait on row locks takes them in one
+ * order: chain heads before any other job row, and each set in ascending id order within one
+ * statement, so that two calls that lock the same chains wait on each other instead of
+ * deadlocking.
+ *
  * @typeParam TTxContext - The transaction context type
  * @typeParam TJobId - The job ID type
  * @typeParam TWorkerId - The worker ID type
@@ -240,7 +245,10 @@ export type StateAdapter<
     ),
   ) => ModeResult<TMode, (StateJob | undefined)[]>;
 
-  /** Gets jobs with their chains by ID in input order; `lock` also locks each chain head. */
+  /**
+   * Gets jobs with their chains by ID in input order; `lock: "exclusive"` locks each job's chain
+   * head and then each job.
+   */
   getJobs: (
     params: { jobIds: TJobId[] } & (
       | ({ lock?: "exclusive" } & TransactionTxContextParam<TTxContext>)
@@ -322,13 +330,18 @@ export type StateAdapter<
   ) => ModeResult<TMode, (StateJob | undefined)[]>;
 
   /**
-   * Deletes chains, or none if one blocks an outside job: its slot then lists those jobs. Deleted
-   * chains are returned with `blocking` `false`, and each remaining chain the deleted blocker rows were
-   * the last to reference gets `blocking` `false`.
+   * Deletes chains with all their jobs and those jobs' blocker rows, and returns the deleted chains
+   * in input order with `blocking` `false`, `undefined` for an id that names no chain head. Locks
+   * the head of each other chain the deleted jobs wait on before it writes, and sets `blocking`
+   * `false` on each one the deleted blocker rows were the last to reference.
+   *
+   * The caller holds the chains' locks, taken with `getChainTails` and `lock: "exclusive"`, and
+   * checked that no job outside `chainIds` waits on the chains; a blocker row of such a job is left
+   * in place.
    */
   deleteChains: (
     params: { chainIds: TJobId[] } & TransactionTxContextParam<TTxContext>,
-  ) => ModeResult<TMode, (StateChain | StateBlockedJob[] | undefined)[]>;
+  ) => ModeResult<TMode, (StateChain | undefined)[]>;
 
   /**
    * Claims due jobs of the types in `batchLimits` in up to `limit` batches, each job with a new

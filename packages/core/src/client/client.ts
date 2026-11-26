@@ -16,7 +16,6 @@ import type { JobRef } from "../entities/job.types.ts";
 import type { OrderDirection, Page } from "../entities/pagination.ts";
 import { type Worker, mapStateWorkerToWorker } from "../entities/worker.ts";
 import {
-  BlockerReferenceError,
   ChainsNotFoundError,
   JobsAlreadyCompletedError,
   JobsStatusMismatchError,
@@ -66,6 +65,7 @@ import {
   parseJobOutcome,
   runApplyJobOutcomes,
   runCreateChains,
+  runDeleteChains,
 } from "./implementation.ts";
 import { type Helpers, createHelpers, runInMode } from "./setup-helpers.ts";
 
@@ -292,9 +292,10 @@ export type Client<
    * Delete a single chain by ID. Returns the deleted chain, or `undefined` if no chain with that ID
    * exists. The `applyJobOutcome` of a running job's attempt handler throws
    * {@link JobNotFoundError}, and its attempt is notified as lost, so with a notify adapter its
-   * `job.signal` aborts.
+   * `job.signal` aborts. Locks the chain's head job and current tail first, as `getChainTailJob` with
+   * `lock: "exclusive"` does.
    *
-   * @throws {@link BlockerReferenceError} if external jobs depend on it.
+   * @throws {@link BlockerReferenceError} if jobs wait on the chain as a blocker.
    */
   deleteChain: <
     TEntryName extends JobTypeEntryNames<TJobTypeDefinitions> =
@@ -306,11 +307,15 @@ export type Client<
   ) => ModeResult<TMode, ResolvedChain<TJobId, TJobTypeDefinitions, TEntryName> | undefined>;
 
   /**
-   * Delete chains by ID. Missing IDs are silently skipped. The `applyJobOutcome` of a running job's
-   * attempt handler throws {@link JobNotFoundError}, and its attempt is notified as lost, so with a
-   * notify adapter its `job.signal` aborts.
+   * Delete chains by ID. Missing IDs are silently skipped. Locks each chain's head job and current tail
+   * first, as `getChainTailJobs` with `lock: "exclusive"` does. To delete a chain together with its
+   * blockers, delete the waiting chain first and its blockers in a second call in the same
+   * transaction. The `applyJobOutcome` of a running job's attempt handler throws
+   * {@link JobNotFoundError}, and its attempt is notified as lost, so with a notify adapter its
+   * `job.signal` aborts.
    *
-   * @throws {@link BlockerReferenceError} if external jobs depend on them.
+   * @throws {@link BlockerReferenceError} (listing every offending chain in `chainIds`) if jobs wait
+   * on any of the chains as a blocker, even jobs in chains of the same call.
    */
   deleteChains: <
     TEntryName extends JobTypeEntryNames<TJobTypeDefinitions> =
@@ -327,8 +332,9 @@ export type Client<
    * chain, and `reschedule` brings the job back later. `job` is `{ id, typeName? }` or a job read
    * earlier; with `output` or `continueWith` its `typeName` must name a single job type.
    *
-   * The job is locked and validated as stored; a passed `status` must match the stored one, so a job
-   * read earlier without a lock that changed since throws instead of being overwritten. `output` and
+   * The job is locked and validated as stored, after the head jobs of the blocker chains a
+   * `continueWith` outcome names; a passed `status` must match the stored one, so a job read earlier
+   * without a lock that changed since throws instead of being overwritten. `output` and
    * `continueWith` complete a blocked, pending or running job. `reschedule` sets `scheduledAt` on a
    * pending job, moves it on a blocked one, which stays blocked, and returns a running one to
    * pending; `reason` is stored as `lastRescheduleReason`. A running job's attempt is lost either
@@ -426,7 +432,7 @@ export type Client<
 
   /**
    * Get a single job by ID. Pass `typeName` for type narrowing. Pass `lock: "exclusive"` (transaction
-   * context required) to lock the job and its chain's head job until the transaction ends.
+   * context required) to lock its chain's head job and then the job until the transaction ends.
    *
    * @throws {@link JobTypeMismatchError} if `typeName` is provided and does not match.
    */
@@ -447,7 +453,7 @@ export type Client<
    * input `ids` — `undefined` for any ID that does not exist. Pass `typeName`
    * to narrow the return type; all found jobs must match or
    * {@link JobsTypeMismatchError} is thrown. Pass `lock: "exclusive"` (transaction context required) to lock
-   * each found job and its chain's head job until the transaction ends.
+   * each found job's chain head job and then the job until the transaction ends.
    *
    * @throws {@link JobsTypeMismatchError} (listing every offending id) if `typeName` is provided and any found job does not match.
    */
@@ -879,80 +885,15 @@ export const createClient = <
         syncAsync(function* () {
           const { ids, ...rest } = options;
           const txCtx = requireTxCtx(helpers.stateAdapter, rest, "deleteChains");
-
-          const verdicts = yield* step(
-            helpers.stateAdapter.deleteChains({
-              txCtx,
-              chainIds: ids,
-            }),
+          const deleted = yield* runDeleteChains.steps(helpers, { chainIds: ids, txCtx });
+          const deletedChains = deleted.map(
+            (stateChain) =>
+              mapStateChainToChain(stateChain, helpers.jobTypes) as ResolvedChain<
+                TJobId,
+                TJobTypeDefinitions,
+                TEntryName
+              >,
           );
-          const blockerRefs = verdicts.flatMap((verdict) =>
-            Array.isArray(verdict)
-              ? verdict.map((blockedJob) => ({
-                  chainId: blockedJob.blockedByChainId,
-                  referencedByJobId: blockedJob.jobId,
-                }))
-              : [],
-          );
-          if (blockerRefs.length > 0) {
-            const lockedChains = yield* step(
-              helpers.stateAdapter.getChains({ txCtx, chainIds: ids }),
-            );
-            notifyAfterTransaction(helpers, txCtx, {
-              lockedPendingJobs: lockedChains.flatMap((chain) => {
-                const currentJob = chain?.tail ?? chain?.head;
-                return currentJob?.status === "pending" ? [currentJob] : [];
-              }),
-            });
-            throw new BlockerReferenceError(
-              `Cannot delete chains: ${[...new Set(blockerRefs.map((r) => r.chainId))].join(", ")} referenced as blockers`,
-              { references: blockerRefs },
-            );
-          }
-
-          const deletedChains = verdicts
-            .filter(
-              (verdict): verdict is StateChain => verdict !== undefined && !Array.isArray(verdict),
-            )
-            .map(
-              (stateChain) =>
-                mapStateChainToChain(stateChain, helpers.jobTypes) as ResolvedChain<
-                  TJobId,
-                  TJobTypeDefinitions,
-                  TEntryName
-                >,
-            );
-
-          const effects = createTxEffects();
-          for (const stateChain of verdicts) {
-            if (stateChain !== undefined && !Array.isArray(stateChain)) {
-              effects.onCommit(() => {
-                helpers.observabilityHelper.chainDeleted(stateChain);
-              });
-            }
-          }
-          const deletedPendingJobs = verdicts.flatMap((verdict) => {
-            if (verdict === undefined || Array.isArray(verdict)) return [];
-            const currentJob = verdict.tail ?? verdict.head;
-            return currentJob.status === "pending" ? [currentJob] : [];
-          });
-          effects.notify({
-            lockedPendingJobs: deletedPendingJobs,
-            settledJobIds: verdicts.flatMap((verdict) =>
-              verdict === undefined || Array.isArray(verdict)
-                ? []
-                : [verdict.head.id, ...(verdict.tail ? [verdict.tail.id] : [])],
-            ),
-            jobAttemptsLost: verdicts
-              .flatMap((verdict) =>
-                verdict !== undefined && !Array.isArray(verdict)
-                  ? [verdict.head, verdict.tail]
-                  : [],
-              )
-              .flatMap((stateJob) => (stateJob?.status === "running" ? [stateJob.id] : [])),
-          });
-          registerTxEffects(helpers, txCtx, effects);
-
           return deletedChains;
         }),
       ),
@@ -1028,15 +969,33 @@ export const createClient = <
             throw new Error("applyJobOutcomes requires each job at most once");
           }
 
+          const blockerChainIds = parsedItems.flatMap(({ outcome }) =>
+            "continueWith" in outcome
+              ? (outcome.continueWith.blockers ?? []).map((blocker) => blocker.id)
+              : [],
+          );
+          const lockedBlockerChains =
+            blockerChainIds.length > 0
+              ? yield* step(
+                  helpers.stateAdapter.getChains({
+                    txCtx,
+                    chainIds: blockerChainIds,
+                    lock: "exclusive",
+                  }),
+                )
+              : [];
           const stateJobs = yield* step(
             helpers.stateAdapter.getJobs({ txCtx, jobIds, lock: "exclusive" }),
           );
           const effects = createTxEffects();
           try {
             effects.notify({
-              lockedPendingJobs: stateJobs.flatMap((job) =>
-                job?.status === "pending" ? [job] : [],
-              ),
+              lockedPendingJobs: [
+                ...lockedBlockerChains.flatMap((chain) =>
+                  chain?.head.status === "pending" ? [chain.head] : [],
+                ),
+                ...stateJobs.flatMap((job) => (job?.status === "pending" ? [job] : [])),
+              ],
             });
             const assertApplicable = (): void => {
               const notFound = jobIds.filter((_, index) => stateJobs[index] === undefined);

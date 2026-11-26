@@ -19,8 +19,8 @@ Use `deleteChain` to target a single chain — it returns the deleted chain or `
 
 ## Blocker safety
 
-<Diagram label="Two fetch-data chains block generate-report; deleting a fetch-data chain alone is rejected, deleting all three together succeeds">
-  <Group title="one deleteChains call" dashed>
+<Diagram label="Two fetch-data chains block generate-report; deleting a fetch-data chain while generate-report waits on it is rejected; deleting generate-report first, then the fetch-data chains, succeeds">
+  <Group title="one transaction" dashed>
     <Flow>
       <Rows spine="end" columns="auto minmax(2.5rem, auto)">
         <Flow>
@@ -37,20 +37,20 @@ Use `deleteChain` to target a single chain — it returns the deleted chain or `
   </Group>
 </Diagram>
 
-Before deleting, the system checks whether any external chain depends on the target chains as blockers. "External" means the dependent job's own chain is not in the deletion set. This prevents orphaning blocked chains that would never unblock. Deleting a `fetch-data` chain on its own is rejected with `BlockerReferenceError`, because `generate-report` still references it:
+Before deleting, `deleteChains` locks the target chains and checks whether any of them is still a blocker: a chain with `blocking: true` has at least one job waiting on it. Such a chain is rejected with `BlockerReferenceError`, whose `chainIds` lists the blocking chains, and nothing is deleted, even when the waiting jobs belong to chains in the same call. This prevents orphaning blocked chains that would never unblock. Deleting a `fetch-data` chain is rejected while `generate-report` still waits on it:
 
 <ExampleCode example="guides" file="src/chain-deletion.ts" region="blocker-safety" />
 
 ## Deleting a chain with its blockers
 
-Deletion never follows blocker relationships on its own. To remove a chain together with the chains it waits on, collect its blocker chains with `getJobBlockers` and pass them in the same `deleteChains` call:
+Deletion never follows blocker relationships on its own. To remove a chain together with the chains it waits on, collect its blocker chains with `getJobBlockers`, delete the chain, and then delete the blockers in a second `deleteChains` call in the same transaction. Deleting the dependent chain removes its blocker references, which clears `blocking` on each blocker it was the last to reference:
 
 <ExampleCode example="guides" file="src/chain-deletion.ts" region="co-delete" />
 
-`getJobBlockers` takes a job ID: a chain's head job has the chain's ID, and a continuation declared with its own `blockers` has to be queried separately (list the chain's jobs with `listChainJobs`). Repeat the lookup on each blocker chain to reach blockers of blockers. If any chain in the set is still a blocker of a job outside it — for example, a blocker shared with another report — the call throws `BlockerReferenceError` and deletes nothing; leave that chain out, or add its dependents to the set.
+`getJobBlockers` takes a job ID: a chain's head job has the chain's ID, and a continuation declared with its own `blockers` has to be queried separately (list the chain's jobs with `listChainJobs`). Repeat the lookup on each blocker chain to reach blockers of blockers. If a blocker is still a blocker of another job — for example, one shared with another report — the second call throws `BlockerReferenceError` and deletes nothing; leave that chain out, or delete its other dependents first.
 
 ## What gets deleted
 
-Given a list of `ids`, the operation deletes all jobs in each chain (every job where `job.chainId` matches a provided ID, including the head and continuations), together with the blocker references those jobs hold on other chains. References pointing at a deleted chain from a job outside the deletion set are never removed — they make the whole deletion fail.
+Given a list of `ids`, the operation deletes all jobs in each chain (every job where `job.chainId` matches a provided ID, including the head and continuations), together with the blocker references those jobs hold on other chains. A chain that other jobs still wait on is never deleted — it makes the whole call fail.
 
 The runnable code is in [examples/guides/src/chain-deletion.ts](https://github.com/kvet/queuert/blob/main/examples/guides/src/chain-deletion.ts). Related: [Tx hooks](../tx-hooks/) and [Job blockers](../job-blockers/).

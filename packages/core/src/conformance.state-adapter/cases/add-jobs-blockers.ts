@@ -6,7 +6,6 @@ import { dynamicSyncAsync, syncAsync, resource, step } from "@queuert/sync-async
 
 import { runInModeOf } from "../../conformance/adapters.ts";
 import type { ConformanceGroup } from "../../conformance/runner.ts";
-import type { StateChain } from "../../state-adapter/state-adapter.ts";
 import type { StateAdapterConformanceContext } from "../types.ts";
 
 const LOCK_BLOCK_OBSERVATION_MS = 100;
@@ -911,7 +910,7 @@ export const addJobsBlockersConcurrentTransactionsLockWaitGroup: ConformanceGrou
 
           releaseDeleter();
           const [deletedChain] = await deleteTx;
-          assert.equal((deletedChain as StateChain).id, blockerChain.id);
+          assert.equal(deletedChain!.id, blockerChain.id);
 
           const [added] = await addTx;
           assert.deepEqual(added.blockers, [undefined]);

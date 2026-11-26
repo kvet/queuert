@@ -23,6 +23,8 @@ import { createChainsGroup, createChainsNotifyGroup } from "./cases/create-chain
 import { deduplicationGroup } from "./cases/deduplication.ts";
 import {
   deletionAsyncGroup,
+  deletionConcurrentTransactionsGroup,
+  deletionConcurrentTransactionsLockWaitGroup,
   deletionGroup,
   deletionNotifyConcurrentTransactionsGroup,
   deletionNotifyGroup,
@@ -89,6 +91,7 @@ export const endToEndNotifyGroups: ConformanceGroup<EndToEndNotifyContext>[] = [
 export const endToEndConcurrentTransactionGroups: ConformanceGroup<StateAdapterConformanceContext>[] =
   [
     blockerChainsConcurrentTransactionsGroup,
+    deletionConcurrentTransactionsGroup,
     applyJobOutcomesConcurrentTransactionsGroup,
     stateResilienceConcurrentTransactionsGroup,
   ];
@@ -101,7 +104,10 @@ export const endToEndNotifyConcurrentTransactionGroups: ConformanceGroup<StateAd
   ];
 
 export const endToEndConcurrentTransactionLockWaitGroups: ConformanceGroup<StateAdapterConformanceContext>[] =
-  [clientQueriesLockedReadsConcurrentTransactionsLockWaitGroup];
+  [
+    clientQueriesLockedReadsConcurrentTransactionsLockWaitGroup,
+    deletionConcurrentTransactionsLockWaitGroup,
+  ];
 
 export const endToEndSavepointGroups: ConformanceGroup<EndToEndSavepointContext>[] = [
   processSavepointGroup,

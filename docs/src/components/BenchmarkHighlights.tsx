@@ -1,6 +1,10 @@
 import { For } from "solid-js";
 
-import { benchmarkMachine, benchmarkSummary, benchmarkSummaryColumns } from "../data/benchmarks.ts";
+import {
+  benchmarkEnvironment,
+  benchmarkSummary,
+  benchmarkSummaryColumns,
+} from "../data/benchmarks.ts";
 import { siteHref } from "../docs/href.ts";
 
 const formatCount = (value: number) => Math.round(value).toLocaleString("en-US");
@@ -50,8 +54,17 @@ export const BenchmarkHighlights = () => (
     </div>
     <p class="mt-3 text-[13px] text-fg-muted">
       Chains per second created, jobs per second completed by one worker with 16 slots and a no-op
-      handler. Measured on {benchmarkMachine.map((item) => item.value).join(", ")}, with databases
-      in containers.{" "}
+      handler. Measured on{" "}
+      {benchmarkEnvironment("processing-capacity")
+        .filter((item) => item.label === "Machine" || item.label === "Runtime")
+        .map((item) => item.value)
+        .join(", ")}
+      , with databases in containers on{" "}
+      {
+        benchmarkEnvironment("processing-capacity").find((item) => item.label === "Containers")
+          ?.value
+      }
+      .{" "}
       <a
         href={siteHref("/benchmarks/processing-capacity/")}
         class="text-fg-muted underline hover:text-fg"

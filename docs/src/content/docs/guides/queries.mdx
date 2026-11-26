@@ -59,7 +59,16 @@ Discover which chain and job types exist in the data, and get per-status counts 
 
 <ExampleCode example="guides" file="src/queries.ts" region="locked-reads" />
 
-`lock: "exclusive"` requires a transaction context with every field the provider's context type requires, so a locked read without one does not compile. A read that matches nothing locks nothing, so a lock does not serialize a "create if absent" against a concurrent create; close that race with [deduplication](../deduplication/). Keep locked transactions short, since workers cannot start the locked jobs until they end. Two transactions that lock the same rows in a different order can deadlock, so take every lock you need in one read and retry the transaction on a deadlock error.
+`lock: "exclusive"` requires a transaction context with every field the provider's context type requires, so a locked read without one does not compile. A read that matches nothing locks nothing, so a lock does not serialize a "create if absent" against a concurrent create; close that race with [deduplication](../deduplication/). Keep locked transactions short, since workers cannot start the locked jobs until they end.
+
+To own a chain for the rest of a transaction, read it with `getChainTailJob({ ...txCtx, chainId, lock: "exclusive" })`. It locks the chain's head job, which is the chain's lock, and its current tail, so no worker or caller completes, continues, reschedules or deletes the chain, and no new chain starts waiting on it, until your transaction ends. Lists need no lock of their own: once the chain is locked, `listChainJobs` and `listBlockedJobs` for it read rows that only a holder of that lock can change. `getChain` with a lock takes only the head: the chain cannot complete, be deleted or gain blocked jobs, but its tail can still continue.
+
+Queuert takes row locks in one order, and a transaction that follows it waits instead of deadlocking:
+
+- Lock every chain you need in one read, since a read locks its chains' head jobs in ID order before any other job.
+- Lock the chains a chain waits on before the chain itself, the way completing a chain locks it and then the jobs that wait on it.
+
+A worker that completes a job locks the job before its chain's head, so a locked read can still deadlock with a completion of the same chain. The database then aborts one of the two transactions; retry it on a deadlock error.
 
 ## Blockers
 

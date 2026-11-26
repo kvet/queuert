@@ -450,24 +450,15 @@ export class ChainsTypeMismatchError extends Error {
   }
 }
 
-/** Describes a single blocker reference: which chain is referenced by which job. */
-export type BlockerReference = {
-  chainId: string;
-  referencedByJobId: string;
-};
-
-/** Thrown when deleting chains that are still referenced as blockers by other jobs. */
+/** Thrown when deleting chains that jobs still wait on as blockers, even jobs in chains deleted by the same call. */
 export class BlockerReferenceError extends Error {
-  /** The blocker references that prevented deletion. */
-  readonly references: readonly BlockerReference[];
+  /** The chains that blocked the deletion: each has `blocking: true`, so at least one job waits on it. */
+  readonly chainIds: readonly string[];
 
-  constructor(
-    message: string,
-    options: { references: readonly BlockerReference[]; cause?: unknown },
-  ) {
+  constructor(message: string, options: { chainIds: readonly string[]; cause?: unknown }) {
     super(message, options.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "BlockerReferenceError";
-    this.references = options.references;
+    this.chainIds = options.chainIds;
   }
 }
 

@@ -1,67 +1,77 @@
 # Type complexity
 
-Last run 2026-11-23 · commit e279ddec · load average 3.04 · TS 6, TS 7, tsrs
+Last run 2026-11-26 · commit 23926ee8 · load average 2.23 · TS 6, TS 7, tsrs
 
 ## Type-check time (ms)
 
 | Scenario                     | TS 6 | TS 7 | tsrs |
 | ---------------------------- | ---: | ---: | ---: |
-| Linear: 1 type               |  323 |   81 |   47 |
-| Linear: 5 types              |  332 |   82 |   47 |
-| Linear: 10 types             |  337 |   83 |   49 |
-| Linear: 20 types             |  348 |   87 |   48 |
-| Linear: 50 types             |  390 |   96 |   51 |
-| Linear: 100 types            |  462 |  115 |   54 |
-| Branched: 2w x 2d            |  337 |   84 |   47 |
-| Branched: 3w x 3d            |  382 |   92 |   49 |
-| Branched: 4w x 3d            |  448 |  108 |   54 |
-| Branched: 2w x 6d            |  515 |  131 |   59 |
-| Blockers: 3 steps            |  349 |   87 |   49 |
-| Blockers: 8 steps            |  384 |   96 |   52 |
-| Blockers: 15 steps           |  444 |  112 |   55 |
-| Blockers: 25 steps           |  527 |  140 |   62 |
-| Loop: 5 steps                |  338 |   83 |   48 |
-| Loop: 10 steps               |  345 |   84 |   47 |
-| Loop: 20 steps               |  358 |   86 |   48 |
-| Loop: 50 steps               |  399 |  100 |   51 |
-| Merge: 2 x 50                |  447 |  109 |   55 |
-| Merge: 5 x 50                |  579 |  148 |   65 |
-| Merge: 10 x 50               |  795 |  214 |   79 |
-| Merge: 20 x 50               | 1236 |  363 |  117 |
-| Merge: 50 x 50               | 2857 |  951 |  265 |
-| Middleware: 1 on linear-100  |  465 |  114 |   55 |
-| Middleware: 2 on linear-100  |  464 |  115 |   56 |
-| Middleware: 5 on linear-100  |  477 |  117 |   55 |
-| Middleware: 10 on linear-100 |  480 |  117 |   56 |
+| Linear: 1 type               |  371 |   77 |   46 |
+| Linear: 5 types              |  341 |   80 |   46 |
+| Linear: 10 types             |  349 |   87 |   50 |
+| Linear: 20 types             |  365 |   90 |   50 |
+| Linear: 50 types             |  410 |  102 |   53 |
+| Linear: 100 types            |  460 |  113 |   56 |
+| Branched: 2w x 2d            |  341 |   84 |   48 |
+| Branched: 3w x 3d            |  392 |   95 |   50 |
+| Branched: 4w x 3d            |  442 |  108 |   55 |
+| Branched: 2w x 6d            |  514 |  131 |   66 |
+| Blockers: 3 steps            |  343 |   86 |   51 |
+| Blockers: 8 steps            |  384 |   97 |   53 |
+| Blockers: 15 steps           |  444 |  118 |   56 |
+| Blockers: 25 steps           |  519 |  140 |   61 |
+| Loop: 5 steps                |  334 |   84 |   48 |
+| Loop: 10 steps               |  346 |   85 |   49 |
+| Loop: 20 steps               |  353 |   89 |   54 |
+| Loop: 50 steps               |  398 |   98 |   54 |
+| Merge: 2 x 50                |  438 |  107 |   55 |
+| Merge: 5 x 50                |  576 |  146 |   66 |
+| Merge: 10 x 50               |  795 |  216 |   80 |
+| Merge: 20 x 50               | 1202 |  364 |  117 |
+| Merge: 50 x 50               | 2836 |  943 |  272 |
+| Middleware: 1 on linear-100  |  464 |  112 |   58 |
+| Middleware: 2 on linear-100  |  463 |  114 |   59 |
+| Middleware: 5 on linear-100  |  468 |  113 |   55 |
+| Middleware: 10 on linear-100 |  473 |  114 |   55 |
 
 ## Instantiations
 
 | Scenario                     | Job types |    TS 6 |    TS 7 |    tsrs |
 | ---------------------------- | --------: | ------: | ------: | ------: |
-| Linear: 1 type               |         1 |   28595 |   28668 |   28820 |
-| Linear: 5 types              |         5 |   31246 |   31319 |   31476 |
-| Linear: 10 types             |        10 |   34356 |   34429 |   34591 |
-| Linear: 20 types             |        20 |   40576 |   40649 |   40821 |
-| Linear: 50 types             |        50 |   59236 |   59309 |   59511 |
-| Linear: 100 types            |       100 |   90336 |   90409 |   90661 |
-| Branched: 2w x 2d            |         7 |   32523 |   32605 |   32764 |
-| Branched: 3w x 3d            |        40 |   53250 |   53401 |   53593 |
-| Branched: 4w x 3d            |        85 |   81531 |   81793 |   82030 |
-| Branched: 2w x 6d            |       127 |  107823 |  108085 |  108364 |
-| Blockers: 3 steps            |        10 |   39939 |   40030 |   40192 |
-| Blockers: 8 steps            |        30 |   64869 |   65005 |   65187 |
-| Blockers: 15 steps           |        58 |  105819 |  106018 |  106228 |
-| Blockers: 25 steps           |        98 |  176559 |  176848 |  177098 |
-| Loop: 5 steps                |         6 |   32228 |   32301 |   32459 |
-| Loop: 10 steps               |        11 |   35418 |   35491 |   35654 |
-| Loop: 20 steps               |        21 |   41798 |   41871 |   42044 |
-| Loop: 50 steps               |        51 |   60938 |   61011 |   61214 |
-| Merge: 2 x 50                |       100 |   95667 |   95735 |   96092 |
-| Merge: 5 x 50                |       250 |  188923 |  189000 |  189672 |
-| Merge: 10 x 50               |       500 |  345583 |  345675 |  346872 |
-| Merge: 20 x 50               |      1000 |  658887 |  659009 |  661256 |
-| Merge: 50 x 50               |      2500 | 1613093 | 1613305 | 1618702 |
-| Middleware: 1 on linear-100  |       100 |   90336 |   90409 |   90661 |
-| Middleware: 2 on linear-100  |       100 |   90729 |   90802 |   91054 |
-| Middleware: 5 on linear-100  |       100 |   91641 |   91714 |   91966 |
-| Middleware: 10 on linear-100 |       100 |   93442 |   93514 |   93766 |
+| Linear: 1 type               |         1 |   28588 |   28661 |   28813 |
+| Linear: 5 types              |         5 |   31239 |   31312 |   31469 |
+| Linear: 10 types             |        10 |   34349 |   34422 |   34584 |
+| Linear: 20 types             |        20 |   40569 |   40642 |   40814 |
+| Linear: 50 types             |        50 |   59229 |   59302 |   59504 |
+| Linear: 100 types            |       100 |   90329 |   90402 |   90654 |
+| Branched: 2w x 2d            |         7 |   32516 |   32598 |   32757 |
+| Branched: 3w x 3d            |        40 |   53243 |   53394 |   53586 |
+| Branched: 4w x 3d            |        85 |   81524 |   81786 |   82023 |
+| Branched: 2w x 6d            |       127 |  107816 |  108078 |  108357 |
+| Blockers: 3 steps            |        10 |   39932 |   40023 |   40185 |
+| Blockers: 8 steps            |        30 |   64862 |   64998 |   65180 |
+| Blockers: 15 steps           |        58 |  105812 |  106011 |  106221 |
+| Blockers: 25 steps           |        98 |  176552 |  176841 |  177091 |
+| Loop: 5 steps                |         6 |   32221 |   32294 |   32452 |
+| Loop: 10 steps               |        11 |   35411 |   35484 |   35647 |
+| Loop: 20 steps               |        21 |   41791 |   41864 |   42037 |
+| Loop: 50 steps               |        51 |   60931 |   61004 |   61207 |
+| Merge: 2 x 50                |       100 |   95660 |   95728 |   96085 |
+| Merge: 5 x 50                |       250 |  188916 |  188993 |  189665 |
+| Merge: 10 x 50               |       500 |  345576 |  345668 |  346865 |
+| Merge: 20 x 50               |      1000 |  658880 |  659002 |  661249 |
+| Merge: 50 x 50               |      2500 | 1613086 | 1613298 | 1618695 |
+| Middleware: 1 on linear-100  |       100 |   90329 |   90402 |   90654 |
+| Middleware: 2 on linear-100  |       100 |   90722 |   90795 |   91047 |
+| Middleware: 5 on linear-100  |       100 |   91634 |   91707 |   91959 |
+| Middleware: 10 on linear-100 |       100 |   93435 |   93507 |   93759 |
+
+## Environment
+
+| Setting    |                         Value |
+| ---------- | ----------------------------: |
+| Machine    | Apple M5 Pro, 15 cores, 48 GB |
+| Power mode |                        Normal |
+| OS         |                  macOS 26.7.3 |
+| Runtime    |              Node.js v24.22.1 |
+| Containers |              socktainer 1.6.1 |

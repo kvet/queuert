@@ -7,8 +7,7 @@ import { Code } from "../../../components/mdx/Code.tsx";
 import { StackFilter } from "../../../components/StackFilter.tsx";
 import {
   allocationGroups,
-  benchmarkContainers,
-  benchmarkMachine,
+  benchmarkEnvironment,
   benchmarkServers,
   benchmarkSourceUrl,
   cpuGroups,
@@ -70,8 +69,7 @@ const cpuCategories = (): FieldItem[] => [
 ];
 
 const setup = [
-  ...benchmarkMachine,
-  benchmarkContainers,
+  ...benchmarkEnvironment("runtime-performance"),
   benchmarkServers,
   {
     label: "Work step",

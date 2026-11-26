@@ -7,6 +7,7 @@ import { type Chain, assertChainsTypeName, mapStateChainToChain } from "../entit
 import type { DeduplicationOptions } from "../entities/deduplication.ts";
 import type { ScheduleOptions } from "../entities/schedule.ts";
 import {
+  BlockerReferenceError,
   ChainsNotFoundError,
   InvalidJobIdError,
   InvalidJobIdsError,
@@ -404,6 +405,60 @@ export const runCreateChains: SyncAsync<
     for (const { jobSpan } of prepared) {
       jobSpan?.end({ status: "error", error });
     }
+    registerTxEffectsAfterError(helpers, txCtx, effects);
+    throw error;
+  }
+});
+
+export const runDeleteChains: SyncAsync<
+  [helpers: Helpers, options: { chainIds: string[]; txCtx: BaseTxContext }],
+  StateChain[]
+> = syncAsync(function* (
+  helpers: Helpers,
+  { chainIds, txCtx }: { chainIds: string[]; txCtx: BaseTxContext },
+) {
+  const lockedTails = yield* step(
+    helpers.stateAdapter.getChainTails({
+      txCtx,
+      chainIds: [...new Set(chainIds)],
+      lock: "exclusive",
+    }),
+  );
+
+  const effects = createTxEffects();
+  effects.notify({
+    lockedPendingJobs: lockedTails.flatMap((tail) => (tail?.status === "pending" ? [tail] : [])),
+  });
+  try {
+    const referencedChainIds = lockedTails.flatMap((tail) =>
+      tail?.chain.blocking ? [tail.chainId] : [],
+    );
+    if (referencedChainIds.length > 0) {
+      throw new BlockerReferenceError(
+        `Cannot delete chains: ${referencedChainIds.join(", ")} referenced as blockers`,
+        { chainIds: referencedChainIds },
+      );
+    }
+
+    const deleted = yield* step(helpers.stateAdapter.deleteChains({ txCtx, chainIds }));
+    const deletedChains = deleted.filter((chain) => chain !== undefined);
+    for (const stateChain of deletedChains) {
+      effects.onCommit(() => {
+        helpers.observabilityHelper.chainDeleted(stateChain);
+      });
+    }
+    const deletedJobs = deletedChains.flatMap((stateChain) =>
+      stateChain.tail ? [stateChain.head, stateChain.tail] : [stateChain.head],
+    );
+    effects.notify({
+      settledJobIds: deletedJobs.map((stateJob) => stateJob.id),
+      jobAttemptsLost: deletedJobs.flatMap((stateJob) =>
+        stateJob.status === "running" ? [stateJob.id] : [],
+      ),
+    });
+    registerTxEffects(helpers, txCtx, effects);
+    return deletedChains;
+  } catch (error) {
     registerTxEffectsAfterError(helpers, txCtx, effects);
     throw error;
   }

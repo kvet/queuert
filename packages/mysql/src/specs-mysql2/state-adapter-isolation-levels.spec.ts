@@ -369,7 +369,7 @@ for (const { label, snapshotIsolation, it } of suites) {
       expect(dependent!.status).toBe("pending");
     });
 
-    it("a deletion waiting on an attach to the deleted chain refuses to delete it", async ({
+    it("a chain lock waiting on an attach to the chain sees it blocking", async ({
       database: { stateAdapter, inTransaction },
     }) => {
       const [blockerChain, dependentChain] = await stateAdapter.withTransaction(async (txCtx) =>
@@ -397,15 +397,15 @@ for (const { label, snapshotIsolation, it } of suites) {
         async () =>
           inTransaction(waiterLevel, async (txCtx) => {
             await stateAdapter.getJobs({ txCtx, jobIds: [randomUUID()] });
-            return stateAdapter.deleteChains({ txCtx, chainIds: [blockerChain.id] });
+            return stateAdapter.getChainTails({
+              txCtx,
+              chainIds: [blockerChain.id],
+              lock: "exclusive",
+            });
           }),
       );
 
-      expect(waited).toEqual([
-        [expect.objectContaining({ job: expect.objectContaining({ id: dependentChain.head.id }) })],
-      ]);
-      const [blocker] = await stateAdapter.getChains({ chainIds: [blockerChain.id] });
-      expect(blocker!.blocking).toBe(true);
+      expect(waited.map((tail) => tail?.chain.blocking)).toEqual([true]);
     });
 
     it("a chain lock waiting on the completion of the chain returns the completed head", async ({

@@ -1040,17 +1040,33 @@ FROM head_job${tailLateral("head_job", "\n  FOR UPDATE")}
 WHERE (SELECT count(*) FROM head_job) > 0
 `;
 
-  const lockedIds = `
-WITH lock_ids AS (
-  SELECT c.id FROM {{schema}}.{{table_prefix}}job c WHERE c.id = ANY($1::{{job_id_type}}[])
-  UNION
-  SELECT c.chain_id FROM {{schema}}.{{table_prefix}}job c WHERE c.id = ANY($1::{{job_id_type}}[])
-)`;
-  const jobsSelect = (locked: boolean) => `${locked ? lockedIds : ""}
+  const jobsSelect = `
 SELECT j.*, ${chainColumnsSelect("h")}
-FROM ${locked ? "lock_ids l JOIN {{schema}}.{{table_prefix}}job j ON j.id = l.id" : "{{schema}}.{{table_prefix}}job j"}
+FROM {{schema}}.{{table_prefix}}job j
 JOIN {{schema}}.{{table_prefix}}job h ON h.id = j.chain_id
-${locked ? "ORDER BY j.id\nFOR UPDATE OF j" : "WHERE j.id = ANY($1::{{job_id_type}}[])"}
+WHERE j.id = ANY($1::{{job_id_type}}[])
+`;
+
+  const jobsLockedSelect = `
+WITH locked_heads AS MATERIALIZED (
+  SELECT h.*
+  FROM {{schema}}.{{table_prefix}}job h
+  WHERE h.id IN (
+    SELECT c.chain_id FROM {{schema}}.{{table_prefix}}job c WHERE c.id = ANY($1::{{job_id_type}}[])
+  )
+  ORDER BY h.id
+  FOR UPDATE
+),
+locked_jobs AS MATERIALIZED (
+  SELECT j.*
+  FROM {{schema}}.{{table_prefix}}job j
+  WHERE j.id = ANY($1::{{job_id_type}}[]) AND (SELECT count(*) FROM locked_heads) >= 0
+  ORDER BY j.id
+  FOR UPDATE
+)
+SELECT j.*, ${chainColumnsSelect("h")}
+FROM locked_jobs j
+JOIN locked_heads h ON h.id = j.chain_id
 `;
 
   const workersSelect = (locked: boolean) => `
@@ -1069,7 +1085,7 @@ WHERE id = ANY($1::{{worker_id_type}}[])${locked ? "\nORDER BY id\nFOR UPDATE" :
     if (continuedToIds.length === 0) return tails;
     const rows = await execute(
       txCtx,
-      prepared("getJobsLocked", jobsSelect(true), {
+      prepared("getJobsLocked", jobsLockedSelect, {
         params: [t.array()],
         columns: dbStateJobColumns,
       }),
@@ -1182,11 +1198,11 @@ WHERE id = ANY($1::{{worker_id_type}}[])${locked ? "\nORDER BY id\nFOR UPDATE" :
       const rows = await execute(
         txCtx,
         lock === "exclusive"
-          ? prepared("getJobsLocked", jobsSelect(true), {
+          ? prepared("getJobsLocked", jobsLockedSelect, {
               params: [t.array()],
               columns: dbStateJobColumns,
             })
-          : prepared("getJobs", jobsSelect(false), {
+          : prepared("getJobs", jobsSelect, {
               params: [t.array()],
               columns: dbStateJobColumns,
               readOnly: true,
@@ -1605,85 +1621,27 @@ JOIN {{schema}}.{{table_prefix}}job h ON h.id = u.chain_id
 
     deleteChains: async ({ txCtx, chainIds }) => {
       if (chainIds.length === 0) return [];
-      const heights = await execute(
-        txCtx,
-        prepared(
-          "readDeletedChainHeights",
-          `
-WITH RECURSIVE
-members AS (
-  SELECT id FROM {{schema}}.{{table_prefix}}job
-  WHERE id = ANY($1::{{job_id_type}}[]) AND chain_index = 0
-  UNION ALL
-  SELECT id FROM {{schema}}.{{table_prefix}}job
-  WHERE chain_id = ANY($1::{{job_id_type}}[]) AND chain_index > 0
-),
-involved AS (
-  SELECT unnest($1::{{job_id_type}}[]) AS id
-  UNION
-  SELECT jb.blocked_by_chain_id
-  FROM members m
-  JOIN {{schema}}.{{table_prefix}}job_blocker jb ON jb.job_id = m.id
-),
-climb (origin, id, height) AS (
-  SELECT id, id, 0 FROM involved
-  UNION
-  SELECT c.origin, b.blocked_by_chain_id, c.height + 1
-  FROM climb c
-  CROSS JOIN LATERAL (
-    SELECT jb.blocked_by_chain_id
-    FROM {{schema}}.{{table_prefix}}job_blocker jb
-    WHERE jb.job_id = c.id
-    UNION ALL
-    SELECT jb.blocked_by_chain_id
-    FROM {{schema}}.{{table_prefix}}job j
-    JOIN {{schema}}.{{table_prefix}}job_blocker jb ON jb.job_id = j.id
-    WHERE j.chain_id = c.id AND j.chain_index > 0
-  ) b
-  WHERE c.height < 64
-)
-SELECT origin AS id, max(height) AS height FROM climb GROUP BY origin
-`,
-          {
-            params: [t.array()],
-            columns: { id: idDataType, height: t.number() },
-            readOnly: true,
-          },
-        ),
-        [chainIds],
-      );
       await execute(
         txCtx,
         prepared(
-          "lockDeletedChains",
+          "lockDeletedChainBlockers",
           `
-WITH ordered AS (
-  SELECT id, ord FROM unnest($1::{{job_id_type}}[]) WITH ORDINALITY AS o(id, ord)
-),
-targets AS (
-  SELECT j.id, o.ord
-  FROM ordered o
-  JOIN {{schema}}.{{table_prefix}}job j ON j.id = o.id AND j.chain_index = 0
-  UNION ALL
-  SELECT j.id, o.ord
-  FROM ordered o
-  JOIN {{schema}}.{{table_prefix}}job j ON j.chain_id = o.id AND j.chain_index > 0
-  WHERE o.id = ANY($2::{{job_id_type}}[])
-)
-SELECT j.id
-FROM targets t
-JOIN {{schema}}.{{table_prefix}}job j ON j.id = t.id
-ORDER BY t.ord, j.chain_index, j.id
-FOR UPDATE OF j
+SELECT h.id
+FROM {{schema}}.{{table_prefix}}job h
+WHERE h.chain_index = 0
+  AND h.id <> ALL($1::{{job_id_type}}[])
+  AND h.id IN (
+    SELECT jb.blocked_by_chain_id
+    FROM {{schema}}.{{table_prefix}}job m
+    JOIN {{schema}}.{{table_prefix}}job_blocker jb ON jb.job_id = m.id
+    WHERE m.chain_id = ANY($1::{{job_id_type}}[])
+  )
+ORDER BY h.id
+FOR UPDATE
 `,
-          { params: [t.array(), t.array()], columns: { id: idDataType } },
+          { params: [t.array()], columns: { id: idDataType } },
         ),
-        [
-          heights
-            .toSorted((a, b) => a.height - b.height || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-            .map((row) => row.id),
-          chainIds,
-        ],
+        [chainIds],
       );
       const [row] = await execute(
         txCtx,
@@ -1696,17 +1654,9 @@ WITH _members AS (
      OR (chain_id = ANY($1::{{job_id_type}}[]) AND chain_index > 0))
     AND ${FENCE_GUARD}
 ),
-_external_refs AS (
-  SELECT jb.job_id, jb.blocked_by_chain_id, jb."index" AS blocker_index, jb.trace_context AS blocker_trace_context
-  FROM {{schema}}.{{table_prefix}}job_blocker jb
-  JOIN {{schema}}.{{table_prefix}}job j ON j.id = jb.job_id
-  WHERE jb.blocked_by_chain_id = ANY($1::{{job_id_type}}[])
-    AND j.chain_id != ALL($1::{{job_id_type}}[])
-),
 _deleted_blockers AS (
   DELETE FROM {{schema}}.{{table_prefix}}job_blocker
   WHERE job_id IN (SELECT id FROM _members)
-    AND NOT EXISTS (SELECT 1 FROM _external_refs)
 ),
 _cleared_heads AS (
   UPDATE {{schema}}.{{table_prefix}}job h
@@ -1720,57 +1670,36 @@ _cleared_heads AS (
       WHERE job_id IN (SELECT id FROM _members)
     )
     AND h.id NOT IN (SELECT id FROM _members)
-    AND NOT EXISTS (SELECT 1 FROM _external_refs)
+    AND ${FENCE_GUARD}
 ),
 _deleted_jobs AS (
   DELETE FROM {{schema}}.{{table_prefix}}job
   WHERE id IN (SELECT id FROM _members)
-    AND NOT EXISTS (SELECT 1 FROM _external_refs)
   RETURNING *
-),
-_deleted_pairs AS (
-  SELECT
-    row_to_json(head_job) AS head_job,
-    row_to_json(tail_job) AS tail_job
-  FROM (SELECT * FROM _deleted_jobs WHERE chain_index = 0) AS head_job
-  LEFT JOIN LATERAL (
-    SELECT *
-    FROM _deleted_jobs
-    WHERE chain_id = head_job.id AND chain_index > 0
-    ORDER BY chain_index DESC
-    LIMIT 1
-  ) AS tail_job ON TRUE
 )
 SELECT
-  COALESCE((SELECT json_agg(row_to_json(p)) FROM _deleted_pairs p), '[]'::json) AS deleted,
-  COALESCE((SELECT json_agg(json_build_object(
-    'job_id', r.job_id,
-    'blocked_by_chain_id', r.blocked_by_chain_id,
-    'index', r.blocker_index,
-    'trace_context', r.blocker_trace_context,
-    'job', row_to_json(j)
-  )) FROM _external_refs r JOIN {{schema}}.{{table_prefix}}job j ON j.id = r.job_id), '[]'::json) AS blocker_refs
+  COALESCE((
+    SELECT json_agg(json_build_object(
+      'head_job', row_to_json(head_job),
+      'tail_job', (
+        SELECT row_to_json(tail_job)
+        FROM _deleted_jobs tail_job
+        WHERE tail_job.chain_id = head_job.id AND tail_job.chain_index > 0
+        ORDER BY tail_job.chain_index DESC
+        LIMIT 1
+      )
+    ))
+    FROM _deleted_jobs head_job
+    WHERE head_job.chain_index = 0
+  ), '[]'::json) AS deleted
 `,
-          {
-            params: [t.array()],
-            columns: {
-              deleted: t.json<DbChainRow[]>(),
-              blocker_refs: t.json<(DbBlocker & { job: DbJob })[]>(),
-            },
-          },
+          { params: [t.array()], columns: { deleted: t.json<DbChainRow[]>() } },
         ),
         [chainIds],
       );
 
       const deletedById = new Map(row.deleted.map((deleted) => [deleted.head_job.id, deleted]));
-      const refsByChainId = Map.groupBy(row.blocker_refs, (ref) => ref.blocked_by_chain_id);
-      return chainIds.map((chainId): StateChain | StateBlockedJob[] | undefined => {
-        const refs = refsByChainId.get(chainId);
-        if (refs)
-          return refs.map((ref) => ({
-            ...mapDbBlockerToStateBlockedJob(ref),
-            job: mapDbJobToStateJobInfo(ref.job),
-          }));
+      return chainIds.map((chainId) => {
         const deleted = deletedById.get(chainId);
         return deleted ? { ...mapDbChainRowToStateChain(deleted), blocking: false } : undefined;
       });

@@ -5,8 +5,7 @@ import { type KeyValueItem, KeyValueList } from "../../../components/KeyValueLis
 import { Code } from "../../../components/mdx/Code.tsx";
 import { StackFilter } from "../../../components/StackFilter.tsx";
 import {
-  benchmarkContainers,
-  benchmarkMachine,
+  benchmarkEnvironment,
   benchmarkServers,
   benchmarkSourceUrl,
   chainJobsGroups,
@@ -53,8 +52,7 @@ const QueryChart = (props: { title: string; groups: BenchGroup[] }) => {
 };
 
 const setup = [
-  ...benchmarkMachine,
-  benchmarkContainers,
+  ...benchmarkEnvironment("query-performance"),
   benchmarkServers,
   { label: "Runs", value: "10 per method", note: "The charts show the median (p50)." },
   {

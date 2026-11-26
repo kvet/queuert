@@ -11,7 +11,6 @@ import {
 } from "../state-adapter/cursor.ts";
 import type {
   StateAdapter,
-  StateBlockedJob,
   StateChain,
   StateChainInfo,
   StateChainStatus,
@@ -879,33 +878,6 @@ export const createInProcessState = (
     deleteChains: ({ txCtx, chainIds }) =>
       write(txCtx, (journal) => {
         const uniqueChainIds = new Set(chainIds);
-        const externalBlockers = new Map<string, StateBlockedJob[]>();
-        for (const chainId of uniqueChainIds) {
-          const dependents = chains.get(chainId)?.dependents;
-          if (dependents === undefined) continue;
-          for (const dependent of sortedListToArray(dependents)) {
-            if (uniqueChainIds.has(dependent.chain.id)) continue;
-            let references = externalBlockers.get(chainId);
-            if (references === undefined) {
-              references = [];
-              externalBlockers.set(chainId, references);
-            }
-            for (const row of dependent.blockers) {
-              if (row.blockedByChainId !== chainId) continue;
-              references.push({
-                jobId: dependent.id,
-                blockedByChainId: chainId,
-                index: row.index,
-                traceContext: row.traceContext,
-                job: dependent.state!,
-              });
-            }
-          }
-        }
-        if (externalBlockers.size > 0) {
-          return chainIds.map((chainId) => externalBlockers.get(chainId));
-        }
-
         const results = chainIds.map((chainId) => {
           const chain = chains.get(chainId);
           return chain === undefined ? undefined : { ...chainView(chain), blocking: false };

@@ -289,12 +289,33 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           ),
         );
 
+        yield* step(
+          assertRejects(
+            () =>
+              stateAdapter.withTransaction((txCtx) =>
+                client.deleteChains({
+                  ...txCtx,
+                  ids: [mainChain.id, blockerChain.id],
+                }),
+              ),
+            BlockerReferenceError,
+          ),
+        );
+
         const deletedChains = yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.deleteChains({
-              ...txCtx,
-              ids: [mainChain.id, blockerChain.id],
-            }),
+            runInModeOf(
+              stateAdapter,
+              syncAsync(function* () {
+                const deletedMain = yield* step(
+                  client.deleteChains({ ...txCtx, ids: [mainChain.id] }),
+                );
+                const deletedBlocker = yield* step(
+                  client.deleteChains({ ...txCtx, ids: [blockerChain.id] }),
+                );
+                return [...deletedMain, ...deletedBlocker];
+              }),
+            ),
           ),
         );
 
@@ -496,7 +517,7 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
       }),
     },
     {
-      name: "throws when deleting batch-created blocker",
+      name: "throws when deleting a batch-created blocker before its dependents",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
@@ -562,10 +583,18 @@ export const deletionGroup: ConformanceGroup<StateAdapterConformanceContext> = {
 
         const deletedChains = yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.deleteChains({
-              ...txCtx,
-              ids: [mainA.id, mainB.id, blocker.id],
-            }),
+            runInModeOf(
+              stateAdapter,
+              syncAsync(function* () {
+                const deletedMains = yield* step(
+                  client.deleteChains({ ...txCtx, ids: [mainA.id, mainB.id] }),
+                );
+                const deletedBlocker = yield* step(
+                  client.deleteChains({ ...txCtx, ids: [blocker.id] }),
+                );
+                return [...deletedMains, ...deletedBlocker];
+              }),
+            ),
           ),
         );
 
@@ -1297,6 +1326,182 @@ export const deletionNotifyConcurrentTransactionsGroup: ConformanceGroup<StateAd
           await transaction;
 
           await client.awaitChain({ chain: blockerChain, ...completionOptions });
+        },
+      },
+    ],
+  };
+
+const blockerGraphJobTypes = defineJobTypes<{
+  root: { entry: true; input: null; output: null };
+  middle: { entry: true; input: null; output: null; blockers: [{ typeName: "root" }] };
+  leaf: { entry: true; input: null; output: null; blockers: [{ typeName: "middle" }] };
+}>();
+
+export const deletionConcurrentTransactionsGroup: ConformanceGroup<StateAdapterConformanceContext> =
+  {
+    name: "deletion",
+    cases: [
+      {
+        name: "deletes a blocked chain while the chain it waits on completes",
+        run: async ({ createStateAdapter }) => {
+          await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
+          const client = createClient({ stateAdapter, jobTypes: blockerGraphJobTypes });
+
+          await Promise.all(
+            Array.from({ length: 10 }, async () => {
+              const { rootChain, middleChain } = await stateAdapter.withTransaction(
+                async (txCtx) => {
+                  const rootChain = await client.createChain({
+                    ...txCtx,
+                    typeName: "root",
+                    input: null,
+                  });
+                  const middleChain = await client.createChain({
+                    ...txCtx,
+                    typeName: "middle",
+                    input: null,
+                    blockers: [rootChain],
+                  });
+                  return { rootChain, middleChain };
+                },
+              );
+
+              await Promise.all([
+                stateAdapter.withTransaction(async (txCtx) =>
+                  client.deleteChain({ ...txCtx, id: middleChain.id }),
+                ),
+                stateAdapter.withTransaction(async (txCtx) =>
+                  client.applyJobOutcome({
+                    ...txCtx,
+                    job: { id: rootChain.id, typeName: "root" },
+                    output: null,
+                  }),
+                ),
+              ]);
+
+              assert.equal(await client.getChain({ id: middleChain.id }), undefined);
+              const [completedRoot] = await stateAdapter.getChains({ chainIds: [rootChain.id] });
+              assert.equal(completedRoot!.status, "completed");
+              assert.equal(completedRoot!.blocking, false);
+            }),
+          );
+        },
+      },
+      {
+        name: "refuses concurrent deletes of chains that each wait on a chain the other deletes",
+        run: async ({ createStateAdapter }) => {
+          await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
+          const client = createClient({ stateAdapter, jobTypes: blockerGraphJobTypes });
+
+          await Promise.all(
+            Array.from({ length: 10 }, async () => {
+              const { rootChain, middleChain, leafChain } = await stateAdapter.withTransaction(
+                async (txCtx) => {
+                  const rootChain = await client.createChain({
+                    ...txCtx,
+                    typeName: "root",
+                    input: null,
+                  });
+                  const middleChain = await client.createChain({
+                    ...txCtx,
+                    typeName: "middle",
+                    input: null,
+                    blockers: [rootChain],
+                  });
+                  const leafChain = await client.createChain({
+                    ...txCtx,
+                    typeName: "leaf",
+                    input: null,
+                    blockers: [middleChain],
+                  });
+                  return { rootChain, middleChain, leafChain };
+                },
+              );
+
+              await Promise.all([
+                assertRejects(
+                  async () =>
+                    stateAdapter.withTransaction(async (txCtx) =>
+                      client.deleteChains({ ...txCtx, ids: [leafChain.id, rootChain.id] }),
+                    ),
+                  BlockerReferenceError,
+                ),
+                assertRejects(
+                  async () =>
+                    stateAdapter.withTransaction(async (txCtx) =>
+                      client.deleteChains({ ...txCtx, ids: [middleChain.id] }),
+                    ),
+                  BlockerReferenceError,
+                ),
+              ]);
+
+              const remaining = await stateAdapter.getChains({
+                chainIds: [rootChain.id, middleChain.id, leafChain.id],
+              });
+              assert.deepEqual(
+                remaining.map((chain) => chain?.blocking),
+                [true, true, false],
+              );
+            }),
+          );
+        },
+      },
+    ],
+  };
+
+export const deletionConcurrentTransactionsLockWaitGroup: ConformanceGroup<StateAdapterConformanceContext> =
+  {
+    name: "deletion",
+    cases: [
+      {
+        name: "refuses to delete a chain that gains a blocked chain while the delete waits on its lock",
+        run: async ({ createStateAdapter }) => {
+          await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
+          const client = createClient({ stateAdapter, jobTypes: blockerGraphJobTypes });
+
+          const rootChain = await stateAdapter.withTransaction(async (txCtx) =>
+            client.createChain({ ...txCtx, typeName: "root", input: null }),
+          );
+
+          const created = Promise.withResolvers<void>();
+          const release = Promise.withResolvers<void>();
+          const creatorTx = stateAdapter.withTransaction(async (txCtx) => {
+            const middleChain = await client.createChain({
+              ...txCtx,
+              typeName: "middle",
+              input: null,
+              blockers: [rootChain],
+            });
+            created.resolve();
+            await release.promise;
+            return middleChain;
+          });
+
+          await created.promise;
+
+          let deleteSettled = false;
+          const deleteTx = Promise.resolve(
+            stateAdapter.withTransaction(async (txCtx) =>
+              client.deleteChain({ ...txCtx, id: rootChain.id }),
+            ),
+          ).then(
+            () => assert.fail("Expected the delete to be refused"),
+            (error: unknown) => error,
+          );
+          void deleteTx.finally(() => {
+            deleteSettled = true;
+          });
+
+          try {
+            await sleep(100);
+            assert.equal(deleteSettled, false);
+          } finally {
+            release.resolve();
+          }
+          await creatorTx;
+          const error = await deleteTx;
+          assert.ok(error instanceof BlockerReferenceError);
+          assert.deepEqual(error.chainIds, [rootChain.id]);
         },
       },
     ],

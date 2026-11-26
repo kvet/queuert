@@ -1,4 +1,9 @@
-import { type ResultsTable, notMeasured, parseResultsFile } from "benchmark-results/results-file";
+import {
+  type ResultsTable,
+  environmentTableTitle,
+  notMeasured,
+  parseResultsFile,
+} from "benchmark-results/results-file";
 
 import type { BenchGroup } from "../components/BenchChart.tsx";
 import type { KeyValueItem } from "../components/KeyValueList.tsx";
@@ -245,16 +250,18 @@ export const workerGroups = [
   { rows: queryRows("List workers & worker jobs") },
 ] satisfies BenchGroup[];
 
-export const benchmarkMachine = [
-  { label: "Machine", value: "Apple M5 Pro" },
-  { label: "Runtime", value: "Node.js v24" },
-] satisfies KeyValueItem[];
-
-export const benchmarkContainers = {
-  label: "Infrastructure",
-  value: "Docker Desktop on macOS",
-  note: "Databases and pub/sub servers run in containers, so every round trip crosses the VM bridge.",
-} satisfies KeyValueItem;
+export const benchmarkEnvironment = (
+  suite: string,
+): { label: string; value: string; note?: string }[] =>
+  resultsTable(suite, environmentTableTitle).rows.map(([label, value]) =>
+    label === "Containers"
+      ? {
+          label,
+          value,
+          note: "Databases and pub/sub servers run in containers limited to 4 GB and 8 CPUs each, so every round trip crosses the VM bridge.",
+        }
+      : { label, value },
+  );
 
 export const benchmarkServers = {
   label: "Servers",

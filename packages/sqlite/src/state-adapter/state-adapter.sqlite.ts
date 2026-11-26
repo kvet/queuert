@@ -31,7 +31,6 @@ import {
   type BaseTxContext,
   SchemaFencedError,
   type StateAdapter,
-  type StateBlockedJob,
   type StateChain,
   type StateChainInfo,
   type StateChainStatus,
@@ -1390,58 +1389,7 @@ WHERE head_job.id IN (SELECT value FROM json_each(?))
         );
         const chainRowById = new Map(chainRows.map((row) => [row.id, row]));
 
-        const blockingChainIds = chainRows.filter((row) => row.blocking === 1).map((row) => row.id);
-        const blockerRefRows =
-          blockingChainIds.length === 0
-            ? []
-            : yield* step(
-                execute(
-                  txCtx,
-                  prepared(
-                    "getExternalBlockerDetails",
-                    `
-SELECT
-  jb.job_id AS blocker_job_id,
-  jb.blocked_by_chain_id AS blocker_chain_id,
-  jb."index" AS blocker_index,
-  jb.trace_context AS blocker_trace_context,
-  {{job_columns:j}}
-FROM {{table_prefix}}job_blocker jb
-JOIN {{table_prefix}}job j ON j.id = jb.job_id
-WHERE jb.blocked_by_chain_id IN (SELECT value FROM json_each(?))
-  AND j.chain_id NOT IN (SELECT value FROM json_each(?))
-`,
-                    {
-                      params: [t.string(), t.string()],
-                      columns: { ...dbBlockerColumns, ...dbJobColumns },
-                      readOnly: true,
-                    },
-                  ),
-                  [JSON.stringify(blockingChainIds), chainIdsJson],
-                ),
-              );
-
-        const blockersByChain = new Map<string, StateBlockedJob[]>();
-        for (const ref of blockerRefRows) {
-          const blockedJob: StateBlockedJob = {
-            jobId: ref.blocker_job_id,
-            blockedByChainId: ref.blocker_chain_id,
-            index: ref.blocker_index,
-            traceContext: ref.blocker_trace_context,
-            job: mapDbJobToStateJob(ref),
-          };
-          const existing = blockersByChain.get(ref.blocker_chain_id);
-          if (existing) existing.push(blockedJob);
-          else blockersByChain.set(ref.blocker_chain_id, [blockedJob]);
-        }
-
-        const referenced = blockersByChain.size > 0;
-        const chainsToDelete = referenced
-          ? []
-          : chainIds.filter((id) => chainRowById.has(id as string));
-
-        if (chainsToDelete.length > 0) {
-          const deleteJson = JSON.stringify(chainsToDelete);
+        if (chainRows.length > 0) {
           yield* step(
             execute(
               txCtx,
@@ -1471,7 +1419,7 @@ WHERE blocking = 1
 `,
                 { params: [t.string(), t.string()], columns: {} },
               ),
-              [deleteJson, deleteJson],
+              [chainIdsJson, chainIdsJson],
             ),
           );
           yield* step(
@@ -1490,7 +1438,7 @@ WHERE job_id IN (
 `,
                 { params: [t.string(), t.string()], columns: {} },
               ),
-              [deleteJson, deleteJson],
+              [chainIdsJson, chainIdsJson],
             ),
           );
           yield* step(
@@ -1506,15 +1454,12 @@ WHERE ((id IN (SELECT value FROM json_each(?)) AND chain_index = 0)
 `,
                 { params: [t.string(), t.string()], columns: {} },
               ),
-              [deleteJson, deleteJson],
+              [chainIdsJson, chainIdsJson],
             ),
           );
         }
 
         return chainIds.map((chainId) => {
-          const blockers = blockersByChain.get(chainId);
-          if (blockers) return blockers;
-          if (referenced) return undefined;
           const row = chainRowById.get(chainId);
           if (!row) return undefined;
           return { ...mapDbChainRowToStateChain(row), blocking: false };

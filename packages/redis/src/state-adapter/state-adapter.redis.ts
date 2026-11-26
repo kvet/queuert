@@ -6,7 +6,6 @@ import {
   type RetryConfig,
   type ScheduleOptions,
   type StateAdapter,
-  type StateBlockedJob,
   type StateChain,
   type StateChainInfo,
   type StateChainStatus,
@@ -1060,42 +1059,6 @@ export const createRedisStateAdapter = ({
             return [chainId, head && head.id === head.chainId ? head : undefined] as const;
           }),
         );
-
-        const externalBlockers = new Map<string, StateBlockedJob[]>();
-        const blockingChainIds = [...uniqueChainIds].filter(
-          (chainId) => heads.get(chainId)?.blocking,
-        );
-        const blockingDependentIds = await tx.smembersMany(blockingChainIds.map(keys.blockedBy), {
-          validate: true,
-        });
-        const blockingDependents = new Map(
-          (await loadPresentJobs(tx, [...new Set(blockingDependentIds.flat())])).map(
-            (job) => [job.id, job] as const,
-          ),
-        );
-        for (const [chainIndex, chainId] of blockingChainIds.entries()) {
-          for (const dependentId of blockingDependentIds[chainIndex]) {
-            const dependent = blockingDependents.get(dependentId);
-            if (dependent === undefined || uniqueChainIds.has(dependent.chainId)) continue;
-            const entries = dependent.blockers
-              .filter((blocker) => blocker.blockedByChainId === chainId)
-              .toSorted((a, b) => a.index - b.index);
-            for (const entry of entries) {
-              const references = externalBlockers.get(chainId) ?? [];
-              references.push({
-                jobId: dependent.id,
-                blockedByChainId: chainId,
-                index: entry.index,
-                traceContext: entry.traceContext,
-                job: jobInfo(dependent),
-              });
-              externalBlockers.set(chainId, references);
-            }
-          }
-        }
-        if (externalBlockers.size > 0) {
-          return chainIds.map((chainId) => externalBlockers.get(chainId) ?? undefined);
-        }
 
         const presentHeads = [...heads.values()].filter((head) => head !== undefined);
         const views = new Map(

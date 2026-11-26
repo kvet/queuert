@@ -3,7 +3,6 @@ import {
   type Page,
   type ScheduleOptions,
   type StateAdapterConfig,
-  type StateBlockedJob,
   type StateChain,
   type StateChainInfo,
   type StateCount,
@@ -377,23 +376,6 @@ export const createMemoryStateAdapter = (
 
     deleteChains: async ({ txCtx, chainIds }) =>
       write(txCtx, (state) => {
-        const outsideBlockers = state.blockers.filter(
-          (blocker) =>
-            chainIds.includes(blocker.blockedByChainId) &&
-            !chainIds.includes(state.jobs.get(blocker.jobId)!.chainId),
-        );
-        if (outsideBlockers.length > 0) {
-          return chainIds.map((chainId) => {
-            const blockedJobs = outsideBlockers
-              .filter((blocker) => blocker.blockedByChainId === chainId)
-              .map((blocker): StateBlockedJob => ({
-                ...blocker,
-                job: state.jobs.get(blocker.jobId)!,
-              }));
-            return blockedJobs.length > 0 ? blockedJobs : undefined;
-          });
-        }
-
         const deleted = chainIds.map((chainId) => {
           const chain = state.chains.get(chainId);
           return chain && { ...toChain(state, chain), blocking: false };

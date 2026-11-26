@@ -8,6 +8,7 @@ export {
   CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  ClockIcon,
   CloseIcon,
   CopyIcon,
   DocsIcon,

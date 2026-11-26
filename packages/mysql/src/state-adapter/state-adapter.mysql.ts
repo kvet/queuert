@@ -548,8 +548,6 @@ export const createMysqlStateAdapter = <
   ): Promise<T> =>
     txCtx ? fn(txCtx) : retryOwnWork(async () => stateProvider.withTransaction(fn));
 
-  const jobIds = (alias = "id_list") =>
-    `SELECT ${alias}.id FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) ${alias}`;
   const tailJoin = (headAlias: string, tailAlias: string) =>
     `LEFT JOIN {{prefix}}job ${tailAlias} FORCE INDEX (PRIMARY) ON ${tailAlias}.id = (SELECT tail_lookup.id FROM {{prefix}}job tail_lookup WHERE tail_lookup.chain_id = ${headAlias}.id AND tail_lookup.chain_index > 0 ORDER BY tail_lookup.chain_index DESC LIMIT 1)`;
   const stateJobSelect = `SELECT ${selectJob("j")}, ${selectChain("h", "c_")} FROM {{prefix}}job j JOIN {{prefix}}job h ON h.id = j.chain_id`;
@@ -630,6 +628,17 @@ export const createMysqlStateAdapter = <
   };
 
   const headOrderedJobs = `JSON_TABLE(?, '$[*]' COLUMNS (chain_id {{job_id_type}} PATH '$.chain_id', id {{job_id_type}} PATH '$.id')) d STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.chain_id STRAIGHT_JOIN {{prefix}}job j FORCE INDEX (PRIMARY) ON j.id = d.id AND j.chain_id = h.id`;
+
+  const lockChainHeads = async (txCtx: TTxContext | undefined, chainIds: string[]) =>
+    execute(
+      txCtx,
+      prepared(
+        "lockChainHeads",
+        `SELECT ${selectJob("h", "h_")} FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.id WHERE h.chain_index = 0 {{for_update:h}}`,
+        { params: [t.string()], columns: prefixColumns(dbJobColumns, "h_") },
+      ),
+      [sortedIdsParam(chainIds)],
+    );
 
   const isWritable = (
     locked: { status: string; attemptToken: string | null } | undefined,
@@ -812,13 +821,7 @@ WHERE j.status = 'running'
         `SELECT ${selectJob("j")}, ${selectChain("h", "c_")} FROM ${headOrderedJobs} {{for_update:h:j}}`,
         { params: [t.string()], columns: dbJobRowColumns },
       ),
-      [
-        toJsonParam(
-          continuations.sort(
-            compareBy((continuation) => `${continuation.chain_id}\u0000${continuation.id}`),
-          ),
-        ),
-      ],
+      [toJsonParam(continuations.sort(compareBy((continuation) => continuation.id)))],
     );
     const continuationById = new Map(
       rows.map((row) => [row.id as string, mapDbJobRowToStateJob(row)]),
@@ -865,17 +868,8 @@ WHERE j.status = 'running'
         const chains = await readChains(txCtx, chainIds);
         return chainIds.map((id) => chains.get(id));
       }
-      const sortedChainIds = JSON.stringify([...new Set(chainIds)].sort());
       if (dialect === "mariadb") {
-        const lockedHeads = await execute(
-          txCtx,
-          prepared(
-            "lockChainHeads",
-            `SELECT ${selectJob("h", "h_")} FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.id WHERE h.chain_index = 0 {{for_update:h}}`,
-            { params: [t.string()], columns: prefixColumns(dbJobColumns, "h_") },
-          ),
-          [sortedChainIds],
-        );
+        const lockedHeads = await lockChainHeads(txCtx, chainIds);
         const heads = new Map(lockedHeads.map((row) => [row.h_id as string, row]));
         const chains = await readChains(txCtx, chainIds);
         return chainIds.map((id) => {
@@ -897,7 +891,7 @@ WHERE j.status = 'running'
           `SELECT ${selectJob("h", "h_")}, ${selectJob("t", "t_")} FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.id ${tailJoin("h", "t")} WHERE h.chain_index = 0 {{for_update:h}}`,
           { params: [t.string()], columns: dbChainRowColumns },
         ),
-        [sortedChainIds],
+        [sortedIdsParam(chainIds)],
       );
       const chains = new Map(
         rows.map((row) => [row.h_id as string, mapDbChainRowToStateChain(row)]),
@@ -916,6 +910,7 @@ WHERE j.status = 'running'
     }) => {
       if (chainIds.length === 0) return [];
       const tailSelect = `SELECT ${selectJob("j")}, ${selectChain("h", "c_")} FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.id STRAIGHT_JOIN {{prefix}}job j FORCE INDEX (PRIMARY) ON j.id = COALESCE((SELECT tail_lookup.id FROM {{prefix}}job tail_lookup WHERE tail_lookup.chain_id = h.id AND tail_lookup.chain_index > 0 ORDER BY tail_lookup.chain_index DESC LIMIT 1), h.id) WHERE h.chain_index = 0`;
+      if (lock === "exclusive") await lockChainHeads(txCtx, chainIds);
       const rows =
         lock === "exclusive"
           ? await execute(
@@ -924,7 +919,7 @@ WHERE j.status = 'running'
                 params: [t.string()],
                 columns: dbJobRowColumns,
               }),
-              [JSON.stringify([...new Set(chainIds)].sort())],
+              [sortedIdsParam(chainIds)],
             )
           : await execute(
               txCtx,
@@ -955,6 +950,21 @@ WHERE j.status = 'running'
       if (lock !== "exclusive") {
         const jobs = await readStateJobs(txCtx, ids);
         return ids.map((id) => jobs.get(id));
+      }
+      const jobChains = await execute(
+        txCtx,
+        prepared(
+          "getJobChainIds",
+          `SELECT j.chain_id FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job j FORCE INDEX (PRIMARY) ON j.id = d.id`,
+          { params: [t.string()], columns: { chain_id: jobIdDataType }, readOnly: true },
+        ),
+        [JSON.stringify(ids)],
+      );
+      if (jobChains.length > 0) {
+        await lockChainHeads(
+          txCtx,
+          jobChains.map((row) => row.chain_id as string),
+        );
       }
       const rows = await execute(
         txCtx,
@@ -1381,188 +1391,88 @@ WHERE {{fence_guard}}`,
 
     deleteChains: async ({ txCtx, chainIds }) => {
       if (chainIds.length === 0) return [];
-      const chainIdsParam = sortedIdsParam(chainIds);
-      const heights = await execute(
-        txCtx,
-        prepared(
-          "readDeletedChainHeights",
-          `
-WITH RECURSIVE climb (origin, id, height) AS (
-  SELECT d.id, d.id, 0
-  FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d
-  UNION DISTINCT
-  SELECT jb.blocked_by_chain_id, jb.blocked_by_chain_id, 0
-  FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d
-  STRAIGHT_JOIN {{prefix}}job m FORCE INDEX ({{name_prefix}}chain_index_idx) ON m.chain_id = d.id
-  STRAIGHT_JOIN {{prefix}}job_blocker jb FORCE INDEX (PRIMARY) ON jb.job_id = m.id
-  UNION DISTINCT
-  SELECT c.origin, jb.blocked_by_chain_id, c.height + 1
-  FROM climb c
-  STRAIGHT_JOIN {{prefix}}job j FORCE INDEX ({{name_prefix}}chain_index_idx) ON j.chain_id = c.id
-  STRAIGHT_JOIN {{prefix}}job_blocker jb FORCE INDEX (PRIMARY) ON jb.job_id = j.id
-  WHERE c.height < 64
-)
-SELECT origin AS id, MAX(height) AS height FROM climb GROUP BY origin`,
-          {
-            params: [t.string(), t.string()],
-            columns: { id: jobIdDataType, height: t.number() },
-            readOnly: true,
-          },
-        ),
-        [chainIdsParam, chainIdsParam],
-      );
       const deletedChainIds = new Set<string>(chainIds);
-      const referencedHeadIds = heights
-        .map((row) => row.id as string)
-        .filter((id) => !deletedChainIds.has(id));
-      await execute(
-        txCtx,
-        prepared(
-          "lockDeletedChainHeads",
-          `SELECT h.id FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.id WHERE h.chain_index = 0 {{for_update:h}}`,
-          { params: [t.string()], columns: { id: jobIdDataType } },
-        ),
-        [
-          JSON.stringify(
-            heights
-              .toSorted(
-                (a, b) =>
-                  Number(a.height) - Number(b.height) ||
-                  (String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0),
-              )
-              .map((row) => row.id),
-          ),
-        ],
-      );
-      const members = await execute(
+      const memberRows = await execute(
         txCtx,
         prepared(
           "lockDeletedChains",
-          `SELECT ${selectJob("j")} FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job j FORCE INDEX ({{name_prefix}}chain_index_idx) ON j.chain_id = d.id {{for_update:j}}`,
-          { params: [t.string()], columns: dbJobColumns },
-        ),
-        [chainIdsParam],
-      );
-      const blockingChainIds = members
-        .filter((row) => Number(row.chain_index) === 0 && toBoolean(row.blocking))
-        .map((row) => row.id as string);
-      if (blockingChainIds.length > 0) {
-        const externalRefs = await execute(
-          txCtx,
-          prepared(
-            "findExternalBlockerRefs",
-            `
-SELECT jb.job_id AS b_job_id, jb.blocked_by_chain_id AS b_blocked_by_chain_id, jb.\`index\` AS b_index, jb.trace_context AS b_trace_context, ${selectJob("j")}
+          `
+SELECT ${selectJob("m")}, jb.blocked_by_chain_id AS b_blocked_by_chain_id
 FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d
-STRAIGHT_JOIN {{prefix}}job_blocker jb FORCE INDEX ({{name_prefix}}job_blocker_chain_idx) ON jb.blocked_by_chain_id = d.id
-STRAIGHT_JOIN {{prefix}}job j FORCE INDEX (PRIMARY) ON j.id = jb.job_id
-WHERE j.chain_id NOT IN (${jobIds("member_list")})
-ORDER BY jb.job_id, jb.\`index\`
-{{for_share:jb:j}}`,
-            { params: [t.string(), t.string()], columns: { ...dbBlockerColumns, ...dbJobColumns } },
-          ),
-          [sortedIdsParam(blockingChainIds), chainIdsParam],
-        );
-        if (externalRefs.length > 0) {
-          const refsByChainId = Map.groupBy(
-            externalRefs,
-            (row) => row.b_blocked_by_chain_id as string,
-          );
-          return chainIds.map((chainId) =>
-            refsByChainId
-              .get(chainId)
-              ?.map((row) => mapDbBlockerRowToStateBlockedJob(row, mapDbJobToStateJobInfo(row)!)),
-          );
-        }
-      }
-
-      const membersByChainId = Map.groupBy(members, (row) => row.chain_id as string);
-      const chains = new Map(
-        members
-          .filter((row) => Number(row.chain_index) === 0)
-          .map((head): [string, StateChain] => {
-            const tail = membersByChainId
-              .get(head.id as string)!
-              .filter((row) => Number(row.chain_index) > 0)
-              .reduce<Row | undefined>(
-                (last, row) =>
-                  last === undefined || Number(row.chain_index) > Number(last.chain_index)
-                    ? row
-                    : last,
-                undefined,
-              );
-            return [
-              head.id as string,
-              {
-                ...mapDbHeadToStateChainInfo(head, ""),
-                head: mapDbJobToStateJobInfo(head)!,
-                tail: tail && mapDbJobToStateJobInfo(tail),
-              },
-            ];
-          }),
+STRAIGHT_JOIN {{prefix}}job m FORCE INDEX ({{name_prefix}}chain_index_idx) ON m.chain_id = d.id
+LEFT JOIN {{prefix}}job_blocker jb FORCE INDEX (PRIMARY) ON jb.job_id = m.id
+{{for_update:m:jb}}`,
+          {
+            params: [t.string()],
+            columns: { ...dbJobColumns, b_blocked_by_chain_id: nullableJobIdDataType },
+          },
+        ),
+        [sortedIdsParam(chainIds)],
       );
-      if (members.length > 0) {
-        const memberBlockerHeads = await execute(
-          txCtx,
-          prepared(
-            "lockDeletedChainBlockers",
-            `SELECT DISTINCT jb.blocked_by_chain_id AS id FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job_blocker jb FORCE INDEX (PRIMARY) ON jb.job_id = d.id {{for_share:jb}}`,
-            { params: [t.string()], columns: { id: jobIdDataType } },
+      if (memberRows.length === 0) return chainIds.map(() => undefined);
+
+      const members = [...new Map(memberRows.map((row) => [row.id as string, row])).values()];
+      const blockerHeadIds = [
+        ...new Set(
+          memberRows.flatMap((row) =>
+            row.b_blocked_by_chain_id == null ? [] : [row.b_blocked_by_chain_id as string],
           ),
-          [sortedIdsParam(members.map((row) => row.id as string))],
-        );
-        for (const row of memberBlockerHeads) {
-          const id = row.id as string;
-          if (!deletedChainIds.has(id) && !referencedHeadIds.includes(id)) {
-            referencedHeadIds.push(id);
-          }
-        }
-        await execute(
-          txCtx,
-          prepared(
-            "deleteChainJobs",
-            `
+        ),
+      ].filter((id) => !deletedChainIds.has(id));
+      if (blockerHeadIds.length > 0) await lockChainHeads(txCtx, blockerHeadIds);
+      await execute(
+        txCtx,
+        prepared(
+          "deleteChainJobs",
+          `
 DELETE jb, j
 FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d
 STRAIGHT_JOIN {{prefix}}job j FORCE INDEX (PRIMARY) ON j.id = d.id
 LEFT JOIN {{prefix}}job_blocker jb FORCE INDEX (PRIMARY) ON jb.job_id = j.id
 WHERE {{fence_guard}}`,
-            { params: [t.string()] },
-          ),
-          [sortedIdsParam(members.map((row) => row.id as string))],
-        );
-        if (referencedHeadIds.length > 0) {
-          const stillReferenced = await execute(
-            txCtx,
-            prepared(
-              "findStillReferencedBlockerHeads",
-              `SELECT DISTINCT jb.blocked_by_chain_id AS id FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job_blocker jb FORCE INDEX ({{name_prefix}}job_blocker_chain_idx) ON jb.blocked_by_chain_id = d.id {{for_share:jb}}`,
-              { params: [t.string()], columns: { id: jobIdDataType } },
-            ),
-            [sortedIdsParam(referencedHeadIds)],
-          );
-          const stillReferencedIds = new Set(stillReferenced.map((row) => row.id as string));
-          const unreferencedHeadIds = referencedHeadIds.filter((id) => !stillReferencedIds.has(id));
-          if (unreferencedHeadIds.length > 0) {
-            await execute(
-              txCtx,
-              prepared(
-                "clearUnreferencedBlockerHeads",
-                `
+          { params: [t.string()] },
+        ),
+        [sortedIdsParam(members.map((row) => row.id as string))],
+      );
+      if (blockerHeadIds.length > 0) {
+        await execute(
+          txCtx,
+          prepared(
+            "clearUnreferencedBlockerHeads",
+            `
 UPDATE JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d
 STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.id
 SET h.blocking = FALSE
-WHERE h.blocking = TRUE AND {{fence_guard}}`,
-                { params: [t.string()] },
-              ),
-              [sortedIdsParam(unreferencedHeadIds)],
-            );
-          }
-        }
+WHERE h.blocking = TRUE
+  AND NOT EXISTS (
+    SELECT 1 FROM {{prefix}}job_blocker jb FORCE INDEX ({{name_prefix}}job_blocker_chain_idx)
+    WHERE jb.blocked_by_chain_id = h.id
+  )
+  AND {{fence_guard}}`,
+            { params: [t.string()] },
+          ),
+          [sortedIdsParam(blockerHeadIds)],
+        );
       }
-      return chainIds.map((chainId) => {
-        const chain = chains.get(chainId);
-        return chain && { ...chain, blocking: false };
+
+      const membersByChainId = Map.groupBy(members, (row) => row.chain_id as string);
+      return chainIds.map((chainId): StateChain | undefined => {
+        const chainMembers = membersByChainId.get(chainId);
+        const head = chainMembers?.find((row) => Number(row.chain_index) === 0);
+        if (!chainMembers || !head) return undefined;
+        const tail = chainMembers
+          .filter((row) => Number(row.chain_index) > 0)
+          .reduce<Row | undefined>(
+            (last, row) =>
+              last === undefined || Number(row.chain_index) > Number(last.chain_index) ? row : last,
+            undefined,
+          );
+        return {
+          ...mapDbHeadToStateChainInfo(head, ""),
+          blocking: false,
+          head: mapDbJobToStateJobInfo(head)!,
+          tail: tail && mapDbJobToStateJobInfo(tail),
+        };
       });
     },
 

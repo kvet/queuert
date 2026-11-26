@@ -5,7 +5,7 @@ import { type FieldItem, FieldList } from "../../../components/FieldList.tsx";
 import { type KeyValueItem, KeyValueList } from "../../../components/KeyValueList.tsx";
 import { Code } from "../../../components/mdx/Code.tsx";
 import {
-  benchmarkMachine,
+  benchmarkEnvironment,
   benchmarkSourceUrl,
   instantiationGroups,
   seriesOf,
@@ -42,7 +42,7 @@ const families = [
 const compilers = ["TS 6", "TS 7", "tsrs"];
 
 const setup = [
-  ...benchmarkMachine,
+  ...benchmarkEnvironment("type-complexity").filter((item) => item.label !== "Containers"),
   {
     label: "Compilers",
     value: "TypeScript 6.0.2, TypeScript 7.0.2 and tsrs 7.1.0-beta.tsrs3",

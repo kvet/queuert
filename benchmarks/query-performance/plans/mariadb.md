@@ -73,7 +73,14 @@ id=2  select_type=DEPENDENT SUBQUERY  table=tail_lookup  type=ref  possible_keys
 
 ## getChainTails/lock
 
-1. `getChainTailsLocked`
+1. `lockChainHeads`
+
+```
+id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
+id=1  select_type=SIMPLE  table=h  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=*any*.d.id  Extra=Using where
+```
+
+2. `getChainTailsLocked`
 
 ```
 id=1  select_type=PRIMARY  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
@@ -95,7 +102,14 @@ id=2  select_type=DEPENDENT SUBQUERY  table=tail_lookup  type=ref  possible_keys
 
 ## getChainTails/lockBatch100
 
-1. `getChainTailsLocked`
+1. `lockChainHeads`
+
+```
+id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
+id=1  select_type=SIMPLE  table=h  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=*any*.d.id  Extra=Using where
+```
+
+2. `getChainTailsLocked`
 
 ```
 id=1  select_type=PRIMARY  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
@@ -116,7 +130,21 @@ id=1  select_type=SIMPLE  table=h  type=eq_ref  possible_keys=PRIMARY  key=PRIMA
 
 ## getJobs/lock
 
-1. `getJobsLocked`
+1. `getJobChainIds`
+
+```
+id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
+id=1  select_type=SIMPLE  table=j  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=*any*.d.id  Extra=
+```
+
+2. `lockChainHeads`
+
+```
+id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
+id=1  select_type=SIMPLE  table=h  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=*any*.d.id  Extra=Using where
+```
+
+3. `getJobsLocked`
 
 ```
 id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
@@ -136,7 +164,21 @@ id=1  select_type=SIMPLE  table=h  type=eq_ref  possible_keys=PRIMARY  key=PRIMA
 
 ## getJobs/lockBatch100
 
-1. `getJobsLocked`
+1. `getJobChainIds`
+
+```
+id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
+id=1  select_type=SIMPLE  table=j  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=*any*.d.id  Extra=
+```
+
+2. `lockChainHeads`
+
+```
+id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
+id=1  select_type=SIMPLE  table=h  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=*any*.d.id  Extra=Using where
+```
+
+3. `getJobsLocked`
 
 ```
 id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
@@ -888,28 +930,15 @@ id=1  select_type=SIMPLE  table=h  type=eq_ref  possible_keys=PRIMARY  key=PRIMA
 
 ## deleteChains/default
 
-1. `lockDeletedChainHeads`
+1. `lockDeletedChains`
 
 ```
 id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
-id=1  select_type=SIMPLE  table=h  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=*any*.d.id  Extra=Using where
+id=1  select_type=SIMPLE  table=m  type=ref  possible_keys=queuert_chain_index_idx  key=queuert_chain_index_idx  key_len=36  ref=*any*.d.id  Extra=
+id=1  select_type=SIMPLE  table=jb  type=ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=queuert_bench.m.id  Extra=
 ```
 
-2. `lockDeletedChains`
-
-```
-id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
-id=1  select_type=SIMPLE  table=j  type=ref  possible_keys=queuert_chain_index_idx  key=queuert_chain_index_idx  key_len=36  ref=*any*.d.id  Extra=
-```
-
-3. `lockDeletedChainBlockers`
-
-```
-id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where; Using temporary
-id=1  select_type=SIMPLE  table=jb  type=ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=*any*.d.id  Extra=
-```
-
-4. `deleteChainJobs`
+2. `deleteChainJobs`
 
 ```
 id=1  select_type=PRIMARY  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
@@ -920,28 +949,15 @@ id=2  select_type=SUBQUERY  table=null  type=null  possible_keys=null  key=null 
 
 ## deleteChains/multiJob
 
-1. `lockDeletedChainHeads`
+1. `lockDeletedChains`
 
 ```
 id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
-id=1  select_type=SIMPLE  table=h  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=*any*.d.id  Extra=Using where
+id=1  select_type=SIMPLE  table=m  type=ref  possible_keys=queuert_chain_index_idx  key=queuert_chain_index_idx  key_len=36  ref=*any*.d.id  Extra=
+id=1  select_type=SIMPLE  table=jb  type=ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=queuert_bench.m.id  Extra=
 ```
 
-2. `lockDeletedChains`
-
-```
-id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
-id=1  select_type=SIMPLE  table=j  type=ref  possible_keys=queuert_chain_index_idx  key=queuert_chain_index_idx  key_len=36  ref=*any*.d.id  Extra=
-```
-
-3. `lockDeletedChainBlockers`
-
-```
-id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where; Using temporary
-id=1  select_type=SIMPLE  table=jb  type=ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=*any*.d.id  Extra=
-```
-
-4. `deleteChainJobs`
+2. `deleteChainJobs`
 
 ```
 id=1  select_type=PRIMARY  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
@@ -952,28 +968,15 @@ id=2  select_type=SUBQUERY  table=null  type=null  possible_keys=null  key=null 
 
 ## deleteChains/batch100
 
-1. `lockDeletedChainHeads`
+1. `lockDeletedChains`
 
 ```
 id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
-id=1  select_type=SIMPLE  table=h  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=*any*.d.id  Extra=Using where
+id=1  select_type=SIMPLE  table=m  type=ref  possible_keys=queuert_chain_index_idx  key=queuert_chain_index_idx  key_len=36  ref=*any*.d.id  Extra=
+id=1  select_type=SIMPLE  table=jb  type=ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=queuert_bench.m.id  Extra=
 ```
 
-2. `lockDeletedChains`
-
-```
-id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
-id=1  select_type=SIMPLE  table=j  type=ref  possible_keys=queuert_chain_index_idx  key=queuert_chain_index_idx  key_len=36  ref=*any*.d.id  Extra=
-```
-
-3. `lockDeletedChainBlockers`
-
-```
-id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where; Using temporary
-id=1  select_type=SIMPLE  table=jb  type=ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=*any*.d.id  Extra=
-```
-
-4. `deleteChainJobs`
+2. `deleteChainJobs`
 
 ```
 id=1  select_type=PRIMARY  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where

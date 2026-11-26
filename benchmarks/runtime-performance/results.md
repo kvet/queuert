@@ -1,81 +1,91 @@
 # Runtime performance
 
-Last run 2026-11-23 · commit e279ddec · load average 1.70 · all measurements
+Last run 2026-11-26 · commit 23926ee8 · load average 5.07 · all measurements
 
 ## Memory (KB)
 
 | Measurement            | Setup | In-flight peak | Live JS retained | JIT code retained |
 | ---------------------- | ----: | -------------: | ---------------: | ----------------: |
-| state-postgres         |    70 |            175 |               15 |               115 |
+| state-postgres         |    65 |            165 |               15 |                95 |
 | state-in-process       |   105 |            275 |               10 |               145 |
 | state-in-process-async |   105 |            285 |               10 |               145 |
 | state-sqlite           |    95 |            165 |               10 |               110 |
-| state-mysql            |    75 |            230 |               25 |               130 |
-| state-mariadb          |    70 |            205 |               20 |               105 |
-| state-redis            |   110 |            255 |               20 |               185 |
-| notify-redis           |    65 |            295 |               20 |               135 |
-| notify-postgres        |    80 |            365 |               20 |               200 |
-| notify-nats            |    75 |            280 |               15 |               115 |
+| state-mysql            |    75 |            230 |               25 |               120 |
+| state-mariadb          |    70 |            205 |               25 |                95 |
+| state-redis            |   110 |            260 |               20 |               185 |
+| notify-redis           |    65 |            295 |               20 |               155 |
+| notify-postgres        |    80 |            365 |               20 |               190 |
+| notify-nats            |    75 |            280 |               15 |               110 |
 | notify-ipc             |   100 |            240 |               10 |               105 |
 | otel                   |    90 |            285 |               10 |               140 |
-| dashboard              |   110 |            285 |                5 |               150 |
+| dashboard              |   110 |            285 |               10 |               150 |
 
 ## CPU per job (µs)
 
 | Measurement            | Queuert core | Adapter | Dependencies | Runtime |
 | ---------------------- | -----------: | ------: | -----------: | ------: |
-| state-postgres         |           69 |      27 |           96 |     103 |
-| state-in-process       |           27 |       8 |            0 |       6 |
-| state-in-process-async |           32 |      12 |            0 |      12 |
-| state-sqlite           |           28 |      13 |            8 |      63 |
-| state-mysql            |           73 |      80 |          194 |     202 |
-| state-mariadb          |           88 |      88 |          203 |     238 |
-| state-redis            |           62 |     109 |           26 |      87 |
-| notify-redis           |           80 |      23 |           25 |      90 |
-| notify-postgres        |           64 |      22 |           28 |      60 |
-| notify-nats            |           83 |      26 |           20 |      73 |
-| notify-ipc             |           32 |      11 |            0 |       8 |
-| otel                   |           34 |       9 |            6 |      11 |
-| dashboard              |           28 |       9 |            0 |      12 |
+| state-postgres         |           57 |      25 |           76 |      94 |
+| state-in-process       |           26 |       8 |            0 |       5 |
+| state-in-process-async |           29 |       9 |            0 |      11 |
+| state-sqlite           |           30 |      12 |            7 |      64 |
+| state-mysql            |           69 |      65 |          185 |     159 |
+| state-mariadb          |           77 |      67 |          185 |     185 |
+| state-redis            |           46 |      98 |           21 |      69 |
+| notify-redis           |           55 |      16 |           15 |      52 |
+| notify-postgres        |           53 |      16 |           21 |      50 |
+| notify-nats            |           48 |      14 |           11 |      37 |
+| notify-ipc             |           30 |      12 |            0 |       9 |
+| otel                   |           35 |      12 |            9 |      14 |
+| dashboard              |           27 |      10 |            0 |       9 |
 
 ## Allocated per job (KB)
 
 | Measurement            | Allocated |
 | ---------------------- | --------: |
-| state-postgres         |     154.7 |
-| state-in-process       |      51.0 |
-| state-in-process-async |      71.4 |
-| state-sqlite           |      64.2 |
-| state-mysql            |     266.3 |
-| state-mariadb          |     262.7 |
-| state-redis            |     232.1 |
-| notify-redis           |     102.5 |
-| notify-postgres        |      96.5 |
-| notify-nats            |      92.1 |
-| notify-ipc             |      52.8 |
-| otel                   |      87.9 |
-| dashboard              |      71.6 |
+| state-postgres         |     155.2 |
+| state-in-process       |      50.6 |
+| state-in-process-async |      72.0 |
+| state-sqlite           |      64.4 |
+| state-mysql            |     265.5 |
+| state-mariadb          |     262.5 |
+| state-redis            |     230.2 |
+| notify-redis           |     102.8 |
+| notify-postgres        |      96.9 |
+| notify-nats            |      91.5 |
+| notify-ipc             |      53.4 |
+| otel                   |      87.6 |
+| dashboard              |      71.5 |
 
 ## Schema library CPU per job (µs)
 
 | Registry        | Schema library |
 | --------------- | -------------: |
 | defineJobTypes  |            0.0 |
-| Zod             |            0.1 |
-| Valibot         |            5.7 |
+| Zod             |            0.0 |
+| Valibot         |            5.8 |
 | TypeBox         |            0.0 |
-| ArkType         |            0.1 |
-| Zod codec       |            3.0 |
-| superjson codec |           30.2 |
+| ArkType         |            0.2 |
+| Zod codec       |            2.9 |
+| superjson codec |           28.9 |
 
 ## Allocated per job by registry (KB)
 
 | Registry        | Allocated |
 | --------------- | --------: |
-| defineJobTypes  |      72.3 |
-| Zod             |      74.7 |
+| defineJobTypes  |      71.9 |
+| Zod             |      74.0 |
 | Valibot         |      80.8 |
-| TypeBox         |      73.4 |
+| TypeBox         |      73.5 |
 | ArkType         |      73.9 |
-| Zod codec       |      78.1 |
-| superjson codec |     107.0 |
+| Zod codec       |      78.5 |
+| superjson codec |     106.2 |
+
+## Environment
+
+| Setting    |                         Value |
+| ---------- | ----------------------------: |
+| Machine    | Apple M5 Pro, 15 cores, 48 GB |
+| Power mode |                        Normal |
+| OS         |                  macOS 26.7.3 |
+| Runtime    |              Node.js v24.22.1 |
+| Containers |              socktainer 1.6.1 |

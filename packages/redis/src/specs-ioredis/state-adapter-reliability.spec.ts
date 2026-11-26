@@ -178,6 +178,70 @@ describe("Redis state adapter reliability", () => {
     expect(runs).toBe(2);
   });
 
+  it("runs a transaction again when a job starts waiting on a chain whose tail it locked", async ({
+    setup,
+  }) => {
+    const { stateAdapter, createJob } = setup;
+    const blockerChainId = await createJob("capture-payment");
+    const blockedJobId = await createJob("ship-order");
+    const blockingByRun: boolean[] = [];
+
+    await stateAdapter.withTransaction(async (txCtx) => {
+      const [tail] = await stateAdapter.getChainTails({
+        txCtx,
+        chainIds: [blockerChainId],
+        lock: "exclusive",
+      });
+      blockingByRun.push(tail!.chain.blocking);
+      if (blockingByRun.length === 1) {
+        await stateAdapter.withTransaction(async (otherTxCtx) =>
+          stateAdapter.addJobsBlockers({
+            txCtx: otherTxCtx,
+            jobBlockers: [{ jobId: blockedJobId, blockedByChainIds: [blockerChainId] }],
+          }),
+        );
+      }
+      if (!tail!.chain.blocking) {
+        await stateAdapter.deleteChains({ txCtx, chainIds: [blockerChainId] });
+      }
+    });
+
+    expect(blockingByRun).toEqual([false, true]);
+    const [chain] = await stateAdapter.getChains({ chainIds: [blockerChainId] });
+    expect(chain?.blocking).toBe(true);
+  });
+
+  it("runs a transaction again when a chain whose tail it locked continues", async ({ setup }) => {
+    const { stateAdapter, createJob } = setup;
+    const chainId = await createJob("process-order");
+    const continuationId = stateAdapter.config.generateJobId();
+    const tailIdsByRun: string[] = [];
+
+    const deleted = await stateAdapter.withTransaction(async (txCtx) => {
+      const [tail] = await stateAdapter.getChainTails({
+        txCtx,
+        chainIds: [chainId],
+        lock: "exclusive",
+      });
+      tailIdsByRun.push(tail!.id);
+      if (tailIdsByRun.length === 1) {
+        await stateAdapter.withTransaction(async (otherTxCtx) =>
+          stateAdapter.continueJobs({
+            txCtx: otherTxCtx,
+            jobs: [
+              { typeName: "ship-order", id: continuationId, input: null, continueFromId: chainId },
+            ],
+          }),
+        );
+      }
+      return stateAdapter.deleteChains({ txCtx, chainIds: [chainId] });
+    });
+
+    expect(tailIdsByRun).toEqual([chainId, continuationId]);
+    expect(deleted[0]?.tail?.id).toBe(continuationId);
+    expect(await stateAdapter.getJobs({ jobIds: [continuationId] })).toEqual([undefined]);
+  });
+
   it("throws RedisTransactionConflictError when the last try fails on stale reads", async ({
     setup,
   }) => {
