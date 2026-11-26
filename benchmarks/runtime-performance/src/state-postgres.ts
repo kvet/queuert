@@ -29,7 +29,10 @@ await runDoubleRunBenchmark<Infra>({
   setupInfrastructure: async () => {
     console.log("\nStarting PostgreSQL container...");
     const [beforeContainer, afterContainer, pgContainer] = await measureMemory(async () =>
-      new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start(),
+      new PostgreSqlContainer("postgres:18")
+        .withExposedPorts(5432)
+        .withResourcesQuota({ memory: 4, cpu: 8 })
+        .start(),
     );
     console.log("\nAfter starting container (testcontainers overhead):");
     diffMemory(beforeContainer, afterContainer);

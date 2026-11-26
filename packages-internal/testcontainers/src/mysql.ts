@@ -4,7 +4,7 @@ import { setTimeout } from "node:timers/promises";
 import { createConnection } from "mysql2/promise";
 import { GenericContainer, type StartedTestContainer, Wait } from "testcontainers";
 
-import { withContainerLock } from "./with-container-lock.ts";
+import { REAPED_LABELS, withContainerLock } from "./with-container-lock.ts";
 
 export type MysqlConnectionOptions = {
   host: string;
@@ -32,13 +32,14 @@ const startContainer = async (image: string): Promise<StartedTestContainer> => {
       start: async () =>
         new GenericContainer(image)
           .withName(containerName)
-          .withLabels({ label: containerName })
+          .withLabels({ label: containerName, ...REAPED_LABELS })
           .withEnvironment({
             MYSQL_ROOT_PASSWORD: ROOT_PASSWORD,
             MARIADB_ROOT_PASSWORD: ROOT_PASSWORD,
           })
           .withExposedPorts(3306)
           .withTmpFs({ "/var/lib/mysql": "rw" })
+          .withResourcesQuota({ memory: 2 })
           .withWaitStrategy(Wait.forLogMessage(/port: 3306/))
           .withStartupTimeout(180_000)
           .withReuse()

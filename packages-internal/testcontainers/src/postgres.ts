@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { Client } from "pg";
 
-import { withContainerLock } from "./with-container-lock.ts";
+import { REAPED_LABELS, withContainerLock } from "./with-container-lock.ts";
 
 export type AcquiredPostgres = {
   connectionString: string;
@@ -24,7 +24,7 @@ const startContainer = async (image: string): Promise<StartedPostgreSqlContainer
         new PostgreSqlContainer(image)
           .withName(containerName)
           .withDatabase("base_database_for_tests")
-          .withLabels({ label: containerName })
+          .withLabels({ label: containerName, ...REAPED_LABELS })
           .withExposedPorts(5432)
           .withReuse()
           .start(),

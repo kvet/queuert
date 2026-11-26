@@ -47,7 +47,10 @@ const report = (line = "") => {
 type CapturedQuery = { id: string | undefined; sql: string; explain: string; plan: string };
 
 console.log("\nStarting PostgreSQL container...");
-const pgContainer = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
+const pgContainer = await new PostgreSqlContainer("postgres:18")
+  .withExposedPorts(5432)
+  .withResourcesQuota({ memory: 4, cpu: 8 })
+  .start();
 
 const pool = new Pool({ connectionString: pgContainer.getConnectionUri(), max: 20 });
 const baseProvider = createPgPoolStateProvider({ pool });

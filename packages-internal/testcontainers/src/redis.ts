@@ -1,6 +1,6 @@
 import { RedisContainer, type StartedRedisContainer } from "@testcontainers/redis";
 
-import { withContainerLock } from "./with-container-lock.ts";
+import { REAPED_LABELS, withContainerLock } from "./with-container-lock.ts";
 
 export type AcquiredRedis = {
   connectionUrl: string;
@@ -20,7 +20,7 @@ const startContainer = async (image: string): Promise<StartedRedisContainer> => 
       start: async () =>
         new RedisContainer(image)
           .withName(containerName)
-          .withLabels({ label: containerName })
+          .withLabels({ label: containerName, ...REAPED_LABELS })
           .withExposedPorts(6379)
           .withReuse()
           .start(),

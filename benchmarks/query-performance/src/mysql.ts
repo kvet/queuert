@@ -55,6 +55,7 @@ const container = await new GenericContainer(image)
   .withEnvironment({ MYSQL_ROOT_PASSWORD: "bench", MARIADB_ROOT_PASSWORD: "bench" })
   .withCommand(["--log-bin=binlog", "--sync-binlog=1", "--innodb-buffer-pool-size=1073741824"])
   .withExposedPorts(3306)
+  .withResourcesQuota({ memory: 4, cpu: 8 })
   .withWaitStrategy(Wait.forLogMessage(/port: 3306/))
   .withStartupTimeout(180_000)
   .start();

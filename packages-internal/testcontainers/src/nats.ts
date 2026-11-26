@@ -4,7 +4,7 @@ import {
   type StartedNatsContainer,
 } from "@testcontainers/nats";
 
-import { withContainerLock } from "./with-container-lock.ts";
+import { REAPED_LABELS, withContainerLock } from "./with-container-lock.ts";
 
 export type { NatsConnectionOptions };
 
@@ -26,7 +26,7 @@ const startContainer = async (image: string): Promise<StartedNatsContainer> => {
       start: async () =>
         new NatsContainer(image)
           .withName(containerName)
-          .withLabels({ label: containerName })
+          .withLabels({ label: containerName, ...REAPED_LABELS })
           .withReuse()
           .start(),
     });

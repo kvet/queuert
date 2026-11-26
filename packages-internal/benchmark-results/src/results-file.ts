@@ -2,6 +2,8 @@ export type ResultsTable = { title: string; columns: string[]; rows: string[][] 
 
 export const notMeasured = "-";
 
+export const environmentTableTitle = "Environment";
+
 const renderTable = ({ title, columns, rows }: ResultsTable): string => {
   const widths = columns.map((column, index) =>
     Math.max(3, column.length, ...rows.map((row) => row[index].length)),

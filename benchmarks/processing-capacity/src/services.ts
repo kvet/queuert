@@ -13,7 +13,10 @@ export const startService = async (
   console.log(`\nStarting ${kind} container (shared by every scenario that needs it)...`);
   switch (kind) {
     case "postgres": {
-      const container = await new PostgreSqlContainer("postgres:18").withExposedPorts(5432).start();
+      const container = await new PostgreSqlContainer("postgres:18")
+        .withExposedPorts(5432)
+        .withResourcesQuota({ memory: 4, cpu: 8 })
+        .start();
       return {
         env: { BENCHMARK_POSTGRES_URL: container.getConnectionUri() },
         stop: async () => {
@@ -22,7 +25,10 @@ export const startService = async (
       };
     }
     case "redis": {
-      const container = await new RedisContainer("redis:8").withExposedPorts(6379).start();
+      const container = await new RedisContainer("redis:8")
+        .withExposedPorts(6379)
+        .withResourcesQuota({ memory: 4, cpu: 8 })
+        .start();
       return {
         env: { BENCHMARK_REDIS_URL: container.getConnectionUrl() },
         stop: async () => {
@@ -36,6 +42,7 @@ export const startService = async (
         .withEnvironment({ MYSQL_ROOT_PASSWORD: "bench", MARIADB_ROOT_PASSWORD: "bench" })
         .withCommand(["--log-bin=binlog", "--sync-binlog=1"])
         .withExposedPorts(3306)
+        .withResourcesQuota({ memory: 4, cpu: 8 })
         .withWaitStrategy(Wait.forLogMessage(/port: 3306/))
         .withStartupTimeout(180_000)
         .start();
@@ -54,7 +61,10 @@ export const startService = async (
       };
     }
     case "nats": {
-      const container = await new NatsContainer("nats:2").withExposedPorts(4222).start();
+      const container = await new NatsContainer("nats:2")
+        .withExposedPorts(4222)
+        .withResourcesQuota({ memory: 4, cpu: 8 })
+        .start();
       return {
         env: { BENCHMARK_NATS_OPTIONS: JSON.stringify(container.getConnectionOptions()) },
         stop: async () => {

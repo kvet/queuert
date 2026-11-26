@@ -47,7 +47,10 @@ const report = (line = "") => {
 };
 
 console.log("\nStarting Redis container...");
-const redisContainer = await new RedisContainer("redis:8").withExposedPorts(6379).start();
+const redisContainer = await new RedisContainer("redis:8")
+  .withExposedPorts(6379)
+  .withResourcesQuota({ memory: 4, cpu: 8 })
+  .start();
 const redis = new Redis(redisContainer.getConnectionUrl());
 
 let evalCount = 0;

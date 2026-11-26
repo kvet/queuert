@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import { GenericContainer, Wait } from "testcontainers";
 
-import { withContainerLock } from "./with-container-lock.ts";
+import { REAPED_LABELS, withContainerLock } from "./with-container-lock.ts";
 
 /**
  * Runs a 6-node cluster (3 masters + 3 replicas) inside a single stock `redis` container, so the
@@ -60,9 +60,10 @@ const startCluster = async (image: string): Promise<RedisClusterConnection> => {
       start: async () =>
         new GenericContainer(image)
           .withName(containerName)
-          .withLabels({ label: containerName })
+          .withLabels({ label: containerName, ...REAPED_LABELS })
           .withExposedPorts(...ports.map((port) => ({ container: port, host: port })))
           .withTmpFs({ "/cluster": "rw" })
+          .withResourcesQuota({ memory: 2 })
           .withCommand(["sh", "-c", clusterScript(ports)])
           .withWaitStrategy(Wait.forSuccessfulCommand(clusterReadyCommand(ports)))
           .withStartupTimeout(120_000)

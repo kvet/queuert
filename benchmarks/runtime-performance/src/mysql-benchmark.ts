@@ -47,6 +47,7 @@ export const runMysqlBenchmark = async ({
           })
           .withCommand(["--log-bin=binlog", "--sync-binlog=1"])
           .withExposedPorts(3306)
+          .withResourcesQuota({ memory: 4, cpu: 8 })
           .withWaitStrategy(Wait.forLogMessage(/port: 3306/))
           .withStartupTimeout(180_000)
           .start(),

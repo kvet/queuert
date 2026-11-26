@@ -30,7 +30,10 @@ await runDoubleRunBenchmark<Infra>({
   setupInfrastructure: async () => {
     console.log("\nStarting Redis container...");
     const [beforeContainer, afterContainer, redisContainer] = await measureMemory(async () =>
-      new RedisContainer("redis:8").withExposedPorts(6379).start(),
+      new RedisContainer("redis:8")
+        .withExposedPorts(6379)
+        .withResourcesQuota({ memory: 4, cpu: 8 })
+        .start(),
     );
     console.log("\nAfter starting container (testcontainers overhead):");
     diffMemory(beforeContainer, afterContainer);
