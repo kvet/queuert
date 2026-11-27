@@ -3,6 +3,7 @@ import * as pglite from "@electric-sql/pglite";
 import * as postgres from "@queuert/postgres";
 import * as sqlite from "@queuert/sqlite";
 import * as pgliteProvider from "example-postgresql-state-pglite/provider";
+import * as sqlJsProvider from "example-sqlite-state-sql-js/provider";
 import * as queuert from "queuert";
 import initSqlJs from "sql.js";
 import typescript from "typescript";
@@ -21,6 +22,7 @@ const databaseModules = {
   "@queuert/postgres": postgres,
   "@queuert/sqlite": sqlite,
   "example-postgresql-state-pglite/provider": pgliteProvider,
+  "example-sqlite-state-sql-js/provider": sqlJsProvider,
   "sql.js": initSqlJs,
 };
 

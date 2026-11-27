@@ -14,7 +14,6 @@
 - [EPIC] Unbounded blockers. See `design/unbounded-blockers.md`.
 - [EPIC] how to cleanup chains with 1k+ jobs in a single transaction (SQLite WAL, PG lock footprint)? introduce truncateChainJobs?
 - [EPIC] Align `@queuert/otel` with OpenTelemetry messaging semantic conventions
-- [TASK] SQL.js provider?
 
 # Long term
 

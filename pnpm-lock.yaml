@@ -614,6 +614,9 @@ importers:
       example-postgresql-state-pglite:
         specifier: workspace:*
         version: link:../examples/postgresql/state-pglite
+      example-sqlite-state-sql-js:
+        specifier: workspace:*
+        version: link:../examples/sqlite/state-sql-js
       filesystem-routing:
         specifier: 0.5.0
         version: 0.5.0(vite@8.3.8(@types/node@24.19.2)(jiti@2.7.0)(yaml@2.9.1))
@@ -1818,6 +1821,24 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/core
 
+  examples/sqlite/state-sql-js:
+    devDependencies:
+      '@queuert/sqlite':
+        specifier: workspace:*
+        version: link:../../../packages/sqlite
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../../packages-internal/tsconfig
+      '@types/sql.js':
+        specifier: 1.16.0
+        version: 1.16.0
+      queuert:
+        specifier: workspace:*
+        version: link:../../../packages/core
+      sql.js:
+        specifier: 1.17.0
+        version: 1.17.0
+
   examples/tutorial:
     dependencies:
       '@electric-sql/pglite':
@@ -1832,6 +1853,9 @@ importers:
       example-postgresql-state-pglite:
         specifier: workspace:*
         version: link:../postgresql/state-pglite
+      example-sqlite-state-sql-js:
+        specifier: workspace:*
+        version: link:../sqlite/state-sql-js
       queuert:
         specifier: workspace:*
         version: link:../../packages/core

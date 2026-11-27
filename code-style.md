@@ -316,6 +316,7 @@ sqlite/state-knex             # Knex
 sqlite/state-mikro-orm        # MikroORM
 sqlite/state-bun-sqlite       # bun:sqlite
 sqlite/state-bun-sql          # Bun.SQL
+sqlite/state-sql-js           # sql.js, SQLite in WebAssembly
 sqlite/multi-worker           # worker processes sharing one SQLite file, IPC notify
 
 mysql/state-mysql2            # mysql2 (experimental MySQL / MariaDB state adapter)

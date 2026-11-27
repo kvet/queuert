@@ -42,6 +42,7 @@
     "estree-util-visit": "2.0.0",
     "example-observability-dashboard": "workspace:*",
     "example-postgresql-state-pglite": "workspace:*",
+    "example-sqlite-state-sql-js": "workspace:*",
     "filesystem-routing": "0.5.0",
     "github-slugger": "2.0.0",
     "hast-util-from-html": "2.1.0",

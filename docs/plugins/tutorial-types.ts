@@ -29,8 +29,8 @@ const pgliteRoot = () => join(dirname(require.resolve("@electric-sql/pglite")), 
 
 /**
  * The packages a lesson imports: `queuert` and its PostgreSQL and SQLite adapters from their built
- * `dist`, the drivers the lessons' `db.ts` files open, PGlite and sql.js, and the PGlite state
- * provider of the `postgresql/state-pglite` example.
+ * `dist`, the drivers the lessons' `db.ts` files open, PGlite and sql.js, and the state providers
+ * of the `postgresql/state-pglite` and `sqlite/state-sql-js` examples.
  */
 export const tutorialPackages = (): TutorialPackage[] => {
   const sqlJsTypes = packageRoot("@types/sql.js");
@@ -50,6 +50,12 @@ export const tutorialPackages = (): TutorialPackage[] => {
     {
       name: "example-postgresql-state-pglite",
       directory: join(examplesDirectory, "postgresql/state-pglite"),
+      entry: "src/provider.ts",
+      subpath: "./provider",
+    },
+    {
+      name: "example-sqlite-state-sql-js",
+      directory: join(examplesDirectory, "sqlite/state-sql-js"),
       entry: "src/provider.ts",
       subpath: "./provider",
     },

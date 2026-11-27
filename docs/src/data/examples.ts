@@ -220,6 +220,15 @@ export const examples: Example[] = [
     guide: stateSqlite,
   },
   {
+    name: "sqlite/state-sql-js",
+    label: "sql.js",
+    description: "sql.js, SQLite in-process on WebAssembly, with createAsyncRwLock().",
+    runtime: "Node.js",
+    services: [],
+    files: stateProviderFiles,
+    guide: stateSqlite,
+  },
+  {
     name: "mysql/state-mysql2",
     label: "mysql2",
     description: "The mysql2 driver.",

@@ -1,0 +1,28 @@
+{
+  "name": "example-sqlite-state-sql-js",
+  "version": "0.0.1",
+  "private": true,
+  "description": "An example demonstrating the SQLite state adapter with sql.js.",
+  "license": "MIT",
+  "author": "kvet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvet/queuert.git"
+  },
+  "type": "module",
+  "exports": {
+    "./provider": "./src/provider.ts"
+  },
+  "scripts": {
+    "start": "node src/index.ts",
+    "test": "vitest --run",
+    "typecheck": "tsrs --noEmit"
+  },
+  "devDependencies": {
+    "@queuert/sqlite": "workspace:*",
+    "@queuert/tsconfig": "workspace:*",
+    "@types/sql.js": "1.16.0",
+    "queuert": "workspace:*",
+    "sql.js": "1.17.0"
+  }
+}

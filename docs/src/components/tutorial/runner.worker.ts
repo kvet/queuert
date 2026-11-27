@@ -22,14 +22,19 @@ const databaseModules = async (database: TutorialDatabase): Promise<Record<strin
       "example-postgresql-state-pglite/provider": provider,
     };
   }
-  const [sqlJs, sqlite, wasm] = await Promise.all([
+  const [sqlJs, sqlite, provider, wasm] = await Promise.all([
     import("sql.js"),
     import("@queuert/sqlite"),
+    import("example-sqlite-state-sql-js/provider"),
     import("sql.js/dist/sql-wasm-browser.wasm?url"),
   ]);
   const initSqlJs = async (config: SqlJsConfig) =>
     sqlJs.default({ ...config, locateFile: () => wasm.default });
-  return { "sql.js": initSqlJs, "@queuert/sqlite": sqlite };
+  return {
+    "sql.js": initSqlJs,
+    "@queuert/sqlite": sqlite,
+    "example-sqlite-state-sql-js/provider": provider,
+  };
 };
 
 scope.addEventListener("message", (event) => {

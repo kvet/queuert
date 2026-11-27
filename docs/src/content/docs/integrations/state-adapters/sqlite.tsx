@@ -70,7 +70,7 @@ const Page = () => (
     </p>
     <AtAGlance
       package="@queuert/sqlite"
-      clients="better-sqlite3, node:sqlite, bun:sqlite, Bun SQL, Drizzle, Kysely, Prisma, Knex, MikroORM"
+      clients="better-sqlite3, node:sqlite, bun:sqlite, Bun SQL, sql.js, Drizzle, Kysely, Prisma, Knex, MikroORM"
       isolation={
         <>
           A single writer at a time; writes are serialized, synchronously or by an{" "}
@@ -563,6 +563,7 @@ const Page = () => (
         "sqlite/state-node-sqlite",
         "sqlite/state-bun-sqlite",
         "sqlite/state-bun-sql",
+        "sqlite/state-sql-js",
         "sqlite/state-drizzle",
         "sqlite/state-kysely",
         "sqlite/state-prisma",
