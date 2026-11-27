@@ -1,10 +1,6 @@
-import {
-  createClient,
-  createInProcessStateAdapter,
-  createProcessors,
-  createWorkerRunner,
-  defineJobTypes,
-} from "queuert";
+import { createClient, createProcessors, createWorkerRunner, defineJobTypes } from "queuert";
+
+import { openDatabase } from "./db.ts";
 
 const jobTypes = defineJobTypes<{
   "send-welcome-email": {
@@ -14,7 +10,8 @@ const jobTypes = defineJobTypes<{
   };
 }>();
 
-await using stateAdapter = createInProcessStateAdapter({ mode: "async" });
+await using db = await openDatabase();
+const { stateAdapter } = db;
 const client = createClient({ stateAdapter, jobTypes });
 
 const processors = createProcessors({

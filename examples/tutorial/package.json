@@ -5,12 +5,19 @@
   "type": "module",
   "scripts": {
     "start": "node src/hero.ts && for lesson in src/*/solution/index.ts; do node \"$lesson\" || exit 1; done",
-    "typecheck": "tsrs --noEmit"
+    "typecheck": "tsrs --noEmit",
+    "test": "vitest --run"
   },
   "dependencies": {
-    "queuert": "workspace:*"
+    "@electric-sql/pglite": "0.5.16",
+    "@queuert/postgres": "workspace:*",
+    "@queuert/sqlite": "workspace:*",
+    "example-postgresql-state-pglite": "workspace:*",
+    "queuert": "workspace:*",
+    "sql.js": "1.17.0"
   },
   "devDependencies": {
-    "@queuert/tsconfig": "workspace:*"
+    "@queuert/tsconfig": "workspace:*",
+    "@types/sql.js": "1.16.0"
   }
 }

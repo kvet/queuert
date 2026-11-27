@@ -5,11 +5,11 @@ import { stepperItems } from "./stepper.ts";
 
 describe("stepperItems", () => {
   it("numbers the steps from one and links each to its page", () => {
-    const items = stepperItems(learnSteps, "branching", () => false);
+    const items = stepperItems(learnSteps, "job-blockers", () => false);
 
-    expect(items.map((item) => item.number)).toEqual([1, 2, 3, 4, 5]);
+    expect(items.map((item) => item.number)).toEqual([1, 2, 3, 4, 5, 6]);
     expect(items[0]?.slug).toBe("learn/first-chain");
-    expect(items[4]?.slug).toBe("learn/errors-and-retries");
+    expect(items[5]?.slug).toBe("learn/job-blockers");
   });
 
   it("marks exactly the open step as current", () => {
@@ -21,9 +21,9 @@ describe("stepperItems", () => {
   });
 
   it("marks done steps from the progress lookup, independent of the current step", () => {
-    const done = new Set(["first-chain", "branching"]);
-    const items = stepperItems(learnSteps, "branching", (id) => done.has(id));
+    const done = new Set(["first-chain", "transactional-completion"]);
+    const items = stepperItems(learnSteps, "transactional-completion", (id) => done.has(id));
 
-    expect(items.map((item) => item.done)).toEqual([true, false, false, true, false]);
+    expect(items.map((item) => item.done)).toEqual([true, false, false, true, false, false]);
   });
 });

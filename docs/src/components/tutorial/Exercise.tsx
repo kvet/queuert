@@ -1,8 +1,24 @@
 import { Box, CheckIcon, ChoiceChips, WarningIcon } from "@queuert/ui/components";
-import { For, Match, Show, Switch, createMemo, createSignal, onSettled } from "solid-js";
+import {
+  For,
+  Match,
+  Show,
+  Switch,
+  createEffect,
+  createMemo,
+  createSignal,
+  onSettled,
+} from "solid-js";
 
 import { learnSteps } from "../../data/learn.ts";
+import { createSyncedTabs, selectSyncedTab } from "../mdx/Tabs.tsx";
 import { ChainView } from "./ChainView.tsx";
+import {
+  type TutorialDatabase,
+  databaseFile,
+  databaseOfLabel,
+  tutorialDatabases,
+} from "./databases.ts";
 import type { ExerciseEditor } from "./editor.ts";
 import { markStepDone } from "./progress.ts";
 import { type ChainEvent, groupFrames } from "./recorder.ts";
@@ -60,14 +76,17 @@ type RunState = { status: "idle" } | { status: "running" } | ExerciseResult;
 
 /**
  * A tutorial lesson's code, editable and runnable in the browser, with the lesson's `start` and
- * `solution` files, its `check` and the highlighted start files that the build exports from a step
- * page with a `<TryIt>`. The prerendered page shows the highlighted code, and the editor takes over
- * once the page hydrates, restoring the reader's draft for the lesson.
+ * `solution` files, each database's `db.ts`, its `check` and the highlighted start files that the
+ * build exports from a step page with a `<TryIt>`. The prerendered page shows the highlighted code,
+ * and the editor takes over once the page hydrates, restoring the reader's draft for the lesson.
+ * The database follows the install picker's state adapter pick, PostgreSQL unless it is SQLite, and
+ * its `db.ts` shows read-only beside the reader's files.
  */
 export const Exercise = (props: {
   lesson: string;
   start: string;
   solution: string;
+  databases: string;
   check: string;
   html: string;
   task?: string;
@@ -75,9 +94,16 @@ export const Exercise = (props: {
 }) => {
   const start = JSON.parse(props.start) as ExerciseFiles;
   const solution = JSON.parse(props.solution) as ExerciseFiles;
+  const databases = JSON.parse(props.databases) as Record<TutorialDatabase, string>;
   const check = props.check;
   const html = JSON.parse(props.html) as Record<string, string>;
-  const fileNames = Object.keys(start);
+  const fileNames = [...Object.keys(start), databaseFile];
+  const syncedTab = createSyncedTabs();
+  const database = () => databaseOfLabel(syncedTab("state"));
+  const withDatabase = (lessonFiles: ExerciseFiles, pick: TutorialDatabase) => ({
+    ...lessonFiles,
+    [databaseFile]: databases[pick],
+  });
 
   let files: ExerciseFiles = { ...start };
   let editor: ExerciseEditor | undefined;
@@ -124,7 +150,12 @@ export const Exercise = (props: {
   const controller = createRunController({
     launch: async (handlers) => {
       const { runExercise } = await import("./client.ts");
-      return runExercise({ files, check, ...handlers });
+      return runExercise({
+        files: withDatabase(files, database()),
+        database: database(),
+        check,
+        ...handlers,
+      });
     },
     onStart: () => {
       stopPlayer();
@@ -174,8 +205,12 @@ export const Exercise = (props: {
 
   const load = (next: ExerciseFiles) => {
     files = { ...next };
-    editor?.load(files);
+    editor?.load(withDatabase(files, database()));
   };
+
+  createEffect(database, (pick) => {
+    editor?.load(withDatabase(files, pick));
+  });
 
   onSettled(() => {
     let disposed = false;
@@ -186,10 +221,12 @@ export const Exercise = (props: {
         if (disposed || editorHost === undefined) return;
         editor = createExerciseEditor({
           parent: editorHost,
-          files,
+          files: withDatabase(files, database()),
           file: file(),
+          readOnly: [databaseFile],
           language: exerciseLanguage,
           onChange: (changed, source) => {
+            if (changed === databaseFile) return;
             files = { ...files, [changed]: source };
             writeDraft(props.lesson, files);
           },
@@ -268,19 +305,27 @@ export const Exercise = (props: {
             </p>
           )}
         </Show>
-        <Show when={fileNames.length > 1}>
-          <div class="px-4 pt-3">
-            <ChoiceChips
-              label="File"
-              options={fileNames.map((name) => ({ value: name, label: name }))}
-              value={file()}
-              onChange={(name) => {
-                setFile(name);
-                editor?.show(name);
-              }}
-            />
-          </div>
-        </Show>
+        <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 pt-3">
+          <ChoiceChips
+            label="File"
+            options={fileNames.map((name) => ({ value: name, label: name }))}
+            value={file()}
+            onChange={(name) => {
+              setFile(name);
+              editor?.show(name);
+            }}
+          />
+          <ChoiceChips
+            label="Database"
+            options={tutorialDatabases.map(({ id, label }) => ({ value: id, label }))}
+            value={database()}
+            onChange={(id) => {
+              const option = tutorialDatabases.find((candidate) => candidate.id === id);
+              if (option !== undefined) selectSyncedTab("state", option.label);
+              clearOutput();
+            }}
+          />
+        </div>
         <Show when={!editorReady()}>
           <div
             class="code-html [&_pre]:[overflow-wrap:anywhere] [&_pre]:whitespace-pre-wrap"

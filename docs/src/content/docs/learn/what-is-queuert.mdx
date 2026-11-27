@@ -22,7 +22,15 @@ Queuert is a **job-chain library**: durable, typed background work that lives in
   </Flow>
 </Diagram>
 
-The unit of work is a typed **chain** of jobs, possibly of different types. Each job's input, output and continuation are inferred end to end, so a rename or a wrong shape is a compile error. Because a chain starts inside your database transaction, the work that follows a write commits or rolls back with the data that triggered it. There is no separate queue to keep in sync (the [transactional outbox pattern](https://microservices.io/patterns/data/transactional-outbox.html), built in).
+The unit of work is a typed **chain** of jobs, possibly of different types. Each job's input, output and continuation are inferred end to end, so a rename or a wrong shape is a compile error. Because a chain starts inside your database transaction, the work that follows a write commits or rolls back with the data that triggered it. There is no separate queue to keep in sync.
+
+## Guarantees
+
+- **Transactional outbox.** A chain started inside your transaction commits or rolls back with your data, and workers only see committed jobs. [Transactional outbox](../transactional-outbox/) teaches it.
+- **Nothing is dropped.** An attempt that throws, or whose worker dies, puts the job back to `pending`, and it runs again with backoff until it completes. [Errors and retries](../errors-and-retries/) teaches it.
+- **Transactional completion.** A job's outcome commits in the same transaction as the writes it made, once, so a retry never applies them twice. [Transactional completion](../transactional-completion/) teaches it.
+- **No stale writes.** An attempt that no longer owns its job, because its worker's lease ran out, cannot complete it; its transaction rolls back.
+- **Checked by the compiler.** Inputs, outputs, continuations and blockers are typed from one set of job type definitions.
 
 ## Where it fits
 
@@ -35,8 +43,6 @@ For one-on-one comparisons see the [comparison pages](/queuert/comparison/).
 
 ## Features
 
-- **Transactional at both ends.** Enqueueing and finishing a job (with its next step) commit in your own transaction.
-- **Typed chains.** Inputs, outputs, continuations and blockers are checked by the compiler.
 - **Lives in your database.** PostgreSQL, SQLite, MySQL/MariaDB or Redis, with no workflow server to run.
 - **Fast wakeup.** With a notify adapter, workers are woken when a row commits instead of waiting for the next poll.
 - **Fan-in, scheduling and deduplication** are built in: wait for several chains, delay or retry with backoff, collapse duplicates by key.

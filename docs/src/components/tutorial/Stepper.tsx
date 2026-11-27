@@ -6,14 +6,14 @@ import { siteHref } from "../../docs/href.ts";
 import { createStepDone } from "./progress.ts";
 import { stepperItems } from "./stepper.ts";
 
-/** The Basics steps across the top of a `layout: "step"` page: a way back to Learn, then each step as a link. */
+/** The Learn steps across the top of a `layout: "step"` page: a way back to Learn, then each step as a link. */
 export const Stepper = (props: { current: string }) => {
   const isDone = createStepDone();
   const items = () => stepperItems(learnSteps, props.current, isDone);
   const open = () => items().find((item) => item.current);
 
   return (
-    <nav aria-label="Basics steps" class="pt-6" data-stepper>
+    <nav aria-label="Learn steps" class="pt-6" data-stepper>
       <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
         <a
           href={siteHref("/learn/")}

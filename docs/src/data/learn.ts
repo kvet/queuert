@@ -1,4 +1,10 @@
-export type LearnStep = { id: string; title: string; minutes: number; summary: string };
+export type LearnStep = {
+  id: string;
+  title: string;
+  minutes: number;
+  summary: string;
+  group: "essentials" | "shaping-chains";
+};
 
 export const learnSteps: LearnStep[] = [
   {
@@ -6,30 +12,55 @@ export const learnSteps: LearnStep[] = [
     title: "Your first chain",
     minutes: 2,
     summary: "Define a job type, start a chain and let a worker process it.",
+    group: "essentials",
   },
   {
-    id: "chains-in-your-transaction",
-    title: "Chains in your transaction",
+    id: "transactional-outbox",
+    title: "Transactional outbox",
     minutes: 3,
-    summary: "Start a chain next to your own write so both commit or roll back together.",
-  },
-  {
-    id: "continuing-a-chain",
-    title: "Continuing a chain",
-    minutes: 3,
-    summary: "Hand a chain from one job to the next with continueWith.",
-  },
-  {
-    id: "branching",
-    title: "Branching",
-    minutes: 3,
-    summary: "Pick the next job at runtime.",
+    summary:
+      "Start a chain in the transaction that saves your data, so neither exists without the other.",
+    group: "essentials",
   },
   {
     id: "errors-and-retries",
     title: "Errors and retries",
+    minutes: 3,
+    summary: "A job that throws or whose worker dies goes back to pending and runs again.",
+    group: "essentials",
+  },
+  {
+    id: "transactional-completion",
+    title: "Transactional completion",
+    minutes: 3,
+    summary:
+      "Complete a job in the transaction that writes its result, so a retry never applies it twice.",
+    group: "essentials",
+  },
+  {
+    id: "continuing-a-chain",
+    title: "Continuing a chain",
     minutes: 4,
-    summary: "Throw, go back to pending and retry with backoff.",
+    summary: "Hand a chain from one job to the next with continueWith, and branch at runtime.",
+    group: "shaping-chains",
+  },
+  {
+    id: "job-blockers",
+    title: "Job blockers",
+    minutes: 4,
+    summary: "Make a job wait until other chains complete.",
+    group: "shaping-chains",
+  },
+];
+
+export const learnGroups: { id: LearnStep["group"]; intro: string }[] = [
+  {
+    id: "essentials",
+    intro: "How a chain runs and what Queuert guarantees about it.",
+  },
+  {
+    id: "shaping-chains",
+    intro: "Chains of several jobs, and jobs that wait for other chains.",
   },
 ];
 
@@ -43,9 +74,9 @@ export const learnStepSlug = (step: LearnStep): string => `learn/${step.id}`;
 
 export const goFurther: { slug: string; title: string; summary: string }[] = [
   {
-    slug: "guides/job-blockers",
-    title: "Job blockers",
-    summary: "Make a job wait for other chains to complete before it starts.",
+    slug: "guides/chain-patterns",
+    title: "Chain patterns",
+    summary: "Loops, go-to jumps and other chain shapes.",
   },
   {
     slug: "guides/scheduling",

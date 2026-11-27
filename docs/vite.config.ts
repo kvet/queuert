@@ -16,6 +16,7 @@ const base = new URL(siteUrl).pathname;
 
 export default defineConfig({
   base,
+  oxc: { target: "es2022" },
   worker: { format: "es", plugins: () => [tutorialTypes()] },
   optimizeDeps: {
     include: [
@@ -30,6 +31,7 @@ export default defineConfig({
       "minisearch",
       "typescript",
     ],
+    exclude: ["@electric-sql/pglite"],
   },
   plugins: [
     content({ base }),

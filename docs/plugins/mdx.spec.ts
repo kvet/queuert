@@ -391,6 +391,17 @@ describe("TryIt in MDX", () => {
         join(examplesDirectory, "tutorial/src/lesson", folder, "index.ts"),
         `export const ${folder} = 1;\n`,
       );
+      writeFileSync(
+        join(examplesDirectory, "tutorial/src/lesson", folder, "db.ts"),
+        'export * from "../../db/postgres.ts";\n',
+      );
+    }
+    mkdirSync(join(examplesDirectory, "tutorial/src/db"));
+    for (const database of ["postgres", "sqlite"]) {
+      writeFileSync(
+        join(examplesDirectory, "tutorial/src/db", `${database}.ts`),
+        `export const database = "${database}";\n`,
+      );
     }
     writeFileSync(
       join(examplesDirectory, "tutorial/src/lesson/check.ts"),
@@ -411,6 +422,7 @@ describe("TryIt in MDX", () => {
     expect(output).toMatch(/export const exercise\b/);
     expect(output).toContain('"start":');
     expect(output).toContain('"solution":');
+    expect(output).toContain('"databases":');
     expect(output).toContain('"check":');
     expect(output).toContain('"html":');
     expect(output).not.toMatch(/<TryIt[^>]*\bstart=/);

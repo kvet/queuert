@@ -1,40 +1,71 @@
 import "../integrations/dashboard/demo/dispose-symbols.ts";
+import * as pglite from "@electric-sql/pglite";
+import * as postgres from "@queuert/postgres";
+import * as sqlite from "@queuert/sqlite";
+import * as pgliteProvider from "example-postgresql-state-pglite/provider";
 import * as queuert from "queuert";
+import initSqlJs from "sql.js";
 import typescript from "typescript";
 import { describe, expect, it } from "vitest";
 
-import { listExercises, readExercise } from "../../../plugins/exercise.ts";
+import { type Exercise, listExercises, readExercise } from "../../../plugins/exercise.ts";
 import { readTutorialTypes } from "../../../plugins/tutorial-types.ts";
+import { type TutorialDatabase, databaseFile, tutorialDatabases } from "./databases.ts";
 import { foldImports } from "./fold.ts";
 import { createExerciseLanguage } from "./language.ts";
 import { type ChainEvent, createChainRecorder, groupFrames, reduceChains } from "./recorder.ts";
 import { compileExercise, executeExercise, formatLog } from "./runtime.ts";
 
-const run = async (files: Record<string, string>, check: string) => {
+const databaseModules = {
+  "@electric-sql/pglite": pglite,
+  "@queuert/postgres": postgres,
+  "@queuert/sqlite": sqlite,
+  "example-postgresql-state-pglite/provider": pgliteProvider,
+  "sql.js": initSqlJs,
+};
+
+const run = async (
+  files: Record<string, string>,
+  check: string,
+  modules: Record<string, unknown> = { queuert },
+) => {
   const compiled = compileExercise(typescript, files, check);
   expect(compiled.diagnostics).toEqual([]);
   const logs: string[] = [];
   const result = await executeExercise({
     compiled,
-    modules: { queuert },
+    modules: { ...databaseModules, ...modules },
     onLog: (log) => logs.push(log.text),
   });
   return { result, logs };
 };
 
+const withDatabase = (
+  exercise: Exercise,
+  files: Record<string, string>,
+  database: TutorialDatabase,
+) => ({ ...files, [databaseFile]: exercise.databases[database] });
+
+const lessonsOnDatabases = listExercises().flatMap((lesson) =>
+  tutorialDatabases.map(({ id }) => [lesson, id] as const),
+);
+
 const passingCheck = "export const check = () => {};";
 
-describe.each(listExercises())("tutorial lesson %s", (lesson) => {
+describe.each(lessonsOnDatabases)("tutorial lesson %s on %s", (lesson, database) => {
   const exercise = readExercise(lesson);
 
   it("passes its check with the solution", async () => {
-    const { result, logs } = await run(exercise.solution, exercise.check);
+    const { result, logs } = await run(
+      withDatabase(exercise, exercise.solution, database),
+      exercise.check,
+    );
 
     expect(result, logs.join("\n")).toEqual({ status: "passed" });
   });
 
   it("fails its check with the start files", async () => {
-    const { result } = await run(exercise.start, exercise.check);
+    const { result } = await run(withDatabase(exercise, exercise.start, database), exercise.check);
 
     expect(result.status).toBe("failed");
   });
@@ -110,35 +141,47 @@ describe("formatLog", () => {
 describe("createExerciseLanguage", () => {
   const language = createExerciseLanguage(typescript, readTutorialTypes());
 
-  it.each(listExercises())("type-checks lesson %s's start and solution cleanly", (lesson) => {
-    const exercise = readExercise(lesson);
+  it.each(lessonsOnDatabases)(
+    "type-checks lesson %s's start and solution cleanly on %s",
+    (lesson, database) => {
+      const exercise = readExercise(lesson);
+      const diagnostics = (files: Record<string, string>) =>
+        language
+          .diagnostics(withDatabase(exercise, files, database))
+          .map((diagnostic) => diagnostic.text);
 
-    expect(language.diagnostics(exercise.start).map((diagnostic) => diagnostic.text)).toEqual([]);
-    expect(language.diagnostics(exercise.solution).map((diagnostic) => diagnostic.text)).toEqual(
-      [],
-    );
-  });
+      expect(diagnostics(exercise.start)).toEqual([]);
+      expect(diagnostics(exercise.solution)).toEqual([]);
+    },
+  );
 
   it("reports a job type name queuert's types reject", () => {
-    const files = readExercise("first-chain").solution;
-    const broken = files["index.ts"].replace(
+    const exercise = readExercise("first-chain");
+    const broken = exercise.solution["index.ts"].replace(
       'typeName: "send-welcome-email", input',
       'typeName: "send-welcome-sms", input',
     );
 
-    const diagnostics = language.diagnostics({ "index.ts": broken });
+    const diagnostics = language.diagnostics(
+      withDatabase(exercise, { "index.ts": broken }, "postgres"),
+    );
 
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0].text).toMatch(/^index\.ts:\d+:\d+ .*send-welcome-sms/s);
   });
 
   it("shows the declared type on hover and completes job type names", () => {
-    const source = readExercise("first-chain").solution["index.ts"];
-    const files = { "index.ts": source };
+    const exercise = readExercise("first-chain");
+    const source = exercise.solution["index.ts"];
+    const files = withDatabase(exercise, { "index.ts": source }, "postgres");
 
     const hover = language.quickInfo(files, "index.ts", source.indexOf("createClient("));
     const completions = language.completions(
-      { "index.ts": source.replace('typeName: "send-welcome-email"', 'typeName: "') },
+      withDatabase(
+        exercise,
+        { "index.ts": source.replace('typeName: "send-welcome-email"', 'typeName: "') },
+        "postgres",
+      ),
       "index.ts",
       source.indexOf('typeName: "send-welcome-email"') + 'typeName: "'.length,
     );
@@ -176,7 +219,10 @@ describe("createChainRecorder", () => {
     const events: ChainEvent[] = [];
     const result = await executeExercise({
       compiled: compileExercise(typescript, files, check),
-      modules: { queuert: createChainRecorder(queuert, (event) => events.push(event)) },
+      modules: {
+        ...databaseModules,
+        queuert: createChainRecorder(queuert, (event) => events.push(event)),
+      },
     });
     return { result, events };
   };
@@ -184,7 +230,10 @@ describe("createChainRecorder", () => {
   it.each(listExercises())("records lesson %s's solution as completed chains", async (lesson) => {
     const exercise = readExercise(lesson);
 
-    const { result, events } = await record(exercise.solution, exercise.check);
+    const { result, events } = await record(
+      withDatabase(exercise, exercise.solution, "postgres"),
+      exercise.check,
+    );
     const chains = reduceChains(events);
 
     expect(result).toEqual({ status: "passed" });
@@ -195,7 +244,10 @@ describe("createChainRecorder", () => {
   it("steps through a continued chain one commit at a time", async () => {
     const exercise = readExercise("continuing-a-chain");
 
-    const { events } = await record(exercise.solution, exercise.check);
+    const { events } = await record(
+      withDatabase(exercise, exercise.solution, "postgres"),
+      exercise.check,
+    );
     const frames = groupFrames(events);
 
     expect(frames.map((frame) => frame.map((event) => event.kind))).toEqual([

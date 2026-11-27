@@ -1,6 +1,6 @@
 ---
 title: Errors and retries
-description: Retry a job that throws, with backoff, until an attempt succeeds.
+description: Retry a job that throws, with backoff, until an attempt succeeds, and recover the jobs of a worker that died.
 layout: step
 ---
 
@@ -23,6 +23,8 @@ When a job throws, nothing is lost: the worker puts it back to pending and runs 
 Each run of the handler is an attempt. An attempt that throws, or ends without committing `applyJobOutcome`, fails: the job returns to `pending`, its `attempt` count goes up and the error is kept as `lastAttemptError`. The chain stays open, and a job that keeps throwing keeps being retried; there is no dead-letter state.
 
 The delay before the next attempt is the backoff. It starts at `initialDelayMs`, grows by `multiplier` after every failure in a row, and stops growing at `maxDelayMs`. The defaults start at 10 seconds, which suits a real outage and is far too slow for a lesson. Set `backoffConfig` on a processor to choose its own delays; [Retry and backoff](../../how-it-works/worker-runner/#retry-and-backoff) has the formula.
+
+A worker can also die mid-attempt, from a crash, a deploy or a lost network. While it runs, a worker renews a lease on its row in the database; once the lease runs out, 60 seconds by default, another worker reclaims its running jobs, puts them back to `pending` and runs them again. If the old process wakes up later, its `applyJobOutcome` finds that the attempt no longer owns the job and throws, so its transaction rolls back and writes nothing. [Worker lease](../../how-it-works/worker-runner/#worker-lease) has the details.
 
 The `sync-to-crm` job below calls a CRM that is down for its first two attempts. With the default backoff the retries come too late for the lesson's three-second wait, so the chain never finishes. The output shows each attempt and the error that failed it.
 

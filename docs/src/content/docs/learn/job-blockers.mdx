@@ -1,0 +1,38 @@
+---
+title: Job blockers
+description: Make a job wait until other chains complete, and read their outputs when it runs.
+layout: step
+---
+
+import { Arrow, Diagram, Flow, Node, Rows, Transition } from "../../../components/diagram";
+
+A job can wait for other chains: it starts as `blocked` and becomes `pending` once every chain it is blocked by has completed.
+
+<Diagram label="Completed capture-payment and reserve-stock chains unblock ship-order, which moves from blocked to pending">
+  <Flow>
+    <Rows spine="end" columns="auto minmax(2.5rem, auto)">
+      <Flow>
+        <Node status="completed">capture-payment</Node>
+        <Arrow head="none" />
+      </Flow>
+      <Flow>
+        <Node status="completed">reserve-stock</Node>
+        <Arrow head="none" />
+      </Flow>
+    </Rows>
+    <Node sub={<Transition from="blocked" to="pending" />}>ship-order</Node>
+  </Flow>
+</Diagram>
+
+A job type declares what it waits for in `blockers`, a tuple of job type references: `blockers: [{ typeName: "capture-payment" }, { typeName: "reserve-stock" }]`. `client.createChain` then takes the chains to wait for in `blockers`, and TypeScript checks them against the tuple. Create the blockers and the blocked chain in one transaction, so either all of them exist or none do.
+
+When the blocked job runs, `job.blockers` holds the blocker chains in the same order, each with its typed `output`, so a blocked job can read what its blockers produced, such as the payment ID. A blocker's chain can be as long as you like: the job waits for its last job to complete.
+
+Below, a worker runs three jobs at once. `ship-order` has no blockers, so it ships the order straight away, before the payment is captured and the stock is reserved.
+
+<TryIt lesson="job-blockers">in `job-types.ts`, give `ship-order` the `blockers` `capture-payment` and `reserve-stock`; then pass the payment and stock chains as `blockers` when `index.ts` creates the `ship-order` chain.</TryIt>
+
+## Related guides
+
+- [Job blockers](../../guides/job-blockers/): blockers by ID, variadic blockers and the blocker limit.
+- [Job type references](../../how-it-works/job-type-references/): nominal and structural references to job types.

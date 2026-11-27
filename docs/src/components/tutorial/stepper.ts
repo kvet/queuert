@@ -9,7 +9,7 @@ export type StepperItem = {
   done: boolean;
 };
 
-/** The Basics steps in order, each flagged as the open one and as passed or marked read. */
+/** The Learn steps in order, each flagged as the open one and as passed or marked read. */
 export const stepperItems = (
   steps: LearnStep[],
   currentId: string,

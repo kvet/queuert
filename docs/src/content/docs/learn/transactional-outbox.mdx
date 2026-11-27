@@ -1,0 +1,43 @@
+---
+title: Transactional outbox
+description: Start a chain in the transaction that saves your data, so the job exists exactly when the data does.
+layout: step
+---
+
+import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/diagram";
+
+Most background work follows a write: a user signs up, then gets a welcome email. When the job and the user are two separate writes, a failure between them leaves one without the other. The transactional outbox removes the gap by saving the job in the same transaction as the data.
+
+<Diagram label="A transaction holds the INSERT of the user and createChain; commit leaves a pending job for the worker, rollback leaves neither">
+  <Flow>
+    <Group title="transaction" dashed>
+      <Flow>
+        <Node sub="INSERT INTO users">save user</Node>
+        <Arrow />
+        <Node sub="same txCtx">client.createChain(…)</Node>
+      </Flow>
+    </Group>
+    <Rows spine columns="minmax(6rem, auto) auto">
+      <Flow>
+        <Arrow label="COMMIT" />
+        <Node status="pending">send-welcome-email</Node>
+      </Flow>
+      <Flow>
+        <Arrow label="ROLLBACK" failure />
+        <Node variant="ghost" sub="no user, no job">nothing</Node>
+      </Flow>
+    </Rows>
+  </Flow>
+</Diagram>
+
+With a separate queue, the two writes can drift apart in either order. Queue the email first and a failed save sends it to a user who does not exist; save first and a crash before the queue call leaves a user who never hears from you. [The dual-write problem](../../blog/dual-write-problem/) walks through each case. The outbox pattern writes the message into a table of the same database instead, inside the transaction that saves the data, and a relay delivers it after the commit. With Queuert the jobs table is the outbox and the worker is the relay, so there is no separate queue to keep in sync.
+
+Passing the same `txCtx` to your own SQL and to `client.createChain` puts both writes in one transaction: the job commits with the user and rolls back with it. A worker only ever sees committed jobs.
+
+Below, `signUp` creates the chain in one transaction and saves the user in a second. The second sign-up reuses ada's email, so its `INSERT` fails on the `UNIQUE` constraint, but its chain has already committed and the worker emails a user who was never saved.
+
+<TryIt lesson="transactional-outbox">make `signUp` insert the user and create the chain in one `withTransaction`, so a sign-up that fails queues no email.</TryIt>
+
+## Related guides
+
+- [Tx hooks](../../guides/tx-hooks/): run your own side effects only after the transaction commits.

@@ -15,8 +15,11 @@ const Tick = (props: { done: boolean }) => (
   </span>
 );
 
-/** The ordered Basics steps with a tick for each one passed or marked read in this browser. */
-export const StepProgress = (props: { steps: LearnStep[] }) => {
+/**
+ * Learn steps in order, numbered from `first`, with a tick for each one passed or marked read in
+ * this browser.
+ */
+export const StepProgress = (props: { steps: LearnStep[]; first?: number }) => {
   const isDone = createStepDone();
 
   return (
@@ -31,7 +34,7 @@ export const StepProgress = (props: { steps: LearnStep[] }) => {
               <Tick done={isDone(step.id)} />
               <span class="flex min-w-0 flex-1 flex-col gap-1">
                 <span class="text-[15px] font-semibold text-fg group-hover:text-accent-fg">
-                  {index() + 1}. {step.title}
+                  {index() + (props.first ?? 1)}. {step.title}
                 </span>
                 <span class="text-[13px] text-fg-muted">{step.summary}</span>
               </span>
@@ -44,7 +47,7 @@ export const StepProgress = (props: { steps: LearnStep[] }) => {
   );
 };
 
-/** A small control near the end of a Basics step that ticks it on the Learn page without the exercise. */
+/** A small control near the end of a Learn step that ticks it on the Learn page without the exercise. */
 export const MarkAsRead = (props: { id: string }) => {
   const isDone = createStepDone();
 

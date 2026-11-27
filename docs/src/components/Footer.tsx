@@ -17,7 +17,7 @@ const columns: { title: string; links: FooterLink[] }[] = [
     title: "Learn",
     links: [
       { label: "What is Queuert", href: siteHref("/learn/what-is-queuert/") },
-      { label: "Basics", href: siteHref("/learn/") },
+      { label: "Lessons", href: siteHref("/learn/") },
       { label: "Use it in your app", href: siteHref("/learn/use-it-in-your-app/") },
     ],
   },

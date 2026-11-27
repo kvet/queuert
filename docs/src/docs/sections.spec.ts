@@ -88,10 +88,11 @@ describe("siteSections", () => {
       "learn",
       "learn/what-is-queuert",
       "learn/first-chain",
-      "learn/chains-in-your-transaction",
-      "learn/continuing-a-chain",
-      "learn/branching",
+      "learn/transactional-outbox",
       "learn/errors-and-retries",
+      "learn/transactional-completion",
+      "learn/continuing-a-chain",
+      "learn/job-blockers",
       "learn/use-it-in-your-app",
     ]);
   });

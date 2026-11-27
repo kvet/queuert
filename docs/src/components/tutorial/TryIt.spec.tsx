@@ -8,6 +8,7 @@ describe("TaskProvider", () => {
     lesson: "first-chain",
     start: JSON.stringify({ "index.ts": "" }),
     solution: JSON.stringify({ "index.ts": "" }),
+    databases: JSON.stringify({ postgres: "", sqlite: "" }),
     check: "export const check = () => {};",
     html: JSON.stringify({ "index.ts": "<pre>start</pre>" }),
   };

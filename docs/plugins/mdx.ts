@@ -233,7 +233,7 @@ const remarkExampleCode =
 
 /**
  * Reads the lesson of a page's one `<TryIt lesson>` from `examples/tutorial/src/<lesson>/` and
- * exports its start and solution files (as JSON), its check and the highlighted start files from the
+ * exports its start and solution files and each database's `db.ts` (as JSON), its check and the highlighted start files from the
  * page module as `exercise`, for the task panel. The `<TryIt>` line keeps only its lesson.
  */
 const remarkTryIt =
@@ -265,6 +265,7 @@ const remarkTryIt =
       lesson: exercise.lesson,
       start: JSON.stringify(exercise.start),
       solution: JSON.stringify(exercise.solution),
+      databases: JSON.stringify(exercise.databases),
       check: exercise.check,
       html: JSON.stringify(html),
     };

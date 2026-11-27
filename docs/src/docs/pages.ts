@@ -15,6 +15,7 @@ export type DocModule = {
     lesson: string;
     start: string;
     solution: string;
+    databases: string;
     check: string;
     html: string;
   };

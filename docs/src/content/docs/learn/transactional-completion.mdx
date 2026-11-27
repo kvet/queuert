@@ -1,0 +1,44 @@
+---
+title: Transactional completion
+description: Complete a job in the transaction that writes its result, so a retried job never applies its result twice.
+layout: step
+---
+
+import { Arrow, Diagram, Flow, Group, Node, Rows } from "../../../components/diagram";
+
+A job can run more than once: an attempt that throws or whose worker dies is retried. Writes to your database stay safe when they share a transaction with `applyJobOutcome`, because the job's result and its completion then commit together, exactly once.
+
+<Diagram label="A transaction holds the UPDATE of the stock and applyJobOutcome; commit keeps both and completes the job, a crash rolls both back and the job is retried">
+  <Flow>
+    <Group title="transaction" dashed>
+      <Flow>
+        <Node sub="UPDATE products">reserve stock</Node>
+        <Arrow />
+        <Node sub="same txCtx">applyJobOutcome(…)</Node>
+      </Flow>
+    </Group>
+    <Rows spine columns="minmax(6rem, auto) auto">
+      <Flow>
+        <Arrow label="COMMIT" />
+        <Node status="completed">reserve-stock</Node>
+      </Flow>
+      <Flow>
+        <Arrow label="crash" failure />
+        <Node status="pending" sub="stock unchanged, retried">reserve-stock</Node>
+      </Flow>
+    </Rows>
+  </Flow>
+</Diagram>
+
+The previous lesson showed what happens to a failed attempt: the job goes back to `pending` and the handler runs again from the top. Anything the first attempt committed on its own stays committed, so a handler that updates a row in one transaction and completes the job in another applies that update once per attempt. Spreading the same `txCtx` into your SQL and into `applyJobOutcome` closes the gap: if the attempt fails before the commit, the update rolls back with the completion, and once it commits the job is completed and never runs again.
+
+This covers writes to your own database. A call to another service, such as a payment API, cannot join the transaction, so it can run again on a retry: pass `job.id` as its idempotency key so the service applies it once. [Job processing reliability](../../how-it-works/processing-reliability/) walks through every place an attempt can fail.
+
+The `reserve-stock` job below takes 2 lamps from a stock of 10, but runs its `UPDATE` before the transaction that completes the job, and its first attempt crashes in between. The retry reserves the lamps again and the stock ends at 6.
+
+<TryIt lesson="transactional-completion">run the `UPDATE` inside the transaction with `sql(txCtx)`, so the crashed attempt's reservation rolls back and the stock ends at 8.</TryIt>
+
+## Related guides
+
+- [Error handling](../../guides/error-handling/): end a job with a domain error, or compensate with a follow-up job.
+- [Workerless outcomes](../../guides/workerless-outcomes/): complete a job from your own transaction, without a worker.

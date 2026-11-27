@@ -11,9 +11,9 @@ An attempt is one run of a job's handler. Queuert opens no transaction around it
 
 ## Transactional design
 
-Jobs are created inside the same transaction as your application state, the transactional outbox pattern. If the transaction rolls back, the job is never created, and the job always references state that exists. The [Chains in your transaction](/queuert/learn/chains-in-your-transaction/) lesson shows the call; the [dual-write problem](../../blog/dual-write-problem/) post explains what it replaces.
+Jobs are created inside the same transaction as your application state, the transactional outbox pattern. If the transaction rolls back, the job is never created, and the job always references state that exists. The [Transactional outbox](/queuert/learn/transactional-outbox/) lesson shows the call; the [dual-write problem](../../blog/dual-write-problem/) post explains what it replaces.
 
-The same holds at the other end. The handler does its reads, external API calls and long computations first, then opens a transaction, writes its domain changes and calls `applyJobOutcome` in it. The outcome (an output that completes the chain, a `continueWith` that adds the next job, or a reschedule) commits or rolls back together with those writes:
+The same holds at the other end. The handler does its reads, external API calls and long computations first, then opens a transaction, writes its domain changes and calls `applyJobOutcome` in it. The outcome (an output that completes the chain, a `continueWith` that adds the next job, or a reschedule) commits or rolls back together with those writes, as the [Transactional completion](/queuert/learn/transactional-completion/) lesson shows:
 
 ```typescript
 attemptHandler: async ({ job, applyJobOutcome }) => {

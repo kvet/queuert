@@ -107,12 +107,13 @@ export type ExerciseEditor = {
 
 /**
  * A CodeMirror editor over a lesson's files, multi-line imports folded; Mod-Enter runs them. `language` type-checks every file
- * as the reader types, shows types on hover and completes from TypeScript.
+ * as the reader types, shows types on hover and completes from TypeScript. The `readOnly` files can be read but not edited.
  */
 export const createExerciseEditor = (options: {
   parent: HTMLElement;
   files: ExerciseFiles;
   file: string;
+  readOnly: string[];
   language: ExerciseLanguageClient;
   onChange: (file: string, source: string) => void;
   onRun: () => void;
@@ -207,6 +208,7 @@ export const createExerciseEditor = (options: {
         javascript({ typescript: true }),
         syntaxHighlighting(highlightStyle),
         theme,
+        EditorState.readOnly.of(options.readOnly.includes(file)),
         languageFeatures(file),
         keymap.of([
           {

@@ -539,6 +539,9 @@ importers:
       '@codemirror/view':
         specifier: 6.43.15
         version: 6.43.15
+      '@electric-sql/pglite':
+        specifier: 0.5.16
+        version: 0.5.16
       '@kobalte/core':
         specifier: 2.0.0-alpha.5
         version: 2.0.0-alpha.5(@solidjs/web@2.0.3(solid-js@2.0.3))(solid-js@2.0.3)
@@ -554,6 +557,12 @@ importers:
       '@queuert/dashboard':
         specifier: workspace:*
         version: link:../packages/dashboard
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../packages/postgres
+      '@queuert/sqlite':
+        specifier: workspace:*
+        version: link:../packages/sqlite
       '@queuert/tsconfig':
         specifier: workspace:*
         version: link:../packages-internal/tsconfig
@@ -587,6 +596,9 @@ importers:
       '@types/node':
         specifier: 24.19.2
         version: 24.19.2
+      '@types/sql.js':
+        specifier: 1.16.0
+        version: 1.16.0
       benchmark-results:
         specifier: workspace:*
         version: link:../packages-internal/benchmark-results
@@ -599,6 +611,9 @@ importers:
       example-observability-dashboard:
         specifier: workspace:*
         version: link:../examples/observability/dashboard
+      example-postgresql-state-pglite:
+        specifier: workspace:*
+        version: link:../examples/postgresql/state-pglite
       filesystem-routing:
         specifier: 0.5.0
         version: 0.5.0(vite@8.3.8(@types/node@24.19.2)(jiti@2.7.0)(yaml@2.9.1))
@@ -659,6 +674,9 @@ importers:
       solid-js:
         specifier: 2.0.3
         version: 2.0.3
+      sql.js:
+        specifier: 1.17.0
+        version: 1.17.0
       tailwindcss:
         specifier: 4.3.5
         version: 4.3.5
@@ -879,7 +897,7 @@ importers:
         version: link:../../../packages-internal/tsconfig
       drizzle-orm:
         specifier: 0.45.4
-        version: 0.45.4(@electric-sql/pglite@0.4.3)(@opentelemetry/api@1.10.0)(@prisma/client@7.10.1(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.2.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@9.6.0)(@types/pg@8.23.1)(better-sqlite3@13.2.0)(bun-types@1.4.4)(knex@3.3.0(better-sqlite3@13.2.0)(mariadb@3.5.5)(mysql2@3.24.6(@types/node@24.19.2))(pg@8.23.1))(kysely@0.29.9)(mysql2@3.24.6(@types/node@24.19.2))(pg@8.23.1)(postgres@4.1.1)(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.2.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))
+        version: 0.45.4(@electric-sql/pglite@0.4.3)(@opentelemetry/api@1.10.0)(@prisma/client@7.10.1(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.2.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@9.6.0)(@types/pg@8.23.1)(@types/sql.js@1.16.0)(better-sqlite3@13.2.0)(bun-types@1.4.4)(knex@3.3.0(better-sqlite3@13.2.0)(mariadb@3.5.5)(mysql2@3.24.6(@types/node@24.19.2))(pg@8.23.1))(kysely@0.29.9)(mysql2@3.24.6(@types/node@24.19.2))(pg@8.23.1)(postgres@4.1.1)(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.2.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(sql.js@1.17.0)
       mysql2:
         specifier: 3.24.6
         version: 3.24.6(@types/node@24.19.2)
@@ -1387,7 +1405,7 @@ importers:
         version: 8.23.1
       drizzle-orm:
         specifier: 0.45.4
-        version: 0.45.4(@electric-sql/pglite@0.4.3)(@opentelemetry/api@1.10.0)(@prisma/client@7.10.1(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.2.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@9.6.0)(@types/pg@8.23.1)(better-sqlite3@13.2.0)(bun-types@1.4.4)(knex@3.3.0(better-sqlite3@13.2.0)(mariadb@3.5.5)(mysql2@3.24.6(@types/node@24.19.2))(pg@8.23.1))(kysely@0.29.9)(mysql2@3.24.6(@types/node@24.19.2))(pg@8.23.1)(postgres@4.1.1)(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.2.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))
+        version: 0.45.4(@electric-sql/pglite@0.4.3)(@opentelemetry/api@1.10.0)(@prisma/client@7.10.1(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.2.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@9.6.0)(@types/pg@8.23.1)(@types/sql.js@1.16.0)(better-sqlite3@13.2.0)(bun-types@1.4.4)(knex@3.3.0(better-sqlite3@13.2.0)(mariadb@3.5.5)(mysql2@3.24.6(@types/node@24.19.2))(pg@8.23.1))(kysely@0.29.9)(mysql2@3.24.6(@types/node@24.19.2))(pg@8.23.1)(postgres@4.1.1)(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.2.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(sql.js@1.17.0)
       pg:
         specifier: 8.23.1
         version: 8.23.1
@@ -1693,7 +1711,7 @@ importers:
         version: 13.2.0
       drizzle-orm:
         specifier: 0.45.4
-        version: 0.45.4(@electric-sql/pglite@0.4.3)(@opentelemetry/api@1.10.0)(@prisma/client@7.10.1(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.2.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@9.6.0)(@types/pg@8.23.1)(better-sqlite3@13.2.0)(bun-types@1.4.4)(knex@3.3.0(better-sqlite3@13.2.0)(mariadb@3.5.5)(mysql2@3.24.6(@types/node@24.19.2))(pg@8.23.1))(kysely@0.29.9)(mysql2@3.24.6(@types/node@24.19.2))(pg@8.23.1)(postgres@4.1.1)(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.2.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))
+        version: 0.45.4(@electric-sql/pglite@0.4.3)(@opentelemetry/api@1.10.0)(@prisma/client@7.10.1(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.2.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@9.6.0)(@types/pg@8.23.1)(@types/sql.js@1.16.0)(better-sqlite3@13.2.0)(bun-types@1.4.4)(knex@3.3.0(better-sqlite3@13.2.0)(mariadb@3.5.5)(mysql2@3.24.6(@types/node@24.19.2))(pg@8.23.1))(kysely@0.29.9)(mysql2@3.24.6(@types/node@24.19.2))(pg@8.23.1)(postgres@4.1.1)(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.2.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(sql.js@1.17.0)
       queuert:
         specifier: workspace:*
         version: link:../../../packages/core
@@ -1802,13 +1820,31 @@ importers:
 
   examples/tutorial:
     dependencies:
+      '@electric-sql/pglite':
+        specifier: 0.5.16
+        version: 0.5.16
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
+      '@queuert/sqlite':
+        specifier: workspace:*
+        version: link:../../packages/sqlite
+      example-postgresql-state-pglite:
+        specifier: workspace:*
+        version: link:../postgresql/state-pglite
       queuert:
         specifier: workspace:*
         version: link:../../packages/core
+      sql.js:
+        specifier: 1.17.0
+        version: 1.17.0
     devDependencies:
       '@queuert/tsconfig':
         specifier: workspace:*
         version: link:../../packages-internal/tsconfig
+      '@types/sql.js':
+        specifier: 1.16.0
+        version: 1.16.0
 
   examples/validation/arktype:
     dependencies:
@@ -4314,6 +4350,9 @@ packages:
   '@types/dockerode@4.0.2':
     resolution: {integrity: sha512-hA4myZ0XzwHG/p/eCLElYsQS3y1XZfvi6AfLFKVp1SNpPkO6J3xLatacAFVkReTxXRoIa3eHJmhJi9w6I3+zNA==}
 
+  '@types/emscripten@1.41.6':
+    resolution: {integrity: sha512-uN+9i8bFT5CUcZfyIEYDrSueACEyKGbUs5kC/72DGlZZoinh84sJfVV0i8UOJD1asdzkvLPBRrKs41kZ8MdEXg==}
+
   '@types/estree-jsx@1.0.5':
     resolution: {integrity: sha512-52CcUVNFyfb1A2ALocQw/Dd1BQFNmSdkuC3BkZ6iqhdMfQz7JWOFRuJFloOzjk+6WijU56m9oKXFAXc7o3Towg==}
 
@@ -4358,6 +4397,9 @@ packages:
 
   '@types/retry@0.12.5':
     resolution: {integrity: sha512-3xSjTp3v03X/lSQLkczaN9UIEwJMoMCA1+Nb5HfbJEQWogdeQIyVtTvxPXDQjZ5zws8rFQfVfRdz03ARihPJgw==}
+
+  '@types/sql.js@1.16.0':
+    resolution: {integrity: sha512-GKyBpH0SOnplgFqfdLSJ27LhNmY2JokyIIOvGevVjuD3WZ2fMuEmT8u+wIX+pTUID4Pl1D5aH0kXZ0TB9gkTZw==}
 
   '@types/ssh2-streams@0.1.13':
     resolution: {integrity: sha512-faHyY3brO9oLEA0QlcO8N2wT7R0+1sHWZvQ+y3rMLwdY1ZyS1z0W3t65j9PqT4HmQ6ALzNe7RZlNuCNE0wBSWA==}
@@ -6642,6 +6684,9 @@ packages:
   sql-escaper@1.9.1:
     resolution: {integrity: sha512-4p522TVYaJXTbMlYgAwacjyg3EJyYe9KYWYlYJVwZG1YjtzxU5m5iSzsZoGI69Po7j3i/2tKlpZQi7uvhTL+WA==}
     engines: {bun: '>=1.0.0', deno: '>=2.0.0', node: '>=12.0.0'}
+
+  sql.js@1.17.0:
+    resolution: {integrity: sha512-HNdo5+2eSTEm7iLcfXUd2mjZX3Oe+5mJ0uDgIpirS7gSLHhZIw9kWDWxNcDVeFGEIBxJlkgo525g0CZJoH8GgA==}
 
   sqlstring@2.3.3:
     resolution: {integrity: sha512-qC9iz2FlN7DQl3+wjwn3802RTyjCx7sDvfQEXchwa6CWOx07/WVfh91gBmQ9fahw8snwGEWU3xGzOt4tFyHLxg==}
@@ -9014,6 +9059,8 @@ snapshots:
       '@types/node': 24.19.2
       '@types/ssh2': 1.15.6
 
+  '@types/emscripten@1.41.6': {}
+
   '@types/estree-jsx@1.0.5':
     dependencies:
       '@types/estree': 1.0.10
@@ -9063,6 +9110,11 @@ snapshots:
       csstype: 3.2.4
 
   '@types/retry@0.12.5': {}
+
+  '@types/sql.js@1.16.0':
+    dependencies:
+      '@types/emscripten': 1.41.6
+      '@types/node': 24.19.2
 
   '@types/ssh2-streams@0.1.13':
     dependencies:
@@ -9685,13 +9737,14 @@ snapshots:
 
   dotenv@17.4.2: {}
 
-  drizzle-orm@0.45.4(@electric-sql/pglite@0.4.3)(@opentelemetry/api@1.10.0)(@prisma/client@7.10.1(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.2.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@9.6.0)(@types/pg@8.23.1)(better-sqlite3@13.2.0)(bun-types@1.4.4)(knex@3.3.0(better-sqlite3@13.2.0)(mariadb@3.5.5)(mysql2@3.24.6(@types/node@24.19.2))(pg@8.23.1))(kysely@0.29.9)(mysql2@3.24.6(@types/node@24.19.2))(pg@8.23.1)(postgres@4.1.1)(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.2.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)):
+  drizzle-orm@0.45.4(@electric-sql/pglite@0.4.3)(@opentelemetry/api@1.10.0)(@prisma/client@7.10.1(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.2.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@9.6.0)(@types/pg@8.23.1)(@types/sql.js@1.16.0)(better-sqlite3@13.2.0)(bun-types@1.4.4)(knex@3.3.0(better-sqlite3@13.2.0)(mariadb@3.5.5)(mysql2@3.24.6(@types/node@24.19.2))(pg@8.23.1))(kysely@0.29.9)(mysql2@3.24.6(@types/node@24.19.2))(pg@8.23.1)(postgres@4.1.1)(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.2.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(sql.js@1.17.0):
     optionalDependencies:
       '@electric-sql/pglite': 0.4.3
       '@opentelemetry/api': 1.10.0
       '@prisma/client': 7.10.1(prisma@7.10.0(@types/react@19.3.0)(better-sqlite3@13.2.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(typescript@7.0.2)
       '@types/better-sqlite3': 9.6.0
       '@types/pg': 8.23.1
+      '@types/sql.js': 1.16.0
       better-sqlite3: 13.2.0
       bun-types: 1.4.4
       knex: 3.3.0(better-sqlite3@13.2.0)(mariadb@3.5.5)(mysql2@3.24.6(@types/node@24.19.2))(pg@8.23.1)
@@ -9700,6 +9753,7 @@ snapshots:
       pg: 8.23.1
       postgres: 4.1.1
       prisma: 7.10.0(@types/react@19.3.0)(better-sqlite3@13.2.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
+      sql.js: 1.17.0
 
   dts-resolver@3.0.0: {}
 
@@ -11658,6 +11712,8 @@ snapshots:
   split2@4.2.0: {}
 
   sql-escaper@1.9.1: {}
+
+  sql.js@1.17.0: {}
 
   sqlstring@2.3.3: {}
 

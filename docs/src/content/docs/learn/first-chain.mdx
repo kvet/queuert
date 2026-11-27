@@ -22,9 +22,11 @@ A chain is Queuert's unit of work: your code creates it, a worker processes it, 
 
 A job type names a kind of work and the shapes of its input and output. `defineJobTypes` declares them once, and both the client that starts chains and the worker that processes them read the same definitions, so a wrong input is a compile error. An `entry` type can start a chain.
 
-`client.createChain` starts a chain of that type, and the first job lands as `pending` in your state adapter. A worker runner picks it up, runs the type's `attemptHandler` and completes the job through `applyJobOutcome` with its output. `client.awaitChain` waits for the chain and returns that output.
+Chains and jobs are rows in your own database. The lessons run on a real one inside your browser, PostgreSQL through PGlite or SQLite through sql.js; pick either above the editor. `db.ts` opens it, applies Queuert's migration and hands back the `stateAdapter` that the client and the worker read and write through. It also exports a small `sql` helper the later lessons use for their own tables.
 
-The code below already defines `send-welcome-email`, keeps its state in memory with the in-process state adapter, and starts a worker runner that processes it. Nothing happens yet, because no chain asks for the work.
+`client.createChain` inserts the chain's first job as `pending`. A worker runner picks it up, runs the type's `attemptHandler` and completes the job through `applyJobOutcome` with its output. `client.awaitChain` waits for the chain and returns that output.
+
+The code below already defines `send-welcome-email` and starts a worker runner that processes it. Nothing happens yet, because no chain asks for the work.
 
 <TryIt lesson="first-chain">create a `send-welcome-email` chain for user `"ada"` with `client.createChain`, wait for it with `client.awaitChain`, and log the chain's output.</TryIt>
 

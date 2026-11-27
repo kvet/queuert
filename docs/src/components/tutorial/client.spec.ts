@@ -79,6 +79,7 @@ describe("client", () => {
 
     const run = runExercise({
       files: { "index.ts": "" },
+      database: "postgres",
       check: "",
       onLog: () => {},
       onChainEvent: () => {},
@@ -94,6 +95,7 @@ describe("client", () => {
 
     const run = runExercise({
       files: { "index.ts": "" },
+      database: "postgres",
       check: "",
       onLog: () => {},
       onChainEvent: () => {},
@@ -102,7 +104,8 @@ describe("client", () => {
 
     await expect(run.result).resolves.toEqual({
       status: "error",
-      message: "The run did not finish within 15s",
+      message:
+        "The run did not finish within 15s. A query inside a transaction that is not given its txCtx, such as sql() in place of sql(txCtx), waits for that transaction and never runs.",
     });
     expect(workers).toHaveLength(1);
   });
@@ -113,6 +116,7 @@ describe("client", () => {
 
     const run = runExercise({
       files: { "index.ts": "" },
+      database: "postgres",
       check: "",
       onLog: () => {},
       onChainEvent: () => {},
@@ -133,7 +137,8 @@ describe("client", () => {
 
     await expect(run.result).resolves.toEqual({
       status: "error",
-      message: "The run did not finish within 15s",
+      message:
+        "The run did not finish within 15s. A query inside a transaction that is not given its txCtx, such as sql() in place of sql(txCtx), waits for that transaction and never runs.",
     });
     expect(workers[1].terminated).toBe(true);
   });

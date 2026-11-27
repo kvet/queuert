@@ -1,3 +1,4 @@
+import type { TutorialDatabase } from "./databases.ts";
 import type { ExerciseLanguage } from "./language.ts";
 import type {
   CompilerRequest,
@@ -85,6 +86,7 @@ export type ExerciseRun = { result: Promise<ExerciseResult>; cancel: () => void 
  */
 export const runExercise = (options: {
   files: ExerciseFiles;
+  database: TutorialDatabase;
   check: string;
   onLog: (log: ExerciseLog) => void;
   onChainEvent: (event: ChainEvent) => void;
@@ -104,7 +106,10 @@ export const runExercise = (options: {
   });
 
   timeout = setTimeout(() => {
-    settle({ status: "error", message: `The run did not finish within ${runTimeoutMs / 1000}s` });
+    settle({
+      status: "error",
+      message: `The run did not finish within ${runTimeoutMs / 1000}s. A query inside a transaction that is not given its txCtx, such as sql() in place of sql(txCtx), waits for that transaction and never runs.`,
+    });
   }, runTimeoutMs);
   void ask({ kind: "compile", files: options.files, check: options.check })
     .then(({ compiled, diagnostics }) => {
@@ -128,7 +133,10 @@ export const runExercise = (options: {
       runner.addEventListener("error", (event) => {
         settle({ status: "error", message: event.message || "The run crashed" });
       });
-      const request: RunRequest = { compiled: { files: compiled.files, check: compiled.check } };
+      const request: RunRequest = {
+        compiled: { files: compiled.files, check: compiled.check },
+        database: options.database,
+      };
       runner.postMessage(request);
     })
     .catch((error: unknown) => {
