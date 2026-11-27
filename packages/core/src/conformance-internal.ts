@@ -30,6 +30,7 @@ export {
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
   stateAdapterConcurrentTransactionLockWaitGroups,
+  stateAdapterConcurrentTransactionTwoConnectionGroups,
   stateAdapterCountCapGroups,
   stateAdapterSavepointGroups,
   stateAdapterSchemaFenceConcurrentTransactionGroups,

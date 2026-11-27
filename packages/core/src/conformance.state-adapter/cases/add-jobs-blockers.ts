@@ -743,60 +743,6 @@ export const addJobsBlockersConcurrentTransactionsGroup: ConformanceGroup<StateA
         },
       },
       {
-        name: "reports a blocker chain completed after the transaction's first read as complete",
-        run: async ({ createStateAdapter }) => {
-          await using stateAdapter = await createStateAdapter();
-
-          const [blockerChain, mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
-            stateAdapter.createJobs({
-              txCtx,
-              jobs: [
-                {
-                  id: stateAdapter.config.generateJobId(),
-                  typeName: "late-completed-blocker",
-                  input: null,
-                },
-                { id: stateAdapter.config.generateJobId(), typeName: "main", input: null },
-              ],
-            }),
-          );
-
-          const firstRead = Promise.withResolvers<void>();
-          const completerDone = Promise.withResolvers<void>();
-          const addTx = stateAdapter.withTransaction(async (txCtx) => {
-            await stateAdapter.getChains({ txCtx, chainIds: [blockerChain.id] });
-            firstRead.resolve();
-            await completerDone.promise;
-            return stateAdapter.addJobsBlockers({
-              txCtx,
-              jobBlockers: [{ jobId: mainChain.head.id, blockedByChainIds: [blockerChain.id] }],
-            });
-          });
-          await firstRead.promise;
-
-          try {
-            await stateAdapter.withTransaction(async (txCtx) => {
-              await stateAdapter.completeJobs({
-                txCtx,
-                jobs: [{ jobId: blockerChain.head.id, output: null }],
-              });
-              await stateAdapter.unblockJobs({ txCtx, blockedByChainId: blockerChain.id });
-            });
-          } finally {
-            completerDone.resolve();
-          }
-
-          const [added] = await addTx;
-          assert.equal(added.status, "pending");
-          assert.deepEqual(
-            added.blockers.map((blocker) => blocker?.status),
-            ["completed"],
-          );
-          const [stored] = await stateAdapter.getJobs({ jobIds: [mainChain.head.id] });
-          assert.equal(stored!.status, "pending");
-        },
-      },
-      {
         name: "concurrent attaches and completions of shared blocker chains leave no dependent blocked",
         run: async ({ createStateAdapter }) => {
           await using stateAdapter = await createStateAdapter();
@@ -853,6 +799,67 @@ export const addJobsBlockersConcurrentTransactionsGroup: ConformanceGroup<StateA
             dependents.map((dependent) => dependent!.status),
             dependentIds.map(() => "pending"),
           );
+        },
+      },
+    ],
+  };
+
+export const addJobsBlockersConcurrentTransactionsTwoConnectionGroup: ConformanceGroup<StateAdapterConformanceContext> =
+  {
+    name: "addJobsBlockers",
+    cases: [
+      {
+        name: "reports a blocker chain completed after the transaction's first read as complete",
+        run: async ({ createStateAdapter }) => {
+          await using stateAdapter = await createStateAdapter();
+
+          const [blockerChain, mainChain] = await stateAdapter.withTransaction(async (txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "late-completed-blocker",
+                  input: null,
+                },
+                { id: stateAdapter.config.generateJobId(), typeName: "main", input: null },
+              ],
+            }),
+          );
+
+          const firstRead = Promise.withResolvers<void>();
+          const completerDone = Promise.withResolvers<void>();
+          const addTx = stateAdapter.withTransaction(async (txCtx) => {
+            await stateAdapter.getChains({ txCtx, chainIds: [blockerChain.id] });
+            firstRead.resolve();
+            await completerDone.promise;
+            return stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [{ jobId: mainChain.head.id, blockedByChainIds: [blockerChain.id] }],
+            });
+          });
+          await firstRead.promise;
+
+          try {
+            await stateAdapter.withTransaction(async (txCtx) => {
+              await stateAdapter.completeJobs({
+                txCtx,
+                jobs: [{ jobId: blockerChain.head.id, output: null }],
+              });
+              await stateAdapter.unblockJobs({ txCtx, blockedByChainId: blockerChain.id });
+            });
+          } finally {
+            completerDone.resolve();
+          }
+
+          const [added] = await addTx;
+          assert.equal(added.status, "pending");
+          assert.deepEqual(
+            added.blockers.map((blocker) => blocker?.status),
+            ["completed"],
+          );
+          const [stored] = await stateAdapter.getJobs({ jobIds: [mainChain.head.id] });
+          assert.equal(stored!.status, "pending");
         },
       },
     ],

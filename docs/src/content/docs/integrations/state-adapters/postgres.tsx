@@ -385,8 +385,11 @@ const Page = () => (
           table and reports a serialization failure, and that <code>withTransaction</code> runs no
           statement before its callback. The cases run at the isolation level of your provider's
           transactions; to cover several levels, create the cases once per level, over providers
-          whose connections default to it. The factory, <code>withNonTransactionContext</code>, the
-          optional <code>withSavepoint</code> and the per-case adapter work as described in{" "}
+          whose connections default to it. A provider that runs every transaction on one connection,
+          such as PGlite, passes <code>singleConnection: true</code>, which leaves out the cases
+          that need a second transaction to run while the first is still open. The factory,{" "}
+          <code>withNonTransactionContext</code>, the optional <code>withSavepoint</code> and the
+          per-case adapter work as described in{" "}
           <a href={siteHref("/integrations/state-adapters/#testing-your-provider")}>
             Testing your provider
           </a>

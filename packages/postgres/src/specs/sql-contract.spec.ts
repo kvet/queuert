@@ -9,6 +9,7 @@ import {
   stateAdapterAsyncLockWaitGroups,
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
+  stateAdapterConcurrentTransactionTwoConnectionGroups,
   stateAdapterConcurrentTransactionLockWaitGroups,
   type StateAdapterConformanceContext,
 } from "queuert/conformance-internal";
@@ -344,6 +345,7 @@ describe("PostgreSQL SQL contract", () => {
       ...stateAdapterAsyncGroups,
       ...stateAdapterAsyncLockWaitGroups,
       ...stateAdapterConcurrentTransactionGroups,
+      ...stateAdapterConcurrentTransactionTwoConnectionGroups,
       ...stateAdapterConcurrentTransactionLockWaitGroups,
     ],
   });

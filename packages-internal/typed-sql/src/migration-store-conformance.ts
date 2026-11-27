@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
 
 import { assertRejects } from "@queuert/helpers/assert-rejects";
 import { raceWithSleep, sleep } from "@queuert/helpers/sleep";
@@ -63,7 +62,7 @@ export const migrationStoreBaseGroups: MigratorConformanceGroup[] = [
       {
         name: "initialize is idempotent and starts with an empty history",
         run: dynamicSyncAsync(function* (context: MigratorConformanceContext<Mode>) {
-          const prefix = `conformance_${randomBytes(4).toString("hex")}`;
+          const prefix = `conformance_${crypto.randomUUID().slice(0, 8)}`;
           const store = yield* resource({
             ...context.createMigrationStore({
               migrationTableName: `${prefix}_migration`,
@@ -85,7 +84,7 @@ export const migrationStoreBaseGroups: MigratorConformanceGroup[] = [
       {
         name: "records, lists and unrecords migrations",
         run: dynamicSyncAsync(function* (context: MigratorConformanceContext<Mode>) {
-          const prefix = `conformance_${randomBytes(4).toString("hex")}`;
+          const prefix = `conformance_${crypto.randomUUID().slice(0, 8)}`;
           const store = yield* resource({
             ...context.createMigrationStore({
               migrationTableName: `${prefix}_migration`,
@@ -115,7 +114,7 @@ export const migrationStoreBaseGroups: MigratorConformanceGroup[] = [
       {
         name: "applies a transactional migration and its record in the migration's transaction",
         run: dynamicSyncAsync(function* (context: MigratorConformanceContext<Mode>) {
-          const prefix = `conformance_${randomBytes(4).toString("hex")}`;
+          const prefix = `conformance_${crypto.randomUUID().slice(0, 8)}`;
           const item = `${prefix}_item`;
           const createItems = syncAsync(function* (txCtx: unknown) {
             yield* step(context.executeSql(`CREATE TABLE ${item} (id INTEGER PRIMARY KEY)`, txCtx));
@@ -160,7 +159,7 @@ export const migrationStoreBaseGroups: MigratorConformanceGroup[] = [
       {
         name: "rolls back a failing transactional migration's row writes and record",
         run: dynamicSyncAsync(function* (context: MigratorConformanceContext<Mode>) {
-          const prefix = `conformance_${randomBytes(4).toString("hex")}`;
+          const prefix = `conformance_${crypto.randomUUID().slice(0, 8)}`;
           const item = `${prefix}_item`;
           const seedItems = syncAsync(function* (txCtx: unknown) {
             yield* step(context.executeSql(`INSERT INTO ${item} (id) VALUES (1)`, txCtx));
@@ -207,7 +206,7 @@ export const migrationStoreBaseGroups: MigratorConformanceGroup[] = [
       {
         name: "records a non-transactional migration after its `up` and unrecords it after its `down`",
         run: dynamicSyncAsync(function* (context: MigratorConformanceContext<Mode>) {
-          const prefix = `conformance_${randomBytes(4).toString("hex")}`;
+          const prefix = `conformance_${crypto.randomUUID().slice(0, 8)}`;
           const item = `${prefix}_item`;
           const store = yield* resource({
             ...context.createMigrationStore({
@@ -264,7 +263,7 @@ export const migrationStoreBaseGroups: MigratorConformanceGroup[] = [
       {
         name: "names the failing migration, keeping the driver error as the cause",
         run: dynamicSyncAsync(function* (context: MigratorConformanceContext<Mode>) {
-          const prefix = `conformance_${randomBytes(4).toString("hex")}`;
+          const prefix = `conformance_${crypto.randomUUID().slice(0, 8)}`;
           const item = `${prefix}_item`;
           const store = yield* resource({
             ...context.createMigrationStore({
@@ -313,7 +312,7 @@ export const migrationStoreTransactionalDdlGroups: MigratorConformanceGroup[] = 
       {
         name: "rolls back a failing transactional migration's work and record",
         run: dynamicSyncAsync(function* (context: MigratorConformanceContext<Mode>) {
-          const prefix = `conformance_${randomBytes(4).toString("hex")}`;
+          const prefix = `conformance_${crypto.randomUUID().slice(0, 8)}`;
           const item = `${prefix}_item`;
           const createItems = syncAsync(function* (txCtx: unknown) {
             yield* step(context.executeSql(`CREATE TABLE ${item} (id INTEGER PRIMARY KEY)`, txCtx));
@@ -367,7 +366,7 @@ export const migrationStoreLeaseGroups: MigratorConformanceGroup[] = [
       {
         name: "lets one owner hold the lease at a time",
         run: dynamicSyncAsync(function* (context: MigratorConformanceContext<Mode>) {
-          const prefix = `conformance_${randomBytes(4).toString("hex")}`;
+          const prefix = `conformance_${crypto.randomUUID().slice(0, 8)}`;
           const store = yield* resource({
             ...context.createMigrationStore({
               migrationTableName: `${prefix}_migration`,
@@ -398,7 +397,7 @@ export const migrationStoreLeaseGroups: MigratorConformanceGroup[] = [
       {
         name: "lets another owner take an expired lease",
         run: dynamicSyncAsync(function* (context: MigratorConformanceContext<Mode>) {
-          const prefix = `conformance_${randomBytes(4).toString("hex")}`;
+          const prefix = `conformance_${crypto.randomUUID().slice(0, 8)}`;
           const store = yield* resource({
             ...context.createMigrationStore({
               migrationTableName: `${prefix}_migration`,
@@ -425,7 +424,7 @@ export const migrationStoreLeaseGroups: MigratorConformanceGroup[] = [
       {
         name: "applies each migration once when two migrators run at once",
         run: dynamicSyncAsync(function* (context: MigratorConformanceContext<Mode>) {
-          const prefix = `conformance_${randomBytes(4).toString("hex")}`;
+          const prefix = `conformance_${crypto.randomUUID().slice(0, 8)}`;
           const tables = {
             migrationTableName: `${prefix}_migration`,
             lockTableName: `${prefix}_lock`,
@@ -491,7 +490,7 @@ export const migrationStoreLeaseGroups: MigratorConformanceGroup[] = [
       {
         name: "makes a migration transaction wait for an open one while the history is empty",
         run: dynamicSyncAsync(function* (context: MigratorConformanceContext<Mode>) {
-          const prefix = `conformance_${randomBytes(4).toString("hex")}`;
+          const prefix = `conformance_${crypto.randomUUID().slice(0, 8)}`;
           const tables = {
             migrationTableName: `${prefix}_migration`,
             lockTableName: `${prefix}_lock`,

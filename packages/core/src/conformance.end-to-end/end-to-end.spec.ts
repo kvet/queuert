@@ -10,6 +10,7 @@ import {
   stateAdapterAsyncLockWaitGroups,
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
+  stateAdapterConcurrentTransactionTwoConnectionGroups,
   stateAdapterConcurrentTransactionLockWaitGroups,
 } from "../conformance.state-adapter/groups.ts";
 import {
@@ -107,6 +108,7 @@ describe("createStateAdapterEndToEndConformanceCases", () => {
       titlesOf([
         ...stateAdapterBaseGroups,
         ...stateAdapterConcurrentTransactionGroups,
+        ...stateAdapterConcurrentTransactionTwoConnectionGroups,
         ...stateAdapterConcurrentTransactionLockWaitGroups,
       ]),
     );

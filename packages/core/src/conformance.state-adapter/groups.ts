@@ -3,6 +3,7 @@ import {
   addJobsBlockersGroup,
   addJobsBlockersConcurrentTransactionsGroup,
   addJobsBlockersConcurrentTransactionsLockWaitGroup,
+  addJobsBlockersConcurrentTransactionsTwoConnectionGroup,
 } from "./cases/add-jobs-blockers.ts";
 import { closeGroup } from "./cases/close.ts";
 import {
@@ -77,6 +78,7 @@ import {
   startJobAttemptHeldTransactionGroup,
   startJobAttemptHeldTransactionLockWaitGroup,
   startJobAttemptConcurrentTransactionsGroup,
+  startJobAttemptConcurrentTransactionsTwoConnectionGroup,
 } from "./cases/start-job-attempt.ts";
 import { startWorkerGroup } from "./cases/start-worker.ts";
 import { stopWorkerGroup } from "./cases/stop-worker.ts";
@@ -89,6 +91,7 @@ import {
   unblockJobsGroup,
   unblockJobsConcurrentTransactionsGroup,
   unblockJobsConcurrentTransactionsLockWaitGroup,
+  unblockJobsConcurrentTransactionsTwoConnectionGroup,
 } from "./cases/unblock-jobs.ts";
 import {
   withTransactionGroup,
@@ -179,6 +182,13 @@ export const stateAdapterConcurrentTransactionLockWaitGroups: ConformanceGroup<S
     addJobsBlockersConcurrentTransactionsLockWaitGroup,
     unblockJobsConcurrentTransactionsLockWaitGroup,
     deleteChainsConcurrentTransactionsLockWaitGroup,
+  ];
+
+export const stateAdapterConcurrentTransactionTwoConnectionGroups: ConformanceGroup<StateAdapterConformanceContext>[] =
+  [
+    addJobsBlockersConcurrentTransactionsTwoConnectionGroup,
+    unblockJobsConcurrentTransactionsTwoConnectionGroup,
+    startJobAttemptConcurrentTransactionsTwoConnectionGroup,
   ];
 
 export const stateAdapterSchemaFenceGroups: ConformanceGroup<SchemaFenceConformanceContext>[] = [

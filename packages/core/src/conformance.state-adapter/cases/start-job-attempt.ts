@@ -1249,6 +1249,13 @@ export const startJobAttemptConcurrentTransactionsGroup: ConformanceGroup<StateA
           assert.equal(acquiredIds.length + remaining.length, count);
         },
       },
+    ],
+  };
+
+export const startJobAttemptConcurrentTransactionsTwoConnectionGroup: ConformanceGroup<StateAdapterConformanceContext> =
+  {
+    name: "startJobAttempts",
+    cases: [
       {
         name: "a claim in an open transaction leaves the other due jobs to a concurrent claim",
         run: async ({ createStateAdapter }) => {

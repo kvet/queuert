@@ -12,6 +12,7 @@ import {
   stateAdapterAsyncLockWaitGroups,
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
+  stateAdapterConcurrentTransactionTwoConnectionGroups,
   stateAdapterConcurrentTransactionLockWaitGroups,
 } from "./groups.ts";
 import type { StateAdapterConformanceContext } from "./types.ts";
@@ -77,6 +78,7 @@ export const createStateAdapterConformanceCases = ({
       ...(concurrent === true
         ? [
             ...stateAdapterConcurrentTransactionGroups,
+            ...stateAdapterConcurrentTransactionTwoConnectionGroups,
             ...stateAdapterConcurrentTransactionLockWaitGroups,
           ]
         : []),

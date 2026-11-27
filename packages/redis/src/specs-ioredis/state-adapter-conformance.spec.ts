@@ -4,6 +4,7 @@ import { acquireRedis } from "@queuert/testcontainers";
 import { Redis } from "ioredis";
 import {
   stateAdapterConcurrentTransactionGroups,
+  stateAdapterConcurrentTransactionTwoConnectionGroups,
   stateAdapterCountCapGroups,
 } from "queuert/conformance-internal";
 import { it as baseIt, describe } from "vitest";
@@ -65,7 +66,10 @@ describe("Redis State Provider Conformance (ioredis)", () => {
 describe("Redis State Adapter Conformance (ioredis) - Concurrent Transactions", () => {
   conformanceTestSuite({
     it,
-    groups: stateAdapterConcurrentTransactionGroups,
+    groups: [
+      ...stateAdapterConcurrentTransactionGroups,
+      ...stateAdapterConcurrentTransactionTwoConnectionGroups,
+    ],
   });
 });
 

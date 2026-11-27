@@ -837,80 +837,6 @@ export const unblockJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapt
     name: "unblockJobs",
     cases: [
       {
-        name: "concurrent blocker chain completions unblock all jobs sharing those blockers",
-        run: async ({ createStateAdapter }) => {
-          await using stateAdapter = await createStateAdapter();
-          const blockerCount = 5;
-          const mainCount = 5;
-
-          const blockerJobs = (
-            await stateAdapter.withTransaction((txCtx) =>
-              stateAdapter.createJobs({
-                txCtx,
-                jobs: Array.from({ length: blockerCount }, (_, index) => ({
-                  id: stateAdapter.config.generateJobId(),
-                  typeName: "shared-blocker",
-                  input: { index },
-                })),
-              }),
-            )
-          ).map((r) => r.head);
-
-          const mainJobs = (
-            await stateAdapter.withTransaction((txCtx) =>
-              stateAdapter.createJobs({
-                txCtx,
-                jobs: Array.from({ length: mainCount }, (_, index) => ({
-                  id: stateAdapter.config.generateJobId(),
-                  typeName: "shared-main",
-                  input: { index },
-                })),
-              }),
-            )
-          ).map((r) => r.head);
-
-          await stateAdapter.withTransaction((txCtx) =>
-            stateAdapter.addJobsBlockers({
-              txCtx,
-              jobBlockers: mainJobs.map((main) => ({
-                jobId: main.id,
-                blockedByChainIds: blockerJobs.map((b) => b.chainId),
-              })),
-            }),
-          );
-
-          let readyCount = 0;
-          const allReady = Promise.withResolvers<void>();
-          const release = Promise.withResolvers<void>();
-
-          const allDone = Promise.all(
-            blockerJobs.map(async (blocker) =>
-              stateAdapter.withTransaction(async (txCtx) => {
-                readyCount++;
-                if (readyCount === blockerCount) allReady.resolve();
-                await release.promise;
-                await stateAdapter.completeJobs({
-                  txCtx,
-                  jobs: [{ jobId: blocker.id, output: null }],
-                });
-                await stateAdapter.unblockJobs({ txCtx, blockedByChainId: blocker.chainId });
-              }),
-            ),
-          );
-
-          await allReady.promise;
-          release.resolve();
-          await allDone;
-
-          const finalStates = await Promise.all(
-            mainJobs.map(async (main) => stateAdapter.getJobs({ jobIds: [main.id] })),
-          );
-
-          const stranded = finalStates.filter(([job]) => job?.status === "blocked");
-          assert.equal(stranded.length, 0);
-        },
-      },
-      {
         name: "concurrent completions of 16 blocker chains in 8 lanes unblock each of 200 dependents exactly when its last blocker completes",
         run: async ({ createStateAdapter }) => {
           await using stateAdapter = await createStateAdapter();
@@ -995,6 +921,87 @@ export const unblockJobsConcurrentTransactionsGroup: ConformanceGroup<StateAdapt
             await statuses(),
             dependents.map(() => "pending"),
           );
+        },
+      },
+    ],
+  };
+
+export const unblockJobsConcurrentTransactionsTwoConnectionGroup: ConformanceGroup<StateAdapterConformanceContext> =
+  {
+    name: "unblockJobs",
+    cases: [
+      {
+        name: "concurrent blocker chain completions unblock all jobs sharing those blockers",
+        run: async ({ createStateAdapter }) => {
+          await using stateAdapter = await createStateAdapter();
+          const blockerCount = 5;
+          const mainCount = 5;
+
+          const blockerJobs = (
+            await stateAdapter.withTransaction((txCtx) =>
+              stateAdapter.createJobs({
+                txCtx,
+                jobs: Array.from({ length: blockerCount }, (_, index) => ({
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "shared-blocker",
+                  input: { index },
+                })),
+              }),
+            )
+          ).map((r) => r.head);
+
+          const mainJobs = (
+            await stateAdapter.withTransaction((txCtx) =>
+              stateAdapter.createJobs({
+                txCtx,
+                jobs: Array.from({ length: mainCount }, (_, index) => ({
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "shared-main",
+                  input: { index },
+                })),
+              }),
+            )
+          ).map((r) => r.head);
+
+          await stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: mainJobs.map((main) => ({
+                jobId: main.id,
+                blockedByChainIds: blockerJobs.map((b) => b.chainId),
+              })),
+            }),
+          );
+
+          let readyCount = 0;
+          const allReady = Promise.withResolvers<void>();
+          const release = Promise.withResolvers<void>();
+
+          const allDone = Promise.all(
+            blockerJobs.map(async (blocker) =>
+              stateAdapter.withTransaction(async (txCtx) => {
+                readyCount++;
+                if (readyCount === blockerCount) allReady.resolve();
+                await release.promise;
+                await stateAdapter.completeJobs({
+                  txCtx,
+                  jobs: [{ jobId: blocker.id, output: null }],
+                });
+                await stateAdapter.unblockJobs({ txCtx, blockedByChainId: blocker.chainId });
+              }),
+            ),
+          );
+
+          await allReady.promise;
+          release.resolve();
+          await allDone;
+
+          const finalStates = await Promise.all(
+            mainJobs.map(async (main) => stateAdapter.getJobs({ jobIds: [main.id] })),
+          );
+
+          const stranded = finalStates.filter(([job]) => job?.status === "blocked");
+          assert.equal(stranded.length, 0);
         },
       },
     ],

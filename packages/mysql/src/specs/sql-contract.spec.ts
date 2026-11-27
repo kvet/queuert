@@ -8,6 +8,7 @@ import {
   stateAdapterAsyncLockWaitGroups,
   stateAdapterBaseGroups,
   stateAdapterConcurrentTransactionGroups,
+  stateAdapterConcurrentTransactionTwoConnectionGroups,
   stateAdapterConcurrentTransactionLockWaitGroups,
 } from "queuert/conformance-internal";
 import { it as baseIt, describe, expect } from "vitest";
@@ -131,6 +132,7 @@ for (const { image, dialect, connectionOptions } of acquired) {
         ...stateAdapterAsyncGroups,
         ...stateAdapterAsyncLockWaitGroups,
         ...stateAdapterConcurrentTransactionGroups,
+        ...stateAdapterConcurrentTransactionTwoConnectionGroups,
         ...stateAdapterConcurrentTransactionLockWaitGroups,
       ],
     });

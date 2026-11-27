@@ -6,6 +6,7 @@ import {
   endToEndAsyncGroups,
   endToEndBaseGroups,
   stateAdapterConcurrentTransactionGroups,
+  stateAdapterConcurrentTransactionTwoConnectionGroups,
 } from "queuert/conformance-internal";
 import { it as baseIt, describe } from "vitest";
 
@@ -33,7 +34,11 @@ baseIt("index");
 describe("Redis Cluster State Provider Conformance (ioredis)", () => {
   conformanceTestSuite({
     it,
-    groups: [...redisStateProviderConformanceGroups, ...stateAdapterConcurrentTransactionGroups],
+    groups: [
+      ...redisStateProviderConformanceGroups,
+      ...stateAdapterConcurrentTransactionGroups,
+      ...stateAdapterConcurrentTransactionTwoConnectionGroups,
+    ],
   });
 });
 
