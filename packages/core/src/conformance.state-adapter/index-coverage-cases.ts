@@ -79,6 +79,8 @@ export type IndexCoverageCaseKey =
   | "getChainTails/lock"
   | "getChainTails/batch100"
   | "getChainTails/lockBatch100"
+  | "getChainTails/lockBlockers"
+  | "getChainTails/lockBlockersBatch100"
   | "getJobs/default"
   | "getJobs/lock"
   | "getJobs/batch100"
@@ -1486,6 +1488,46 @@ export const operationalCoverageGroups: IndexCoverageGroup[] = [
                     txCtx,
                     chainIds: sentinels.fanIn.blockerChainIds.slice(0, BATCH_SIZE),
                     lock: "exclusive",
+                  }),
+                ),
+              );
+            }),
+          ),
+      },
+      {
+        key: "getChainTails/lockBlockers",
+        label: "+ lock with blockers",
+        run: () => (stateAdapter, sentinels) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.getChainTails({
+                    txCtx,
+                    chainIds: [sentinels.fanIn.blockedJobId],
+                    lock: "exclusive",
+                    lockBlockers: true,
+                  }),
+                ),
+              );
+            }),
+          ),
+      },
+      {
+        key: "getChainTails/lockBlockersBatch100",
+        label: "+ lock with blockers, batch of 100",
+        run: () => (stateAdapter, sentinels) =>
+          runInModeOf(
+            stateAdapter,
+            syncAsync(function* () {
+              yield* step(
+                stateAdapter.withTransaction((txCtx) =>
+                  stateAdapter.getChainTails({
+                    txCtx,
+                    chainIds: sentinels.fanIn.blockedJobIds.slice(0, BATCH_SIZE),
+                    lock: "exclusive",
+                    lockBlockers: true,
                   }),
                 ),
               );

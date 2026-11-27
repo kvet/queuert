@@ -68,7 +68,7 @@ Queuert takes row locks in one order, and a transaction that follows it waits in
 - Lock every chain you need in one read, since a read locks its chains' head jobs in ID order before any other job.
 - Lock the chains a chain waits on before the chain itself, the way completing a chain locks it and then the jobs that wait on it.
 
-A worker that completes a job locks the job before its chain's head, so a locked read can still deadlock with a completion of the same chain. The database then aborts one of the two transactions; retry it on a deadlock error.
+A worker that completes a job locks the job before its chain's head, so a locked read can still deadlock with a completion of the same chain. Deleting chains locks them and the chains they wait on blocker first, so a read that locks a blocker together with a chain that waits on it can deadlock with a delete. The database then aborts one of the two transactions; retry it on a deadlock error.
 
 ## Blockers
 

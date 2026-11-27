@@ -9,7 +9,11 @@ import {
 } from "queuert/conformance-internal";
 import { it as baseIt, describe } from "vitest";
 
-import { capabilityGroups, createEndToEndContext } from "./state-adapter-end-to-end.spec-helper.ts";
+import {
+  capabilityGroups,
+  createEndToEndContext,
+  noRetryGroups,
+} from "./state-adapter-end-to-end.spec-helper.ts";
 
 const { connectionOptions } = await acquireMysql("mariadb:11.4", import.meta.url);
 
@@ -23,6 +27,12 @@ const it = baseIt
     createEndToEndContext(pool, "mariadb", async () => noopNotifyAdapter),
   );
 
+const noRetryIt = it.extend("conformance", { scope: "file" }, async ({ pool }) =>
+  createEndToEndContext(pool, "mariadb", async () => noopNotifyAdapter, {
+    transactionRetry: { maxTries: 1, initialDelayMs: 0, maxDelayMs: 0 },
+  }),
+);
+
 // NOTE: hack for vitest plugin
 baseIt("index");
 
@@ -31,4 +41,8 @@ describe("mariadb:11.4 End-to-End Conformance, noop notify", () => {
     it,
     groups: [...endToEndBaseGroups, ...endToEndAsyncGroups, ...capabilityGroups],
   });
+});
+
+describe("mariadb:11.4 End-to-End Conformance, noop notify, without transaction retries", () => {
+  conformanceTestSuite({ it: noRetryIt, groups: noRetryGroups });
 });

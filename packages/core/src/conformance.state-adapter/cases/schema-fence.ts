@@ -45,6 +45,31 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceContext> =
             ),
           ),
         );
+        try {
+          yield* step(
+            context.withWritesFenced(() =>
+              stateAdapter.withTransaction((txCtx) =>
+                runInModeOf(
+                  stateAdapter,
+                  syncAsync(function* () {
+                    try {
+                      yield* step(
+                        stateAdapter.createJobs({
+                          txCtx,
+                          jobs: [{ id: fencedJobId, typeName: "fenced-create", input: null }],
+                        }),
+                      );
+                    } catch (error) {
+                      assert.ok(error instanceof SchemaFencedError && error.cause !== undefined);
+                    }
+                  }),
+                ),
+              ),
+            ),
+          );
+        } catch (error) {
+          assert.ok(error instanceof Error);
+        }
 
         assert.deepEqual(yield* step(stateAdapter.getJobs({ jobIds: [fencedJobId] })), [undefined]);
       }),
@@ -110,6 +135,40 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceContext> =
             ),
           ),
         );
+        try {
+          yield* step(
+            context.withWritesFenced(() =>
+              stateAdapter.withTransaction((txCtx) =>
+                runInModeOf(
+                  stateAdapter,
+                  syncAsync(function* () {
+                    try {
+                      yield* step(
+                        stateAdapter.continueJobs({
+                          txCtx,
+                          jobs: [
+                            {
+                              id: continuationId,
+                              typeName: "fenced-continue:next",
+                              input: null,
+                              continueFromId: job.id,
+                              attemptToken: job.attemptToken!,
+                              workerId: job.attemptBy!,
+                            },
+                          ],
+                        }),
+                      );
+                    } catch (error) {
+                      assert.ok(error instanceof SchemaFencedError);
+                    }
+                  }),
+                ),
+              ),
+            ),
+          );
+        } catch (error) {
+          assert.ok(error instanceof Error);
+        }
 
         assert.deepEqual(yield* step(stateAdapter.getJobs({ jobIds: [job.id] })), before);
         assert.deepEqual(yield* step(stateAdapter.getJobs({ jobIds: [continuationId] })), [
@@ -155,6 +214,33 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceContext> =
             ),
           ),
         );
+        try {
+          yield* step(
+            context.withWritesFenced(() =>
+              stateAdapter.withTransaction((txCtx) =>
+                runInModeOf(
+                  stateAdapter,
+                  syncAsync(function* () {
+                    try {
+                      yield* step(
+                        stateAdapter.addJobsBlockers({
+                          txCtx,
+                          jobBlockers: [
+                            { jobId: mainChain.head.id, blockedByChainIds: [blockerChain.id] },
+                          ],
+                        }),
+                      );
+                    } catch (error) {
+                      assert.ok(error instanceof SchemaFencedError);
+                    }
+                  }),
+                ),
+              ),
+            ),
+          );
+        } catch (error) {
+          assert.ok(error instanceof Error);
+        }
 
         assert.deepEqual(
           yield* step(stateAdapter.getJobs({ jobIds: [mainChain.head.id] })),
@@ -215,6 +301,28 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceContext> =
             ),
           ),
         );
+        try {
+          yield* step(
+            context.withWritesFenced(() =>
+              stateAdapter.withTransaction((txCtx) =>
+                runInModeOf(
+                  stateAdapter,
+                  syncAsync(function* () {
+                    try {
+                      yield* step(
+                        stateAdapter.unblockJobs({ txCtx, blockedByChainId: blockerChain.id }),
+                      );
+                    } catch (error) {
+                      assert.ok(error instanceof SchemaFencedError);
+                    }
+                  }),
+                ),
+              ),
+            ),
+          );
+        } catch (error) {
+          assert.ok(error instanceof Error);
+        }
 
         assert.equal(before[0]!.status, "blocked");
         assert.deepEqual(
@@ -378,6 +486,31 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceContext> =
             ),
           ),
         );
+        try {
+          yield* step(
+            context.withWritesFenced(() =>
+              stateAdapter.withTransaction((txCtx) =>
+                runInModeOf(
+                  stateAdapter,
+                  syncAsync(function* () {
+                    try {
+                      yield* step(
+                        stateAdapter.completeJobs({
+                          txCtx,
+                          jobs: [{ jobId: chain.head.id, output: null }],
+                        }),
+                      );
+                    } catch (error) {
+                      assert.ok(error instanceof SchemaFencedError);
+                    }
+                  }),
+                ),
+              ),
+            ),
+          );
+        } catch (error) {
+          assert.ok(error instanceof Error);
+        }
 
         assert.deepEqual(yield* step(stateAdapter.getJobs({ jobIds: [chain.head.id] })), before);
       }),
@@ -419,21 +552,36 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceContext> =
       }),
     },
     {
-      name: "deleteChains fails with SchemaFencedError once its writes are fenced, keeping the chain",
+      name: "deleteChains fails with SchemaFencedError once its writes are fenced, keeping the chain and the chain it waits on",
       run: dynamicSyncAsync(function* ({ createStateAdapter, ...context }) {
         const stateAdapter = yield* resource(createStateAdapter());
 
-        const [chain] = yield* step(
+        const [blockerChain, chain] = yield* step(
           stateAdapter.withTransaction((txCtx) =>
             stateAdapter.createJobs({
               txCtx,
               jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "fenced-delete-blocker",
+                  input: null,
+                },
                 { id: stateAdapter.config.generateJobId(), typeName: "fenced-delete", input: null },
               ],
             }),
           ),
         );
-        const before = yield* step(stateAdapter.getJobs({ jobIds: [chain.head.id] }));
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [{ jobId: chain.head.id, blockedByChainIds: [blockerChain.id] }],
+            }),
+          ),
+        );
+        const before = yield* step(
+          stateAdapter.getChains({ chainIds: [blockerChain.id, chain.id] }),
+        );
 
         yield* step(
           context.withWritesFenced(() =>
@@ -446,12 +594,35 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceContext> =
             ),
           ),
         );
+        try {
+          yield* step(
+            context.withWritesFenced(() =>
+              stateAdapter.withTransaction((txCtx) =>
+                runInModeOf(
+                  stateAdapter,
+                  syncAsync(function* () {
+                    try {
+                      yield* step(stateAdapter.deleteChains({ txCtx, chainIds: [chain.id] }));
+                    } catch (error) {
+                      assert.ok(error instanceof SchemaFencedError);
+                    }
+                  }),
+                ),
+              ),
+            ),
+          );
+        } catch (error) {
+          assert.ok(error instanceof Error);
+        }
 
-        assert.deepEqual(yield* step(stateAdapter.getJobs({ jobIds: [chain.head.id] })), before);
+        assert.deepEqual(
+          yield* step(stateAdapter.getChains({ chainIds: [blockerChain.id, chain.id] })),
+          before,
+        );
       }),
     },
     {
-      name: "stopWorker fails with SchemaFencedError once its writes are fenced, keeping the worker",
+      name: "stopWorker fails with SchemaFencedError once its writes are fenced, keeping the worker and its running job",
       run: dynamicSyncAsync(function* ({ createStateAdapter, ...context }) {
         const stateAdapter = yield* resource(createStateAdapter());
 
@@ -463,7 +634,26 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceContext> =
             leaseMs: 60_000,
           }),
         );
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "fenced-stop", input: null },
+              ],
+            }),
+          ),
+        );
+        const [job] = yield* step(
+          stateAdapter.startJobAttempts({
+            workerId: worker.id,
+            workerToken: worker.token,
+            batchLimits: { "fenced-stop": 1 },
+            limit: 1,
+          }),
+        );
         const before = yield* step(stateAdapter.getWorkers({ workerIds: [worker.id] }));
+        const jobBefore = yield* step(stateAdapter.getJobs({ jobIds: [job.id] }));
 
         yield* step(
           context.withWritesFenced(() =>
@@ -475,6 +665,7 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceContext> =
         );
 
         assert.deepEqual(yield* step(stateAdapter.getWorkers({ workerIds: [worker.id] })), before);
+        assert.deepEqual(yield* step(stateAdapter.getJobs({ jobIds: [job.id] })), jobBefore);
       }),
     },
     {

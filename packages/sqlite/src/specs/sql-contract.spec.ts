@@ -100,20 +100,6 @@ const validateBeforeExecute = (
   if (!isPreparableQuery(sql)) return undefined;
   const ctx = `\n  SQL: ${sql.slice(0, 160).replace(/\s+/g, " ")}${sql.length > 160 ? "..." : ""}`;
 
-  const isLockStatement = /^\s*UPDATE\s+\w+\s+SET\s+(\w+)\s*=\s*\1\s/.test(sql);
-  const fencedWrites = sql.match(
-    /\b(?:INSERT INTO|UPDATE)\s+queuert_(?:job|job_blocker|worker)\b/g,
-  );
-  if (fencedWrites !== null && !isLockStatement) {
-    const fenceGuards = sql.match(
-      /NOT EXISTS \(SELECT 1 FROM queuert_schema_fence_v\d+ WHERE 1 = 0\)/g,
-    );
-    expect(
-      fenceGuards?.length ?? 0,
-      `every write to job, job_blocker or worker must reference the write fence${ctx}`,
-    ).toBe(fencedWrites.length);
-  }
-
   const declaredParamCount = Object.keys(paramTypes).length;
   const placeholderCount = countPlaceholders(sql);
   expect(

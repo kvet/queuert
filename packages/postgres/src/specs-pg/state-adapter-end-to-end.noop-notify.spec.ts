@@ -10,7 +10,11 @@ import {
 } from "queuert/conformance-internal";
 import { it as baseIt, describe } from "vitest";
 
-import { capabilityGroups, createEndToEndContext } from "./state-adapter-end-to-end.spec-helper.ts";
+import {
+  capabilityGroups,
+  createEndToEndContext,
+  noRetryGroups,
+} from "./state-adapter-end-to-end.spec-helper.ts";
 
 const pg = await acquirePostgres("postgres:14", import.meta.url);
 
@@ -29,6 +33,12 @@ const it = baseIt
     createEndToEndContext(pool, async () => noopNotifyAdapter),
   );
 
+const noRetryIt = it.extend("conformance", { scope: "file" }, async ({ pool }) =>
+  createEndToEndContext(pool, async () => noopNotifyAdapter, {
+    transactionRetry: { maxTries: 1, initialDelayMs: 0, maxDelayMs: 0 },
+  }),
+);
+
 // NOTE: hack for vitest plugin
 baseIt("index");
 
@@ -37,4 +47,8 @@ describe("PostgreSQL End-to-End Conformance, noop notify", () => {
     it,
     groups: [...endToEndBaseGroups, ...endToEndAsyncGroups, ...capabilityGroups],
   });
+});
+
+describe("PostgreSQL End-to-End Conformance, noop notify, without transaction retries", () => {
+  conformanceTestSuite({ it: noRetryIt, groups: noRetryGroups });
 });

@@ -81,12 +81,16 @@ export const createEndToEndContext = async (
   pool: Pool,
   dialect: "mysql" | "mariadb",
   createNotifyAdapter: EndToEndContext["createNotifyAdapter"],
+  stateAdapterOptions?: Parameters<
+    typeof createMysqlStateProviderConformanceContext
+  >[0]["stateAdapterOptions"],
 ): Promise<EndToEndContext> => ({
   ...createMysqlStateProviderConformanceContext({
     createStateProvider: async () => createMysql2PoolProvider({ pool }),
     dialect,
     withNonTransactionContext: withMysql2PoolNonTransactionContext(pool),
     withSavepoint: withMysql2PoolSavepoint,
+    stateAdapterOptions,
   }),
   withSavepoint: withMysql2PoolSavepoint,
   createNotifyAdapter,
@@ -111,6 +115,11 @@ export const createEndToEndContext = async (
       throw error;
     }),
 });
+
+export const noRetryGroups: ConformanceGroup<EndToEndContext>[] = [
+  ...endToEndConcurrentTransactionGroups,
+  ...endToEndConcurrentTransactionLockWaitGroups,
+];
 
 export const capabilityGroups: ConformanceGroup<EndToEndContext>[] = [
   ...endToEndConcurrentTransactionGroups,

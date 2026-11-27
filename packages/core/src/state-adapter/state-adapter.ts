@@ -174,7 +174,10 @@ type TransactionTxContextParam<TTxContext extends BaseTxContext> = { txCtx: TTxC
  * A chain's head row is its lock. An adapter whose methods wait on row locks takes them in one
  * order: chain heads before any other job row, and each set in ascending id order within one
  * statement, so that two calls that lock the same chains wait on each other instead of
- * deadlocking.
+ * deadlocking. `getChainTails` with `lockBlockers` is the exception: it locks the heads of its
+ * chains and of the chains they wait on blocker first, so a call that locks a blocker and a chain
+ * that waits on it in one statement can deadlock with it; the database aborts one of the two
+ * transactions.
  *
  * @typeParam TTxContext - The transaction context type
  * @typeParam TJobId - The job ID type
@@ -236,12 +239,16 @@ export type StateAdapter<
    * Gets each chain's tail job with its chain, by chain ID in input order: the latest job in chain
    * order, which is the head while the chain has not continued. `lock: "exclusive"` locks each
    * chain's head row and then its tail row, and returns each chain's current tail: a tail continued while the
-   * call waited on its lock is followed to the continuation, which is locked too.
+   * call waited on its lock is followed to the continuation, which is locked too. `lockBlockers`
+   * first locks the heads of the chains and of every chain their jobs wait on, a blocker's head
+   * before the heads of the chains that wait on it, and repeats that until it locks no new head,
+   * so a blocker a chain gained while the call waited is locked before any tail; an adapter without
+   * row locks ignores it.
    */
   getChainTails: (
     params: { chainIds: TJobId[] } & (
-      | ({ lock?: "exclusive" } & TransactionTxContextParam<TTxContext>)
-      | ({ lock?: undefined } & AutocommitTxContextParam<TTxContext>)
+      | ({ lock?: "exclusive"; lockBlockers?: boolean } & TransactionTxContextParam<TTxContext>)
+      | ({ lock?: undefined; lockBlockers?: undefined } & AutocommitTxContextParam<TTxContext>)
     ),
   ) => ModeResult<TMode, (StateJob | undefined)[]>;
 
@@ -331,13 +338,12 @@ export type StateAdapter<
 
   /**
    * Deletes chains with all their jobs and those jobs' blocker rows, and returns the deleted chains
-   * in input order with `blocking` `false`, `undefined` for an id that names no chain head. Locks
-   * the head of each other chain the deleted jobs wait on before it writes, and sets `blocking`
-   * `false` on each one the deleted blocker rows were the last to reference.
+   * in input order with `blocking` `false`, `undefined` for an id that names no chain head, and
+   * sets `blocking` `false` on each other chain the deleted blocker rows were the last to reference.
    *
-   * The caller holds the chains' locks, taken with `getChainTails` and `lock: "exclusive"`, and
-   * checked that no job outside `chainIds` waits on the chains; a blocker row of such a job is left
-   * in place.
+   * The caller holds the chains' locks and the locks of the chains they wait on, taken with
+   * `getChainTails`, `lock: "exclusive"` and `lockBlockers`, and checked that no job outside
+   * `chainIds` waits on the chains; a blocker row of such a job is left in place.
    */
   deleteChains: (
     params: { chainIds: TJobId[] } & TransactionTxContextParam<TTxContext>,

@@ -178,6 +178,32 @@ const compareBy =
 
 const sortedIdsParam = (ids: string[]): string => JSON.stringify([...new Set(ids)].sort());
 
+const orderBlockersFirst = (edges: { id: string; blockerId: string | null }[]): string[] => {
+  const blockerIdsById = Map.groupBy(edges, (edge) => edge.id);
+  const depths = new Map<string, number>();
+  const depthOf = (id: string, visiting: Set<string>): number => {
+    const known = depths.get(id);
+    if (known !== undefined) return known;
+    if (visiting.has(id)) return 0;
+    visiting.add(id);
+    const depth = Math.max(
+      0,
+      ...(blockerIdsById.get(id) ?? []).flatMap(({ blockerId }) =>
+        blockerId === null || !blockerIdsById.has(blockerId)
+          ? []
+          : [depthOf(blockerId, visiting) + 1],
+      ),
+    );
+    visiting.delete(id);
+    depths.set(id, depth);
+    return depth;
+  };
+  return [...blockerIdsById.keys()]
+    .map((id) => ({ id, depth: depthOf(id, new Set()) }))
+    .sort((a, b) => a.depth - b.depth || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .map(({ id }) => id);
+};
+
 const mapDbJobToStateJobInfo = (row: Row, prefix = ""): StateJobInfo | undefined => {
   const column = (name: (typeof DB_JOB_COLUMNS)[number]): unknown => row[`${prefix}${name}`];
   if (column("id") == null) return undefined;
@@ -764,7 +790,11 @@ WHERE {{fence_guard}}`,
 
   const headOrderedJobs = `JSON_TABLE(?, '$[*]' COLUMNS (chain_id {{job_id_type}} PATH '$.chain_id', id {{job_id_type}} PATH '$.id')) d STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.chain_id STRAIGHT_JOIN {{prefix}}job j FORCE INDEX (PRIMARY) ON j.id = d.id AND j.chain_id = h.id`;
 
-  const lockChainHeads = async (txCtx: TTxContext | undefined, chainIds: string[]) =>
+  const lockChainHeads = async (
+    txCtx: TTxContext | undefined,
+    chainIds: string[],
+    orderedIdsParam = sortedIdsParam(chainIds),
+  ) =>
     execute(
       txCtx,
       prepared(
@@ -772,8 +802,51 @@ WHERE {{fence_guard}}`,
         `SELECT ${selectJob("h", "h_")} FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.id WHERE h.chain_index = 0 {{for_update:h}}`,
         { params: [t.string()], columns: prefixColumns(dbJobColumns, "h_") },
       ),
-      [sortedIdsParam(chainIds)],
+      [orderedIdsParam],
     );
+
+  const lockChainHeadsBlockersFirst = async (
+    txCtx: TTxContext | undefined,
+    chainIds: string[],
+    lockedHeadIds: string[] = [],
+  ): Promise<void> => {
+    const blockerEdges = await execute(
+      txCtx,
+      prepared(
+        "readChainBlockerEdges",
+        `
+WITH locked_heads AS (
+  SELECT d.id
+  FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d
+  UNION
+  SELECT jb.blocked_by_chain_id
+  FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d
+  STRAIGHT_JOIN {{prefix}}job m FORCE INDEX ({{name_prefix}}chain_index_idx) ON m.chain_id = d.id
+  STRAIGHT_JOIN {{prefix}}job_blocker jb FORCE INDEX (PRIMARY) ON jb.job_id = m.id
+)
+SELECT h.id, jb.blocked_by_chain_id AS blocker_id
+FROM locked_heads h
+LEFT JOIN {{prefix}}job j FORCE INDEX ({{name_prefix}}chain_index_idx) ON j.chain_id = h.id
+LEFT JOIN {{prefix}}job_blocker jb FORCE INDEX (PRIMARY)
+  ON jb.job_id = j.id AND jb.blocked_by_chain_id IN (SELECT id FROM locked_heads)`,
+        {
+          params: [t.string(), t.string()],
+          columns: { id: jobIdDataType, blocker_id: nullableJobIdDataType },
+          readOnly: true,
+        },
+      ),
+      [sortedIdsParam(chainIds), sortedIdsParam(chainIds)],
+    );
+    const orderedHeadIds = orderBlockersFirst(
+      blockerEdges.map((row) => ({
+        id: row.id as string,
+        blockerId: (row.blocker_id as string | null) ?? null,
+      })),
+    );
+    await lockChainHeads(txCtx, orderedHeadIds, JSON.stringify(orderedHeadIds));
+    if (orderedHeadIds.every((id) => lockedHeadIds.includes(id))) return;
+    await lockChainHeadsBlockersFirst(txCtx, chainIds, orderedHeadIds);
+  };
 
   const isWritable = (
     locked: { status: string; attemptToken: string | null } | undefined,
@@ -1038,12 +1111,17 @@ WHERE j.status = 'running'
       txCtx,
       chainIds,
       lock,
+      lockBlockers,
     }: {
       txCtx?: TTxContext;
       chainIds: TJobId[];
       lock?: "exclusive";
+      lockBlockers?: boolean;
     }) => {
       if (chainIds.length === 0) return [];
+      if (lock === "exclusive" && lockBlockers === true) {
+        await lockChainHeadsBlockersFirst(txCtx, chainIds);
+      }
       const tailSelect = `SELECT ${selectJob("j")}, ${selectChain("h", "c_")} FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.id STRAIGHT_JOIN {{prefix}}job j FORCE INDEX (PRIMARY) ON j.id = COALESCE((SELECT tail_lookup.id FROM {{prefix}}job tail_lookup WHERE tail_lookup.chain_id = h.id AND tail_lookup.chain_index > 0 ORDER BY tail_lookup.chain_index DESC LIMIT 1), h.id) WHERE h.chain_index = 0`;
       if (lock === "exclusive") await lockChainHeads(txCtx, chainIds);
       const rows =
@@ -1569,7 +1647,26 @@ WHERE {{fence_guard}}`,
         ),
         [sortedIdsParam(members.map((row) => row.id as string))],
       );
-      if (blockerHeadIds.length > 0) {
+      const referencedRows =
+        blockerHeadIds.length > 0
+          ? await execute(
+              txCtx,
+              prepared(
+                "readReferencedBlockerHeads",
+                `
+SELECT DISTINCT jb.blocked_by_chain_id AS id
+FROM JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d
+STRAIGHT_JOIN {{prefix}}job_blocker jb FORCE INDEX ({{name_prefix}}job_blocker_chain_idx)
+  ON jb.blocked_by_chain_id = d.id
+{{for_share:jb}} SKIP LOCKED`,
+                { params: [t.string()], columns: { id: jobIdDataType } },
+              ),
+              [sortedIdsParam(blockerHeadIds)],
+            )
+          : [];
+      const referencedHeadIds = new Set(referencedRows.map((row) => row.id as string));
+      const unreferencedHeadIds = blockerHeadIds.filter((id) => !referencedHeadIds.has(id));
+      if (unreferencedHeadIds.length > 0) {
         await execute(
           txCtx,
           prepared(
@@ -1579,14 +1676,10 @@ UPDATE JSON_TABLE(?, '$[*]' COLUMNS (id {{job_id_type}} PATH '$')) d
 STRAIGHT_JOIN {{prefix}}job h FORCE INDEX (PRIMARY) ON h.id = d.id
 SET h.blocking = FALSE
 WHERE h.blocking = TRUE
-  AND NOT EXISTS (
-    SELECT 1 FROM {{prefix}}job_blocker jb FORCE INDEX ({{name_prefix}}job_blocker_chain_idx)
-    WHERE jb.blocked_by_chain_id = h.id
-  )
   AND {{fence_guard}}`,
             { params: [t.string()] },
           ),
-          [sortedIdsParam(blockerHeadIds)],
+          [sortedIdsParam(unreferencedHeadIds)],
         );
       }
 

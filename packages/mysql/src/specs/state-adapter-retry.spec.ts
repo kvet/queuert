@@ -212,4 +212,70 @@ describe("transaction conflict retries", () => {
       "createMysqlStateAdapter: invalid configuration:\n  - transactionRetry.maxTries must be a positive integer (got 0)\n  - transactionRetry.initialDelayMs must be a non-negative finite number (got -1)",
     );
   });
+  it("locks and deletes chains whose blockers block each other while the outer blocker completes without a deadlock", async ({
+    stateProvider,
+  }) => {
+    const stateAdapter = createMysqlStateAdapter({
+      stateProvider,
+      dialect: "mysql",
+      transactionRetry: { maxTries: 1, initialDelayMs: 0, maxDelayMs: 0 },
+    });
+
+    await Promise.all(
+      Array.from({ length: 10 }, async () => {
+        const [rootId, middleId, leafId, fanId] = Array.from({ length: 4 }, () =>
+          stateAdapter.config.generateJobId(),
+        );
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.createJobs({
+            txCtx,
+            jobs: [
+              { id: rootId, typeName: "root", input: null },
+              { id: middleId, typeName: "middle", input: null },
+              { id: leafId, typeName: "leaf", input: null },
+              { id: fanId, typeName: "fan", input: null },
+            ],
+          }),
+        );
+        await stateAdapter.withTransaction(async (txCtx) =>
+          stateAdapter.addJobsBlockers({
+            txCtx,
+            jobBlockers: [
+              { jobId: middleId, blockedByChainIds: [rootId] },
+              { jobId: leafId, blockedByChainIds: [middleId, rootId] },
+              { jobId: fanId, blockedByChainIds: [rootId, middleId] },
+            ],
+          }),
+        );
+
+        await Promise.all([
+          stateAdapter.withTransaction(async (txCtx) => {
+            await stateAdapter.getChainTails({
+              txCtx,
+              chainIds: [leafId],
+              lock: "exclusive",
+              lockBlockers: true,
+            });
+            await stateAdapter.deleteChains({ txCtx, chainIds: [leafId] });
+          }),
+          stateAdapter.withTransaction(async (txCtx) => {
+            await stateAdapter.getChainTails({
+              txCtx,
+              chainIds: [fanId],
+              lock: "exclusive",
+              lockBlockers: true,
+            });
+            await stateAdapter.deleteChains({ txCtx, chainIds: [fanId] });
+          }),
+          stateAdapter.withTransaction(async (txCtx) => {
+            await stateAdapter.completeJobs({
+              txCtx,
+              jobs: [{ jobId: rootId, output: null }],
+            });
+            await stateAdapter.unblockJobs({ txCtx, blockedByChainId: rootId });
+          }),
+        ]);
+      }),
+    );
+  });
 });

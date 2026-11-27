@@ -1335,6 +1335,14 @@ const blockerGraphJobTypes = defineJobTypes<{
   root: { entry: true; input: null; output: null };
   middle: { entry: true; input: null; output: null; blockers: [{ typeName: "root" }] };
   leaf: { entry: true; input: null; output: null; blockers: [{ typeName: "middle" }] };
+  joined: {
+    entry: true;
+    input: null;
+    output: null;
+    blockers: [{ typeName: "root" }, { typeName: "middle" }];
+  };
+  step: { entry: true; input: null; continueWith: { typeName: "waiting" } };
+  waiting: { input: null; output: null; blockers: [{ typeName: "root" }] };
 }>();
 
 export const deletionConcurrentTransactionsGroup: ConformanceGroup<StateAdapterConformanceContext> =
@@ -1347,44 +1355,203 @@ export const deletionConcurrentTransactionsGroup: ConformanceGroup<StateAdapterC
           await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
           const client = createClient({ stateAdapter, jobTypes: blockerGraphJobTypes });
 
-          await Promise.all(
-            Array.from({ length: 10 }, async () => {
-              const { rootChain, middleChain } = await stateAdapter.withTransaction(
-                async (txCtx) => {
-                  const rootChain = await client.createChain({
-                    ...txCtx,
-                    typeName: "root",
-                    input: null,
-                  });
-                  const middleChain = await client.createChain({
-                    ...txCtx,
-                    typeName: "middle",
-                    input: null,
-                    blockers: [rootChain],
-                  });
-                  return { rootChain, middleChain };
-                },
-              );
+          for (let i = 0; i < 10; i++) {
+            const { rootChain, middleChain } = await stateAdapter.withTransaction(async (txCtx) => {
+              const rootChain = await client.createChain({
+                ...txCtx,
+                typeName: "root",
+                input: null,
+              });
+              const middleChain = await client.createChain({
+                ...txCtx,
+                typeName: "middle",
+                input: null,
+                blockers: [rootChain],
+              });
+              return { rootChain, middleChain };
+            });
 
-              await Promise.all([
-                stateAdapter.withTransaction(async (txCtx) =>
-                  client.deleteChain({ ...txCtx, id: middleChain.id }),
-                ),
+            await Promise.all([
+              stateAdapter.withTransaction(async (txCtx) =>
+                client.deleteChain({ ...txCtx, id: middleChain.id }),
+              ),
+              stateAdapter.withTransaction(async (txCtx) =>
+                client.applyJobOutcome({
+                  ...txCtx,
+                  job: { id: rootChain.id, typeName: "root" },
+                  output: null,
+                }),
+              ),
+            ]);
+
+            assert.equal(await client.getChain({ id: middleChain.id }), undefined);
+            const [completedRoot] = await stateAdapter.getChains({ chainIds: [rootChain.id] });
+            assert.equal(completedRoot!.status, "completed");
+            assert.equal(completedRoot!.blocking, false);
+          }
+        },
+      },
+      {
+        name: "deletes chains that wait on a chain and on each other while that chain completes",
+        run: async ({ createStateAdapter }) => {
+          await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
+          const client = createClient({ stateAdapter, jobTypes: blockerGraphJobTypes });
+
+          for (let i = 0; i < 10; i++) {
+            const { rootChain, middleChain, firstJoinedChain, secondJoinedChain } =
+              await stateAdapter.withTransaction(async (txCtx) => {
+                const rootChain = await client.createChain({
+                  ...txCtx,
+                  typeName: "root",
+                  input: null,
+                });
+                const middleChain = await client.createChain({
+                  ...txCtx,
+                  typeName: "middle",
+                  input: null,
+                  blockers: [rootChain],
+                });
+                const firstJoinedChain = await client.createChain({
+                  ...txCtx,
+                  typeName: "joined",
+                  input: null,
+                  blockers: [rootChain, middleChain],
+                });
+                const secondJoinedChain = await client.createChain({
+                  ...txCtx,
+                  typeName: "joined",
+                  input: null,
+                  blockers: [rootChain, middleChain],
+                });
+                return { rootChain, middleChain, firstJoinedChain, secondJoinedChain };
+              });
+
+            await Promise.all([
+              stateAdapter.withTransaction(async (txCtx) =>
+                client.deleteChain({ ...txCtx, id: firstJoinedChain.id }),
+              ),
+              stateAdapter.withTransaction(async (txCtx) =>
+                client.deleteChain({ ...txCtx, id: secondJoinedChain.id }),
+              ),
+              stateAdapter.withTransaction(async (txCtx) =>
+                client.applyJobOutcome({
+                  ...txCtx,
+                  job: { id: rootChain.id, typeName: "root" },
+                  output: null,
+                }),
+              ),
+            ]);
+
+            assert.equal(await client.getChain({ id: firstJoinedChain.id }), undefined);
+            assert.equal(await client.getChain({ id: secondJoinedChain.id }), undefined);
+            const [completedRoot, unblockedMiddle] = await stateAdapter.getChains({
+              chainIds: [rootChain.id, middleChain.id],
+            });
+            assert.equal(completedRoot!.status, "completed");
+            assert.equal(completedRoot!.blocking, true);
+            assert.equal(unblockedMiddle!.head.status, "pending");
+            assert.equal(unblockedMiddle!.blocking, false);
+          }
+        },
+      },
+      {
+        name: "deletes a chain whose continuation waits on a chain while that chain completes",
+        run: async ({ createStateAdapter }) => {
+          await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
+          const client = createClient({ stateAdapter, jobTypes: blockerGraphJobTypes });
+
+          for (let i = 0; i < 10; i++) {
+            const { rootChain, stepChain } = await stateAdapter.withTransaction(async (txCtx) => {
+              const rootChain = await client.createChain({
+                ...txCtx,
+                typeName: "root",
+                input: null,
+              });
+              const stepChain = await client.createChain({
+                ...txCtx,
+                typeName: "step",
+                input: null,
+              });
+              return { rootChain, stepChain };
+            });
+            await stateAdapter.withTransaction(async (txCtx) =>
+              client.applyJobOutcome({
+                ...txCtx,
+                job: { id: stepChain.id, typeName: "step" },
+                continueWith: { typeName: "waiting", input: null, blockers: [rootChain] },
+              }),
+            );
+
+            await Promise.all([
+              stateAdapter.withTransaction(async (txCtx) =>
+                client.deleteChain({ ...txCtx, id: stepChain.id }),
+              ),
+              stateAdapter.withTransaction(async (txCtx) =>
+                client.applyJobOutcome({
+                  ...txCtx,
+                  job: { id: rootChain.id, typeName: "root" },
+                  output: null,
+                }),
+              ),
+            ]);
+
+            assert.equal(await client.getChain({ id: stepChain.id }), undefined);
+            const [completedRoot] = await stateAdapter.getChains({ chainIds: [rootChain.id] });
+            assert.equal(completedRoot!.status, "completed");
+            assert.equal(completedRoot!.blocking, false);
+          }
+        },
+      },
+      {
+        name: "deletes a chain while it continues with a job that waits on a chain that completes",
+        run: async ({ createStateAdapter }) => {
+          await using stateAdapter = await createCaseStateAdapter(createStateAdapter);
+          const client = createClient({ stateAdapter, jobTypes: blockerGraphJobTypes });
+
+          for (let i = 0; i < 30; i++) {
+            const { rootChain, stepChain } = await stateAdapter.withTransaction(async (txCtx) => {
+              const rootChain = await client.createChain({
+                ...txCtx,
+                typeName: "root",
+                input: null,
+              });
+              const stepChain = await client.createChain({
+                ...txCtx,
+                typeName: "step",
+                input: null,
+              });
+              return { rootChain, stepChain };
+            });
+
+            await Promise.all([
+              Promise.resolve(
                 stateAdapter.withTransaction(async (txCtx) =>
                   client.applyJobOutcome({
                     ...txCtx,
-                    job: { id: rootChain.id, typeName: "root" },
-                    output: null,
+                    job: { id: stepChain.id, typeName: "step" },
+                    continueWith: { typeName: "waiting", input: null, blockers: [rootChain] },
                   }),
                 ),
-              ]);
+              ).catch((error: unknown) => {
+                assert.ok(error instanceof JobNotFoundError);
+              }),
+              stateAdapter.withTransaction(async (txCtx) =>
+                client.deleteChain({ ...txCtx, id: stepChain.id }),
+              ),
+              stateAdapter.withTransaction(async (txCtx) =>
+                client.applyJobOutcome({
+                  ...txCtx,
+                  job: { id: rootChain.id, typeName: "root" },
+                  output: null,
+                }),
+              ),
+            ]);
 
-              assert.equal(await client.getChain({ id: middleChain.id }), undefined);
-              const [completedRoot] = await stateAdapter.getChains({ chainIds: [rootChain.id] });
-              assert.equal(completedRoot!.status, "completed");
-              assert.equal(completedRoot!.blocking, false);
-            }),
-          );
+            assert.equal(await client.getChain({ id: stepChain.id }), undefined);
+            const [completedRoot] = await stateAdapter.getChains({ chainIds: [rootChain.id] });
+            assert.equal(completedRoot!.status, "completed");
+            assert.equal(completedRoot!.blocking, false);
+          }
         },
       },
       {

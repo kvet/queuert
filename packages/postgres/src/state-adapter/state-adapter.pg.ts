@@ -1075,6 +1075,65 @@ FROM {{schema}}.{{table_prefix}}worker
 WHERE id = ANY($1::{{worker_id_type}}[])${locked ? "\nORDER BY id\nFOR UPDATE" : ""}
 `;
 
+  const lockChainHeadsBlockersFirst = async (
+    txCtx: TTxContext | undefined,
+    chainIds: string[],
+    lockedHeadIds: string[] = [],
+  ): Promise<void> => {
+    const rows = await execute(
+      txCtx,
+      prepared(
+        "lockChainHeadsBlockersFirst",
+        `
+WITH RECURSIVE locked_heads AS MATERIALIZED (
+  SELECT d.id FROM unnest($1::{{job_id_type}}[]) AS d(id)
+  UNION
+  SELECT jb.blocked_by_chain_id
+  FROM {{schema}}.{{table_prefix}}job m
+  JOIN {{schema}}.{{table_prefix}}job_blocker jb ON jb.job_id = m.id
+  WHERE (m.id = ANY($1::{{job_id_type}}[]) AND m.chain_index = 0)
+     OR (m.chain_id = ANY($1::{{job_id_type}}[]) AND m.chain_index > 0)
+),
+blocker_edges AS MATERIALIZED (
+  SELECT DISTINCT jb.blocked_by_chain_id AS blocker_id, l.id AS dependent_id
+  FROM locked_heads l
+  CROSS JOIN LATERAL (
+    SELECT d.id FROM {{schema}}.{{table_prefix}}job d
+    WHERE d.id = l.id AND d.chain_index = 0
+    UNION ALL
+    SELECT d.id FROM {{schema}}.{{table_prefix}}job d
+    WHERE d.chain_id = l.id AND d.chain_index > 0
+  ) d
+  JOIN {{schema}}.{{table_prefix}}job_blocker jb ON jb.job_id = d.id
+  WHERE jb.blocked_by_chain_id IN (SELECT id FROM locked_heads)
+),
+blocker_depths AS (
+  SELECT id, 0 AS depth FROM locked_heads
+  UNION
+  SELECT e.dependent_id, b.depth + 1
+  FROM blocker_depths b
+  JOIN blocker_edges e ON e.blocker_id = b.id
+  WHERE b.depth < (SELECT count(*) FROM locked_heads)
+)
+SELECT h.id
+FROM {{schema}}.{{table_prefix}}job h
+JOIN (SELECT id, max(depth) AS depth FROM blocker_depths GROUP BY id) b ON b.id = h.id
+WHERE h.chain_index = 0
+ORDER BY b.depth, h.id
+FOR UPDATE OF h
+`,
+        { params: [t.array()], columns: { id: idDataType } },
+      ),
+      [chainIds],
+    );
+    if (rows.every((row) => lockedHeadIds.includes(row.id))) return;
+    await lockChainHeadsBlockersFirst(
+      txCtx,
+      chainIds,
+      rows.map((row) => row.id),
+    );
+  };
+
   const followContinuedTails = async (
     txCtx: TTxContext | undefined,
     tails: (StateJob | undefined)[],
@@ -1152,12 +1211,17 @@ WHERE id = ANY($1::{{worker_id_type}}[])${locked ? "\nORDER BY id\nFOR UPDATE" :
       txCtx,
       chainIds,
       lock,
+      lockBlockers,
     }: {
       txCtx?: TTxContext;
       chainIds: TJobId[];
       lock?: "exclusive";
+      lockBlockers?: boolean;
     }) => {
       if (chainIds.length === 0) return [];
+      if (lock === "exclusive" && lockBlockers === true) {
+        await lockChainHeadsBlockersFirst(txCtx, chainIds);
+      }
       const rows = await execute(
         txCtx,
         lock === "exclusive"
@@ -1621,28 +1685,6 @@ JOIN {{schema}}.{{table_prefix}}job h ON h.id = u.chain_id
 
     deleteChains: async ({ txCtx, chainIds }) => {
       if (chainIds.length === 0) return [];
-      await execute(
-        txCtx,
-        prepared(
-          "lockDeletedChainBlockers",
-          `
-SELECT h.id
-FROM {{schema}}.{{table_prefix}}job h
-WHERE h.chain_index = 0
-  AND h.id <> ALL($1::{{job_id_type}}[])
-  AND h.id IN (
-    SELECT jb.blocked_by_chain_id
-    FROM {{schema}}.{{table_prefix}}job m
-    JOIN {{schema}}.{{table_prefix}}job_blocker jb ON jb.job_id = m.id
-    WHERE m.chain_id = ANY($1::{{job_id_type}}[])
-  )
-ORDER BY h.id
-FOR UPDATE
-`,
-          { params: [t.array()], columns: { id: idDataType } },
-        ),
-        [chainIds],
-      );
       const [row] = await execute(
         txCtx,
         prepared(
@@ -1652,11 +1694,11 @@ WITH _members AS (
   SELECT id FROM {{schema}}.{{table_prefix}}job
   WHERE ((id = ANY($1::{{job_id_type}}[]) AND chain_index = 0)
      OR (chain_id = ANY($1::{{job_id_type}}[]) AND chain_index > 0))
-    AND ${FENCE_GUARD}
 ),
 _deleted_blockers AS (
   DELETE FROM {{schema}}.{{table_prefix}}job_blocker
   WHERE job_id IN (SELECT id FROM _members)
+    AND ${FENCE_GUARD}
 ),
 _cleared_heads AS (
   UPDATE {{schema}}.{{table_prefix}}job h
@@ -1675,6 +1717,7 @@ _cleared_heads AS (
 _deleted_jobs AS (
   DELETE FROM {{schema}}.{{table_prefix}}job
   WHERE id IN (SELECT id FROM _members)
+    AND ${FENCE_GUARD}
   RETURNING *
 )
 SELECT

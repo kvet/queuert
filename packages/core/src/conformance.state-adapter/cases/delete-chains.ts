@@ -753,9 +753,15 @@ export const deleteChainsConcurrentTransactionsGroup: ConformanceGroup<StateAdap
 
           await Promise.all(
             dependentChains.map(async (dependentChain) =>
-              stateAdapter.withTransaction((txCtx) =>
-                stateAdapter.deleteChains({ txCtx, chainIds: [dependentChain.id] }),
-              ),
+              stateAdapter.withTransaction(async (txCtx) => {
+                await stateAdapter.getChainTails({
+                  txCtx,
+                  chainIds: [dependentChain.id],
+                  lock: "exclusive",
+                  lockBlockers: true,
+                });
+                return stateAdapter.deleteChains({ txCtx, chainIds: [dependentChain.id] });
+              }),
             ),
           );
 
@@ -796,9 +802,15 @@ export const deleteChainsConcurrentTransactionsGroup: ConformanceGroup<StateAdap
           const [, attached] = await Promise.all([
             Promise.all(
               existingDependents.map(async (dependentChain) =>
-                stateAdapter.withTransaction((txCtx) =>
-                  stateAdapter.deleteChains({ txCtx, chainIds: [dependentChain.id] }),
-                ),
+                stateAdapter.withTransaction(async (txCtx) => {
+                  await stateAdapter.getChainTails({
+                    txCtx,
+                    chainIds: [dependentChain.id],
+                    lock: "exclusive",
+                    lockBlockers: true,
+                  });
+                  return stateAdapter.deleteChains({ txCtx, chainIds: [dependentChain.id] });
+                }),
               ),
             ),
             Promise.all(
@@ -829,9 +841,15 @@ export const deleteChainsConcurrentTransactionsGroup: ConformanceGroup<StateAdap
 
           await Promise.all(
             attached.map(async (dependentChain) =>
-              stateAdapter.withTransaction((txCtx) =>
-                stateAdapter.deleteChains({ txCtx, chainIds: [dependentChain.id] }),
-              ),
+              stateAdapter.withTransaction(async (txCtx) => {
+                await stateAdapter.getChainTails({
+                  txCtx,
+                  chainIds: [dependentChain.id],
+                  lock: "exclusive",
+                  lockBlockers: true,
+                });
+                return stateAdapter.deleteChains({ txCtx, chainIds: [dependentChain.id] });
+              }),
             ),
           );
           const [afterAll] = await stateAdapter.getChains({ chainIds: [blockerChain.id] });
@@ -872,9 +890,15 @@ export const deleteChainsConcurrentTransactionsGroup: ConformanceGroup<StateAdap
 
           await Promise.all([
             ...deletedChains.map(async (dependentChain) =>
-              stateAdapter.withTransaction((txCtx) =>
-                stateAdapter.deleteChains({ txCtx, chainIds: [dependentChain.id] }),
-              ),
+              stateAdapter.withTransaction(async (txCtx) => {
+                await stateAdapter.getChainTails({
+                  txCtx,
+                  chainIds: [dependentChain.id],
+                  lock: "exclusive",
+                  lockBlockers: true,
+                });
+                return stateAdapter.deleteChains({ txCtx, chainIds: [dependentChain.id] });
+              }),
             ),
             stateAdapter.withTransaction(async (txCtx) => {
               const [completed] = await stateAdapter.completeJobs({
@@ -929,18 +953,39 @@ export const deleteChainsConcurrentTransactionsGroup: ConformanceGroup<StateAdap
               );
 
               const settled = await Promise.allSettled([
-                stateAdapter.withTransaction((txCtx) =>
-                  stateAdapter.deleteChains({ txCtx, chainIds: [leafChain.id] }),
-                ),
-                stateAdapter.withTransaction((txCtx) =>
-                  stateAdapter.deleteChains({ txCtx, chainIds: [fanChain.id, otherFanChain.id] }),
-                ),
-                stateAdapter.withTransaction((txCtx) =>
-                  stateAdapter.deleteChains({
+                stateAdapter.withTransaction(async (txCtx) => {
+                  await stateAdapter.getChainTails({
+                    txCtx,
+                    chainIds: [leafChain.id],
+                    lock: "exclusive",
+                    lockBlockers: true,
+                  });
+                  return stateAdapter.deleteChains({ txCtx, chainIds: [leafChain.id] });
+                }),
+                stateAdapter.withTransaction(async (txCtx) => {
+                  await stateAdapter.getChainTails({
+                    txCtx,
+                    chainIds: [fanChain.id, otherFanChain.id],
+                    lock: "exclusive",
+                    lockBlockers: true,
+                  });
+                  return stateAdapter.deleteChains({
+                    txCtx,
+                    chainIds: [fanChain.id, otherFanChain.id],
+                  });
+                }),
+                stateAdapter.withTransaction(async (txCtx) => {
+                  await stateAdapter.getChainTails({
                     txCtx,
                     chainIds: [middleChain.id, otherFanChain.id],
-                  }),
-                ),
+                    lock: "exclusive",
+                    lockBlockers: true,
+                  });
+                  return stateAdapter.deleteChains({
+                    txCtx,
+                    chainIds: [middleChain.id, otherFanChain.id],
+                  });
+                }),
                 stateAdapter.withTransaction(async (txCtx) => {
                   const [completed] = await stateAdapter.completeJobs({
                     txCtx,
@@ -1033,9 +1078,15 @@ export const deleteChainsConcurrentTransactionsLockWaitGroup: ConformanceGroup<S
 
           let deleteSettled = false;
           const deleteTx = Promise.resolve(
-            stateAdapter.withTransaction((txCtx) =>
-              stateAdapter.deleteChains({ txCtx, chainIds: [dependentChain.id] }),
-            ),
+            stateAdapter.withTransaction(async (txCtx) => {
+              await stateAdapter.getChainTails({
+                txCtx,
+                chainIds: [dependentChain.id],
+                lock: "exclusive",
+                lockBlockers: true,
+              });
+              return stateAdapter.deleteChains({ txCtx, chainIds: [dependentChain.id] });
+            }),
           ).finally(() => {
             deleteSettled = true;
           });
@@ -1113,6 +1164,7 @@ export const deleteChainsConcurrentTransactionsLockWaitGroup: ConformanceGroup<S
                 txCtx,
                 chainIds: [stateChain.id],
                 lock: "exclusive",
+                lockBlockers: true,
               });
               return stateAdapter.deleteChains({ txCtx, chainIds: [stateChain.id] });
             }),

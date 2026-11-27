@@ -69,6 +69,9 @@ const createFlakyStateAdapter = (
 export const createEndToEndContext = async (
   pool: Pool,
   createNotifyAdapter?: EndToEndSavepointContext["createNotifyAdapter"],
+  stateAdapterOptions?: Parameters<
+    typeof createPgStateProviderConformanceContext
+  >[0]["stateAdapterOptions"],
 ): Promise<
   EndToEndSavepointContext & EndToEndPoisonTransactionContext & EndToEndFlakyDbContext
 > => ({
@@ -76,6 +79,7 @@ export const createEndToEndContext = async (
     createStateProvider: async () => createPgPoolProvider({ pool }),
     withNonTransactionContext: withPgPoolNonTransactionContext(pool),
     withSavepoint: withPgPoolSavepoint,
+    stateAdapterOptions,
   }),
   withSavepoint: withPgPoolSavepoint,
   createNotifyAdapter,
@@ -101,6 +105,11 @@ export const createEndToEndContext = async (
       throw error;
     }),
 });
+
+export const noRetryGroups: ConformanceGroup<EndToEndSavepointContext>[] = [
+  ...endToEndConcurrentTransactionGroups,
+  ...endToEndConcurrentTransactionLockWaitGroups,
+];
 
 export const capabilityGroups: ConformanceGroup<
   EndToEndSavepointContext & EndToEndPoisonTransactionContext & EndToEndFlakyDbContext

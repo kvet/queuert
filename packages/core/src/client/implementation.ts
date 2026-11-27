@@ -422,6 +422,7 @@ export const runDeleteChains: SyncAsync<
       txCtx,
       chainIds: [...new Set(chainIds)],
       lock: "exclusive",
+      lockBlockers: true,
     }),
   );
 
