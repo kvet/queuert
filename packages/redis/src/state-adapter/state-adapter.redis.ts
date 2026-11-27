@@ -1194,12 +1194,19 @@ export const createRedisStateAdapter = ({
                   .map(({ batch }) => batch);
           if (candidateBatches.length === 0) break;
 
-          const claimed: DbJob[] = [];
-          for (const job of await loadPresentJobs(
+          const claimable = (
+            await loadPresentJobs(
+              tx,
+              candidateBatches.flat().map(({ member }) => dueJobId(member)),
+            )
+          ).filter((job) => job.status === "pending" && job.scheduledAt.getTime() <= nowMs);
+          await loadJobs(
             tx,
-            candidateBatches.flat().map(({ member }) => dueJobId(member)),
-          )) {
-            if (job.status !== "pending" || job.scheduledAt.getTime() > nowMs) continue;
+            claimable.map((job) => job.id),
+            { lock: true },
+          );
+          const claimed: DbJob[] = [];
+          for (const job of claimable) {
             const updated: DbJob = {
               ...job,
               status: "running",

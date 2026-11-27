@@ -283,14 +283,14 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceContext> =
       }),
     },
     {
-      name: "startJobAttempts fails with SchemaFencedError once its writes are fenced, leaving the job pending",
+      name: "startJobAttempts fails with SchemaFencedError once its writes are fenced, for one job type or several, leaving the job pending",
       run: dynamicSyncAsync(function* ({ createStateAdapter, ...context }) {
         const stateAdapter = yield* resource(createStateAdapter());
 
         const worker = yield* step(
           stateAdapter.startWorker({
             workerId: stateAdapter.config.generateWorkerId(),
-            typeNames: ["fenced-start-attempt"],
+            typeNames: ["fenced-start-attempt", "fenced-start-attempt-other"],
             concurrency: 1,
             leaseMs: 60_000,
           }),
@@ -319,6 +319,20 @@ export const schemaFenceGroup: ConformanceGroup<SchemaFenceConformanceContext> =
                   workerId: worker.id,
                   workerToken: worker.token,
                   batchLimits: { "fenced-start-attempt": 1 },
+                  limit: 1,
+                }),
+              SchemaFencedError,
+            ),
+          ),
+        );
+        yield* step(
+          context.withWritesFenced(() =>
+            assertRejects(
+              () =>
+                stateAdapter.startJobAttempts({
+                  workerId: worker.id,
+                  workerToken: worker.token,
+                  batchLimits: { "fenced-start-attempt": 1, "fenced-start-attempt-other": 1 },
                   limit: 1,
                 }),
               SchemaFencedError,

@@ -581,6 +581,62 @@ export const startJobAttemptGroup: ConformanceGroup<StateAdapterConformanceConte
       }),
     },
     {
+      name: "acquires the oldest batches across types",
+      run: dynamicSyncAsync(function* ({ createStateAdapter }) {
+        const stateAdapter = yield* resource(createStateAdapter());
+
+        const worker = yield* step(
+          stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["acquire-oldest-a", "acquire-oldest-b"],
+            concurrency: 2,
+            leaseMs: 60_000,
+          }),
+        );
+        const older = yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: Array.from({ length: 4 }, () => ({
+                id: stateAdapter.config.generateJobId(),
+                typeName: "acquire-oldest-b",
+                input: null,
+              })),
+            }),
+          ),
+        );
+        yield* wait(sleep(10));
+        yield* step(
+          stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                {
+                  id: stateAdapter.config.generateJobId(),
+                  typeName: "acquire-oldest-a",
+                  input: null,
+                },
+              ],
+            }),
+          ),
+        );
+
+        const acquired = yield* step(
+          stateAdapter.startJobAttempts({
+            workerId: worker.id,
+            workerToken: worker.token,
+            batchLimits: { "acquire-oldest-a": 1, "acquire-oldest-b": 2 },
+            limit: 2,
+          }),
+        );
+
+        assert.deepEqual(
+          acquired.map((job) => job.id).sort(),
+          older.map((chain) => chain.head.id).sort(),
+        );
+      }),
+    },
+    {
       name: "returns the acquired job's chain",
       run: dynamicSyncAsync(function* ({ createStateAdapter }) {
         const stateAdapter = yield* resource(createStateAdapter());
@@ -1328,6 +1384,141 @@ export const startJobAttemptConcurrentTransactionsTwoConnectionGroup: Conformanc
           assert.equal(new Set(claimedIds).size, count);
         },
       },
+      ...[
+        {
+          shape: "batch limits differ",
+          groups: [
+            { typeName: "claim-footprint-a", batchLimit: 1, count: 4 },
+            { typeName: "claim-footprint-b", batchLimit: 3, count: 6 },
+          ],
+          idleTypes: 0,
+          firstLimit: 2,
+          firstTakes: [2, 0],
+        },
+        {
+          shape: "the claim spans types",
+          groups: [
+            { typeName: "claim-span-a", batchLimit: 1, count: 2 },
+            { typeName: "claim-span-b", batchLimit: 2, count: 4 },
+          ],
+          idleTypes: 0,
+          firstLimit: 3,
+          firstTakes: [2, 2],
+        },
+        {
+          shape: "batch limits are equal",
+          groups: [
+            { typeName: "claim-equal-a", batchLimit: 1, count: 3 },
+            { typeName: "claim-equal-b", batchLimit: 1, count: 3 },
+          ],
+          idleTypes: 0,
+          firstLimit: 2,
+          firstTakes: [2, 0],
+        },
+        {
+          shape: "most types are idle",
+          groups: [
+            { typeName: "claim-idle-a", batchLimit: 2, count: 6 },
+            { typeName: "claim-idle-b", batchLimit: 1, count: 2 },
+          ],
+          idleTypes: 20,
+          firstLimit: 1,
+          firstTakes: [2, 0],
+        },
+        {
+          shape: "a batch is short",
+          groups: [
+            { typeName: "claim-short-a", batchLimit: 5, count: 2 },
+            { typeName: "claim-short-b", batchLimit: 1, count: 4 },
+          ],
+          idleTypes: 0,
+          firstLimit: 1,
+          firstTakes: [2, 0],
+        },
+      ].map(({ shape, groups, idleTypes, firstLimit, firstTakes }) => ({
+        name: `a claim in an open transaction leaves every due job it does not take to a concurrent claim when ${shape}`,
+        run: async ({ createStateAdapter }: StateAdapterConformanceContext) => {
+          await using stateAdapter = await createStateAdapter();
+
+          const batchLimits = Object.fromEntries([
+            ...groups.map(({ typeName, batchLimit }) => [typeName, batchLimit]),
+            ...Array.from({ length: idleTypes }, (_, index) => [
+              `${groups[0].typeName}-idle-${index}`,
+              1,
+            ]),
+          ]);
+          const typeNames = Object.keys(batchLimits);
+          const firstWorker = await stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames,
+            concurrency: firstLimit,
+            leaseMs: 60_000,
+          });
+          const secondWorker = await stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames,
+            concurrency: 20,
+            leaseMs: 60_000,
+          });
+          const createdIds: string[][] = [];
+          for (const { typeName, count } of groups) {
+            await sleep(10);
+            const chains = await stateAdapter.withTransaction(async (txCtx) =>
+              stateAdapter.createJobs({
+                txCtx,
+                jobs: Array.from({ length: count }, () => ({
+                  id: stateAdapter.config.generateJobId(),
+                  typeName,
+                  input: null,
+                })),
+              }),
+            );
+            createdIds.push(chains.map((chain) => chain.head.id));
+          }
+
+          const firstClaimed = Promise.withResolvers<void>();
+          const releaseFirst = Promise.withResolvers<void>();
+          const firstTx = stateAdapter.withTransaction(async (txCtx) => {
+            const jobs = await stateAdapter.startJobAttempts({
+              txCtx,
+              workerId: firstWorker.id,
+              workerToken: firstWorker.token,
+              batchLimits,
+              limit: firstLimit,
+            });
+            firstClaimed.resolve();
+            await releaseFirst.promise;
+            return jobs;
+          });
+          await firstClaimed.promise;
+
+          const secondClaim = stateAdapter.startJobAttempts({
+            workerId: secondWorker.id,
+            workerToken: secondWorker.token,
+            batchLimits,
+            limit: 20,
+          });
+          try {
+            assert.equal(
+              await raceWithSleep(
+                Promise.resolve(secondClaim).then(() => "settled"),
+                SETTLE_BOUND_MS,
+              ),
+              "settled",
+            );
+          } finally {
+            releaseFirst.resolve();
+          }
+
+          const firstIds = (await firstTx).map((job) => job.id);
+          const secondIds = (await secondClaim).map((job) => job.id);
+          assert.deepEqual(
+            createdIds.map((ids) => ids.filter((id) => firstIds.includes(id)).length),
+            firstTakes,
+          );
+          assert.deepEqual([...firstIds, ...secondIds].sort(), createdIds.flat().sort());
+        },
+      })),
       {
         name: "a producer does not wait on an open claim that drained the queue",
         run: async ({ createStateAdapter }) => {
@@ -1526,6 +1717,64 @@ export const startJobAttemptConcurrentTransactionsTwoConnectionGroup: Conformanc
             limit: 1,
           });
           assert.equal(acquiredAfterRelease?.id, lockedChain.head.id);
+        },
+      },
+      {
+        name: "a claim over several job types takes a younger type's job when the oldest type's due job is locked",
+        run: async ({ createStateAdapter }) => {
+          await using stateAdapter = await createStateAdapter();
+
+          const worker = await stateAdapter.startWorker({
+            workerId: stateAdapter.config.generateWorkerId(),
+            typeNames: ["locked-oldest", "free-younger"],
+            concurrency: 1,
+            leaseMs: 60_000,
+          });
+
+          const [lockedChain] = await stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "locked-oldest", input: null },
+              ],
+            }),
+          );
+          await sleep(10);
+          const [freeChain] = await stateAdapter.withTransaction((txCtx) =>
+            stateAdapter.createJobs({
+              txCtx,
+              jobs: [
+                { id: stateAdapter.config.generateJobId(), typeName: "free-younger", input: null },
+              ],
+            }),
+          );
+
+          const { promise: jobLocked, resolve: signalJobLocked } = Promise.withResolvers<void>();
+          const { promise: jobGate, resolve: releaseJob } = Promise.withResolvers<void>();
+
+          const lockerTx = stateAdapter.withTransaction(async (txCtx) => {
+            await stateAdapter.getJobs({ txCtx, jobIds: [lockedChain.head.id], lock: "exclusive" });
+            signalJobLocked();
+            await jobGate;
+          });
+
+          await jobLocked;
+
+          try {
+            const acquired = await stateAdapter.startJobAttempts({
+              workerId: worker.id,
+              workerToken: worker.token,
+              batchLimits: { "locked-oldest": 1, "free-younger": 1 },
+              limit: 1,
+            });
+            assert.deepEqual(
+              acquired.map((job) => job.id),
+              [freeChain.head.id],
+            );
+          } finally {
+            releaseJob();
+            await lockerTx;
+          }
         },
       },
     ],

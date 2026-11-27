@@ -347,8 +347,10 @@ export type StateAdapter<
    * Claims due jobs of the types in `batchLimits` in up to `limit` batches, each job with a new
    * `attemptToken`, while the worker row holds `workerToken` with a live lease, skipping locked rows
    * so no two callers get the same job. A type's claimed jobs are its oldest due ones, split oldest
-   * first into batches of its batch limit, all full but the last; fewer batches only when no more
-   * jobs are available. With a batch limit of 1, a batch is a job.
+   * first into batches of its batch limit, all full but the last, and the claim takes the batches
+   * whose first job is oldest across types. It locks only the jobs it claims, so it may return fewer
+   * batches than are due when a concurrent claim holds some of them. With a batch limit of 1, a
+   * batch is a job.
    */
   startJobAttempts: (
     params: {

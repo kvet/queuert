@@ -252,9 +252,11 @@ const Page = () => (
           A locked read of a pending job, such as a client read with <code>lock: "exclusive"</code>{" "}
           or the ones <code>client.applyJobOutcome</code> and <code>client.deleteChains</code> take,
           marks the job for up to 60 seconds; workers skip a marked job until the transaction
-          commits or rolls back. A transaction that holds the lock longer than that can see a worker
-          claim the job. Workers look past marked jobs through at most the first 1,000 due jobs of
-          each type, so a worker claims nothing of a type whose first 1,000 due jobs are all marked.
+          commits or rolls back. A claim inside an open transaction marks the jobs it takes the same
+          way, so a concurrent claim leaves them to it. A transaction that holds the lock longer
+          than that can see a worker claim the job. Workers look past marked jobs through at most
+          the first 1,000 due jobs of each type, so a worker claims nothing of a type whose first
+          1,000 due jobs are all marked.
         </p>
         <p>
           No transaction ever waits for a lock. Where PostgreSQL would make a second transaction

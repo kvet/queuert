@@ -1706,10 +1706,11 @@ SELECT
     },
 
     startJobAttempts: async ({ txCtx, batchLimits, workerId, workerToken, limit }) => {
+      const multiType = Object.keys(batchLimits).length > 1;
       const results = await execute(
         txCtx,
         prepared(
-          "startJobAttempts",
+          multiType ? "startJobAttempts" : "startJobAttemptsOfType",
           `
 WITH live_worker AS (
   UPDATE {{schema}}.{{table_prefix}}worker w
@@ -1720,40 +1721,106 @@ WITH live_worker AS (
     AND ${FENCE_GUARD}
   RETURNING w.id
 ),
-candidate_jobs AS (
-  SELECT j.id, j.scheduled_at, t.type_order, t.batch_limit
-  FROM (
-    SELECT type_name, batch_limit, random() AS type_order
-    FROM unnest($1::text[], $5::int[]) AS u(type_name, batch_limit)
-    ORDER BY type_order
-  ) AS t
+claim_args AS MATERIALIZED (
+  SELECT $1::text[] AS type_names, $5::int[] AS batch_limits, $3::int AS claim_limit
+),
+job_types AS (
+  SELECT u.type_name, u.batch_limit, a.claim_limit
+  FROM claim_args a
+  CROSS JOIN LATERAL unnest(a.type_names, a.batch_limits) AS u(type_name, batch_limit)
+),
+${
+  multiType
+    ? `batch_heads AS (
+  SELECT t.type_name, t.batch_limit, h.scheduled_at, h.position / t.batch_limit AS batch_index
+  FROM job_types t
   CROSS JOIN LATERAL (
-    SELECT j.id, j.scheduled_at
+    SELECT d.scheduled_at, row_number() OVER (ORDER BY d.scheduled_at) - 1 AS position
+    FROM (
+      SELECT j.scheduled_at
+      FROM {{schema}}.{{table_prefix}}job j
+      WHERE j.type_name = t.type_name
+        AND j.status = 'pending'
+        AND j.scheduled_at <= statement_timestamp()
+      ORDER BY j.scheduled_at ASC
+      LIMIT t.claim_limit * t.batch_limit
+    ) d
+  ) h
+  WHERE h.position % t.batch_limit = 0
+),
+type_quotas AS (
+  SELECT type_name, batch_limit, count(*) AS batches
+  FROM (
+    SELECT type_name, batch_limit
+    FROM batch_heads
+    ORDER BY scheduled_at, type_name
+    LIMIT (SELECT claim_limit FROM claim_args)
+  ) b
+  GROUP BY type_name, batch_limit
+),`
+    : `type_quotas AS (
+  SELECT type_name, batch_limit, claim_limit AS batches
+  FROM job_types
+),`
+}
+claimed_jobs AS (
+  SELECT j.id, q.type_name
+  FROM type_quotas q
+  CROSS JOIN LATERAL (
+    SELECT j.id
     FROM {{schema}}.{{table_prefix}}job j
-    WHERE j.type_name = t.type_name
+    WHERE j.type_name = q.type_name
       AND j.status = 'pending'
       AND j.scheduled_at <= statement_timestamp()
     ORDER BY j.scheduled_at ASC
-    LIMIT $3 * t.batch_limit
+    LIMIT q.batches * q.batch_limit
     FOR UPDATE OF j SKIP LOCKED
   ) j
   WHERE EXISTS (SELECT 1 FROM live_worker)
-  LIMIT $3 * (SELECT max(batch_limit) FROM unnest($5::int[]) AS u(batch_limit))
+  LIMIT (SELECT max(claim_limit * batch_limit) FROM job_types)
+),${
+            multiType
+              ? `
+claimed_types AS (
+  SELECT q.type_name, q.batches, count(c.id) < q.batches * q.batch_limit AS short,
+    (count(c.id) + q.batch_limit - 1) / q.batch_limit AS claimed_batches
+  FROM type_quotas q
+  LEFT JOIN claimed_jobs c ON c.type_name = q.type_name
+  GROUP BY q.type_name, q.batch_limit, q.batches
 ),
-numbered_jobs AS (
-  SELECT
-    id,
-    type_order,
-    (row_number() OVER (PARTITION BY type_order ORDER BY scheduled_at, id) - 1)
-      / batch_limit AS batch_index
-  FROM candidate_jobs
+leftover_quotas AS (
+  SELECT type_name, batch_limit, count(*) AS batches
+  FROM (
+    SELECT b.type_name, b.batch_limit
+    FROM batch_heads b
+    LEFT JOIN claimed_types c ON c.type_name = b.type_name
+    WHERE NOT COALESCE(c.short, false)
+      AND b.batch_index >= COALESCE(c.batches, 0)
+    ORDER BY b.scheduled_at, b.type_name
+    LIMIT (SELECT claim_limit FROM claim_args)
+      - (SELECT COALESCE(sum(claimed_batches), 0)::bigint FROM claimed_types)
+  ) b
+  GROUP BY type_name, batch_limit
 ),
-acquired_batches AS (
-  SELECT DISTINCT type_order, batch_index
-  FROM numbered_jobs
-  ORDER BY type_order, batch_index
-  LIMIT $3
-),
+leftover_jobs AS (
+  SELECT j.id
+  FROM leftover_quotas q
+  CROSS JOIN LATERAL (
+    SELECT j.id
+    FROM {{schema}}.{{table_prefix}}job j
+    WHERE j.type_name = q.type_name
+      AND j.status = 'pending'
+      AND j.scheduled_at <= statement_timestamp()
+      AND j.id NOT IN (SELECT id FROM claimed_jobs)
+    ORDER BY j.scheduled_at ASC
+    LIMIT q.batches * q.batch_limit
+    FOR UPDATE OF j SKIP LOCKED
+  ) j
+  WHERE EXISTS (SELECT 1 FROM live_worker)
+  LIMIT (SELECT max(claim_limit * batch_limit) FROM job_types)
+),`
+              : ""
+          }
 updated AS (
   UPDATE {{schema}}.{{table_prefix}}job AS job
   SET status = 'running',
@@ -1761,9 +1828,8 @@ updated AS (
     attempt_at = statement_timestamp(),
     attempt_by = $2::{{worker_id_type}},
     attempt_token = gen_random_uuid()
-  FROM numbered_jobs n
-  JOIN acquired_batches b ON b.type_order = n.type_order AND b.batch_index = n.batch_index
-  WHERE job.id = n.id
+  FROM (${multiType ? "SELECT id FROM claimed_jobs UNION ALL SELECT id FROM leftover_jobs" : "SELECT id FROM claimed_jobs"}) c
+  WHERE job.id = c.id
     AND ${FENCE_GUARD}
   RETURNING job.*
 )

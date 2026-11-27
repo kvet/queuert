@@ -4,7 +4,6 @@
 - [TASK] State gauges. See `design/state-gauges.md`.
 - [EPIC] Redis state adapter performance and open problems. See `design/redis-state-adapter-performance.md`.
 - [EPIC] MongoDB adapter. See `design/mongodb-adapter.md`.
-- [TASK] Job distribution in `startJobAttempts` — claim batches fairly across a worker's job types in every adapter, and lock only the jobs a claim takes when the types' batch limits differ
 
 # Medium term
 

@@ -574,6 +574,141 @@ export const createMysqlStateAdapter = <
     return new Map(rows.map((row) => [row.h_id as string, mapDbChainRowToStateChain(row)]));
   };
 
+  const planTypeQuotas = async (
+    txCtx: TTxContext,
+    batchLimits: Record<string, number>,
+    limit: number,
+  ): Promise<{ typeName: string; jobs: number }[]> => {
+    const typeNames = Object.keys(batchLimits);
+    const rows = await execute(
+      txCtx,
+      prepared(
+        `planPendingJobBatches:${typeNames.length}`,
+        `
+SELECT type_name, LEAST(COUNT(*) * MAX(batch_limit), MAX(due_count)) AS jobs
+FROM (
+  SELECT type_name, batch_limit, due_count
+  FROM (
+    SELECT type_name, picked_ts, batch_limit,
+      ROW_NUMBER() OVER (PARTITION BY type_name ORDER BY picked_ts) - 1 AS position,
+      COUNT(*) OVER (PARTITION BY type_name) AS due_count
+    FROM (
+      ${typeNames
+        .map(
+          () =>
+            `(SELECT type_name, status_ts AS picked_ts, CAST(? AS UNSIGNED) AS batch_limit FROM {{prefix}}job FORCE INDEX ({{name_prefix}}job_status_idx) WHERE type_name = ? AND status = 'pending' AND status_ts <= UTC_TIMESTAMP(6) ORDER BY status_ts LIMIT ?)`,
+        )
+        .join("\n      UNION ALL\n      ")}
+    ) AS due_jobs
+  ) AS numbered_jobs
+  WHERE position MOD batch_limit = 0
+  ORDER BY picked_ts, type_name
+  LIMIT ?
+) AS batch_heads
+GROUP BY type_name`,
+        {
+          params: [...typeNames.flatMap(() => [t.number(), t.string(), t.number()]), t.number()],
+          columns: { type_name: t.string(), jobs: t.number() },
+        },
+      ),
+      [
+        ...typeNames.flatMap((typeName) => [
+          batchLimits[typeName],
+          typeName,
+          limit * batchLimits[typeName],
+        ]),
+        limit,
+      ],
+    );
+    return rows.map((row) => ({ typeName: row.type_name as string, jobs: Number(row.jobs) }));
+  };
+
+  const claimPendingJobs = async (
+    txCtx: TTxContext,
+    {
+      batchLimits,
+      limit,
+      workerId,
+    }: { batchLimits: Record<string, number>; limit: number; workerId: string },
+  ): Promise<string[]> => {
+    const typeNames = Object.keys(batchLimits);
+    if (limit <= 0 || typeNames.length === 0) return [];
+    const typeQuotas =
+      typeNames.length === 1
+        ? [{ typeName: typeNames[0], jobs: limit * batchLimits[typeNames[0]] }]
+        : await planTypeQuotas(txCtx, batchLimits, limit);
+    if (typeQuotas.length === 0) return [];
+
+    const lockedRows = await execute(
+      txCtx,
+      prepared(
+        `lockPendingJobs:${typeQuotas.length}`,
+        typeQuotas
+          .map(
+            () =>
+              `(SELECT id, type_name FROM {{prefix}}job FORCE INDEX ({{name_prefix}}job_status_idx) WHERE type_name = ? AND status = 'pending' AND status_ts <= UTC_TIMESTAMP(6) ORDER BY status_ts LIMIT ? FOR UPDATE SKIP LOCKED)`,
+          )
+          .join("\nUNION ALL\n"),
+        {
+          params: typeQuotas.flatMap(() => [t.string(), t.number()]),
+          columns: { id: jobIdDataType, type_name: t.string() },
+        },
+      ),
+      typeQuotas.flatMap(({ typeName, jobs }) => [typeName, jobs]),
+    );
+    if (lockedRows.length > 0) {
+      await execute(
+        txCtx,
+        prepared(
+          "claimJobs",
+          `
+UPDATE JSON_TABLE(?, '$[*]' COLUMNS (
+  id {{job_id_type}} PATH '$.id',
+  attempt_token CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PATH '$.attempt_token'
+)) d
+STRAIGHT_JOIN {{prefix}}job j FORCE INDEX (PRIMARY) ON j.id = d.id
+SET j.status = 'running',
+  j.attempt = j.attempt + 1,
+  j.attempt_at = UTC_TIMESTAMP(6),
+  j.attempt_by = ?,
+  j.attempt_token = d.attempt_token
+WHERE {{fence_guard}}`,
+          { params: [t.string(), workerIdDataType] },
+        ),
+        [
+          JSON.stringify(
+            lockedRows.map((row) => ({ id: row.id, attempt_token: crypto.randomUUID() })),
+          ),
+          workerId,
+        ],
+      );
+    }
+
+    const lockedQuotas = typeQuotas.map((quota) => ({
+      ...quota,
+      locked: lockedRows.filter((row) => row.type_name === quota.typeName).length,
+    }));
+    const shortTypeNames = new Set(
+      lockedQuotas.filter(({ jobs, locked }) => locked < jobs).map(({ typeName }) => typeName),
+    );
+    const claimedBatches = lockedQuotas.reduce(
+      (batches, { typeName, locked }) => batches + Math.ceil(locked / batchLimits[typeName]),
+      0,
+    );
+    const lockedIds = lockedRows.map((row) => row.id as string);
+    if (shortTypeNames.size === 0) return lockedIds;
+    return [
+      ...lockedIds,
+      ...(await claimPendingJobs(txCtx, {
+        batchLimits: Object.fromEntries(
+          Object.entries(batchLimits).filter(([typeName]) => !shortTypeNames.has(typeName)),
+        ),
+        limit: limit - claimedBatches,
+        workerId,
+      })),
+    ];
+  };
+
   const readStateJobs = async (
     txCtx: TTxContext | undefined,
     ids: string[],
@@ -1491,71 +1626,9 @@ WHERE h.blocking = TRUE
         );
         if (!liveWorker) return [];
 
-        const pickedRows = await execute(
-          txCtx,
-          prepared(
-            `pickPendingJobBatches:${typeNames.length}`,
-            `
-SELECT id
-FROM (
-  SELECT id, DENSE_RANK() OVER (ORDER BY batch_index, type_name) AS batch_rank
-  FROM (
-    SELECT id, type_name,
-      (ROW_NUMBER() OVER (PARTITION BY type_name ORDER BY picked_ts, id) - 1) DIV batch_limit AS batch_index
-    FROM (
-      ${typeNames
-        .map(
-          () =>
-            `(SELECT id, type_name, status_ts AS picked_ts, CAST(? AS UNSIGNED) AS batch_limit FROM {{prefix}}job FORCE INDEX ({{name_prefix}}job_status_idx) WHERE type_name = ? AND status = 'pending' AND status_ts <= UTC_TIMESTAMP(6) ORDER BY status_ts LIMIT ? FOR UPDATE SKIP LOCKED)`,
-        )
-        .join("\n      UNION ALL\n      ")}
-    ) AS candidate_jobs
-  ) AS numbered_jobs
-) AS ranked_jobs
-WHERE batch_rank <= ?`,
-            {
-              params: [
-                ...typeNames.flatMap(() => [t.number(), t.string(), t.number()]),
-                t.number(),
-              ],
-              columns: { id: jobIdDataType },
-            },
-          ),
-          [
-            ...typeNames.flatMap((typeName) => [
-              batchLimits[typeName],
-              typeName,
-              limit * batchLimits[typeName],
-            ]),
-            limit,
-          ],
-        );
-        const pickedIds = pickedRows.map((row) => row.id as string);
+        const pickedIds = await claimPendingJobs(txCtx, { batchLimits, limit, workerId });
         if (pickedIds.length === 0) return [];
 
-        await execute(
-          txCtx,
-          prepared(
-            "claimJobs",
-            `
-UPDATE JSON_TABLE(?, '$[*]' COLUMNS (
-  id {{job_id_type}} PATH '$.id',
-  attempt_token CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PATH '$.attempt_token'
-)) d
-STRAIGHT_JOIN {{prefix}}job j FORCE INDEX (PRIMARY) ON j.id = d.id
-SET j.status = 'running',
-  j.attempt = j.attempt + 1,
-  j.attempt_at = UTC_TIMESTAMP(6),
-  j.attempt_by = ?,
-  j.attempt_token = d.attempt_token
-WHERE {{fence_guard}}`,
-            { params: [t.string(), workerIdDataType] },
-          ),
-          [
-            JSON.stringify(pickedIds.map((id) => ({ id, attempt_token: crypto.randomUUID() }))),
-            workerId,
-          ],
-        );
         const rows = await execute(
           txCtx,
           prepared(
