@@ -109,9 +109,10 @@ export type WorkerRunner = {
    */
   start: () => Promise<void>;
   /**
-   * Stop processing: abort the running attempts' signals, wait for every attempt to end and remove
-   * the worker's registration. Does nothing when the worker runner is not started; concurrent calls
-   * wait for the same shutdown. Never rejects.
+   * Stop processing: abort the running attempts' signals, wait for every attempt to end and for a
+   * lease renewal in flight, for at most `heartbeatMs` and never past the local deadline, and
+   * remove the worker's registration. Does nothing when the worker runner is not started;
+   * concurrent calls wait for the same shutdown. Never rejects.
    */
   stop: () => Promise<void>;
   /** Stop the worker runner if it is started and prevent it from starting again. Idempotent. */

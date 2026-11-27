@@ -53,13 +53,14 @@ export const holdLease = async ({
     if (performance.now() >= deadline) return false;
     const sentAt = performance.now();
     renewalSent = true;
-    const renewed = await raceWithSleep(
-      renew().catch(() => undefined),
-      deadline - sentAt,
-      {
-        signal,
-      },
-    );
+    const renewal = renew().catch(() => undefined);
+    const renewed = await raceWithSleep(renewal, deadline - sentAt, {
+      signal,
+    });
+    if (signal.aborted) {
+      await raceWithSleep(renewal, Math.min(config.heartbeatMs, deadline - performance.now()));
+      return true;
+    }
     if (renewed === false) return false;
     if (renewed === true) deadline = sentAt + window;
   }

@@ -79,7 +79,7 @@ The worker runner stops claiming once it is stopping or its worker's lease is lo
 Calling `stop()` triggers graceful shutdown. It does nothing when the worker runner is not started, and concurrent calls wait for the same shutdown:
 
 1. Signal abort — in-flight attempts see their `job.signal` abort, and the main loop stops claiming
-2. Wait for the main loop to exit, then for all in-flight handlers to end (return or throw), while the lease keeps renewing
+2. Wait for the main loop to exit, then for all in-flight handlers to end (return or throw), while the lease keeps renewing, then for a lease renewal in flight, for at most `heartbeatMs` and never past the local deadline
 3. In one transaction, delete the row this registration created with `stopWorker` and, if it was still there, reschedule any job still running under it
 4. Emit the `workerStopped` observability event
 
@@ -116,7 +116,7 @@ One heartbeat per worker renews the lease every `heartbeatMs`, however many atte
 
 **Claims are gated on the lease.** `startJobAttempts` claims nothing unless the row this registration created exists with a live lease in database time, so a worker whose lease expired cannot start new attempts even before it notices.
 
-**Local deadline.** The worker runner counts its worker's lease as lost `durationMs − heartbeatMs` after the last successful renewal was sent, or after the registration was sent, measured on a monotonic local clock. The stored lease runs `durationMs` from a database time taken after a renewal was sent, so the local deadline comes at least `heartbeatMs` before the lease can expire, and the worker runner aborts its attempts before another worker runner can reclaim their jobs. No local timestamp is compared with the stored lease. With the defaults the deadline falls 45s after the last successful renewal was sent, so the renewals 15s and 30s after it can both fail, and the worker loses its lease at 45s. A renewal still pending at the deadline is cut off, so a renewal that hangs cannot keep a worker past its deadline looking live.
+**Local deadline.** The worker runner counts its worker's lease as lost `durationMs − heartbeatMs` after the last successful renewal was sent, or after the registration was sent, measured on a monotonic local clock. The stored lease runs `durationMs` from a database time taken after a renewal was sent, so the local deadline comes at least `heartbeatMs` before the lease can expire, and the worker runner aborts its attempts before another worker runner can reclaim their jobs. No local timestamp is compared with the stored lease. With the defaults the deadline falls 45s after the last successful renewal was sent, so the renewals 15s and 30s after it can both fail, and the worker loses its lease at 45s. A renewal still pending at the deadline is cut off, so a renewal that hangs cannot keep a worker past its deadline looking live. Stopping waits for a renewal in flight, for at most `heartbeatMs` and never past the same deadline, before the worker runner stops its worker.
 
 <Diagram label="With the default lease: worker runner A renews at 0s while running capture-payment; its renewals at 15s and 30s fail; at its 45s local deadline it counts the lease as lost and aborts its attempts; at 60s the lease expires in the database; worker runner B reclaims capture-payment, which returns to pending; A registers again under the same workerId">
   <Timeline lanes={["worker runner A", "worker runner B"]}>

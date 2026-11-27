@@ -176,7 +176,26 @@ describe("holdLease", () => {
     await expect(held).resolves.toBe(true);
   });
 
-  it("stops waiting for a hung renewal once the signal aborts", async () => {
+  it("waits for a renewal in flight once the signal aborts", async () => {
+    const reply = Promise.withResolvers<boolean>();
+    const stop = new AbortController();
+    const held = holdLease({
+      config,
+      startedAt: performance.now(),
+      renew: async () => reply.promise,
+      signal: stop.signal,
+    });
+
+    await vi.advanceTimersByTimeAsync(config.heartbeatMs);
+    stop.abort();
+    await vi.advanceTimersByTimeAsync(0);
+    await expect(settled(held)).resolves.toBe(pending);
+
+    reply.resolve(true);
+    await expect(held).resolves.toBe(true);
+  });
+
+  it("stops waiting for a hung renewal a heartbeat after the signal aborts", async () => {
     const stop = new AbortController();
     const held = holdLease({
       config,
@@ -187,7 +206,28 @@ describe("holdLease", () => {
 
     await vi.advanceTimersByTimeAsync(config.heartbeatMs);
     stop.abort();
+    await vi.advanceTimersByTimeAsync(config.heartbeatMs - 1);
+    await expect(settled(held)).resolves.toBe(pending);
 
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(held).resolves.toBe(true);
+  });
+
+  it("stops waiting for a hung renewal at the deadline when it comes before a heartbeat", async () => {
+    const stop = new AbortController();
+    const held = holdLease({
+      config,
+      startedAt: performance.now(),
+      renew: async () => new Promise<boolean>(() => {}),
+      signal: stop.signal,
+    });
+
+    await vi.advanceTimersByTimeAsync(config.durationMs - config.heartbeatMs - 5);
+    stop.abort();
+    await vi.advanceTimersByTimeAsync(4);
+    await expect(settled(held)).resolves.toBe(pending);
+
+    await vi.advanceTimersByTimeAsync(1);
     await expect(held).resolves.toBe(true);
   });
 
