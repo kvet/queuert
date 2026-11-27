@@ -182,6 +182,106 @@ Plans of every statement each query-performance case runs, at scale 100, without
                         -> Covering index lookup on tail_lookup using queuert_chain_index_idx (chain_id = h.id)
 ```
 
+## getChainTails/lockBlockers
+
+1. `lockChainHeads`
+
+```
+-> Nested loop inner join
+    -> Filter: (d.id is not null)
+        -> Materialize table function
+    -> Filter: (h.chain_index = 0)
+        -> Single-row index lookup on h using PRIMARY (id = d.id)
+```
+
+2. `lockChainHeads`
+
+```
+-> Nested loop inner join
+    -> Filter: (d.id is not null)
+        -> Materialize table function
+    -> Filter: (h.chain_index = 0)
+        -> Single-row index lookup on h using PRIMARY (id = d.id)
+```
+
+3. `lockChainHeads`
+
+```
+-> Nested loop inner join
+    -> Filter: (d.id is not null)
+        -> Materialize table function
+    -> Filter: (h.chain_index = 0)
+        -> Single-row index lookup on h using PRIMARY (id = d.id)
+```
+
+4. `getChainTailsLocked`
+
+```
+-> Nested loop inner join
+    -> Nested loop inner join
+        -> Filter: (d.id is not null)
+            -> Materialize table function
+        -> Filter: (h.chain_index = 0)
+            -> Single-row index lookup on h using PRIMARY (id = d.id)
+    -> Filter: (j.id = coalesce((select #2),h.id))
+        -> Single-row index lookup on j using PRIMARY (id = coalesce((select #2),h.id))
+        -> Select #2 (subquery in condition; dependent)
+            -> Limit: 1 row(s)
+                -> Sort: tail_lookup.chain_index DESC, limit input to 1 row(s) per chunk
+                    -> Filter: (tail_lookup.chain_index > 0)
+                        -> Covering index lookup on tail_lookup using queuert_chain_index_idx (chain_id = h.id)
+```
+
+## getChainTails/lockBlockersBatch100
+
+1. `lockChainHeads`
+
+```
+-> Nested loop inner join
+    -> Filter: (d.id is not null)
+        -> Materialize table function
+    -> Filter: (h.chain_index = 0)
+        -> Single-row index lookup on h using PRIMARY (id = d.id)
+```
+
+2. `lockChainHeads`
+
+```
+-> Nested loop inner join
+    -> Filter: (d.id is not null)
+        -> Materialize table function
+    -> Filter: (h.chain_index = 0)
+        -> Single-row index lookup on h using PRIMARY (id = d.id)
+```
+
+3. `lockChainHeads`
+
+```
+-> Nested loop inner join
+    -> Filter: (d.id is not null)
+        -> Materialize table function
+    -> Filter: (h.chain_index = 0)
+        -> Single-row index lookup on h using PRIMARY (id = d.id)
+```
+
+4. `getChainTailsLocked`
+
+```
+-> Nested loop inner join
+    -> Nested loop inner join
+        -> Filter: (d.id is not null)
+            -> Materialize table function
+        -> Filter: (h.chain_index = 0)
+            -> Single-row index lookup on h using PRIMARY (id = d.id)
+    -> Filter: (j.id = coalesce((select #2),h.id))
+        -> Single-row index lookup on j using PRIMARY (id = coalesce((select #2),h.id))
+        -> Select #2 (subquery in condition; dependent)
+            -> Limit: 1 row(s)
+                -> Sort: tail_lookup.chain_index DESC, limit input to 1 row(s) per chunk
+                    -> Filter: (tail_lookup.chain_index > 0)
+                        -> Covering index lookup on tail_lookup using queuert_chain_index_idx (chain_id = h.id)
+```
+
 ## getJobs/default
 
 1. `getJobs`
@@ -810,13 +910,7 @@ Plans of every statement each query-performance case runs, at scale 100, without
 -> Rows fetched before execution
 ```
 
-2. `pickPendingJobBatches:1`
-
-```
--> Rows fetched before execution
-```
-
-3. `claimJobs`
+2. `claimJobs`
 
 ```
 -> Update j (buffered)
@@ -826,7 +920,7 @@ Plans of every statement each query-performance case runs, at scale 100, without
         -> Single-row index lookup on j using PRIMARY (id = d.id)
 ```
 
-4. `readClaimedJobs`
+3. `readClaimedJobs`
 
 ```
 -> Nested loop inner join
@@ -848,26 +942,7 @@ Plans of every statement each query-performance case runs, at scale 100, without
 -> Rows fetched before execution
 ```
 
-2. `pickPendingJobBatches:1`
-
-```
--> Filter: (ranked_jobs.batch_rank <= 100)
-    -> Table scan on ranked_jobs
-        -> Materialize
-            -> Window aggregate: dense_rank() OVER (ORDER BY numbered_jobs.batch_index,numbered_jobs.type_name )
-                -> Sort: numbered_jobs.batch_index, numbered_jobs.type_name
-                    -> Table scan on numbered_jobs
-                        -> Materialize
-                            -> Window aggregate: row_number() OVER (PARTITION BY candidate_jobs.type_name ORDER BY candidate_jobs.picked_ts,candidate_jobs.id )
-                                -> Sort: candidate_jobs.type_name, candidate_jobs.picked_ts, candidate_jobs.id
-                                    -> Table scan on candidate_jobs
-                                        -> Materialize
-                                            -> Limit: 100 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:batch:start') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:batch:start' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-```
-
-3. `claimJobs`
+2. `claimJobs`
 
 ```
 -> Update j (buffered)
@@ -877,7 +952,7 @@ Plans of every statement each query-performance case runs, at scale 100, without
         -> Single-row index lookup on j using PRIMARY (id = d.id)
 ```
 
-4. `readClaimedJobs`
+3. `readClaimedJobs`
 
 ```
 -> Nested loop inner join
@@ -899,26 +974,7 @@ Plans of every statement each query-performance case runs, at scale 100, without
 -> Rows fetched before execution
 ```
 
-2. `pickPendingJobBatches:1`
-
-```
--> Filter: (ranked_jobs.batch_rank <= 10)
-    -> Table scan on ranked_jobs
-        -> Materialize
-            -> Window aggregate: dense_rank() OVER (ORDER BY numbered_jobs.batch_index,numbered_jobs.type_name )
-                -> Sort: numbered_jobs.batch_index, numbered_jobs.type_name
-                    -> Table scan on numbered_jobs
-                        -> Materialize
-                            -> Window aggregate: row_number() OVER (PARTITION BY candidate_jobs.type_name ORDER BY candidate_jobs.picked_ts,candidate_jobs.id )
-                                -> Sort: candidate_jobs.type_name, candidate_jobs.picked_ts, candidate_jobs.id
-                                    -> Table scan on candidate_jobs
-                                        -> Materialize
-                                            -> Limit: 100 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:batch:start-batches') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:batch:start-batches' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-```
-
-3. `claimJobs`
+2. `claimJobs`
 
 ```
 -> Update j (buffered)
@@ -928,7 +984,7 @@ Plans of every statement each query-performance case runs, at scale 100, without
         -> Single-row index lookup on j using PRIMARY (id = d.id)
 ```
 
-4. `readClaimedJobs`
+3. `readClaimedJobs`
 
 ```
 -> Nested loop inner join
@@ -950,320 +1006,326 @@ Plans of every statement each query-performance case runs, at scale 100, without
 -> Rows fetched before execution
 ```
 
-2. `pickPendingJobBatches:100`
+2. `planPendingJobBatches:100`
 
 ```
--> Filter: (ranked_jobs.batch_rank <= 10)
-    -> Table scan on ranked_jobs
-        -> Materialize
-            -> Window aggregate: dense_rank() OVER (ORDER BY numbered_jobs.batch_index,numbered_jobs.type_name )
-                -> Sort: numbered_jobs.batch_index, numbered_jobs.type_name
-                    -> Table scan on numbered_jobs
-                        -> Materialize
-                            -> Window aggregate: row_number() OVER (PARTITION BY candidate_jobs.type_name ORDER BY candidate_jobs.picked_ts,candidate_jobs.id )
-                                -> Sort: candidate_jobs.type_name, candidate_jobs.picked_ts, candidate_jobs.id
-                                    -> Table scan on candidate_jobs
-                                        -> Union all materialize
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'seed:throwaway:pending') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'seed:throwaway:pending' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:0') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:0' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:1') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:1' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:2') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:2' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:3') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:3' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:4') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:4' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:5') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:5' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:6') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:6' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:7') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:7' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:8') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:8' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:9') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:9' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:10') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:10' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:11') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:11' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:12') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:12' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:13') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:13' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:14') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:14' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:15') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:15' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:16') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:16' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:17') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:17' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:18') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:18' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:19') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:19' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:20') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:20' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:21') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:21' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:22') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:22' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:23') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:23' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:24') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:24' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:25') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:25' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:26') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:26' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:27') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:27' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:28') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:28' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:29') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:29' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:30') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:30' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:31') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:31' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:32') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:32' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:33') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:33' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:34') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:34' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:35') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:35' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:36') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:36' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:37') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:37' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:38') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:38' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:39') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:39' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:40') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:40' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:41') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:41' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:42') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:42' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:43') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:43' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:44') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:44' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:45') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:45' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:46') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:46' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:47') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:47' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:48') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:48' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:49') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:49' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:50') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:50' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:51') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:51' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:52') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:52' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:53') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:53' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:54') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:54' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:55') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:55' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:56') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:56' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:57') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:57' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:58') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:58' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:59') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:59' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:60') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:60' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:61') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:61' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:62') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:62' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:63') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:63' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:64') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:64' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:65') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:65' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:66') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:66' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:67') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:67' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:68') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:68' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:69') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:69' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:70') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:70' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:71') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:71' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:72') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:72' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:73') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:73' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:74') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:74' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:75') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:75' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:76') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:76' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:77') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:77' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:78') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:78' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:79') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:79' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:80') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:80' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:81') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:81' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:82') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:82' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:83') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:83' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:84') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:84' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:85') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:85' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:86') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:86' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:87') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:87' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:88') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:88' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:89') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:89' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:90') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:90' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:91') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:91' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:92') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:92' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:93') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:93' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:94') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:94' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:95') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:95' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:96') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:96' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:97') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:97' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
-                                            -> Limit: 10 row(s)
-                                                -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:98') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
-                                                    -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:98' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+-> Table scan on <temporary>
+    -> Aggregate using temporary table
+        -> Table scan on batch_heads
+            -> Materialize
+                -> Limit: 10 row(s)
+                    -> Sort: numbered_jobs.picked_ts, numbered_jobs.type_name, limit input to 10 row(s) per chunk
+                        -> Filter: ((numbered_jobs.position % numbered_jobs.batch_limit) = 0)
+                            -> Table scan on numbered_jobs
+                                -> Materialize
+                                    -> Window aggregate with buffering: count(0) OVER (PARTITION BY due_jobs.type_name )
+                                        -> Sort: due_jobs.type_name
+                                            -> Table scan on <temporary>
+                                                -> Temporary table
+                                                    -> Window aggregate: row_number() OVER (PARTITION BY due_jobs.type_name ORDER BY due_jobs.picked_ts )
+                                                        -> Sort: due_jobs.type_name, due_jobs.picked_ts
+                                                            -> Table scan on due_jobs
+                                                                -> Union all materialize
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'seed:throwaway:pending') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'seed:throwaway:pending' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:0') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:0' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:1') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:1' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:2') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:2' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:3') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:3' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:4') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:4' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:5') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:5' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:6') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:6' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:7') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:7' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:8') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:8' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:9') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:9' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:10') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:10' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:11') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:11' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:12') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:12' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:13') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:13' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:14') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:14' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:15') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:15' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:16') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:16' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:17') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:17' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:18') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:18' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:19') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:19' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:20') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:20' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:21') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:21' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:22') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:22' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:23') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:23' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:24') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:24' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:25') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:25' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:26') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:26' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:27') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:27' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:28') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:28' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:29') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:29' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:30') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:30' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:31') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:31' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:32') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:32' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:33') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:33' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:34') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:34' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:35') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:35' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:36') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:36' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:37') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:37' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:38') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:38' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:39') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:39' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:40') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:40' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:41') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:41' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:42') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:42' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:43') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:43' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:44') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:44' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:45') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:45' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:46') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:46' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:47') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:47' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:48') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:48' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:49') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:49' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:50') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:50' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:51') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:51' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:52') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:52' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:53') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:53' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:54') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:54' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:55') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:55' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:56') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:56' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:57') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:57' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:58') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:58' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:59') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:59' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:60') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:60' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:61') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:61' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:62') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:62' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:63') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:63' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:64') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:64' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:65') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:65' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:66') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:66' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:67') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:67' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:68') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:68' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:69') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:69' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:70') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:70' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:71') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:71' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:72') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:72' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:73') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:73' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:74') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:74' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:75') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:75' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:76') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:76' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:77') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:77' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:78') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:78' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:79') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:79' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:80') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:80' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:81') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:81' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:82') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:82' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:83') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:83' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:84') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:84' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:85') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:85' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:86') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:86' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:87') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:87' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:88') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:88' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:89') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:89' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:90') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:90' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:91') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:91' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:92') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:92' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:93') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:93' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:94') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:94' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:95') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:95' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:96') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:96' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:97') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:97' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
+                                                                    -> Limit: 10 row(s)
+                                                                        -> Filter: ((queuert_job.`status` = 'pending') and (queuert_job.type_name = 'idx:type:98') and (queuert_job.status_ts <= <cache>(utc_timestamp(6))))
+                                                                            -> Covering index range scan on queuert_job using queuert_job_status_idx over (type_name = 'idx:type:98' AND status = 'pending' AND NULL < status_ts <= '<timestamp>')
 ```
 
 3. `claimJobs`

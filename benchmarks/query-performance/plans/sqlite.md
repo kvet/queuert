@@ -130,6 +130,44 @@ CORRELATED SCALAR SUBQUERY 1
 SEARCH t USING COVERING INDEX queuert_chain_index_idx (chain_id=? AND chain_index>?)
 ```
 
+## getChainTails/lockBlockers
+
+1. `takeWriteLock`
+
+```
+SCAN queuert_write_lock
+```
+
+2. `getChains`
+
+```
+SEARCH head_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+LIST SUBQUERY 2
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH tail_job USING INDEX queuert_chain_index_idx (chain_id=? AND chain_index=?) LEFT-JOIN
+CORRELATED SCALAR SUBQUERY 1
+SEARCH t USING COVERING INDEX queuert_chain_index_idx (chain_id=? AND chain_index>?)
+```
+
+## getChainTails/lockBlockersBatch100
+
+1. `takeWriteLock`
+
+```
+SCAN queuert_write_lock
+```
+
+2. `getChains`
+
+```
+SEARCH head_job USING INDEX sqlite_autoindex_queuert_job_1 (id=?)
+LIST SUBQUERY 2
+SCAN json_each VIRTUAL TABLE INDEX 1:
+SEARCH tail_job USING INDEX queuert_chain_index_idx (chain_id=? AND chain_index=?) LEFT-JOIN
+CORRELATED SCALAR SUBQUERY 1
+SEARCH t USING COVERING INDEX queuert_chain_index_idx (chain_id=? AND chain_index>?)
+```
+
 ## getJobs/default
 
 1. `getJobs`

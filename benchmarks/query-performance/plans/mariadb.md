@@ -118,6 +118,70 @@ id=1  select_type=PRIMARY  table=j  type=eq_ref  possible_keys=PRIMARY  key=PRIM
 id=2  select_type=DEPENDENT SUBQUERY  table=tail_lookup  type=ref  possible_keys=queuert_chain_index_idx  key=queuert_chain_index_idx  key_len=36  ref=queuert_bench.h.id  Extra=Using where; Using index
 ```
 
+## getChainTails/lockBlockers
+
+1. `lockChainHeads`
+
+```
+id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
+id=1  select_type=SIMPLE  table=h  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=*any*.d.id  Extra=Using where
+```
+
+2. `lockChainHeads`
+
+```
+id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
+id=1  select_type=SIMPLE  table=h  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=*any*.d.id  Extra=Using where
+```
+
+3. `lockChainHeads`
+
+```
+id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
+id=1  select_type=SIMPLE  table=h  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=*any*.d.id  Extra=Using where
+```
+
+4. `getChainTailsLocked`
+
+```
+id=1  select_type=PRIMARY  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
+id=1  select_type=PRIMARY  table=h  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=*any*.d.id  Extra=Using where
+id=1  select_type=PRIMARY  table=j  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=func  Extra=Using where
+id=2  select_type=DEPENDENT SUBQUERY  table=tail_lookup  type=ref  possible_keys=queuert_chain_index_idx  key=queuert_chain_index_idx  key_len=36  ref=queuert_bench.h.id  Extra=Using where; Using index
+```
+
+## getChainTails/lockBlockersBatch100
+
+1. `lockChainHeads`
+
+```
+id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
+id=1  select_type=SIMPLE  table=h  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=*any*.d.id  Extra=Using where
+```
+
+2. `lockChainHeads`
+
+```
+id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
+id=1  select_type=SIMPLE  table=h  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=*any*.d.id  Extra=Using where
+```
+
+3. `lockChainHeads`
+
+```
+id=1  select_type=SIMPLE  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
+id=1  select_type=SIMPLE  table=h  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=*any*.d.id  Extra=Using where
+```
+
+4. `getChainTailsLocked`
+
+```
+id=1  select_type=PRIMARY  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
+id=1  select_type=PRIMARY  table=h  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=*any*.d.id  Extra=Using where
+id=1  select_type=PRIMARY  table=j  type=eq_ref  possible_keys=PRIMARY  key=PRIMARY  key_len=36  ref=func  Extra=Using where
+id=2  select_type=DEPENDENT SUBQUERY  table=tail_lookup  type=ref  possible_keys=queuert_chain_index_idx  key=queuert_chain_index_idx  key_len=36  ref=queuert_bench.h.id  Extra=Using where; Using index
+```
+
 ## getJobs/default
 
 1. `getJobs`
@@ -598,16 +662,7 @@ id=1  select_type=PRIMARY  table=queuert_worker  type=const  possible_keys=PRIMA
 id=2  select_type=SUBQUERY  table=null  type=null  possible_keys=null  key=null  key_len=null  ref=null  Extra=Impossible WHERE
 ```
 
-2. `pickPendingJobBatches:1`
-
-```
-id=1  select_type=PRIMARY  table=<derived2>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using where
-id=2  select_type=DERIVED  table=<derived3>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using temporary
-id=3  select_type=DERIVED  table=<derived4>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using temporary
-id=4  select_type=DERIVED  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
-```
-
-3. `claimJobs`
+2. `claimJobs`
 
 ```
 id=1  select_type=PRIMARY  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
@@ -615,7 +670,7 @@ id=1  select_type=PRIMARY  table=j  type=eq_ref  possible_keys=PRIMARY  key=PRIM
 id=2  select_type=SUBQUERY  table=null  type=null  possible_keys=null  key=null  key_len=null  ref=null  Extra=Impossible WHERE
 ```
 
-4. `readClaimedJobs`
+3. `readClaimedJobs`
 
 ```
 id=1  select_type=PRIMARY  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
@@ -633,16 +688,7 @@ id=1  select_type=PRIMARY  table=queuert_worker  type=const  possible_keys=PRIMA
 id=2  select_type=SUBQUERY  table=null  type=null  possible_keys=null  key=null  key_len=null  ref=null  Extra=Impossible WHERE
 ```
 
-2. `pickPendingJobBatches:1`
-
-```
-id=1  select_type=PRIMARY  table=<derived2>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using where
-id=2  select_type=DERIVED  table=<derived3>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using temporary
-id=3  select_type=DERIVED  table=<derived4>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using temporary
-id=4  select_type=DERIVED  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
-```
-
-3. `claimJobs`
+2. `claimJobs`
 
 ```
 id=1  select_type=PRIMARY  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
@@ -650,7 +696,7 @@ id=1  select_type=PRIMARY  table=j  type=eq_ref  possible_keys=PRIMARY  key=PRIM
 id=2  select_type=SUBQUERY  table=null  type=null  possible_keys=null  key=null  key_len=null  ref=null  Extra=Impossible WHERE
 ```
 
-4. `readClaimedJobs`
+3. `readClaimedJobs`
 
 ```
 id=1  select_type=PRIMARY  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
@@ -668,16 +714,7 @@ id=1  select_type=PRIMARY  table=queuert_worker  type=const  possible_keys=PRIMA
 id=2  select_type=SUBQUERY  table=null  type=null  possible_keys=null  key=null  key_len=null  ref=null  Extra=Impossible WHERE
 ```
 
-2. `pickPendingJobBatches:1`
-
-```
-id=1  select_type=PRIMARY  table=<derived2>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using where
-id=2  select_type=DERIVED  table=<derived3>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using temporary
-id=3  select_type=DERIVED  table=<derived4>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using temporary
-id=4  select_type=DERIVED  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
-```
-
-3. `claimJobs`
+2. `claimJobs`
 
 ```
 id=1  select_type=PRIMARY  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
@@ -685,7 +722,7 @@ id=1  select_type=PRIMARY  table=j  type=eq_ref  possible_keys=PRIMARY  key=PRIM
 id=2  select_type=SUBQUERY  table=null  type=null  possible_keys=null  key=null  key_len=null  ref=null  Extra=Impossible WHERE
 ```
 
-4. `readClaimedJobs`
+3. `readClaimedJobs`
 
 ```
 id=1  select_type=PRIMARY  table=d  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Table function: json_table; Using where
@@ -703,11 +740,11 @@ id=1  select_type=PRIMARY  table=queuert_worker  type=const  possible_keys=PRIMA
 id=2  select_type=SUBQUERY  table=null  type=null  possible_keys=null  key=null  key_len=null  ref=null  Extra=Impossible WHERE
 ```
 
-2. `pickPendingJobBatches:100`
+2. `planPendingJobBatches:100`
 
 ```
-id=1  select_type=PRIMARY  table=<derived2>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using where
-id=2  select_type=DERIVED  table=<derived3>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using temporary
+id=1  select_type=PRIMARY  table=<derived2>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using temporary; Using filesort
+id=2  select_type=DERIVED  table=<derived3>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using where; Using filesort
 id=3  select_type=DERIVED  table=<derived4>  type=ALL  possible_keys=null  key=null  key_len=null  ref=null  Extra=Using temporary
 id=4  select_type=DERIVED  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index
 id=5  select_type=UNION  table=queuert_job  type=range  possible_keys=queuert_job_status_idx  key=queuert_job_status_idx  key_len=1049  ref=null  Extra=Using where; Using index

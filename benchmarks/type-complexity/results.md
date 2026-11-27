@@ -1,38 +1,38 @@
 # Type complexity
 
-Last run 2026-11-26 · commit 23926ee8 · load average 2.23 · TS 6, TS 7, tsrs
+Last run 2026-11-26 · commit 28448c56 · load average 4.68 · TS 6, TS 7, tsrs
 
 ## Type-check time (ms)
 
 | Scenario                     | TS 6 | TS 7 | tsrs |
 | ---------------------------- | ---: | ---: | ---: |
-| Linear: 1 type               |  371 |   77 |   46 |
-| Linear: 5 types              |  341 |   80 |   46 |
-| Linear: 10 types             |  349 |   87 |   50 |
-| Linear: 20 types             |  365 |   90 |   50 |
-| Linear: 50 types             |  410 |  102 |   53 |
-| Linear: 100 types            |  460 |  113 |   56 |
-| Branched: 2w x 2d            |  341 |   84 |   48 |
-| Branched: 3w x 3d            |  392 |   95 |   50 |
-| Branched: 4w x 3d            |  442 |  108 |   55 |
-| Branched: 2w x 6d            |  514 |  131 |   66 |
-| Blockers: 3 steps            |  343 |   86 |   51 |
-| Blockers: 8 steps            |  384 |   97 |   53 |
-| Blockers: 15 steps           |  444 |  118 |   56 |
-| Blockers: 25 steps           |  519 |  140 |   61 |
-| Loop: 5 steps                |  334 |   84 |   48 |
-| Loop: 10 steps               |  346 |   85 |   49 |
-| Loop: 20 steps               |  353 |   89 |   54 |
-| Loop: 50 steps               |  398 |   98 |   54 |
-| Merge: 2 x 50                |  438 |  107 |   55 |
-| Merge: 5 x 50                |  576 |  146 |   66 |
-| Merge: 10 x 50               |  795 |  216 |   80 |
-| Merge: 20 x 50               | 1202 |  364 |  117 |
-| Merge: 50 x 50               | 2836 |  943 |  272 |
-| Middleware: 1 on linear-100  |  464 |  112 |   58 |
-| Middleware: 2 on linear-100  |  463 |  114 |   59 |
-| Middleware: 5 on linear-100  |  468 |  113 |   55 |
-| Middleware: 10 on linear-100 |  473 |  114 |   55 |
+| Linear: 1 type               |  318 |   77 |   45 |
+| Linear: 5 types              |  322 |   79 |   45 |
+| Linear: 10 types             |  331 |   82 |   48 |
+| Linear: 20 types             |  335 |   84 |   48 |
+| Linear: 50 types             |  391 |   94 |   49 |
+| Linear: 100 types            |  445 |  110 |   53 |
+| Branched: 2w x 2d            |  323 |   79 |   46 |
+| Branched: 3w x 3d            |  367 |   90 |   48 |
+| Branched: 4w x 3d            |  430 |  104 |   52 |
+| Branched: 2w x 6d            |  496 |  126 |   56 |
+| Blockers: 3 steps            |  336 |   84 |   47 |
+| Blockers: 8 steps            |  378 |   94 |   50 |
+| Blockers: 15 steps           |  428 |  107 |   53 |
+| Blockers: 25 steps           |  512 |  134 |   59 |
+| Loop: 5 steps                |  323 |   80 |   45 |
+| Loop: 10 steps               |  335 |   80 |   48 |
+| Loop: 20 steps               |  343 |   85 |   46 |
+| Loop: 50 steps               |  387 |   93 |   50 |
+| Merge: 2 x 50                |  436 |  106 |   53 |
+| Merge: 5 x 50                |  559 |  143 |   61 |
+| Merge: 10 x 50               |  768 |  205 |   78 |
+| Merge: 20 x 50               | 1177 |  350 |  112 |
+| Merge: 50 x 50               | 2744 |  916 |  254 |
+| Middleware: 1 on linear-100  |  451 |  111 |   52 |
+| Middleware: 2 on linear-100  |  455 |  112 |   52 |
+| Middleware: 5 on linear-100  |  458 |  111 |   53 |
+| Middleware: 10 on linear-100 |  463 |  115 |   53 |
 
 ## Instantiations
 
@@ -68,10 +68,10 @@ Last run 2026-11-26 · commit 23926ee8 · load average 2.23 · TS 6, TS 7, tsrs
 
 ## Environment
 
-| Setting    |                         Value |
-| ---------- | ----------------------------: |
-| Machine    | Apple M5 Pro, 15 cores, 48 GB |
-| Power mode |                        Normal |
-| OS         |                  macOS 26.7.3 |
-| Runtime    |              Node.js v24.22.1 |
-| Containers |              socktainer 1.6.1 |
+| Setting    |                                  Value |
+| ---------- | -------------------------------------: |
+| Machine    |          Apple M5 Pro, 15 cores, 48 GB |
+| Power mode |                                 Normal |
+| OS         |                           macOS 26.7.3 |
+| Runtime    |                       Node.js v24.22.1 |
+| Containers | Docker Desktop 4.100.1 (247138) 29.9.3 |

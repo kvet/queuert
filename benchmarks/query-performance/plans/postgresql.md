@@ -150,6 +150,326 @@ Result
                                 Index Cond: ((chain_id = head_job.id) AND (chain_index > 0))
 ```
 
+## getChainTails/lockBlockers
+
+1. `lockChainHeadsBlockersFirst`
+
+```
+LockRows
+  CTE locked_heads
+    ->  Unique
+          ->  Sort
+                Sort Key: d.id
+                ->  Append
+                      ->  Function Scan on unnest d
+                      ->  Nested Loop
+                            ->  Bitmap Heap Scan on queuert_job m
+                                  Recheck Cond: ((id = ANY ('{<uuid>}'::uuid[])) OR ((chain_id = ANY ('{<uuid>}'::uuid[])) AND (chain_index > 0)))
+                                  Filter: (((id = ANY ('{<uuid>}'::uuid[])) AND (chain_index = 0)) OR ((chain_id = ANY ('{<uuid>}'::uuid[])) AND (chain_index > 0)))
+                                  ->  BitmapOr
+                                        ->  Bitmap Index Scan on queuert_job_pkey
+                                              Index Cond: (id = ANY ('{<uuid>}'::uuid[]))
+                                        ->  Bitmap Index Scan on queuert_chain_index_idx
+                                              Index Cond: ((chain_id = ANY ('{<uuid>}'::uuid[])) AND (chain_index > 0))
+                            ->  Index Only Scan using queuert_job_blocker_pkey on queuert_job_blocker jb
+                                  Index Cond: (job_id = m.id)
+  CTE blocker_edges
+    ->  Unique
+          ->  Sort
+                Sort Key: jb_1.blocked_by_chain_id, l.id
+                ->  Hash Semi Join
+                      Hash Cond: (jb_1.blocked_by_chain_id = locked_heads.id)
+                      ->  Nested Loop
+                            ->  Nested Loop
+                                  ->  CTE Scan on locked_heads l
+                                  ->  Append
+                                        ->  Index Scan using queuert_job_pkey on queuert_job d_2
+                                              Index Cond: (id = l.id)
+                                              Filter: (chain_index = 0)
+                                        ->  Index Scan using queuert_chain_index_idx on queuert_job d_3
+                                              Index Cond: (chain_id = l.id)
+                            ->  Memoize
+                                  Cache Key: d_2.id
+                                  Cache Mode: logical
+                                  ->  Index Only Scan using queuert_job_blocker_pkey on queuert_job_blocker jb_1
+                                        Index Cond: (job_id = d_2.id)
+                      ->  Hash
+                            ->  CTE Scan on locked_heads
+  CTE blocker_depths
+    ->  Recursive Union
+          ->  CTE Scan on locked_heads locked_heads_2
+          ->  Hash Join
+                Hash Cond: (b_1.id = e.blocker_id)
+                InitPlan 3
+                  ->  Aggregate
+                        ->  CTE Scan on locked_heads locked_heads_1
+                ->  WorkTable Scan on blocker_depths b_1
+                      Filter: (depth < (InitPlan 3).col1)
+                ->  Hash
+                      ->  CTE Scan on blocker_edges e
+  ->  Sort
+        Sort Key: b.depth, h.id
+        ->  Nested Loop
+              ->  Subquery Scan on b
+                    ->  HashAggregate
+                          Group Key: blocker_depths.id
+                          ->  CTE Scan on blocker_depths
+              ->  Index Scan using queuert_job_pkey on queuert_job h
+                    Index Cond: (id = b.id)
+                    Filter: (chain_index = 0)
+```
+
+2. `lockChainHeadsBlockersFirst`
+
+```
+LockRows
+  CTE locked_heads
+    ->  Unique
+          ->  Sort
+                Sort Key: d.id
+                ->  Append
+                      ->  Function Scan on unnest d
+                      ->  Nested Loop
+                            ->  Bitmap Heap Scan on queuert_job m
+                                  Recheck Cond: ((id = ANY ('{<uuid>}'::uuid[])) OR ((chain_id = ANY ('{<uuid>}'::uuid[])) AND (chain_index > 0)))
+                                  Filter: (((id = ANY ('{<uuid>}'::uuid[])) AND (chain_index = 0)) OR ((chain_id = ANY ('{<uuid>}'::uuid[])) AND (chain_index > 0)))
+                                  ->  BitmapOr
+                                        ->  Bitmap Index Scan on queuert_job_pkey
+                                              Index Cond: (id = ANY ('{<uuid>}'::uuid[]))
+                                        ->  Bitmap Index Scan on queuert_chain_index_idx
+                                              Index Cond: ((chain_id = ANY ('{<uuid>}'::uuid[])) AND (chain_index > 0))
+                            ->  Index Only Scan using queuert_job_blocker_pkey on queuert_job_blocker jb
+                                  Index Cond: (job_id = m.id)
+  CTE blocker_edges
+    ->  Unique
+          ->  Sort
+                Sort Key: jb_1.blocked_by_chain_id, l.id
+                ->  Hash Semi Join
+                      Hash Cond: (jb_1.blocked_by_chain_id = locked_heads.id)
+                      ->  Nested Loop
+                            ->  Nested Loop
+                                  ->  CTE Scan on locked_heads l
+                                  ->  Append
+                                        ->  Index Scan using queuert_job_pkey on queuert_job d_2
+                                              Index Cond: (id = l.id)
+                                              Filter: (chain_index = 0)
+                                        ->  Index Scan using queuert_chain_index_idx on queuert_job d_3
+                                              Index Cond: (chain_id = l.id)
+                            ->  Memoize
+                                  Cache Key: d_2.id
+                                  Cache Mode: logical
+                                  ->  Index Only Scan using queuert_job_blocker_pkey on queuert_job_blocker jb_1
+                                        Index Cond: (job_id = d_2.id)
+                      ->  Hash
+                            ->  CTE Scan on locked_heads
+  CTE blocker_depths
+    ->  Recursive Union
+          ->  CTE Scan on locked_heads locked_heads_2
+          ->  Hash Join
+                Hash Cond: (b_1.id = e.blocker_id)
+                InitPlan 3
+                  ->  Aggregate
+                        ->  CTE Scan on locked_heads locked_heads_1
+                ->  WorkTable Scan on blocker_depths b_1
+                      Filter: (depth < (InitPlan 3).col1)
+                ->  Hash
+                      ->  CTE Scan on blocker_edges e
+  ->  Sort
+        Sort Key: b.depth, h.id
+        ->  Nested Loop
+              ->  Subquery Scan on b
+                    ->  HashAggregate
+                          Group Key: blocker_depths.id
+                          ->  CTE Scan on blocker_depths
+              ->  Index Scan using queuert_job_pkey on queuert_job h
+                    Index Cond: (id = b.id)
+                    Filter: (chain_index = 0)
+```
+
+3. `getChainTailsLocked`
+
+```
+Result
+  One-Time Filter: ((InitPlan 2).col1 > 0)
+  CTE head_job
+    ->  LockRows
+          ->  Index Scan using queuert_job_pkey on queuert_job queuert_job_1
+                Index Cond: (id = ANY ('{<uuid>}'::uuid[]))
+                Filter: (chain_index = 0)
+  InitPlan 2
+    ->  Aggregate
+          ->  CTE Scan on head_job head_job_1
+  ->  Nested Loop Left Join
+        ->  CTE Scan on head_job
+        ->  Subquery Scan on tail_job
+              ->  Limit
+                    ->  LockRows
+                          ->  Index Scan Backward using queuert_chain_index_idx on queuert_job
+                                Index Cond: ((chain_id = head_job.id) AND (chain_index > 0))
+```
+
+## getChainTails/lockBlockersBatch100
+
+1. `lockChainHeadsBlockersFirst`
+
+```
+LockRows
+  CTE locked_heads
+    ->  Unique
+          ->  Sort
+                Sort Key: d.id
+                ->  Append
+                      ->  Function Scan on unnest d
+                      ->  Nested Loop
+                            ->  Bitmap Heap Scan on queuert_job m
+                                  Recheck Cond: ((id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[])) OR ((chain_id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[])) AND (chain_index > 0)))
+                                  Filter: (((id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[])) AND (chain_index = 0)) OR ((chain_id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[])) AND (chain_index > 0)))
+                                  ->  BitmapOr
+                                        ->  Bitmap Index Scan on queuert_job_pkey
+                                              Index Cond: (id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[]))
+                                        ->  Bitmap Index Scan on queuert_chain_index_idx
+                                              Index Cond: ((chain_id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[])) AND (chain_index > 0))
+                            ->  Index Only Scan using queuert_job_blocker_pkey on queuert_job_blocker jb
+                                  Index Cond: (job_id = m.id)
+  CTE blocker_edges
+    ->  Unique
+          ->  Sort
+                Sort Key: jb_1.blocked_by_chain_id, l.id
+                ->  Hash Semi Join
+                      Hash Cond: (jb_1.blocked_by_chain_id = locked_heads.id)
+                      ->  Nested Loop
+                            ->  Nested Loop
+                                  ->  CTE Scan on locked_heads l
+                                  ->  Append
+                                        ->  Index Scan using queuert_job_pkey on queuert_job d_2
+                                              Index Cond: (id = l.id)
+                                              Filter: (chain_index = 0)
+                                        ->  Index Scan using queuert_chain_index_idx on queuert_job d_3
+                                              Index Cond: (chain_id = l.id)
+                            ->  Memoize
+                                  Cache Key: d_2.id
+                                  Cache Mode: logical
+                                  ->  Index Only Scan using queuert_job_blocker_pkey on queuert_job_blocker jb_1
+                                        Index Cond: (job_id = d_2.id)
+                      ->  Hash
+                            ->  CTE Scan on locked_heads
+  CTE blocker_depths
+    ->  Recursive Union
+          ->  CTE Scan on locked_heads locked_heads_2
+          ->  Hash Join
+                Hash Cond: (b_1.id = e.blocker_id)
+                InitPlan 3
+                  ->  Aggregate
+                        ->  CTE Scan on locked_heads locked_heads_1
+                ->  WorkTable Scan on blocker_depths b_1
+                      Filter: (depth < (InitPlan 3).col1)
+                ->  Hash
+                      ->  CTE Scan on blocker_edges e
+  ->  Sort
+        Sort Key: b.depth, h.id
+        ->  Nested Loop
+              ->  Subquery Scan on b
+                    ->  HashAggregate
+                          Group Key: blocker_depths.id
+                          ->  CTE Scan on blocker_depths
+              ->  Index Scan using queuert_job_pkey on queuert_job h
+                    Index Cond: (id = b.id)
+                    Filter: (chain_index = 0)
+```
+
+2. `lockChainHeadsBlockersFirst`
+
+```
+LockRows
+  CTE locked_heads
+    ->  Unique
+          ->  Sort
+                Sort Key: d.id
+                ->  Append
+                      ->  Function Scan on unnest d
+                      ->  Nested Loop
+                            ->  Bitmap Heap Scan on queuert_job m
+                                  Recheck Cond: ((id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[])) OR ((chain_id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[])) AND (chain_index > 0)))
+                                  Filter: (((id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[])) AND (chain_index = 0)) OR ((chain_id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[])) AND (chain_index > 0)))
+                                  ->  BitmapOr
+                                        ->  Bitmap Index Scan on queuert_job_pkey
+                                              Index Cond: (id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[]))
+                                        ->  Bitmap Index Scan on queuert_chain_index_idx
+                                              Index Cond: ((chain_id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[])) AND (chain_index > 0))
+                            ->  Index Only Scan using queuert_job_blocker_pkey on queuert_job_blocker jb
+                                  Index Cond: (job_id = m.id)
+  CTE blocker_edges
+    ->  Unique
+          ->  Sort
+                Sort Key: jb_1.blocked_by_chain_id, l.id
+                ->  Hash Semi Join
+                      Hash Cond: (jb_1.blocked_by_chain_id = locked_heads.id)
+                      ->  Nested Loop
+                            ->  Nested Loop
+                                  ->  CTE Scan on locked_heads l
+                                  ->  Append
+                                        ->  Index Scan using queuert_job_pkey on queuert_job d_2
+                                              Index Cond: (id = l.id)
+                                              Filter: (chain_index = 0)
+                                        ->  Index Scan using queuert_chain_index_idx on queuert_job d_3
+                                              Index Cond: (chain_id = l.id)
+                            ->  Memoize
+                                  Cache Key: d_2.id
+                                  Cache Mode: logical
+                                  ->  Index Only Scan using queuert_job_blocker_pkey on queuert_job_blocker jb_1
+                                        Index Cond: (job_id = d_2.id)
+                      ->  Hash
+                            ->  CTE Scan on locked_heads
+  CTE blocker_depths
+    ->  Recursive Union
+          ->  CTE Scan on locked_heads locked_heads_2
+          ->  Hash Join
+                Hash Cond: (b_1.id = e.blocker_id)
+                InitPlan 3
+                  ->  Aggregate
+                        ->  CTE Scan on locked_heads locked_heads_1
+                ->  WorkTable Scan on blocker_depths b_1
+                      Filter: (depth < (InitPlan 3).col1)
+                ->  Hash
+                      ->  CTE Scan on blocker_edges e
+  ->  Sort
+        Sort Key: b.depth, h.id
+        ->  Nested Loop
+              ->  Subquery Scan on b
+                    ->  HashAggregate
+                          Group Key: blocker_depths.id
+                          ->  CTE Scan on blocker_depths
+              ->  Index Scan using queuert_job_pkey on queuert_job h
+                    Index Cond: (id = b.id)
+                    Filter: (chain_index = 0)
+```
+
+3. `getChainTailsLocked`
+
+```
+Result
+  One-Time Filter: ((InitPlan 2).col1 > 0)
+  CTE head_job
+    ->  LockRows
+          ->  Sort
+                Sort Key: queuert_job_1.id
+                ->  Bitmap Heap Scan on queuert_job queuert_job_1
+                      Recheck Cond: (id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[]))
+                      Filter: (chain_index = 0)
+                      ->  Bitmap Index Scan on queuert_job_pkey
+                            Index Cond: (id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[]))
+  InitPlan 2
+    ->  Aggregate
+          ->  CTE Scan on head_job head_job_1
+  ->  Nested Loop Left Join
+        ->  CTE Scan on head_job
+        ->  Subquery Scan on tail_job
+              ->  Limit
+                    ->  LockRows
+                          ->  Index Scan Backward using queuert_chain_index_idx on queuert_job
+                                Index Cond: ((chain_id = head_job.id) AND (chain_index > 0))
+```
+
 ## getJobs/default
 
 1. `getJobs`
@@ -1046,7 +1366,7 @@ Delete on queuert_worker
 
 ## startJobAttempts/default
 
-1. `startJobAttempts`
+1. `startJobAttemptsOfType`
 
 ```
 Nested Loop
@@ -1060,64 +1380,54 @@ Nested Loop
                 ->  Index Scan using queuert_worker_pkey on queuert_worker w
                       Index Cond: (id = '<uuid>'::uuid)
                       Filter: ((token = '<uuid>'::uuid) AND (lease_until > statement_timestamp()))
-  CTE candidate_jobs
+  CTE claim_args
+    ->  Result
+  CTE job_types
+    ->  Nested Loop
+          ->  CTE Scan on claim_args a
+          ->  Function Scan on u_1
+  CTE claimed_jobs
     ->  Limit
-          InitPlan 3
+          InitPlan 5
             ->  CTE Scan on live_worker
-          InitPlan 4
+          InitPlan 6
             ->  Aggregate
-                  ->  Function Scan on unnest u_1
+                  ->  CTE Scan on job_types
           ->  Result
-                One-Time Filter: (InitPlan 3).col1
+                One-Time Filter: (InitPlan 5).col1
                 ->  Nested Loop
-                      ->  Sort
-                            Sort Key: (random())
-                            ->  Function Scan on u_2
+                      ->  CTE Scan on job_types job_types_1
                       ->  Subquery Scan on j
                             ->  Limit
                                   ->  LockRows
                                         ->  Index Scan using queuert_job_pending_idx on queuert_job j_1
-                                              Index Cond: ((type_name = u_2.type_name) AND (scheduled_at <= statement_timestamp()))
+                                              Index Cond: ((type_name = job_types_1.type_name) AND (scheduled_at <= statement_timestamp()))
                                               Filter: (status = 'pending'::text)
-  CTE numbered_jobs
-    ->  WindowAgg
-          Window: w1 AS (PARTITION BY candidate_jobs.type_order ORDER BY candidate_jobs.scheduled_at, candidate_jobs.id ROWS UNBOUNDED PRECEDING)
-          ->  Sort
-                Sort Key: candidate_jobs.type_order, candidate_jobs.scheduled_at, candidate_jobs.id
-                ->  CTE Scan on candidate_jobs
   CTE updated
     ->  Update on queuert_job job
-          InitPlan 7
+          InitPlan 8
             ->  Result
                   One-Time Filter: false
           ->  Result
-                One-Time Filter: (NOT (InitPlan 7).col1)
+                One-Time Filter: (NOT (InitPlan 8).col1)
                 ->  Nested Loop
-                      ->  Merge Join
-                            Merge Cond: (n.type_order = b.type_order)
-                            Join Filter: (n.batch_index = b.batch_index)
-                            ->  CTE Scan on numbered_jobs n
-                            ->  Materialize
-                                  ->  Subquery Scan on b
-                                        ->  Limit
-                                              ->  Unique
-                                                    ->  Incremental Sort
-                                                          Sort Key: numbered_jobs.type_order, numbered_jobs.batch_index
-                                                          Presorted Key: numbered_jobs.type_order
-                                                          ->  CTE Scan on numbered_jobs
+                      ->  CTE Scan on claimed_jobs
                       ->  Index Scan using queuert_job_pkey on queuert_job job
-                            Index Cond: (id = n.id)
+                            Index Cond: (id = claimed_jobs.id)
   ->  CTE Scan on updated u
-  ->  Index Scan using queuert_job_pkey on queuert_job h
-        Index Cond: (id = u.chain_id)
-  SubPlan 9
+  ->  Memoize
+        Cache Key: u.chain_id
+        Cache Mode: logical
+        ->  Index Scan using queuert_job_pkey on queuert_job h
+              Index Cond: (id = u.chain_id)
+  SubPlan 10
     ->  Index Only Scan using queuert_job_blocker_pkey on queuert_job_blocker jb
           Index Cond: (job_id = u.id)
 ```
 
 ## startJobAttempts/limit100
 
-1. `startJobAttempts`
+1. `startJobAttemptsOfType`
 
 ```
 Nested Loop
@@ -1131,64 +1441,54 @@ Nested Loop
                 ->  Index Scan using queuert_worker_pkey on queuert_worker w
                       Index Cond: (id = '<uuid>'::uuid)
                       Filter: ((token = '<uuid>'::uuid) AND (lease_until > statement_timestamp()))
-  CTE candidate_jobs
+  CTE claim_args
+    ->  Result
+  CTE job_types
+    ->  Nested Loop
+          ->  CTE Scan on claim_args a
+          ->  Function Scan on u_1
+  CTE claimed_jobs
     ->  Limit
-          InitPlan 3
+          InitPlan 5
             ->  CTE Scan on live_worker
-          InitPlan 4
+          InitPlan 6
             ->  Aggregate
-                  ->  Function Scan on unnest u_1
+                  ->  CTE Scan on job_types
           ->  Result
-                One-Time Filter: (InitPlan 3).col1
+                One-Time Filter: (InitPlan 5).col1
                 ->  Nested Loop
-                      ->  Sort
-                            Sort Key: (random())
-                            ->  Function Scan on u_2
+                      ->  CTE Scan on job_types job_types_1
                       ->  Subquery Scan on j
                             ->  Limit
                                   ->  LockRows
                                         ->  Index Scan using queuert_job_pending_idx on queuert_job j_1
-                                              Index Cond: ((type_name = u_2.type_name) AND (scheduled_at <= statement_timestamp()))
+                                              Index Cond: ((type_name = job_types_1.type_name) AND (scheduled_at <= statement_timestamp()))
                                               Filter: (status = 'pending'::text)
-  CTE numbered_jobs
-    ->  WindowAgg
-          Window: w1 AS (PARTITION BY candidate_jobs.type_order ORDER BY candidate_jobs.scheduled_at, candidate_jobs.id ROWS UNBOUNDED PRECEDING)
-          ->  Sort
-                Sort Key: candidate_jobs.type_order, candidate_jobs.scheduled_at, candidate_jobs.id
-                ->  CTE Scan on candidate_jobs
   CTE updated
     ->  Update on queuert_job job
-          InitPlan 7
+          InitPlan 8
             ->  Result
                   One-Time Filter: false
           ->  Result
-                One-Time Filter: (NOT (InitPlan 7).col1)
+                One-Time Filter: (NOT (InitPlan 8).col1)
                 ->  Nested Loop
-                      ->  Merge Join
-                            Merge Cond: (n.type_order = b.type_order)
-                            Join Filter: (n.batch_index = b.batch_index)
-                            ->  CTE Scan on numbered_jobs n
-                            ->  Materialize
-                                  ->  Subquery Scan on b
-                                        ->  Limit
-                                              ->  Unique
-                                                    ->  Incremental Sort
-                                                          Sort Key: numbered_jobs.type_order, numbered_jobs.batch_index
-                                                          Presorted Key: numbered_jobs.type_order
-                                                          ->  CTE Scan on numbered_jobs
+                      ->  CTE Scan on claimed_jobs
                       ->  Index Scan using queuert_job_pkey on queuert_job job
-                            Index Cond: (id = n.id)
+                            Index Cond: (id = claimed_jobs.id)
   ->  CTE Scan on updated u
-  ->  Index Scan using queuert_job_pkey on queuert_job h
-        Index Cond: (id = u.chain_id)
-  SubPlan 9
+  ->  Memoize
+        Cache Key: u.chain_id
+        Cache Mode: logical
+        ->  Index Scan using queuert_job_pkey on queuert_job h
+              Index Cond: (id = u.chain_id)
+  SubPlan 10
     ->  Index Only Scan using queuert_job_blocker_pkey on queuert_job_blocker jb
           Index Cond: (job_id = u.id)
 ```
 
 ## startJobAttempts/batchLimit10
 
-1. `startJobAttempts`
+1. `startJobAttemptsOfType`
 
 ```
 Nested Loop
@@ -1202,57 +1502,47 @@ Nested Loop
                 ->  Index Scan using queuert_worker_pkey on queuert_worker w
                       Index Cond: (id = '<uuid>'::uuid)
                       Filter: ((token = '<uuid>'::uuid) AND (lease_until > statement_timestamp()))
-  CTE candidate_jobs
+  CTE claim_args
+    ->  Result
+  CTE job_types
+    ->  Nested Loop
+          ->  CTE Scan on claim_args a
+          ->  Function Scan on u_1
+  CTE claimed_jobs
     ->  Limit
-          InitPlan 3
+          InitPlan 5
             ->  CTE Scan on live_worker
-          InitPlan 4
+          InitPlan 6
             ->  Aggregate
-                  ->  Function Scan on unnest u_1
+                  ->  CTE Scan on job_types
           ->  Result
-                One-Time Filter: (InitPlan 3).col1
+                One-Time Filter: (InitPlan 5).col1
                 ->  Nested Loop
-                      ->  Sort
-                            Sort Key: (random())
-                            ->  Function Scan on u_2
+                      ->  CTE Scan on job_types job_types_1
                       ->  Subquery Scan on j
                             ->  Limit
                                   ->  LockRows
                                         ->  Index Scan using queuert_job_pending_idx on queuert_job j_1
-                                              Index Cond: ((type_name = u_2.type_name) AND (scheduled_at <= statement_timestamp()))
+                                              Index Cond: ((type_name = job_types_1.type_name) AND (scheduled_at <= statement_timestamp()))
                                               Filter: (status = 'pending'::text)
-  CTE numbered_jobs
-    ->  WindowAgg
-          Window: w1 AS (PARTITION BY candidate_jobs.type_order ORDER BY candidate_jobs.scheduled_at, candidate_jobs.id ROWS UNBOUNDED PRECEDING)
-          ->  Sort
-                Sort Key: candidate_jobs.type_order, candidate_jobs.scheduled_at, candidate_jobs.id
-                ->  CTE Scan on candidate_jobs
   CTE updated
     ->  Update on queuert_job job
-          InitPlan 7
+          InitPlan 8
             ->  Result
                   One-Time Filter: false
           ->  Result
-                One-Time Filter: (NOT (InitPlan 7).col1)
+                One-Time Filter: (NOT (InitPlan 8).col1)
                 ->  Nested Loop
-                      ->  Merge Join
-                            Merge Cond: (n.type_order = b.type_order)
-                            Join Filter: (n.batch_index = b.batch_index)
-                            ->  CTE Scan on numbered_jobs n
-                            ->  Materialize
-                                  ->  Subquery Scan on b
-                                        ->  Limit
-                                              ->  Unique
-                                                    ->  Incremental Sort
-                                                          Sort Key: numbered_jobs.type_order, numbered_jobs.batch_index
-                                                          Presorted Key: numbered_jobs.type_order
-                                                          ->  CTE Scan on numbered_jobs
+                      ->  CTE Scan on claimed_jobs
                       ->  Index Scan using queuert_job_pkey on queuert_job job
-                            Index Cond: (id = n.id)
+                            Index Cond: (id = claimed_jobs.id)
   ->  CTE Scan on updated u
-  ->  Index Scan using queuert_job_pkey on queuert_job h
-        Index Cond: (id = u.chain_id)
-  SubPlan 9
+  ->  Memoize
+        Cache Key: u.chain_id
+        Cache Mode: logical
+        ->  Index Scan using queuert_job_pkey on queuert_job h
+              Index Cond: (id = u.chain_id)
+  SubPlan 10
     ->  Index Only Scan using queuert_job_blocker_pkey on queuert_job_blocker jb
           Index Cond: (job_id = u.id)
 ```
@@ -1273,60 +1563,113 @@ Nested Loop
                 ->  Index Scan using queuert_worker_pkey on queuert_worker w
                       Index Cond: (id = '<uuid>'::uuid)
                       Filter: ((token = '<uuid>'::uuid) AND (lease_until > statement_timestamp()))
-  CTE candidate_jobs
+  CTE claim_args
+    ->  Result
+  CTE job_types
+    ->  Nested Loop
+          ->  CTE Scan on claim_args a
+          ->  Function Scan on u_1
+  CTE batch_heads
+    ->  Nested Loop
+          ->  CTE Scan on job_types t
+          ->  Subquery Scan on h_1
+                Filter: ((h_1."position" % (t.batch_limit)::bigint) = 0)
+                ->  WindowAgg
+                      Window: w1 AS (ORDER BY j.scheduled_at ROWS UNBOUNDED PRECEDING)
+                      ->  Limit
+                            ->  Index Only Scan using queuert_job_pending_idx on queuert_job j
+                                  Index Cond: ((type_name = t.type_name) AND (scheduled_at <= statement_timestamp()))
+  CTE type_quotas
+    ->  HashAggregate
+          Group Key: batch_heads.type_name, batch_heads.batch_limit
+          ->  Limit
+                InitPlan 6
+                  ->  CTE Scan on claim_args
+                ->  Sort
+                      Sort Key: batch_heads.scheduled_at, batch_heads.type_name
+                      ->  CTE Scan on batch_heads
+  CTE claimed_jobs
     ->  Limit
-          InitPlan 3
+          InitPlan 8
             ->  CTE Scan on live_worker
-          InitPlan 4
+          InitPlan 9
             ->  Aggregate
-                  ->  Function Scan on unnest u_1
+                  ->  CTE Scan on job_types
           ->  Result
-                One-Time Filter: (InitPlan 3).col1
+                One-Time Filter: (InitPlan 8).col1
                 ->  Nested Loop
-                      ->  Sort
-                            Sort Key: (random())
-                            ->  Function Scan on u_2
-                      ->  Subquery Scan on j
+                      ->  CTE Scan on type_quotas q
+                      ->  Subquery Scan on j_1
                             ->  Limit
                                   ->  LockRows
-                                        ->  Index Scan using queuert_job_pending_idx on queuert_job j_1
-                                              Index Cond: ((type_name = u_2.type_name) AND (scheduled_at <= statement_timestamp()))
+                                        ->  Index Scan using queuert_job_pending_idx on queuert_job j_2
+                                              Index Cond: ((type_name = q.type_name) AND (scheduled_at <= statement_timestamp()))
                                               Filter: (status = 'pending'::text)
-  CTE numbered_jobs
-    ->  WindowAgg
-          Window: w1 AS (PARTITION BY candidate_jobs.type_order ORDER BY candidate_jobs.scheduled_at, candidate_jobs.id ROWS UNBOUNDED PRECEDING)
-          ->  Sort
-                Sort Key: candidate_jobs.type_order, candidate_jobs.scheduled_at, candidate_jobs.id
-                ->  CTE Scan on candidate_jobs
+  CTE claimed_types
+    ->  HashAggregate
+          Group Key: q_1.type_name, q_1.batch_limit, q_1.batches
+          ->  Hash Right Join
+                Hash Cond: (c.type_name = q_1.type_name)
+                ->  CTE Scan on claimed_jobs c
+                ->  Hash
+                      ->  CTE Scan on type_quotas q_1
+  CTE leftover_jobs
+    ->  Limit
+          InitPlan 12
+            ->  CTE Scan on live_worker live_worker_1
+          InitPlan 13
+            ->  Aggregate
+                  ->  CTE Scan on job_types job_types_1
+          ->  Result
+                One-Time Filter: (InitPlan 12).col1
+                ->  Nested Loop
+                      ->  GroupAggregate
+                            Group Key: b.type_name, b.batch_limit
+                            ->  Sort
+                                  Sort Key: b.type_name, b.batch_limit
+                                  ->  Subquery Scan on b
+                                        ->  Limit
+                                              InitPlan 14
+                                                ->  CTE Scan on claim_args claim_args_1
+                                              InitPlan 15
+                                                ->  Aggregate
+                                                      ->  CTE Scan on claimed_types
+                                              ->  Sort
+                                                    Sort Key: b_1.scheduled_at, b_1.type_name
+                                                    ->  Hash Left Join
+                                                          Hash Cond: (b_1.type_name = c_1.type_name)
+                                                          Filter: ((NOT COALESCE(c_1.short, false)) AND (b_1.batch_index >= COALESCE(c_1.batches, '0'::bigint)))
+                                                          ->  CTE Scan on batch_heads b_1
+                                                          ->  Hash
+                                                                ->  CTE Scan on claimed_types c_1
+                      ->  Subquery Scan on j_3
+                            ->  Limit
+                                  ->  LockRows
+                                        ->  Index Scan using queuert_job_pending_idx on queuert_job j_4
+                                              Index Cond: ((type_name = b.type_name) AND (scheduled_at <= statement_timestamp()))
+                                              Filter: ((NOT (ANY (id = (hashed SubPlan 16).col1))) AND (status = 'pending'::text))
+                                              SubPlan 16
+                                                ->  CTE Scan on claimed_jobs
   CTE updated
     ->  Update on queuert_job job
-          InitPlan 7
+          InitPlan 18
             ->  Result
                   One-Time Filter: false
           ->  Result
-                One-Time Filter: (NOT (InitPlan 7).col1)
+                One-Time Filter: (NOT (InitPlan 18).col1)
                 ->  Nested Loop
-                      ->  Merge Join
-                            Merge Cond: (n.type_order = b.type_order)
-                            Join Filter: (n.batch_index = b.batch_index)
-                            ->  CTE Scan on numbered_jobs n
-                            ->  Materialize
-                                  ->  Subquery Scan on b
-                                        ->  Limit
-                                              ->  Unique
-                                                    ->  Incremental Sort
-                                                          Sort Key: numbered_jobs.type_order, numbered_jobs.batch_index
-                                                          Presorted Key: numbered_jobs.type_order
-                                                          ->  CTE Scan on numbered_jobs
+                      ->  Append
+                            ->  CTE Scan on claimed_jobs claimed_jobs_1
+                            ->  CTE Scan on leftover_jobs
                       ->  Index Scan using queuert_job_pkey on queuert_job job
-                            Index Cond: (id = n.id)
+                            Index Cond: (id = claimed_jobs_1.id)
   ->  CTE Scan on updated u
   ->  Memoize
         Cache Key: u.chain_id
         Cache Mode: logical
         ->  Index Scan using queuert_job_pkey on queuert_job h
               Index Cond: (id = u.chain_id)
-  SubPlan 9
+  SubPlan 20
     ->  Index Only Scan using queuert_job_blocker_pkey on queuert_job_blocker jb
           Index Cond: (job_id = u.id)
 ```
@@ -1549,55 +1892,34 @@ Nested Loop
 
 ## deleteChains/default
 
-1. `lockDeletedChainBlockers`
-
-```
-LockRows
-  ->  Sort
-        Sort Key: h.id
-        ->  Nested Loop
-              ->  HashAggregate
-                    Group Key: jb.blocked_by_chain_id
-                    ->  Nested Loop
-                          ->  Seq Scan on queuert_job m
-                                Filter: (chain_id = ANY ('{<uuid>}'::uuid[]))
-                          ->  Bitmap Heap Scan on queuert_job_blocker jb
-                                Recheck Cond: (job_id = m.id)
-                                ->  Bitmap Index Scan on queuert_job_blocker_pkey
-                                      Index Cond: (job_id = m.id)
-              ->  Index Scan using queuert_job_pkey on queuert_job h
-                    Index Cond: (id = jb.blocked_by_chain_id)
-                    Filter: ((id <> ALL ('{<uuid>}'::uuid[])) AND (chain_index = 0))
-```
-
-2. `deleteChains`
+1. `deleteChains`
 
 ```
 Result
   CTE _members
-    ->  Result
-          One-Time Filter: (NOT (InitPlan 1).col1)
-          InitPlan 1
-            ->  Result
-                  One-Time Filter: false
-          ->  Bitmap Heap Scan on queuert_job
-                Recheck Cond: ((id = ANY ('{<uuid>}'::uuid[])) OR ((chain_id = ANY ('{<uuid>}'::uuid[])) AND (chain_index > 0)))
-                Filter: (((id = ANY ('{<uuid>}'::uuid[])) AND (chain_index = 0)) OR ((chain_id = ANY ('{<uuid>}'::uuid[])) AND (chain_index > 0)))
-                ->  BitmapOr
-                      ->  Bitmap Index Scan on queuert_job_pkey
-                            Index Cond: (id = ANY ('{<uuid>}'::uuid[]))
-                      ->  Bitmap Index Scan on queuert_chain_index_idx
-                            Index Cond: ((chain_id = ANY ('{<uuid>}'::uuid[])) AND (chain_index > 0))
+    ->  Bitmap Heap Scan on queuert_job
+          Recheck Cond: ((id = ANY ('{<uuid>}'::uuid[])) OR ((chain_id = ANY ('{<uuid>}'::uuid[])) AND (chain_index > 0)))
+          Filter: (((id = ANY ('{<uuid>}'::uuid[])) AND (chain_index = 0)) OR ((chain_id = ANY ('{<uuid>}'::uuid[])) AND (chain_index > 0)))
+          ->  BitmapOr
+                ->  Bitmap Index Scan on queuert_job_pkey
+                      Index Cond: (id = ANY ('{<uuid>}'::uuid[]))
+                ->  Bitmap Index Scan on queuert_chain_index_idx
+                      Index Cond: ((chain_id = ANY ('{<uuid>}'::uuid[])) AND (chain_index > 0))
   CTE _deleted_blockers
     ->  Delete on queuert_job_blocker
-          ->  Nested Loop
-                ->  HashAggregate
-                      Group Key: _members.id
-                      ->  CTE Scan on _members
-                ->  Bitmap Heap Scan on queuert_job_blocker
-                      Recheck Cond: (job_id = _members.id)
-                      ->  Bitmap Index Scan on queuert_job_blocker_pkey
-                            Index Cond: (job_id = _members.id)
+          InitPlan 2
+            ->  Result
+                  One-Time Filter: false
+          ->  Result
+                One-Time Filter: (NOT (InitPlan 2).col1)
+                ->  Nested Loop
+                      ->  HashAggregate
+                            Group Key: _members.id
+                            ->  CTE Scan on _members
+                      ->  Bitmap Heap Scan on queuert_job_blocker
+                            Recheck Cond: (job_id = _members.id)
+                            ->  Bitmap Index Scan on queuert_job_blocker_pkey
+                                  Index Cond: (job_id = _members.id)
   CTE _cleared_heads
     ->  Update on queuert_job h
           InitPlan 8
@@ -1629,17 +1951,22 @@ Result
                           ->  CTE Scan on _members _members_1
   CTE _deleted_jobs
     ->  Delete on queuert_job queuert_job_1
-          ->  Nested Loop
-                ->  HashAggregate
-                      Group Key: _members_4.id
-                      ->  CTE Scan on _members _members_4
-                ->  Index Scan using queuert_job_pkey on queuert_job queuert_job_1
-                      Index Cond: (id = _members_4.id)
-  InitPlan 12
+          InitPlan 10
+            ->  Result
+                  One-Time Filter: false
+          ->  Result
+                One-Time Filter: (NOT (InitPlan 10).col1)
+                ->  Nested Loop
+                      ->  HashAggregate
+                            Group Key: _members_4.id
+                            ->  CTE Scan on _members _members_4
+                      ->  Index Scan using queuert_job_pkey on queuert_job queuert_job_1
+                            Index Cond: (id = _members_4.id)
+  InitPlan 13
     ->  Aggregate
           ->  CTE Scan on _deleted_jobs head_job
                 Filter: (chain_index = 0)
-          SubPlan 11
+          SubPlan 12
             ->  Limit
                   ->  Sort
                         Sort Key: tail_job.chain_index DESC
@@ -1649,55 +1976,34 @@ Result
 
 ## deleteChains/multiJob
 
-1. `lockDeletedChainBlockers`
-
-```
-LockRows
-  ->  Sort
-        Sort Key: h.id
-        ->  Nested Loop
-              ->  HashAggregate
-                    Group Key: jb.blocked_by_chain_id
-                    ->  Nested Loop
-                          ->  Seq Scan on queuert_job m
-                                Filter: (chain_id = ANY ('{<uuid>}'::uuid[]))
-                          ->  Bitmap Heap Scan on queuert_job_blocker jb
-                                Recheck Cond: (job_id = m.id)
-                                ->  Bitmap Index Scan on queuert_job_blocker_pkey
-                                      Index Cond: (job_id = m.id)
-              ->  Index Scan using queuert_job_pkey on queuert_job h
-                    Index Cond: (id = jb.blocked_by_chain_id)
-                    Filter: ((id <> ALL ('{<uuid>}'::uuid[])) AND (chain_index = 0))
-```
-
-2. `deleteChains`
+1. `deleteChains`
 
 ```
 Result
   CTE _members
-    ->  Result
-          One-Time Filter: (NOT (InitPlan 1).col1)
-          InitPlan 1
-            ->  Result
-                  One-Time Filter: false
-          ->  Bitmap Heap Scan on queuert_job
-                Recheck Cond: ((id = ANY ('{<uuid>}'::uuid[])) OR ((chain_id = ANY ('{<uuid>}'::uuid[])) AND (chain_index > 0)))
-                Filter: (((id = ANY ('{<uuid>}'::uuid[])) AND (chain_index = 0)) OR ((chain_id = ANY ('{<uuid>}'::uuid[])) AND (chain_index > 0)))
-                ->  BitmapOr
-                      ->  Bitmap Index Scan on queuert_job_pkey
-                            Index Cond: (id = ANY ('{<uuid>}'::uuid[]))
-                      ->  Bitmap Index Scan on queuert_chain_index_idx
-                            Index Cond: ((chain_id = ANY ('{<uuid>}'::uuid[])) AND (chain_index > 0))
+    ->  Bitmap Heap Scan on queuert_job
+          Recheck Cond: ((id = ANY ('{<uuid>}'::uuid[])) OR ((chain_id = ANY ('{<uuid>}'::uuid[])) AND (chain_index > 0)))
+          Filter: (((id = ANY ('{<uuid>}'::uuid[])) AND (chain_index = 0)) OR ((chain_id = ANY ('{<uuid>}'::uuid[])) AND (chain_index > 0)))
+          ->  BitmapOr
+                ->  Bitmap Index Scan on queuert_job_pkey
+                      Index Cond: (id = ANY ('{<uuid>}'::uuid[]))
+                ->  Bitmap Index Scan on queuert_chain_index_idx
+                      Index Cond: ((chain_id = ANY ('{<uuid>}'::uuid[])) AND (chain_index > 0))
   CTE _deleted_blockers
     ->  Delete on queuert_job_blocker
-          ->  Nested Loop
-                ->  HashAggregate
-                      Group Key: _members.id
-                      ->  CTE Scan on _members
-                ->  Bitmap Heap Scan on queuert_job_blocker
-                      Recheck Cond: (job_id = _members.id)
-                      ->  Bitmap Index Scan on queuert_job_blocker_pkey
-                            Index Cond: (job_id = _members.id)
+          InitPlan 2
+            ->  Result
+                  One-Time Filter: false
+          ->  Result
+                One-Time Filter: (NOT (InitPlan 2).col1)
+                ->  Nested Loop
+                      ->  HashAggregate
+                            Group Key: _members.id
+                            ->  CTE Scan on _members
+                      ->  Bitmap Heap Scan on queuert_job_blocker
+                            Recheck Cond: (job_id = _members.id)
+                            ->  Bitmap Index Scan on queuert_job_blocker_pkey
+                                  Index Cond: (job_id = _members.id)
   CTE _cleared_heads
     ->  Update on queuert_job h
           InitPlan 8
@@ -1729,17 +2035,22 @@ Result
                           ->  CTE Scan on _members _members_1
   CTE _deleted_jobs
     ->  Delete on queuert_job queuert_job_1
-          ->  Nested Loop
-                ->  HashAggregate
-                      Group Key: _members_4.id
-                      ->  CTE Scan on _members _members_4
-                ->  Index Scan using queuert_job_pkey on queuert_job queuert_job_1
-                      Index Cond: (id = _members_4.id)
-  InitPlan 12
+          InitPlan 10
+            ->  Result
+                  One-Time Filter: false
+          ->  Result
+                One-Time Filter: (NOT (InitPlan 10).col1)
+                ->  Nested Loop
+                      ->  HashAggregate
+                            Group Key: _members_4.id
+                            ->  CTE Scan on _members _members_4
+                      ->  Index Scan using queuert_job_pkey on queuert_job queuert_job_1
+                            Index Cond: (id = _members_4.id)
+  InitPlan 13
     ->  Aggregate
           ->  CTE Scan on _deleted_jobs head_job
                 Filter: (chain_index = 0)
-          SubPlan 11
+          SubPlan 12
             ->  Limit
                   ->  Sort
                         Sort Key: tail_job.chain_index DESC
@@ -1749,51 +2060,32 @@ Result
 
 ## deleteChains/batch100
 
-1. `lockDeletedChainBlockers`
-
-```
-LockRows
-  ->  Sort
-        Sort Key: h.id
-        ->  Nested Loop
-              ->  HashAggregate
-                    Group Key: jb.blocked_by_chain_id
-                    ->  Nested Loop
-                          ->  Seq Scan on queuert_job m
-                                Filter: (chain_id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[]))
-                          ->  Index Scan using queuert_job_blocker_pkey on queuert_job_blocker jb
-                                Index Cond: (job_id = m.id)
-              ->  Index Scan using queuert_job_pkey on queuert_job h
-                    Index Cond: (id = jb.blocked_by_chain_id)
-                    Filter: ((chain_index = 0) AND (id <> ALL ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[])))
-```
-
-2. `deleteChains`
+1. `deleteChains`
 
 ```
 Result
   CTE _members
-    ->  Result
-          One-Time Filter: (NOT (InitPlan 1).col1)
-          InitPlan 1
-            ->  Result
-                  One-Time Filter: false
-          ->  Bitmap Heap Scan on queuert_job
-                Recheck Cond: ((id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[])) OR ((chain_id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[])) AND (chain_index > 0)))
-                Filter: (((id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[])) AND (chain_index = 0)) OR ((chain_id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[])) AND (chain_index > 0)))
-                ->  BitmapOr
-                      ->  Bitmap Index Scan on queuert_job_pkey
-                            Index Cond: (id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[]))
-                      ->  Bitmap Index Scan on queuert_chain_index_idx
-                            Index Cond: ((chain_id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[])) AND (chain_index > 0))
+    ->  Bitmap Heap Scan on queuert_job
+          Recheck Cond: ((id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[])) OR ((chain_id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[])) AND (chain_index > 0)))
+          Filter: (((id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[])) AND (chain_index = 0)) OR ((chain_id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[])) AND (chain_index > 0)))
+          ->  BitmapOr
+                ->  Bitmap Index Scan on queuert_job_pkey
+                      Index Cond: (id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[]))
+                ->  Bitmap Index Scan on queuert_chain_index_idx
+                      Index Cond: ((chain_id = ANY ('{<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>,<uuid>}'::uuid[])) AND (chain_index > 0))
   CTE _deleted_blockers
     ->  Delete on queuert_job_blocker
-          ->  Nested Loop
-                ->  HashAggregate
-                      Group Key: _members.id
-                      ->  CTE Scan on _members
-                ->  Index Scan using queuert_job_blocker_pkey on queuert_job_blocker
-                      Index Cond: (job_id = _members.id)
+          InitPlan 2
+            ->  Result
+                  One-Time Filter: false
+          ->  Result
+                One-Time Filter: (NOT (InitPlan 2).col1)
+                ->  Nested Loop
+                      ->  HashAggregate
+                            Group Key: _members.id
+                            ->  CTE Scan on _members
+                      ->  Index Scan using queuert_job_blocker_pkey on queuert_job_blocker
+                            Index Cond: (job_id = _members.id)
   CTE _cleared_heads
     ->  Update on queuert_job h
           InitPlan 8
@@ -1823,17 +2115,22 @@ Result
                           ->  CTE Scan on _members _members_1
   CTE _deleted_jobs
     ->  Delete on queuert_job queuert_job_1
-          ->  Nested Loop
-                ->  HashAggregate
-                      Group Key: _members_4.id
-                      ->  CTE Scan on _members _members_4
-                ->  Index Scan using queuert_job_pkey on queuert_job queuert_job_1
-                      Index Cond: (id = _members_4.id)
-  InitPlan 12
+          InitPlan 10
+            ->  Result
+                  One-Time Filter: false
+          ->  Result
+                One-Time Filter: (NOT (InitPlan 10).col1)
+                ->  Nested Loop
+                      ->  HashAggregate
+                            Group Key: _members_4.id
+                            ->  CTE Scan on _members _members_4
+                      ->  Index Scan using queuert_job_pkey on queuert_job queuert_job_1
+                            Index Cond: (id = _members_4.id)
+  InitPlan 13
     ->  Aggregate
           ->  CTE Scan on _deleted_jobs head_job
                 Filter: (chain_index = 0)
-          SubPlan 11
+          SubPlan 12
             ->  Limit
                   ->  Sort
                         Sort Key: tail_job.chain_index DESC
@@ -3116,11 +3413,8 @@ Nested Loop
                     Presorted Key: j_1.attempt_at
                     ->  Index Scan using queuert_job_attempt_by_idx on queuert_job j_1
                           Index Cond: (attempt_by = '<uuid>'::uuid)
-  ->  Memoize
-        Cache Key: j.chain_id
-        Cache Mode: logical
-        ->  Index Scan using queuert_job_pkey on queuert_job h
-              Index Cond: (id = j.chain_id)
+  ->  Index Scan using queuert_job_pkey on queuert_job h
+        Index Cond: (id = j.chain_id)
 ```
 
 ## listWorkerJobs/cursor
@@ -3136,11 +3430,8 @@ Nested Loop
                     Presorted Key: j_1.attempt_at
                     ->  Index Scan using queuert_job_attempt_by_idx on queuert_job j_1
                           Index Cond: (attempt_by = '<uuid>'::uuid)
-  ->  Memoize
-        Cache Key: j.chain_id
-        Cache Mode: logical
-        ->  Index Scan using queuert_job_pkey on queuert_job h
-              Index Cond: (id = j.chain_id)
+  ->  Index Scan using queuert_job_pkey on queuert_job h
+        Index Cond: (id = j.chain_id)
 ```
 
 2. `dynamic`
@@ -3155,9 +3446,6 @@ Nested Loop
                     ->  Index Scan using queuert_job_attempt_by_idx on queuert_job j_1
                           Index Cond: (attempt_by = '<uuid>'::uuid)
                           Filter: ((attempt_at > '<timestamp>'::timestamp with time zone) OR ((attempt_at = '<timestamp>'::timestamp with time zone) AND (id > '<uuid>'::uuid)))
-  ->  Memoize
-        Cache Key: j.chain_id
-        Cache Mode: logical
-        ->  Index Scan using queuert_job_pkey on queuert_job h
-              Index Cond: (id = j.chain_id)
+  ->  Index Scan using queuert_job_pkey on queuert_job h
+        Index Cond: (id = j.chain_id)
 ```
