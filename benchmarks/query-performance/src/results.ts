@@ -1,6 +1,5 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-
 import { notMeasured } from "benchmark-results/results-file";
+import { writePlansFile } from "benchmark-results/write-plans-file";
 import { writeResultsFile } from "benchmark-results/write-results-file";
 import {
   observabilityCoverageGroups,
@@ -75,41 +74,16 @@ export const writeQueryPlans = (
   scale: number,
   plans: Map<string, QueryPlan[]>,
 ): void => {
-  const dir = new URL("../plans", import.meta.url).pathname;
-  const path = `${dir}/${backend.toLowerCase()}.md`;
-  const sections = [...plans].map(([key, queries]) =>
-    [
-      `## ${key}`,
-      ...(queries.length === 0
-        ? ["No query plans."]
-        : queries.map(({ id, plan }, index) =>
-            [
-              `${index + 1}. \`${id?.replace(/@[0-9a-f]+$/, "") ?? "dynamic"}\``,
-              "",
-              "```",
-              plan
-                .trimEnd()
-                .replaceAll(
-                  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g,
-                  "<uuid>",
-                )
-                .replaceAll(
-                  /'\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}(?::?\d{2})?)?'/g,
-                  "'<timestamp>'",
-                ),
-              "```",
-            ].join("\n"),
-          )),
-    ].join("\n\n"),
-  );
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(
-    path,
-    [
-      `# ${backend} query plans`,
-      `Plans of every statement each query-performance case runs, at scale ${scale}, without cost and row estimates, and with IDs and timestamps replaced by placeholders. Rerun \`pnpm start\` after a query or index change and review the diff.`,
-      ...sections,
-    ].join("\n\n") + "\n",
-  );
-  console.log(`  Plans written to ${path}`);
+  writePlansFile({
+    path: new URL(`../plans/${backend.toLowerCase()}.md`, import.meta.url).pathname,
+    title: `${backend} query plans`,
+    description: `Plans of every statement each query-performance case runs, at scale ${scale}, without cost and row estimates, and with IDs and timestamps replaced by placeholders. Rerun \`pnpm start\` after a query or index change and review the diff.`,
+    sections: [...plans].map(([key, queries]) => ({
+      heading: key,
+      plans: queries.map(({ id, plan }) => ({
+        label: id?.replace(/@[0-9a-f]+$/, "") ?? "dynamic",
+        plan,
+      })),
+    })),
+  });
 };

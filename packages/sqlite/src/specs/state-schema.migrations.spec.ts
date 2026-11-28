@@ -14,23 +14,23 @@ import {
 import Database from "better-sqlite3";
 import { it as baseIt, describe, expect } from "vitest";
 
+import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";
 import {
   createMigrationStore,
   createSchemaMigrations,
-  createSqliteStateAdapter,
-} from "../state-adapter/state-adapter.sqlite.ts";
+} from "../state-adapter/state-schema.migrations.sqlite.ts";
 import {
   type BetterSqlite3Context,
   createBetterSqlite3Provider,
 } from "../state-provider/state-provider.better-sqlite3.ts";
 import type { SqliteStateProvider } from "../state-provider/state-provider.sqlite.ts";
-import { MARKER } from "./state-adapter-migration.process.ts";
+import { MARKER } from "./state-schema.migrations.process.ts";
 
 const INSTALL = "001_schema_v1";
 const ALL = createSchemaMigrations(async () => {}, "async").map((migration) => migration.name);
 const spawnerIn = (mode: Mode) =>
   createDeploymentSpawner<MigrationResult>(
-    join(import.meta.dirname, "state-adapter-migration.process.ts"),
+    join(import.meta.dirname, "state-schema.migrations.process.ts"),
     join(import.meta.dirname, "..", ".."),
     [mode],
   );
@@ -62,25 +62,69 @@ const execute = async (provider: Provider, text: string): Promise<void> => {
   });
 };
 
-const migrateToInstall = async (provider: Provider): Promise<void> => {
+const migrateThroughHistory = async (
+  provider: Provider,
+  tablePrefix: string,
+  migrationNames: string[],
+): Promise<MigrationResult> => {
   const mode = provider.sync === true ? "sync" : "async";
-  const applyTemplateInstall = createTemplateApplier({
-    table_prefix: "queuert_",
-    migration_table: "queuert_migration",
-    write_lock_table: "queuert_write_lock",
+  const applyTemplateHistory = createTemplateApplier({
+    table_prefix: tablePrefix,
+    migration_table: `${tablePrefix}migration`,
+    write_lock_table: `${tablePrefix}write_lock`,
     job_id_type: "TEXT",
     worker_id_type: "TEXT",
   });
   const exec = createTypedSqlExecutor(provider);
-  await createMigrator({
+  return createMigrator({
     mode,
     migrations: createSchemaMigrations(
       (txCtx: BetterSqlite3Context, statement) =>
-        exec({ txCtx, sql: applyTemplateInstall(statement) }),
+        exec({ txCtx, sql: applyTemplateHistory(statement) }),
       mode,
-    ).filter((migration) => migration.name === INSTALL),
-    store: createMigrationStore(provider, applyTemplateInstall),
+    ).filter((migration) => migrationNames.includes(migration.name)),
+    store: createMigrationStore(provider, applyTemplateHistory),
   }).migrateToLatest();
+};
+
+const schemaStructure = async (provider: Provider, tablePrefix: string) => {
+  const unprefixed = (name: string): string => name.replace(tablePrefix, "");
+  const entries = (
+    await query<{ type: string; name: string; tbl_name: string; sql: string | null }>(
+      provider,
+      "SELECT type, name, tbl_name, sql FROM sqlite_schema",
+    )
+  ).filter((entry) => entry.tbl_name.startsWith(tablePrefix));
+  const structure = await Promise.all(
+    entries.map(async (entry) => ({
+      type: entry.type,
+      name: unprefixed(entry.name),
+      tableName: unprefixed(entry.tbl_name),
+      sql:
+        entry.sql
+          ?.replaceAll(tablePrefix, "")
+          .replace(/\s+/g, " ")
+          .replace(/\s*([(),])\s*/g, "$1") ?? null,
+      columns:
+        entry.type === "table"
+          ? await query(provider, `SELECT * FROM pragma_table_xinfo('${entry.name}')`)
+          : [],
+      indexes:
+        entry.type === "table"
+          ? (
+              await query<{ name: string }>(
+                provider,
+                `SELECT * FROM pragma_index_list('${entry.name}') ORDER BY name`,
+              )
+            ).map((index) => ({ ...index, name: unprefixed(index.name) }))
+          : [],
+      indexColumns:
+        entry.type === "index"
+          ? await query(provider, `SELECT * FROM pragma_index_xinfo('${entry.name}')`)
+          : [],
+    })),
+  );
+  return structure.toSorted((a, b) => a.name.localeCompare(b.name));
 };
 
 const workerColumns = async (provider: Provider): Promise<string[]> =>
@@ -172,6 +216,43 @@ describe.each(["async", "sync"] as const)("in %s mode", (mode) => {
       },
     );
 
+    it(
+      "creates the same schema on an empty database as the migration history does",
+      { timeout: 60_000 },
+      async ({ database: { provider, adapter } }) => {
+        expect(await migrateThroughHistory(provider, "history_", ALL)).toEqual({
+          applied: ALL,
+          skipped: [],
+          reverted: [],
+          unrecognized: [],
+        });
+        expect(await adapter.migrateToLatest()).toEqual({
+          applied: ALL,
+          skipped: [],
+          reverted: [],
+          unrecognized: [],
+        });
+
+        const history = await schemaStructure(provider, "history_");
+        expect(history.map((entry) => entry.name)).toContain("job");
+        expect(await schemaStructure(provider, "queuert_")).toEqual(history);
+
+        const customAdapter = createSqliteStateAdapter({
+          stateProvider: provider,
+          tablePrefix: "custom_",
+          generateJobId: (): string => randomUUID(),
+        });
+        expect(await customAdapter.migrateToLatest()).toEqual({
+          applied: ALL,
+          skipped: [],
+          reverted: [],
+          unrecognized: [],
+        });
+        expect(await schemaStructure(provider, "custom_")).toEqual(history);
+        expect(await appliedNames(provider)).toEqual(ALL);
+      },
+    );
+
     it("is a no-op on a second run", { timeout: 60_000 }, async ({ database: { adapter } }) => {
       await adapter.migrateToLatest();
       expect(await adapter.migrateToLatest()).toEqual({
@@ -188,7 +269,7 @@ describe.each(["async", "sync"] as const)("in %s mode", (mode) => {
       "flags the chains that blocker rows reference and replaces the write fence",
       { timeout: 60_000 },
       async ({ database: { provider, adapter } }) => {
-        await migrateToInstall(provider);
+        await migrateThroughHistory(provider, "queuert_", [INSTALL]);
         const blockerChainId = randomUUID();
         const continuedBlockerChainId = randomUUID();
         const continuedBlockerTailId = randomUUID();
@@ -236,7 +317,7 @@ describe.each(["async", "sync"] as const)("in %s mode", (mode) => {
       "counts one failure for a job that stored an attempt error, and none for a job without one",
       { timeout: 60_000 },
       async ({ database: { provider, adapter } }) => {
-        await migrateToInstall(provider);
+        await migrateThroughHistory(provider, "queuert_", [INSTALL]);
         const failedJobId = randomUUID();
         const cleanJobId = randomUUID();
         await execute(
@@ -270,18 +351,14 @@ describe.each(["async", "sync"] as const)("in %s mode", (mode) => {
       "applies the schema exactly once when several deployments migrate at the same time",
       { timeout: 120_000 },
       async ({ database: { path, provider } }) => {
-        const results = await startTogether(
+        const results = (await startTogether(
           Array.from({ length: 4 }, () => spawnDeployment(path, "older")),
-        );
+        )) as MigrationResult[];
 
-        expect(
-          results.toSorted((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
-        ).toEqual([
-          { applied: [], skipped: ALL, reverted: [], unrecognized: [] },
-          { applied: [], skipped: ALL, reverted: [], unrecognized: [] },
-          { applied: [], skipped: ALL, reverted: [], unrecognized: [] },
-          { applied: ALL, skipped: [], reverted: [], unrecognized: [] },
-        ]);
+        expect(results.flatMap((result) => result.applied).toSorted()).toEqual(ALL);
+        expect(results.map((result) => [...result.applied, ...result.skipped].toSorted())).toEqual(
+          results.map(() => ALL),
+        );
         expect(await appliedNames(provider)).toEqual(ALL);
       },
     );

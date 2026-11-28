@@ -2,10 +2,13 @@
 import { randomUUID } from "node:crypto";
 
 import { acquireMysql } from "@queuert/testcontainers";
+import { createMigrator, createTemplateApplier } from "@queuert/typed-sql";
 import { type Pool, type RowDataPacket, createPool } from "mysql2/promise";
 import { it as baseIt, describe, expect } from "vitest";
 
+import { createMysqlMigrationStore } from "../migration-store/migration-store.mysql.ts";
 import { createMysqlStateAdapter } from "../state-adapter/state-adapter.mysql.ts";
+import { createSchemaMigrations } from "../state-adapter/state-schema.migrations.mysql.ts";
 import { createMysql2PoolAtLevel } from "../state-provider/state-provider.mysql2-pool.spec-helper.ts";
 import {
   type Mysql2PoolProvider,
@@ -16,8 +19,10 @@ const ALL = ["001_schema_v1", "002_schema_v2"];
 const INSTALLED = { applied: ALL, skipped: [], reverted: [], unrecognized: [] };
 const UP_TO_DATE = { applied: [], skipped: ALL, reverted: [], unrecognized: [] };
 
+type Layout = { schema?: string; tablePrefix?: string };
+
 const SCHEMA_STATEMENT =
-  /^\s*CREATE TABLE IF NOT EXISTS queuert_(job|job_blocker|worker|schema_fence_v1)\b/;
+  /^\s*CREATE TABLE IF NOT EXISTS queuert_(job|job_blocker|worker|schema_fence_v1|schema_fence_v2)\b/;
 
 const schemaShape = async (pool: Pool): Promise<string[]> => {
   const [tables] = await pool.query<RowDataPacket[]>(
@@ -26,7 +31,7 @@ const schemaShape = async (pool: Pool): Promise<string[]> => {
   const definitions: string[] = [];
   for (const { name } of tables) {
     const [[row]] = await pool.query<RowDataPacket[]>(`SHOW CREATE TABLE \`${name as string}\``);
-    definitions.push(row["Create Table"] as string);
+    definitions.push((row["Create Table"] as string).replaceAll(/_(ascii|utf8mb4)'/g, "'"));
   }
   return definitions;
 };
@@ -58,7 +63,30 @@ const killedAt =
     },
   });
 
-const killedBeforeSchemaV2 = killedAt(/information_schema\.columns/);
+const killedRecording =
+  (name: string) =>
+  (stateProvider: Mysql2PoolProvider): Mysql2PoolProvider => ({
+    ...stateProvider,
+    executeSql: async (options) => {
+      if (
+        /^INSERT IGNORE INTO queuert_migration\b/.test(options.sql) &&
+        options.params[0] === name
+      ) {
+        throw new Error("process killed");
+      }
+      return stateProvider.executeSql(options);
+    },
+  });
+
+const recordingStatements =
+  (statements: string[]) =>
+  (stateProvider: Mysql2PoolProvider): Mysql2PoolProvider => ({
+    ...stateProvider,
+    executeSql: async (options) => {
+      statements.push(options.sql);
+      return stateProvider.executeSql(options);
+    },
+  });
 
 const defineMysqlMigrationSuite = async ({
   image,
@@ -70,6 +98,9 @@ const defineMysqlMigrationSuite = async ({
   callerId: string;
 }): Promise<void> => {
   await acquireMysql(image, callerId);
+  const collation = dialect === "mysql" ? "utf8mb4_0900_bin" : "utf8mb4_nopad_bin";
+  const qualifiedPrefix = ({ schema, tablePrefix = "queuert_" }: Layout) =>
+    schema === undefined ? tablePrefix : `${schema}.${tablePrefix}`;
 
   const it = baseIt.extend("createDatabase", async ({}, { onCleanup }) => {
     const pools: Pool[] = [];
@@ -87,15 +118,45 @@ const defineMysqlMigrationSuite = async ({
         return pool;
       };
       const shapePool = createPoolForDatabase();
+      const createAdapter = (
+        wrap = (provider: Mysql2PoolProvider) => provider,
+        level?: "SERIALIZABLE",
+        layout: Layout = {},
+      ) =>
+        createMysqlStateAdapter({
+          stateProvider: wrap(createMysql2PoolProvider({ pool: createPoolForDatabase(level) })),
+          dialect,
+          ...layout,
+        });
       return {
-        createAdapter: (
+        name: connectionOptions.database,
+        createAdapter,
+        createHistoryMigrator: (
           wrap = (provider: Mysql2PoolProvider) => provider,
-          level?: "SERIALIZABLE",
-        ) =>
-          createMysqlStateAdapter({
-            stateProvider: wrap(createMysql2PoolProvider({ pool: createPoolForDatabase(level) })),
-            dialect,
-          }),
+          layout: Layout = {},
+        ) => {
+          const stateProvider = wrap(createMysql2PoolProvider({ pool: createPoolForDatabase() }));
+          const applyTemplate = createTemplateApplier({
+            prefix: qualifiedPrefix(layout),
+            name_prefix: layout.tablePrefix ?? "queuert_",
+            job_id_type: "CHAR(36) CHARACTER SET ascii COLLATE ascii_bin",
+            worker_id_type: "CHAR(36) CHARACTER SET ascii COLLATE ascii_bin",
+            name_type: `VARCHAR(255) CHARACTER SET utf8mb4 COLLATE ${collation}`,
+            collation,
+          });
+          return createMigrator({
+            migrations: createSchemaMigrations(stateProvider, applyTemplate, layout.schema, {
+              maxTries: 5,
+              initialDelayMs: 50,
+              maxDelayMs: 50,
+            }),
+            store: createMysqlMigrationStore({
+              stateProvider,
+              migrationTable: `${qualifiedPrefix(layout)}migration`,
+              lockTable: `${qualifiedPrefix(layout)}migration_lock`,
+            }),
+          });
+        },
         shape: async () => schemaShape(shapePool),
         pool: shapePool,
       };
@@ -111,8 +172,56 @@ const defineMysqlMigrationSuite = async ({
       expect(await adapter.migrateToLatest()).toEqual(UP_TO_DATE);
     });
 
+    it("installs from a snapshot the schema its migration history builds, column order included", async ({
+      createDatabase,
+    }) => {
+      const history = await createDatabase();
+      const snapshot = await createDatabase();
+      const statements: string[] = [];
+
+      expect(await history.createHistoryMigrator().migrateToLatest()).toEqual(INSTALLED);
+      expect(
+        await snapshot.createAdapter(recordingStatements(statements)).migrateToLatest(),
+      ).toEqual(INSTALLED);
+      expect(statements.filter((statement) => /^\s*(ALTER|UPDATE|DROP)\b/.test(statement))).toEqual(
+        [],
+      );
+      expect(await snapshot.shape()).toEqual(await history.shape());
+    });
+
+    it("installs from a snapshot the schema its migration history builds with a table prefix in another schema", async ({
+      createDatabase,
+    }) => {
+      const connected = await createDatabase();
+      const history = await createDatabase();
+      const snapshot = await createDatabase();
+      const statements: string[] = [];
+
+      expect(
+        await connected
+          .createHistoryMigrator(undefined, { schema: history.name, tablePrefix: "app_" })
+          .migrateToLatest(),
+      ).toEqual(INSTALLED);
+      expect(
+        await connected
+          .createAdapter(recordingStatements(statements), undefined, {
+            schema: snapshot.name,
+            tablePrefix: "app_",
+          })
+          .migrateToLatest(),
+      ).toEqual(INSTALLED);
+      expect(statements.filter((statement) => /^\s*(ALTER|UPDATE|DROP)\b/.test(statement))).toEqual(
+        [],
+      );
+      expect(await snapshot.shape()).toEqual(await history.shape());
+      expect(await snapshot.shape()).toContainEqual(
+        expect.stringContaining("CREATE TABLE `app_job`"),
+      );
+      expect(await connected.shape()).toEqual([]);
+    });
+
     it.for([0, 1, 2, 3])(
-      "resumes a run killed after %i schema statements to the same schema",
+      "resumes a snapshot killed after %i of its statements to the schema of an uninterrupted one",
       async (count, { createDatabase }) => {
         const reference = await createDatabase();
         await reference.createAdapter().migrateToLatest();
@@ -123,10 +232,71 @@ const defineMysqlMigrationSuite = async ({
             .createAdapter((provider) => killedAfterSchemaStatements(provider, count))
             .migrateToLatest(),
         ).rejects.toThrow("process killed");
+        const statements: string[] = [];
+        expect(
+          await interrupted.createAdapter(recordingStatements(statements)).migrateToLatest(),
+        ).toEqual(INSTALLED);
+        expect(statements.filter((statement) => statement.includes("schema_fence_v1"))).toEqual([]);
+        expect(await interrupted.shape()).toEqual(await reference.shape());
+      },
+    );
+
+    it.for([1, 3])(
+      "installs the schema over a schema v1 install killed after %i schema statements",
+      async (count, { createDatabase }) => {
+        const reference = await createDatabase();
+        await reference.createAdapter().migrateToLatest();
+        const interrupted = await createDatabase();
+
+        await expect(
+          interrupted
+            .createHistoryMigrator((provider) => killedAfterSchemaStatements(provider, count))
+            .migrateToLatest(),
+        ).rejects.toThrow("process killed");
         expect(await interrupted.createAdapter().migrateToLatest()).toEqual(INSTALLED);
         expect(await interrupted.shape()).toEqual(await reference.shape());
       },
     );
+
+    it("installs again a snapshot whose recording was killed", async ({ createDatabase }) => {
+      const reference = await createDatabase();
+      await reference.createAdapter().migrateToLatest();
+      const interrupted = await createDatabase();
+      await expect(
+        interrupted.createAdapter(killedRecording("001_schema_v1")).migrateToLatest(),
+      ).rejects.toThrow("process killed");
+      const statements: string[] = [];
+
+      expect(
+        await interrupted.createAdapter(recordingStatements(statements)).migrateToLatest(),
+      ).toEqual(INSTALLED);
+      expect(statements.filter((statement) => statement.includes("schema_fence_v1"))).toEqual([]);
+      expect(await interrupted.shape()).toEqual(await reference.shape());
+    });
+
+    it("records a schema v2 upgrade killed after its write fence without running it again", async ({
+      createDatabase,
+    }) => {
+      const reference = await createDatabase();
+      await reference.createAdapter().migrateToLatest();
+      const database = await createDatabase();
+      await database.createHistoryMigrator().migrateTo("001_schema_v1");
+      await expect(
+        database.createAdapter(killedRecording("002_schema_v2")).migrateToLatest(),
+      ).rejects.toThrow("process killed");
+      const statements: string[] = [];
+
+      expect(
+        await database.createAdapter(recordingStatements(statements)).migrateToLatest(),
+      ).toEqual({
+        applied: ["002_schema_v2"],
+        skipped: ["001_schema_v1"],
+        reverted: [],
+        unrecognized: [],
+      });
+      expect(statements.filter((statement) => /^\s*(ALTER|UPDATE)\b/.test(statement))).toEqual([]);
+      expect(await database.shape()).toEqual(await reference.shape());
+    });
 
     it("upgrades a schema v1 database, counting a stored error as one failure", async ({
       createDatabase,
@@ -134,9 +304,7 @@ const defineMysqlMigrationSuite = async ({
       const reference = await createDatabase();
       await reference.createAdapter().migrateToLatest();
       const database = await createDatabase();
-      await expect(database.createAdapter(killedBeforeSchemaV2).migrateToLatest()).rejects.toThrow(
-        "process killed",
-      );
+      await database.createHistoryMigrator().migrateTo("001_schema_v1");
       const failedJobId = randomUUID();
       const pendingJobId = randomUUID();
       await database.pool.query(
@@ -183,9 +351,7 @@ const defineMysqlMigrationSuite = async ({
         const reference = await createDatabase();
         await reference.createAdapter().migrateToLatest();
         const database = await createDatabase();
-        await expect(
-          database.createAdapter(killedBeforeSchemaV2).migrateToLatest(),
-        ).rejects.toThrow("process killed");
+        await database.createHistoryMigrator().migrateTo("001_schema_v1");
         const failedJobId = randomUUID();
         await database.pool.query(
           "INSERT INTO queuert_job (id, chain_id, chain_index, type_name, chain_status, scheduled_at, attempt, last_attempt_error) VALUES (?, ?, 0, 'upgrade', 'running', UTC_TIMESTAMP(6), 2, ?)",
@@ -250,9 +416,7 @@ const defineMysqlMigrationSuite = async ({
       createDatabase,
     }) => {
       const database = await createDatabase();
-      await expect(database.createAdapter(killedBeforeSchemaV2).migrateToLatest()).rejects.toThrow(
-        "process killed",
-      );
+      await database.createHistoryMigrator().migrateTo("001_schema_v1");
       const adapter = database.createAdapter();
       const { pool } = database;
 
@@ -303,9 +467,7 @@ const defineMysqlMigrationSuite = async ({
       createDatabase,
     }) => {
       const database = await createDatabase();
-      await expect(database.createAdapter(killedBeforeSchemaV2).migrateToLatest()).rejects.toThrow(
-        "process killed",
-      );
+      await database.createHistoryMigrator().migrateTo("001_schema_v1");
       const adapter = database.createAdapter();
       const { pool } = database;
 

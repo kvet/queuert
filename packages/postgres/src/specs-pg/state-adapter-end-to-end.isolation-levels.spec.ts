@@ -10,6 +10,7 @@ import {
 } from "queuert/conformance-internal";
 import { it as baseIt, describe } from "vitest";
 
+import { strictIsolationTransactionRetry } from "../state-provider/state-provider.pg-pool.spec-helper.ts";
 import { capabilityGroups, createEndToEndContext } from "./state-adapter-end-to-end.spec-helper.ts";
 
 const pg = await acquirePostgres("postgres:14", import.meta.url);
@@ -32,7 +33,9 @@ const createIsolationLevelIt = (defaultTransactionIsolation: string) =>
       detectResourceLeaks({ additionalAllowedTypes: TESTCONTAINERS_RESOURCE_TYPES }),
     )
     .extend("conformance", { scope: "file" }, async ({ pool }) =>
-      createEndToEndContext(pool, async () => noopNotifyAdapter),
+      createEndToEndContext(pool, async () => noopNotifyAdapter, {
+        transactionRetry: strictIsolationTransactionRetry,
+      }),
     );
 
 const repeatableReadIt = createIsolationLevelIt("repeatable\\ read");

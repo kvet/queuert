@@ -1,5 +1,7 @@
 import type { StateChainStatus, StateJobStatus } from "queuert";
 
+import type { RedisStoreContext } from "./redis-transaction.ts";
+
 export type IndexedJob = {
   id: string;
   typeName: string;
@@ -408,3 +410,9 @@ export const indexKeyHeads: { exact: boolean; head: string }[] = [
     }),
   ).values(),
 ];
+
+export const createRedisSchemaSnapshot =
+  ({ keys }: RedisSchema) =>
+  async ({ transaction }: RedisStoreContext): Promise<void> => {
+    transaction.sadd(keys.schemaFences, String(SCHEMA_VERSION));
+  };

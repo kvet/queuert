@@ -10,11 +10,11 @@ import {
 } from "@queuert/typed-sql";
 import Database from "better-sqlite3";
 
+import { createSqliteStateAdapter } from "../state-adapter/state-adapter.sqlite.ts";
 import {
   createMigrationStore,
   createSchemaMigrations,
-  createSqliteStateAdapter,
-} from "../state-adapter/state-adapter.sqlite.ts";
+} from "../state-adapter/state-schema.migrations.sqlite.ts";
 import {
   type BetterSqlite3Context,
   createBetterSqlite3Provider,

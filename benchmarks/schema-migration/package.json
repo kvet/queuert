@@ -1,0 +1,43 @@
+{
+  "name": "benchmark-schema-migration",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --max-old-space-size=12288 src/postgres.ts && node --max-old-space-size=12288 src/sqlite.ts && node --max-old-space-size=12288 src/mysql.ts && node --max-old-space-size=12288 src/mysql.ts --mariadb && node --max-old-space-size=12288 src/redis.ts",
+    "start:postgres": "node --max-old-space-size=12288 src/postgres.ts",
+    "start:sqlite": "node --max-old-space-size=12288 src/sqlite.ts",
+    "start:mysql": "node --max-old-space-size=12288 src/mysql.ts",
+    "start:mariadb": "node --max-old-space-size=12288 src/mysql.ts --mariadb",
+    "start:redis": "node --max-old-space-size=12288 src/redis.ts",
+    "typecheck": "tsrs --noEmit"
+  },
+  "dependencies": {
+    "@queuert/mysql": "workspace:*",
+    "@queuert/mysql-schema-v1": "npm:@queuert/mysql@0.18.0",
+    "@queuert/postgres": "workspace:*",
+    "@queuert/postgres-schema-v1": "npm:@queuert/postgres@0.18.0",
+    "@queuert/redis": "workspace:*",
+    "@queuert/redis-schema-v1": "npm:@queuert/redis@0.18.0",
+    "@queuert/sqlite": "workspace:*",
+    "@queuert/sqlite-schema-v1": "npm:@queuert/sqlite@0.18.0",
+    "benchmark-results": "workspace:*",
+    "better-sqlite3": "13.2.0",
+    "example-mysql-state-mysql2": "workspace:*",
+    "example-postgresql-state-pg": "workspace:*",
+    "example-redis-state-ioredis": "workspace:*",
+    "example-sqlite-state-better-sqlite3": "workspace:*",
+    "ioredis": "6.0.0",
+    "mysql2": "3.24.6",
+    "pg": "8.23.1",
+    "queuert-schema-v1": "npm:queuert@0.18.0"
+  },
+  "devDependencies": {
+    "@queuert/tsconfig": "workspace:*",
+    "@testcontainers/postgresql": "12.2.1",
+    "@testcontainers/redis": "12.2.1",
+    "@types/better-sqlite3": "9.6.0",
+    "@types/pg": "8.23.1",
+    "testcontainers": "12.2.1"
+  }
+}

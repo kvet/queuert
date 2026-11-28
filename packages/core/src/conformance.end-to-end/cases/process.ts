@@ -972,7 +972,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 task: {
                   batchLimit: 5,
-                  attemptHandler: async ({ jobs, applyJobOutcomes, fenceJobs }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes, fenceJobs }) => {
                     handlerJobIds.resolve(jobs.map((job) => job.id));
                     await stateAdapter.withTransaction((txCtx) =>
                       runInModeOf(
@@ -1065,7 +1065,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 task: {
                   batchLimit: 5,
-                  attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
                     if (jobs.some((job) => job.attempt === 1)) throw new Error("batch failed");
                     await stateAdapter.withTransaction((txCtx) =>
                       applyJobOutcomes({
@@ -1121,7 +1121,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 task: {
                   batchLimit: 5,
-                  attemptHandler: async ({ jobs, applyJobOutcomes, fenceJobs }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes, fenceJobs }) => {
                     const taken = jobs.find((job) => job.input.index === 0)!;
                     const other = jobs.find((job) => job.input.index === 1)!;
                     await stateAdapter.withTransaction((txCtx) =>
@@ -1234,7 +1234,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 task: {
                   batchLimit: 3,
-                  attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
                     await stateAdapter.withTransaction((txCtx) =>
                       applyJobOutcomes({
                         ...txCtx,
@@ -1288,7 +1288,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 pair: {
                   batchLimit: 2,
-                  attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
                     await stateAdapter.withTransaction((txCtx) =>
                       applyJobOutcomes({
                         ...txCtx,
@@ -1302,7 +1302,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                 },
                 triple: {
                   batchLimit: 3,
-                  attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
                     await stateAdapter.withTransaction((txCtx) =>
                       applyJobOutcomes({
                         ...txCtx,
@@ -1377,7 +1377,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 task: {
                   batchLimit: 2,
-                  attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
                     firstBatchJobIds.resolve(jobs.map((job) => job.id));
                     await released.promise;
                     await stateAdapter.withTransaction((txCtx) =>
@@ -1457,7 +1457,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                 },
                 task: {
                   batchLimit: 5,
-                  attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
                     await stateAdapter.withTransaction((txCtx) =>
                       runInModeOf(
                         stateAdapter,
@@ -1550,7 +1550,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 task: {
                   batchLimit: 5,
-                  attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
                     await stateAdapter.withTransaction((txCtx) =>
                       applyJobOutcomes({
                         ...txCtx,
@@ -1611,7 +1611,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 task: {
                   batchLimit: 5,
-                  attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
                     await assertRejects(
                       () =>
                         stateAdapter.withTransaction((txCtx) =>
@@ -1693,7 +1693,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 task: {
                   batchLimit: 5,
-                  attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
                     await stateAdapter.withTransaction((txCtx) =>
                       applyJobOutcomes({
                         ...txCtx,
@@ -1762,7 +1762,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 task: {
                   batchLimit: 5,
-                  attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
                     await stateAdapter.withTransaction((txCtx) =>
                       applyJobOutcomes({
                         ...txCtx,
@@ -1828,7 +1828,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 task: {
                   batchLimit: 5,
-                  attemptHandler: async ({ jobs, applyJobOutcomes, fenceJobs }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes, fenceJobs }) => {
                     for (const job of jobs) {
                       await stateAdapter.withTransaction((txCtx) =>
                         runInModeOf(
@@ -1897,7 +1897,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 task: {
                   batchLimit: 5,
-                  attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
                     for (const job of jobs) {
                       const settle = () =>
                         stateAdapter.withTransaction((txCtx) =>
@@ -1973,7 +1973,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 task: {
                   batchLimit: 5,
-                  attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
                     await stateAdapter.withTransaction((txCtx) =>
                       applyJobOutcomes({
                         ...txCtx,
@@ -2033,7 +2033,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 task: {
                   batchLimit: 5,
-                  attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
                     await stateAdapter.withTransaction((txCtx) =>
                       applyJobOutcomes({
                         ...txCtx,
@@ -2090,7 +2090,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 task: {
                   batchLimit: 5,
-                  attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
                     await stateAdapter.withTransaction((txCtx) =>
                       applyJobOutcomes({
                         ...txCtx,
@@ -2151,7 +2151,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 task: {
                   batchLimit: 5,
-                  attemptHandler: async ({ jobs, applyJobOutcomes, fenceJobs }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes, fenceJobs }) => {
                     const [first, second] = jobs;
                     const outsider = { id: "00000000-0000-0000-0000-000000000000" };
                     await context.withNonTransactionContext(async (nonTransactionCtx) => {
@@ -2357,7 +2357,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 task: {
                   batchLimit: 5,
-                  attemptHandler: async ({ jobs, applyJobOutcomes, fenceJobs }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes, fenceJobs }) => {
                     const taken = jobs.find((job) => job.input.index === 0 && job.attempt === 1);
                     const others = jobs.filter((job) => job !== taken);
                     if (taken !== undefined) {
@@ -2454,7 +2454,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 task: {
                   batchLimit: 5,
-                  attemptHandler: async ({ jobs, applyJobOutcomes, fenceJobs }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes, fenceJobs }) => {
                     const deleted = jobs.find((job) => job.input.index === 0);
                     const taken = jobs.find((job) => job.input.index === 1 && job.attempt === 1);
                     if (deleted !== undefined && taken !== undefined) {
@@ -2581,7 +2581,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
                 },
                 task: {
                   batchLimit: 5,
-                  attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
                     await stateAdapter.withTransaction((txCtx) =>
                       applyJobOutcomes({
                         ...txCtx,
@@ -2668,7 +2668,7 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               processors: {
                 task: {
                   batchLimit: 5,
-                  attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
                     await stateAdapter.withTransaction((txCtx) =>
                       applyJobOutcomes({
                         ...txCtx,
@@ -2700,17 +2700,16 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
       }),
     },
     {
-      name: "gives a handler with a batch limit typed as number and 1 at runtime a single job",
+      name: "gives a handler with a batch limit of 1 a batch of one job",
       run: dynamicSyncAsync(function* ({ createStateAdapter, createNotifyAdapter }) {
         const stateAdapter = yield* resource(createCaseStateAdapter(createStateAdapter));
         const notifyAdapter = yield* resource(
           createCaseNotifyAdapter(createNotifyAdapter, stateAdapter),
         );
         const jobTypes = defineJobTypes<{
-          task: { entry: true; input: null; output: { shape: string } };
+          task: { entry: true; input: null; output: { batchSize: number } };
         }>();
         const client = createClient({ stateAdapter, notifyAdapter, jobTypes });
-        const batchLimit: number = 1;
         const workerRunner = yield* resource(
           createWorkerRunner({
             client,
@@ -2719,18 +2718,14 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
               jobTypes,
               processors: {
                 task: {
-                  batchLimit,
-                  attemptHandler: async (options) => {
-                    await (options.jobs
-                      ? stateAdapter.withTransaction((txCtx) =>
-                          options.applyJobOutcomes({
-                            ...txCtx,
-                            items: options.jobs.map((job) => ({ job, output: { shape: "batch" } })),
-                          }),
-                        )
-                      : stateAdapter.withTransaction((txCtx) =>
-                          options.applyJobOutcome({ ...txCtx, output: { shape: "single" } }),
-                        ));
+                  batchLimit: 1,
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
+                    await stateAdapter.withTransaction((txCtx) =>
+                      applyJobOutcomes({
+                        ...txCtx,
+                        items: jobs.map((job) => ({ job, output: { batchSize: jobs.length } })),
+                      }),
+                    );
                   },
                 },
               },
@@ -2738,15 +2733,24 @@ export const processGroup: ConformanceGroup<StateAdapterConformanceContext> = {
           }),
         );
 
-        const chain = yield* step(
+        const chains = yield* step(
           stateAdapter.withTransaction((txCtx) =>
-            client.createChain({ ...txCtx, typeName: "task", input: null }),
+            client.createChains({
+              ...txCtx,
+              items: [
+                { typeName: "task", input: null },
+                { typeName: "task", input: null },
+              ],
+            }),
           ),
         );
 
         yield* wait(workerRunner.start());
-        const completed = yield* wait(client.awaitChain({ chain, ...completionOptions }));
-        assert.deepEqual(completed.output, { shape: "single" });
+        const completed = yield* wait(client.awaitChains({ chains, ...completionOptions }));
+        assert.deepEqual(
+          completed.map((chain) => chain.output),
+          [{ batchSize: 1 }, { batchSize: 1 }],
+        );
       }),
     },
   ],
@@ -2971,7 +2975,7 @@ export const processAsyncGroup: ConformanceGroup<StateAdapterConformanceContext>
             processors: {
               task: {
                 batchLimit: 5,
-                attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+                batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
                   await stateAdapter.withTransaction(async (txCtx) => {
                     const completed = applyJobOutcomes({
                       ...txCtx,
@@ -3034,7 +3038,7 @@ export const processAsyncGroup: ConformanceGroup<StateAdapterConformanceContext>
             processors: {
               task: {
                 batchLimit: 5,
-                attemptHandler: async ({ jobs }) => {
+                batchAttemptHandler: async ({ jobs }) => {
                   started.resolve(jobs.map((job) => job.signal));
                   await Promise.all(
                     jobs.map(
@@ -3228,7 +3232,7 @@ export const processNotifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               processors: {
                 task: {
                   batchLimit: 5,
-                  attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
                     const deleted = jobs.find((job) => job.input.index === 0)!;
                     const other = jobs.find((job) => job.input.index === 1)!;
                     started.resolve();
@@ -3291,7 +3295,7 @@ export const processNotifyGroup: ConformanceGroup<EndToEndNotifyContext> = {
               processors: {
                 task: {
                   batchLimit: 5,
-                  attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
                     const external = jobs.find((job) => job.input.index === 0)!;
                     const other = jobs.find((job) => job.input.index === 1)!;
                     started.resolve();

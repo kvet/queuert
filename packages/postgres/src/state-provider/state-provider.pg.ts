@@ -12,10 +12,14 @@ import type { BaseTxContext } from "queuert";
  *   and SERIALIZABLE, or `40P01` (`deadlock_detected`), raised at any level; PostgreSQL rolls the
  *   whole transaction back for both. The adapter retries it in the transactions and statements it runs without a
  *   caller's transaction; a provider that does not report it leaves it unretried.
+ * - `lock_not_available` — SQLSTATE `55P03`, raised when a statement waits longer than
+ *   `lock_timeout` for a lock or a `NOWAIT` lock is taken. The schema migrations retry their lock
+ *   steps on it; a provider that does not report it makes such a step fail the migration.
  */
 export type PgErrorClassification =
   | { kind: "undefined_table"; tableName: string }
-  | { kind: "transaction_conflict" };
+  | { kind: "transaction_conflict" }
+  | { kind: "lock_not_available" };
 
 /**
  * PostgreSQL state provider interface.
@@ -25,7 +29,8 @@ export type PgErrorClassification =
  * client (raw `pg`, Drizzle, Prisma, etc.).
  *
  * Queuert supports READ COMMITTED, REPEATABLE READ and SERIALIZABLE, as a session default or per
- * transaction, including mixed levels.
+ * transaction, including mixed levels. REPEATABLE READ and SERIALIZABLE are experimental: how
+ * Queuert behaves at them may change in a minor release.
  *
  * @typeParam TTxContext - The transaction context type containing database client/connection info
  */

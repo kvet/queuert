@@ -230,6 +230,51 @@ export const classifyErrorTwoConnectionGroup: ConformanceGroup<PgStateProviderCo
           }
         },
       },
+      {
+        name: "classifies a lock timeout as lock_not_available",
+        run: async ({ createStateProvider }) => {
+          const stateProvider = await createStateProvider();
+          const write = async (sql: string, txCtx?: unknown) =>
+            stateProvider.executeSql({
+              txCtx,
+              sql,
+              params: [],
+              paramTypes: {},
+              columnTypes: {},
+              readOnly: false,
+            });
+
+          try {
+            await write(
+              `CREATE TABLE IF NOT EXISTS ${CONFLICT_TABLE} (id integer PRIMARY KEY, value integer NOT NULL)`,
+            );
+            await write(`INSERT INTO ${CONFLICT_TABLE} VALUES (1, 0) ON CONFLICT (id) DO NOTHING`);
+            const locked = Promise.withResolvers<void>();
+            const released = Promise.withResolvers<void>();
+            const holder = stateProvider.withTransaction(async (txCtx) => {
+              await write(`UPDATE ${CONFLICT_TABLE} SET value = value + 1 WHERE id = 1`, txCtx);
+              locked.resolve();
+              await released.promise;
+            });
+            await locked.promise;
+            const error = await captureError(async () =>
+              stateProvider.withTransaction(async (txCtx) => {
+                await write("SET LOCAL lock_timeout = '50ms'", txCtx);
+                await write(`UPDATE ${CONFLICT_TABLE} SET value = value + 1 WHERE id = 1`, txCtx);
+              }),
+            ).finally(async () => {
+              released.resolve();
+              await holder;
+            });
+            assert.deepEqual(stateProvider.classifyError({ error }), {
+              kind: "lock_not_available",
+            });
+          } finally {
+            await write(`DROP TABLE IF EXISTS ${CONFLICT_TABLE}`);
+            await stateProvider.close?.();
+          }
+        },
+      },
     ],
   };
 

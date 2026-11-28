@@ -53,6 +53,7 @@ export const createBunSqlStateProvider = ({
       const driverError = error as { errno?: unknown; message?: unknown } | undefined;
       if (driverError?.errno === "40001" || driverError?.errno === "40P01")
         return { kind: "transaction_conflict" };
+      if (driverError?.errno === "55P03") return { kind: "lock_not_available" };
       if (driverError?.errno !== "42P01") return undefined;
       const tableName = /relation "([^"]+)" does not exist/.exec(String(driverError.message))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };

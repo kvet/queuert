@@ -58,14 +58,16 @@ type MergedDefs<
  * });
  *
  * @throws {TypeError} When `backoffConfig`, or any processor's `backoffConfig` or `batchLimit`,
- * holds an invalid value; the message lists every invalid field.
+ * holds an invalid value, a processor has neither or both of `attemptHandler` and
+ * `batchAttemptHandler`, or sets `batchLimit` without `batchAttemptHandler`; the message lists
+ * every invalid field.
  */
 export const createProcessors = <
   TClientJobTypeDefinitions extends BaseJobTypeDefinitions,
   TStateAdapter extends StateAdapter<any, any, any, Mode>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TExternalJobTypeDefinitions extends BaseJobTypeDefinitions,
-  const TBatchLimits,
+  TProcessors,
   const TAttemptMiddleware extends readonly AnyAttemptMiddleware[] = readonly [],
   TMergedJobTypeDefinitions extends BaseJobTypeDefinitions = MergedDefs<
     TJobTypeDefinitions,
@@ -80,16 +82,15 @@ export const createProcessors = <
     readonly AttemptMiddleware<NoInfer<TStateAdapter>, any>[];
   backoffConfig?: BackoffConfig;
   processors: {
-    [K in keyof TBatchLimits]: Processor<
+    [K in keyof TProcessors]: Processor<
       TStateAdapter,
       TMergedJobTypeDefinitions,
       K & string,
-      MergedAttemptHandlerCtx<TAttemptMiddleware>,
-      TBatchLimits[K]
+      MergedAttemptHandlerCtx<TAttemptMiddleware>
     >;
-  } & Record<Exclude<keyof TBatchLimits, keyof TJobTypeDefinitions & string>, never>;
+  } & Record<Exclude<keyof TProcessors, keyof TJobTypeDefinitions & string>, never>;
 }): Processors<TJobTypeDefinitions, TAttemptMiddleware> => {
-  const processorEntries = Object.entries<Processor<any, any, any, any, any>>(options.processors);
+  const processorEntries = Object.entries<Processor<any, any, any, any>>(options.processors);
   const configViolations = [
     ...backoffConfigViolations("backoffConfig", options.backoffConfig),
     ...processorEntries.flatMap(([typeName, processor]) => [
@@ -97,11 +98,21 @@ export const createProcessors = <
         `processors["${typeName}"].backoffConfig`,
         processor.backoffConfig,
       ),
-      ...(processor.batchLimit === undefined || isPositiveSafeInteger(processor.batchLimit)
-        ? []
-        : [
-            `processors["${typeName}"].batchLimit must be a positive integer (got ${String(processor.batchLimit)})`,
-          ]),
+      ...((typeof processor.attemptHandler === "function") ===
+      (typeof processor.batchAttemptHandler === "function")
+        ? [
+            `processors["${typeName}"] must have exactly one of attemptHandler and batchAttemptHandler`,
+          ]
+        : []),
+      ...(typeof processor.batchAttemptHandler !== "function"
+        ? processor.batchLimit === undefined
+          ? []
+          : [`processors["${typeName}"].batchLimit requires batchAttemptHandler`]
+        : isPositiveSafeInteger(processor.batchLimit)
+          ? []
+          : [
+              `processors["${typeName}"].batchLimit must be a positive integer (got ${String(processor.batchLimit)})`,
+            ]),
     ]),
   ];
   if (configViolations.length > 0) {

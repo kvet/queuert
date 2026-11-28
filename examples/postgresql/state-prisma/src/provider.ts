@@ -43,6 +43,7 @@ export const createPrismaPgStateProvider = <TPrisma extends PrismaLikeClient>({
         ?.cause;
       if (cause?.originalCode === "40001" || cause?.originalCode === "40P01")
         return { kind: "transaction_conflict" };
+      if (cause?.originalCode === "55P03") return { kind: "lock_not_available" };
       if (cause?.originalCode !== "42P01") return undefined;
       const tableName =
         typeof cause.table === "string"

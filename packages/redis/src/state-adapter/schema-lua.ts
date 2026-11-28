@@ -3,7 +3,7 @@ import {
   placeholder,
   placeholderFields,
   symbolicIndex,
-} from "./schema.redis.ts";
+} from "./state-schema.redis.ts";
 
 const luaString = (text: string): string => `'${text.replaceAll(/[\\']/g, "\\$&")}'`;
 

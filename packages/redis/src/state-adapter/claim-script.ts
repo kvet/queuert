@@ -1,6 +1,6 @@
 import { FENCE_LUA } from "./redis-transaction.ts";
 import { indexTransitionLua, keyLua } from "./schema-lua.ts";
-import { dueJobIdLua, placeholder, symbolicSchema } from "./schema.redis.ts";
+import { dueJobIdLua, placeholder, symbolicSchema } from "./state-schema.redis.ts";
 
 const { keys } = symbolicSchema;
 

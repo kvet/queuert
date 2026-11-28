@@ -107,9 +107,10 @@ const Page = () => (
     </For>
     <h2 id="batched-completion">Completion, batched no-op handler</h2>
     <p>
-      The same seeded queue, drained by a processor with <code>batchLimit: 100</code>: each attempt
-      takes up to 100 jobs and applies them with one <code>applyJobOutcomes</code> call in one
-      transaction, so the round trip is paid per batch instead of per job. See{" "}
+      The same seeded queue, drained by a processor with a <code>batchAttemptHandler</code> and{" "}
+      <code>batchLimit: 100</code>: each attempt takes up to 100 jobs and applies them with one{" "}
+      <code>applyJobOutcomes</code> call in one transaction, so the round trip is paid per batch
+      instead of per job. See{" "}
       <a href={siteHref("/guides/batched-processors/")}>Batched processors</a>.
     </p>
     <For each={["1 slot", "4 slots", "16 slots"]}>

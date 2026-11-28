@@ -250,6 +250,67 @@ export const workerGroups = [
   { rows: queryRows("List workers & worker jobs") },
 ] satisfies BenchGroup[];
 
+const migrationBackends = [
+  { label: "PostgreSQL", backend: "postgres" },
+  { label: "SQLite", backend: "sqlite" },
+  { label: "MySQL", backend: "mysql" },
+  { label: "MariaDB", backend: "mariadb" },
+  { label: "Redis", backend: "redis" },
+] satisfies { label: string; backend: Backend }[];
+
+const migrationWriterBackends = migrationBackends.filter(({ label }) =>
+  ["PostgreSQL", "MySQL", "MariaDB"].includes(label),
+);
+
+const migrationDataset = resultsTable("schema-migration", "Dataset");
+
+/** Each scale the schema migration ran at, with its dataset row. */
+export const migrationScales = migrationDataset.rows.map(([label]) => ({
+  label,
+  values: Object.fromEntries(
+    migrationDataset.columns
+      .slice(1)
+      .map((column) => [column, valuesOf(migrationDataset, label, [column])[0]]),
+  ),
+}));
+
+/** One series per scale, the backends as rows. */
+const migrationGroups = (
+  title: string,
+  backends: { label: string; backend: Backend }[],
+): BenchGroup[] => {
+  const table = resultsTable("schema-migration", title);
+  return [
+    {
+      rows: backends.map((backend) => ({
+        ...backend,
+        values: migrationScales.map(({ label }) => valuesOf(table, label, [backend.label])[0]),
+      })),
+    },
+  ];
+};
+
+export const migrationIdleGroups = migrationGroups("Migration time, idle (s)", migrationBackends);
+
+export const migrationWritersGroups = migrationGroups(
+  "Migration time, with schema v1 writers (s)",
+  migrationWriterBackends,
+);
+
+export const migrationStallGroups = migrationGroups(
+  "Longest schema v1 write stall (ms)",
+  migrationWriterBackends,
+);
+
+/** A row of a schema migration table as column → value, for the page's per-backend details. */
+export const migrationRow = (title: string, label: string): Record<string, number> => {
+  const table = resultsTable("schema-migration", title);
+  const columns = table.columns.slice(1);
+  return Object.fromEntries(
+    columns.map((column, index) => [column, valuesOf(table, label, columns)[index]]),
+  );
+};
+
 export const benchmarkEnvironment = (
   suite: string,
 ): { label: string; value: string; note?: string }[] =>

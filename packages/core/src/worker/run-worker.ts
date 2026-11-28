@@ -22,7 +22,7 @@ import type { BaseTxContext, StateJob } from "../state-adapter/state-adapter.ts"
 import { createTxEffects, registerTxEffects } from "../tx-effects/tx-effects.ts";
 import { type WorkerLeaseConfig, holdLease } from "./worker-lease.ts";
 
-export type StampedProcessor = Processor<any, any, any, any, any> & {
+export type StampedProcessor = Processor<any, any, any, any> & {
   readonly [processorAttemptMiddlewareSymbol]: readonly AnyAttemptMiddleware[];
 };
 
@@ -411,8 +411,10 @@ export const runWorker = async ({
         }
         await runAttempt({
           helpers,
-          attemptHandler: jobTypeProcessor.attemptHandler as AnyAttemptHandler,
-          batched: (jobTypeProcessor.batchLimit ?? 1) > 1,
+          attemptHandler: (typeof jobTypeProcessor.batchAttemptHandler === "function"
+            ? jobTypeProcessor.batchAttemptHandler
+            : jobTypeProcessor.attemptHandler) as AnyAttemptHandler,
+          batched: typeof jobTypeProcessor.batchAttemptHandler === "function",
           stateJobs,
           backoffConfig: jobTypeProcessor.backoffConfig ?? defaultBackoffConfig,
           workerId,

@@ -1,6 +1,6 @@
 import { chunk } from "@queuert/helpers/chunk";
 import { createLatch } from "@queuert/helpers/latch";
-import { type MigrationResult, createMigrator } from "@queuert/typed-sql";
+import type { MigrationResult } from "@queuert/typed-sql";
 import {
   type Page,
   type RetryConfig,
@@ -25,10 +25,6 @@ import {
 } from "queuert/internal";
 
 import { RedisTransactionConflictError } from "../errors.ts";
-import {
-  createRedisMigrationStore,
-  createRedisSchemaMigrations,
-} from "../migration-store/migration-store.redis.ts";
 import type { RedisStateProvider } from "../state-provider/state-provider.redis.ts";
 import { CLAIM_SCRIPT } from "./claim-script.ts";
 import {
@@ -42,13 +38,14 @@ import {
   decodeRecord,
   toSchemaFencedError,
 } from "./redis-transaction.ts";
+import { migrateRedisSchemaToLatest } from "./state-schema.migrations.redis.ts";
 import {
   type IndexEntries,
   SCHEMA_VERSION,
   createRedisSchema,
   dueJobId,
   opaqueRecordFields,
-} from "./schema.redis.ts";
+} from "./state-schema.redis.ts";
 
 type BlockerEntry = { blockedByChainId: string; index: number; traceContext: string | null };
 
@@ -1640,15 +1637,7 @@ export const createRedisStateAdapter = ({
       closed.throwIfTripped();
       const withTransaction = async <T>(fn: (txCtx: RedisStoreContext) => Promise<T>) =>
         runTransaction(async (tx) => fn({ transaction: tx }));
-      return createMigrator({
-        migrations: createRedisSchemaMigrations({ schema, stateProvider, withTransaction }),
-        store: createRedisMigrationStore({
-          stateProvider,
-          withTransaction,
-          migrationsKey: keys.migrations,
-          migrationLockKey: keys.migrationLock,
-        }),
-      }).migrateToLatest();
+      return migrateRedisSchemaToLatest({ schema, stateProvider, withTransaction });
     },
 
     close: async () => {

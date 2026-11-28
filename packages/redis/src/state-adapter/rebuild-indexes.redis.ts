@@ -1,10 +1,6 @@
-import { decodeRecord } from "../state-adapter/redis-transaction.ts";
-import {
-  type IndexEntries,
-  type RedisSchema,
-  indexKeyHeads,
-} from "../state-adapter/schema.redis.ts";
 import type { RedisStateProvider } from "../state-provider/state-provider.redis.ts";
+import { decodeRecord } from "./redis-transaction.ts";
+import { type IndexEntries, type RedisSchema, indexKeyHeads } from "./state-schema.redis.ts";
 
 const SCAN_RECORDS_SCRIPT = `
 local result = redis.call('SCAN', ARGV[1], 'MATCH', ARGV[2], 'COUNT', ARGV[3])

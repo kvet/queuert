@@ -2,7 +2,10 @@ import { runDeploymentProcess } from "@queuert/helpers/testing";
 import { type Migration, createMigrator, createTemplateApplier } from "@queuert/typed-sql";
 import { Pool } from "pg";
 
-import { createMigrationStore, createSchemaMigrations } from "../state-adapter/state-adapter.pg.ts";
+import {
+  createMigrationStore,
+  createSchemaMigrations,
+} from "../state-adapter/state-schema.migrations.pg.ts";
 import {
   type PgPoolContext,
   createPgPoolProvider,

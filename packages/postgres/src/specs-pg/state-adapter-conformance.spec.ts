@@ -9,6 +9,7 @@ import {
   pgStateProviderConformanceGroups,
 } from "../conformance/state-provider-conformance.ts";
 import {
+  strictIsolationTransactionRetry,
   withPgPoolNonTransactionContext,
   withPgPoolSavepoint,
 } from "../state-provider/state-provider.pg-pool.spec-helper.ts";
@@ -39,6 +40,7 @@ const createIsolationLevelIt = (defaultTransactionIsolation: string) =>
       createStateProvider: async () => createPgPoolProvider({ pool }),
       withNonTransactionContext: withPgPoolNonTransactionContext(pool),
       withSavepoint: withPgPoolSavepoint,
+      stateAdapterOptions: { transactionRetry: strictIsolationTransactionRetry },
     });
   });
 

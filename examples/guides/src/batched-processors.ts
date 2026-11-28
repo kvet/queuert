@@ -62,7 +62,7 @@ const processors = createProcessors({
     // #region shared-commit
     "send-welcome-email": {
       batchLimit: 50,
-      attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+      batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
         // #hide
         batchSizes.push(jobs.length);
         // #endhide
@@ -89,7 +89,7 @@ const processors = createProcessors({
     // #region independent-jobs
     "sync-to-crm": {
       batchLimit: 20,
-      attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+      batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
         await Promise.allSettled(
           jobs.map(async (job) => {
             const outcome = await crm.upsertContact(job.input.userId, { signal: job.signal }).then(

@@ -257,7 +257,9 @@ const Page = () => (
           The <code>{"{prefix}"}write_lock</code> table is always empty: every migration transaction
           starts with a no-op write to it, which takes SQLite's write lock before the transaction
           reads anything, whatever <code>BEGIN</code> the provider sends. Reads that lock chains,
-          jobs or workers inside a transaction make the same no-op write first.
+          jobs or workers inside a transaction make the same no-op write first. On an empty database
+          it creates the latest schema in one step and records every schema migration as applied; a
+          database an earlier release created runs only the migrations it is missing.
         </p>
         <p>
           The migrator behind <code>migrateToLatest()</code> is exported for your own tables too;
@@ -445,8 +447,8 @@ const Page = () => (
           <code>SchemaFencedError</code> and changes nothing, instead of corrupting state.{" "}
           <code>002_schema_v2</code> also converts <code>last_attempt_error</code> to plain text, so
           code older than it fails to read a job that holds an error. Older workers report the
-          errors through <code>workerError</code> and keep retrying. Stop them once you have
-          deployed the newer version.
+          errors through <code>workerError</code> and keep retrying, so a rolling deployment
+          replaces them without stopping them first.
         </p>
       </Details>
       <Details summary={<span id="testing-your-provider">Testing your provider</span>}>

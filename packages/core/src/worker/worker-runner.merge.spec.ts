@@ -176,15 +176,15 @@ describe("createProcessors", () => {
   });
 
   it("includes processor handlers accessible by key", () => {
-    const handler = orderProcessors["orders.create"].attemptHandler;
+    const processor = orderProcessors["orders.create"];
     const jobTypes = createProcessors({
       client,
       jobTypes: orderJobTypes,
       processors: {
-        "orders.create": { attemptHandler: handler },
+        "orders.create": processor,
       },
     });
-    expect(jobTypes["orders.create"].attemptHandler).toBe(handler);
+    expect(jobTypes["orders.create"].attemptHandler).toBe(processor.attemptHandler);
     expect(jobTypes["orders.fulfill"]).toBeUndefined();
   });
 

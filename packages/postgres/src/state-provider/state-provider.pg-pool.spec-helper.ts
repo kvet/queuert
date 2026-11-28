@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import type { RetryConfig } from "queuert";
 
 import type { PgPoolContext } from "./state-provider.pg-pool.ts";
 
@@ -12,6 +13,13 @@ export const withPgPoolNonTransactionContext =
       poolClient.release();
     }
   };
+
+export const strictIsolationTransactionRetry: RetryConfig = {
+  maxTries: 30,
+  initialDelayMs: 10,
+  multiplier: 2,
+  maxDelayMs: 100,
+};
 
 export const withPgPoolSavepoint = async <T>(
   txCtx: PgPoolContext,

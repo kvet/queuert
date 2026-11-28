@@ -55,6 +55,7 @@ export const createPgPoolStateProvider = ({
       const driverError = error as { code?: unknown; message?: unknown } | undefined;
       if (driverError?.code === "40001" || driverError?.code === "40P01")
         return { kind: "transaction_conflict" };
+      if (driverError?.code === "55P03") return { kind: "lock_not_available" };
       if (driverError?.code !== "42P01") return undefined;
       const tableName = /relation "([^"]+)" does not exist/.exec(String(driverError.message))?.[1];
       return tableName === undefined ? undefined : { kind: "undefined_table", tableName };

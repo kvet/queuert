@@ -5,11 +5,15 @@ sidebar:
   order: 3
 ---
 
-A processor with a `batchLimit` above 1 receives up to that many jobs of its type in one handler call, so it can do its side of the work in bulk — one API call, one query — and settle the jobs together or one by one. Processors without `batchLimit`, or with `batchLimit: 1`, receive one job per call.
+A processor with a `batchAttemptHandler` receives up to `batchLimit` jobs of its type in one handler call, so it can do its side of the work in bulk — one API call, one query — and settle the jobs together or one by one. Processors with an `attemptHandler` receive one job per call.
+
+:::caution[Experimental]
+`batchAttemptHandler` and `batchLimit` are experimental: their API may change in a minor release.
+:::
 
 Settling a batch in one transaction pays the database round trip once per batch instead of once per job: on PostgreSQL, batches of 100 complete about an order of magnitude more jobs per second than single-job attempts (see [batched completion](/queuert/benchmarks/processing-capacity/#batched-completion)).
 
-The handler receives `jobs`, `applyJobOutcomes` and `fenceJobs`. Every job of the batch has its own attempt and its own `job.signal`, and settles once an `applyJobOutcomes` call that names it commits. Each item of `applyJobOutcomes` names a job of the batch as `job` next to one outcome: `output`, `continueWith`, `reschedule` (with an optional `reason`), or `fail`. It returns the committed jobs in the order of its items, each typed by its own item's outcome.
+The `batchAttemptHandler` receives `jobs`, `applyJobOutcomes` and `fenceJobs`. Every job of the batch has its own attempt and its own `job.signal`, and settles once an `applyJobOutcomes` call that names it commits. Each item of `applyJobOutcomes` names a job of the batch as `job` next to one outcome: `output`, `continueWith`, `reschedule` (with an optional `reason`), or `fail`. It returns the committed jobs in the order of its items, each typed by its own item's outcome.
 
 ## Settling a batch together
 
@@ -42,6 +46,6 @@ When each job is its own piece of work, give each its own transaction, so one jo
 
 The worker runner never waits for a batch to fill. It takes up to `batchLimit` jobs of the type that are due when it looks, so a quiet queue runs small batches and a backlog runs full ones. All jobs of a batch have one type, and a batch takes one slot of the worker runner's `concurrency` until its handler returns: `concurrency: 4` with `batchLimit: 50` runs up to four handlers and 200 jobs at once. Each job of a batch still gets its own attempt log entries, which carry the slot as `workerSlot`, and its own `start job-attempt.{type}` span, which carries it as `queuert.worker.slot`.
 
-A `batchLimit` typed as a plain `number`, read from configuration for example, may be 1 at runtime, so its handler receives either shape: `jobs` and `applyJobOutcomes`, or `job` and `applyJobOutcome`. Check `jobs` before using either.
+`batchLimit` is required next to `batchAttemptHandler` and allowed nowhere else. It sets only the batch size: `batchLimit: 1` gives the handler batches of one job.
 
 [Job attempt middleware](/queuert/guides/middleware/) wraps the whole handler call: `wrapHandler` receives every job in `jobs`.

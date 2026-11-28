@@ -251,10 +251,10 @@ const Page = () => (
       Every insert, update or delete of a job, a blocker or a worker is fenced by the adapter's
       schema version. A breaking migration, such as <code>002_schema_v2</code>, removes the fence of
       older versions, so code older than the schema fails each write with{" "}
-      <code>SchemaFencedError</code> and changes nothing, instead of corrupting state. Reads still
-      work, and older workers report the error through <code>workerError</code> and keep retrying.
-      Stop them once you have deployed the newer version. What the fence is differs by backend: see
-      the Write fence section of each adapter's page.
+      <code>SchemaFencedError</code> and changes nothing, instead of corrupting state. Older workers
+      report the error through <code>workerError</code> and keep retrying, so a rolling deployment
+      replaces them without stopping them first. What the fence is differs by backend: see the Write
+      fence section of each adapter's page.
     </p>
 
     <h2 id="testing-your-provider">Testing your provider</h2>

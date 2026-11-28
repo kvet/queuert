@@ -171,7 +171,7 @@ export const createWorkerRunner = <
   workerId?: GetStateAdapterWorkerId<TStateAdapter>;
   /**
    * Maximum number of attempt handler calls to run in parallel: one job each, or one batch for a
-   * processor with a `batchLimit` above 1. Must be a positive integer.
+   * `batchAttemptHandler`. Must be a positive integer.
    *
    * @defaultValue `1`
    */

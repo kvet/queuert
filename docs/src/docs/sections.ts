@@ -154,6 +154,7 @@ export const siteSections: SiteSection[] = [
           "benchmarks/query-performance",
           "benchmarks/type-complexity",
           "benchmarks/runtime-performance",
+          "benchmarks/schema-migration",
         ],
       },
       {

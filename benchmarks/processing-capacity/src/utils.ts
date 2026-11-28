@@ -153,7 +153,7 @@ const measureWorkerWindow = async (
 };
 
 const completeChainsForWindow =
-  (concurrency: number, batchLimit: number) =>
+  (concurrency: number, batchLimit: number | undefined) =>
   async (context: BenchmarkContext): Promise<Measurement> => {
     const { transaction } = context;
     await seedChains(context);
@@ -161,31 +161,42 @@ const completeChainsForWindow =
       total: SEED_COUNT,
       concurrency,
       processors: (onSettled) =>
-        context.createProcessors({
-          client: context.client,
-          jobTypes,
-          processors: {
-            "test-job": {
-              batchLimit,
-              attemptHandler: async (options) => {
-                // oxlint-disable-next-line typescript/promise-function-async -- a sync client's applyJobOutcome returns a plain value
-                await transaction((txCtx, txHooks) =>
-                  options.jobs
-                    ? options.applyJobOutcomes({
+        batchLimit === undefined
+          ? context.createProcessors({
+              client: context.client,
+              jobTypes,
+              processors: {
+                "test-job": {
+                  attemptHandler: async ({ applyJobOutcome }) => {
+                    // oxlint-disable-next-line typescript/promise-function-async -- a sync client's applyJobOutcome returns a plain value
+                    await transaction((txCtx, txHooks) =>
+                      applyJobOutcome({ ...txCtx, txHooks, output: { done: true } }),
+                    );
+                    onSettled(1);
+                  },
+                },
+              },
+            })
+          : context.createProcessors({
+              client: context.client,
+              jobTypes,
+              processors: {
+                "test-job": {
+                  batchLimit,
+                  batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
+                    // oxlint-disable-next-line typescript/promise-function-async -- a sync client's applyJobOutcomes returns a plain value
+                    await transaction((txCtx, txHooks) =>
+                      applyJobOutcomes({
                         ...txCtx,
                         txHooks,
-                        items: options.jobs.map((job) => ({
-                          job,
-                          output: { done: true as const },
-                        })),
-                      })
-                    : options.applyJobOutcome({ ...txCtx, txHooks, output: { done: true } }),
-                );
-                onSettled(options.jobs?.length ?? 1);
+                        items: jobs.map((job) => ({ job, output: { done: true as const } })),
+                      }),
+                    );
+                    onSettled(jobs.length);
+                  },
+                },
               },
-            },
-          },
-        }),
+            }),
     });
   };
 
@@ -338,7 +349,7 @@ const deleteChainsForWindow =
 
 type ScenarioSpec =
   | { kind: "create"; unit: "chains"; batchSize: number }
-  | { kind: "complete"; unit: "jobs"; concurrency: number; batchLimit: number }
+  | { kind: "complete"; unit: "jobs"; concurrency: number; batchLimit: number | undefined }
   | { kind: "continue"; unit: "jobs" }
   | { kind: "fan-in"; unit: "jobs" }
   | { kind: "delete"; unit: "chains"; batchSize: number };
@@ -351,7 +362,7 @@ const scenarios: Record<string, ScenarioSpec> = {
   ...Object.fromEntries(
     NOOP_CONCURRENCY_LEVELS.map((concurrency): [string, ScenarioSpec] => [
       `complete-noop-${concurrency}`,
-      { kind: "complete", unit: "jobs", concurrency, batchLimit: 1 },
+      { kind: "complete", unit: "jobs", concurrency, batchLimit: undefined },
     ]),
   ),
   ...Object.fromEntries(

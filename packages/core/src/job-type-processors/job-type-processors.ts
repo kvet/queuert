@@ -8,93 +8,54 @@ import type { JobTypeNames, JobTypeReachingEntry } from "../job-types/job-types.
 import type { StateAdapter } from "../state-adapter/state-adapter.ts";
 
 /**
- * Configuration for processing a single job type.
- *
- * Without `batchLimit`, or with `batchLimit: 1`, the `attemptHandler` receives one `job` per call.
- * With a larger `batchLimit`, it receives `jobs`: up to `batchLimit` jobs of the type that are due
- * when the worker runner looks, never waiting for more, each with its own attempt, in one call that
- * takes one worker runner concurrency slot. A `batchLimit` typed as a plain `number` gives the
- * handler either shape, decided by its value at runtime.
+ * Configuration for processing a single job type: either an `attemptHandler`, called with one
+ * `job` per call, or a `batchAttemptHandler` with a `batchLimit`, called with `jobs`: up to
+ * `batchLimit` jobs of the type that are due when the worker runner looks, never waiting for more,
+ * each with its own attempt, in one call that takes one worker runner concurrency slot.
  */
 export type Processor<
   TStateAdapter extends StateAdapter<any, any, any, Mode>,
   TJobTypeDefinitions extends BaseJobTypeDefinitions,
   TJobTypeName extends string,
   THandlerCtx,
-  TBatchLimit,
-> = {
-  /**
-   * The most jobs one handler call processes: a positive integer. Above 1, opts the processor
-   * into batches.
-   */
-  batchLimit?: TBatchLimit;
-  /** Handler function called for each job attempt, or each batch of job attempts */
-  attemptHandler: ProcessorAttemptHandler<
-    TStateAdapter,
-    TJobTypeDefinitions,
-    TJobTypeName,
-    JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
-    THandlerCtx,
-    TBatchLimit
-  >;
-  /** Per-job-type backoff configuration (overrides registry/worker runner defaults) */
-  backoffConfig?: BackoffConfig;
-};
-
-type ProcessorAttemptHandler<
-  TStateAdapter extends StateAdapter<any, any, any, Mode>,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TJobTypeName extends string,
-  TChainTypeName extends string,
-  THandlerCtx,
-  TBatchLimit,
-> = unknown extends TBatchLimit
-  ? AttemptHandler<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TChainTypeName, THandlerCtx>
-  : [TBatchLimit] extends [1 | undefined]
-    ? AttemptHandler<TStateAdapter, TJobTypeDefinitions, TJobTypeName, TChainTypeName, THandlerCtx>
-    : 1 extends TBatchLimit
-      ? EitherAttemptHandler<
-          TStateAdapter,
-          TJobTypeDefinitions,
-          TJobTypeName,
-          TChainTypeName,
-          THandlerCtx
-        >
-      : BatchAttemptHandler<
-          TStateAdapter,
-          TJobTypeDefinitions,
-          TJobTypeName,
-          TChainTypeName,
-          THandlerCtx
-        >;
-
-type EitherAttemptHandler<
-  TStateAdapter extends StateAdapter<any, any, any, Mode>,
-  TJobTypeDefinitions extends BaseJobTypeDefinitions,
-  TJobTypeName extends string,
-  TChainTypeName extends string,
-  THandlerCtx,
-> = (
-  processOptions:
-    | (Parameters<
-        AttemptHandler<
-          TStateAdapter,
-          TJobTypeDefinitions,
-          TJobTypeName,
-          TChainTypeName,
-          THandlerCtx
-        >
-      >[0] & { jobs?: never })
-    | (Parameters<
-        BatchAttemptHandler<
-          TStateAdapter,
-          TJobTypeDefinitions,
-          TJobTypeName,
-          TChainTypeName,
-          THandlerCtx
-        >
-      >[0] & { job?: never }),
-) => Promise<void>;
+> =
+  | {
+      /**
+       * Handler function called for each batch of job attempts.
+       *
+       * @experimental
+       */
+      batchAttemptHandler: BatchAttemptHandler<
+        TStateAdapter,
+        TJobTypeDefinitions,
+        TJobTypeName,
+        JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
+        THandlerCtx
+      >;
+      /**
+       * The most jobs one `batchAttemptHandler` call processes: a positive integer.
+       *
+       * @experimental
+       */
+      batchLimit: number;
+      attemptHandler?: never;
+      /** Per-job-type backoff configuration (overrides registry/worker runner defaults) */
+      backoffConfig?: BackoffConfig;
+    }
+  | {
+      /** Handler function called for each job attempt */
+      attemptHandler: AttemptHandler<
+        TStateAdapter,
+        TJobTypeDefinitions,
+        TJobTypeName,
+        JobTypeReachingEntry<TJobTypeDefinitions, TJobTypeName>,
+        THandlerCtx
+      >;
+      batchAttemptHandler?: never;
+      batchLimit?: never;
+      /** Per-job-type backoff configuration (overrides registry/worker runner defaults) */
+      backoffConfig?: BackoffConfig;
+    };
 
 /**
  * Symbol used to carry phantom job type definitions on a processor registry.
@@ -134,7 +95,7 @@ export type Processors<
   TJobTypeDefinitions extends BaseJobTypeDefinitions = BaseJobTypeDefinitions,
   TAttemptMiddleware extends readonly AnyAttemptMiddleware[] = readonly AnyAttemptMiddleware[],
 > = {
-  readonly [K in JobTypeNames<TJobTypeDefinitions>]: Processor<any, any, any, any, any>;
+  readonly [K in JobTypeNames<TJobTypeDefinitions>]: Processor<any, any, any, any>;
 } & {
   readonly [processorsDefinitionsSymbol]: TJobTypeDefinitions;
   readonly [processorsMiddlewareSymbol]: TAttemptMiddleware;

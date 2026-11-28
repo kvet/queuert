@@ -25,7 +25,7 @@ import { Arrow, Diagram, Flow, Group, Node } from "../../../components/diagram";
   </Flow>
 </Diagram>
 
-A middleware has a single hook, `wrapHandler`, which wraps the whole attempt handler. It receives the handler call's `jobs` — one job, or every job of the batch for a [batched processor](/queuert/guides/batched-processors/) — and a `next(ctx)` call that yields the inner layer; the object passed to `next` is merged into the `attemptHandler` options, and its type flows into the handler signature. `next` resolves once the handler returns and rejects with the handler's error; each job's attempt counts as completed once the attempt handler's `applyJobOutcome` or `applyJobOutcomes` call that settles it commits.
+A middleware has a single hook, `wrapHandler`, which wraps the whole attempt handler. It receives the handler call's `jobs` — one job, or every job of the batch for a [batched processor](/queuert/guides/batched-processors/) — and a `next(ctx)` call that yields the inner layer; the object passed to `next` is merged into the handler's options, `attemptHandler` or `batchAttemptHandler`, and its type flows into the handler signature. `next` resolves once the handler returns and rejects with the handler's error; each job's attempt counts as completed once the attempt handler's `applyJobOutcome` or `applyJobOutcomes` call that settles it commits.
 
 See the [`AttemptMiddleware` API reference](/queuert/api/core/type-aliases/attemptmiddleware/) for the full type definition.
 

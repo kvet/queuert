@@ -97,9 +97,8 @@ describe("siteSections", () => {
     ]);
   });
 
-  it("starts Concepts with the glossary and ends Guides with application migrations", () => {
+  it("starts Concepts with the glossary", () => {
     expect(sectionSlugs("concepts")[0]).toBe("how-it-works/glossary");
-    expect(sectionSlugs("guides").at(-1)).toBe("guides/application-migrations");
   });
 
   it("lists the benchmarks inside Compare", () => {

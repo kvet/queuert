@@ -3,12 +3,12 @@ import { acquireRedis, acquireRedisCluster } from "@queuert/testcontainers";
 import { Cluster, Redis } from "ioredis";
 import { it as baseIt, describe, expect } from "vitest";
 
-import { rebuildIndexes } from "../migration-store/rebuild-indexes.redis.ts";
-import { createRedisSchema, indexKeyHeads } from "../state-adapter/schema.redis.ts";
+import { rebuildIndexes } from "../state-adapter/rebuild-indexes.redis.ts";
 import {
   type RedisStateAdapter,
   createRedisStateAdapter,
 } from "../state-adapter/state-adapter.redis.ts";
+import { createRedisSchema, indexKeyHeads } from "../state-adapter/state-schema.redis.ts";
 import type { RedisStateProvider } from "../state-provider/state-provider.redis.ts";
 import { createIoredisClusterStateProvider } from "./state-provider.ioredis-cluster.ts";
 import { createIoredisStateProvider } from "./state-provider.ioredis.ts";

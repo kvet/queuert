@@ -92,7 +92,7 @@ const Page = () => (
       clients="pg, postgres.js, Bun SQL, PGlite, Drizzle, Kysely, Prisma, Knex, MikroORM"
       isolation={
         <>
-          READ COMMITTED, REPEATABLE READ or SERIALIZABLE; see{" "}
+          READ COMMITTED; REPEATABLE READ or SERIALIZABLE, experimental; see{" "}
           <a href="#isolation-level">Isolation levels</a>
         </>
       }
@@ -260,7 +260,9 @@ const Page = () => (
           The adapter creates its schema via <code>migrateToLatest()</code>. All objects live under
           a configurable PostgreSQL <code>schema</code> (default: <code>public</code>) with a table
           name prefix (default: <code>queuert_</code>, shown as <code>{"{prefix}"}</code>) for
-          namespace isolation.
+          namespace isolation. On an empty database it creates the latest schema in one step and
+          records every schema migration as applied; a database an earlier release created runs only
+          the migrations it is missing.
         </p>
         <p>
           The migrator behind <code>migrateToLatest()</code> is exported for your own tables too;
@@ -299,6 +301,10 @@ const Page = () => (
           reclaiming the acquiring worker both write the worker row. At READ COMMITTED the second
           transaction waits and re-reads the row; at the stricter levels it fails with a
           serialization failure (SQLSTATE <code>40001</code>).
+        </p>
+        <p>
+          REPEATABLE READ and SERIALIZABLE are experimental: how Queuert behaves at them may change
+          in a minor release.
         </p>
         <ul>
           <li>
@@ -382,14 +388,14 @@ const Page = () => (
           <code>createPgStateProviderConformanceCases</code> returns the cases, ready to run: every
           case a state adapter must pass, the cases that hold two transactions open at once, checks
           of the schema write fence, and checks that <code>classifyError</code> names a missing
-          table and reports a serialization failure, and that <code>withTransaction</code> runs no
-          statement before its callback. The cases run at the isolation level of your provider's
-          transactions; to cover several levels, create the cases once per level, over providers
-          whose connections default to it. A provider that runs every transaction on one connection,
-          such as PGlite, passes <code>singleConnection: true</code>, which leaves out the cases
-          that need a second transaction to run while the first is still open. The factory,{" "}
-          <code>withNonTransactionContext</code>, the optional <code>withSavepoint</code> and the
-          per-case adapter work as described in{" "}
+          table and reports a serialization failure and a lock timeout, and that{" "}
+          <code>withTransaction</code> runs no statement before its callback. The cases run at the
+          isolation level of your provider's transactions; to cover several levels, create the cases
+          once per level, over providers whose connections default to it. A provider that runs every
+          transaction on one connection, such as PGlite, passes <code>singleConnection: true</code>,
+          which leaves out the cases that need a second transaction to run while the first is still
+          open. The factory, <code>withNonTransactionContext</code>, the optional{" "}
+          <code>withSavepoint</code> and the per-case adapter work as described in{" "}
           <a href={siteHref("/integrations/state-adapters/#testing-your-provider")}>
             Testing your provider
           </a>

@@ -11,8 +11,8 @@ import {
   toConformanceTestCases,
 } from "queuert/conformance-internal";
 
-import { SCHEMA_VERSION } from "../state-adapter/schema.redis.ts";
 import { createRedisStateAdapter } from "../state-adapter/state-adapter.redis.ts";
+import { SCHEMA_VERSION } from "../state-adapter/state-schema.redis.ts";
 import type { RedisStateProvider } from "../state-provider/state-provider.redis.ts";
 
 export type RedisStateProviderConformanceContext = SchemaFenceConformanceContext & {

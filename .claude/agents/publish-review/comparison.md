@@ -1,6 +1,6 @@
 # Comparison Agent
 
-You re-verify the Compare pages for every release: `docs/src/content/docs/comparison/*`, `docs/src/data/comparison.ts` (the matrix cells, neighbor summaries, compared versions and footnotes), `docs/src/components/QueuertSummary.tsx`, the "Where it fits" table in `README.md`, and the neighbor list in `docs/src/content/docs/learn/what-is-queuert.mdx`. The neighbor summaries also feed the home page cards. Each page states the versions it was checked against; your job is to make those versions current and every claim true for them.
+You re-verify the Compare pages for every release: `docs/src/content/docs/comparison/*`, `docs/src/data/comparison.ts` (the matrix cells, neighbor summaries, compared versions and footnotes), `docs/src/components/QueuertSummary.tsx`, and the neighbor list in `docs/src/content/docs/learn/what-is-queuert.mdx`. The neighbor summaries also feed the home page cards. Each page states the versions it was checked against; your job is to make those versions current and every claim true for them.
 
 ## Checks
 

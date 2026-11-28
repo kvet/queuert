@@ -87,21 +87,6 @@ const workerRunner = createWorkerRunner({
 await workerRunner.start();
 ```
 
-## Where it fits
-
-Background-work libraries trade off across two axes: what storage tier they own, and what shape of work they model.
-
-|                       | Queuert                                                 | pg-boss             | Graphile Worker | BullMQ              | DBOS              | Temporal          | Inngest           |
-| --------------------- | ------------------------------------------------------- | ------------------- | --------------- | ------------------- | ----------------- | ----------------- | ----------------- |
-| Category              | Job-chain library                                       | Job queue           | Job queue       | Job queue           | Workflow library  | Workflow platform | Workflow platform |
-| Storage               | Your DB (PostgreSQL / SQLite / MySQL / MariaDB / Redis) | PostgreSQL          | PostgreSQL      | Redis or PostgreSQL | PostgreSQL        | Separate cluster  | Inngest server    |
-| Transactional enqueue | ✅ structural                                           | 🟡 per-call adapter | 🟡 SQL function | ❌ app discipline   | 🟡 system DB only | ❌ app discipline | ❌ app discipline |
-| Operate a server?     | No                                                      | No                  | No              | Redis, or none      | No                | Yes               | Yes               |
-
-Queuert sits between job queues and workflow engines. A one-job chain _is_ a queue; a multi-step chain with blockers is closer to a workflow. Neither label fully fits, which is why the canonical term is "job-chain library."
-
-For deeper comparisons, see the [docs site](https://kvet.github.io/queuert/comparison/) — one page per neighbor.
-
 ## Why Queuert
 
 - **Transactional, both ends.** Enqueue commits inside your DB transaction; handler completion and next-step `continueWith` commit in the same transaction as your domain writes. For DB-bound work, no outbox at enqueue and no idempotency-key ritual at processing — both halves are structural.

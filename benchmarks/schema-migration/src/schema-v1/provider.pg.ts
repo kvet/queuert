@@ -1,0 +1,77 @@
+import type { PgStateProvider } from "@queuert/postgres-schema-v1";
+import type { Pool, PoolClient } from "pg";
+import { type TxHooks, withTxHooks } from "queuert-schema-v1";
+
+export type PgPoolContext = { poolClient: PoolClient; txHooks: TxHooks };
+
+export const createPgPoolStateProvider = ({
+  pool,
+  prepareStatements = true,
+}: {
+  pool: Pool;
+  /**
+   * When true (default), queries that arrive with an `id` are sent as named
+   * prepared statements (`name = id`), letting pg cache the parsed plan per
+   * connection. The adapter folds template variants into `id`, so it uniquely
+   * identifies the resolved SQL. Set to `false` for transaction-mode poolers
+   * (PgBouncer, Supavisor) where named statements break across pooled sessions.
+   */
+  prepareStatements?: boolean;
+}): PgStateProvider<PgPoolContext> => {
+  const exec = async (
+    client: PoolClient,
+    id: string | undefined,
+    sql: string,
+    params: unknown[],
+  ): Promise<unknown[]> => {
+    if (id !== undefined && prepareStatements) {
+      const result = await client.query({ name: id, text: sql, values: params });
+      return result.rows;
+    }
+    const result = await client.query(sql, params);
+    return result.rows;
+  };
+
+  return {
+    withTransaction: async (cb) =>
+      withTxHooks(async (txHooks) => {
+        const poolClient = await pool.connect();
+        try {
+          await poolClient.query("BEGIN ISOLATION LEVEL READ COMMITTED");
+          const result = await cb({ poolClient, txHooks });
+          await poolClient.query("COMMIT");
+          return result;
+        } catch (error) {
+          await poolClient.query("ROLLBACK").catch(() => {});
+          throw error;
+        } finally {
+          poolClient.release();
+        }
+      }),
+    isTransaction: (txCtx) => {
+      const status = txCtx.poolClient.getTransactionStatus();
+      return status === "T" || status === "E";
+    },
+    onTransactionCommit: (txCtx, callback) => {
+      txCtx.txHooks.onCommit(callback);
+    },
+    onTransactionRollback: (txCtx, callback) => {
+      txCtx.txHooks.onRollback(callback);
+    },
+    classifyError: ({ error }) => {
+      const driverError = error as { code?: unknown; message?: unknown } | undefined;
+      if (driverError?.code !== "42P01") return undefined;
+      const tableName = /relation "([^"]+)" does not exist/.exec(String(driverError.message))?.[1];
+      return tableName === undefined ? undefined : { kind: "undefined_table", tableName };
+    },
+    executeSql: async ({ txCtx, id, sql, params }) => {
+      if (txCtx) return exec(txCtx.poolClient, id, sql, params);
+      const poolClient = await pool.connect();
+      try {
+        return await exec(poolClient, id, sql, params);
+      } finally {
+        poolClient.release();
+      }
+    },
+  };
+};

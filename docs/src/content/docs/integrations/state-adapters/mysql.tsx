@@ -166,7 +166,7 @@ const Page = () => (
       clients="mysql2, mariadb, Bun SQL, Drizzle, Kysely, Prisma, Knex, MikroORM"
       isolation={
         <>
-          READ COMMITTED, REPEATABLE READ or SERIALIZABLE; see{" "}
+          READ COMMITTED; REPEATABLE READ or SERIALIZABLE, experimental; see{" "}
           <a href="#isolation-level">Isolation levels</a>
         </>
       }
@@ -347,7 +347,9 @@ const Page = () => (
           database or the configured <code>schema</code>, with a table name prefix (default:{" "}
           <code>queuert_</code>, shown as <code>{"{prefix}"}</code>). DDL commits implicitly on both
           servers, so no migration is atomic: every schema statement is idempotent, and a run that
-          stopped partway resumes where it stopped.
+          stopped partway resumes where it stopped. On an empty database it creates the latest
+          schema in one step and records every schema migration as applied; a database an earlier
+          release created runs only the migrations it is missing.
         </p>
         <p>
           Type names, deduplication keys and text ids use an exact, NO PAD binary collation (
@@ -395,6 +397,10 @@ const Page = () => (
           is a locking read, which sees the latest committed row at any level: attaching a
           dependent, completing its blocker and deleting the blocker all lock the blocker's head
           job.
+        </p>
+        <p>
+          REPEATABLE READ and SERIALIZABLE are experimental: how Queuert behaves at them may change
+          in a minor release.
         </p>
         <ul>
           <li>

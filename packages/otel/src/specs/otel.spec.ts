@@ -505,7 +505,7 @@ describe("Metrics", () => {
         processors: {
           test: {
             batchLimit: 5,
-            attemptHandler: async ({ jobs, applyJobOutcomes }) => {
+            batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
               await withTransaction(async (txCtx) =>
                 applyJobOutcomes({
                   ...txCtx,

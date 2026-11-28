@@ -152,6 +152,9 @@ export const stateProviderMembers = (dialect: "postgres" | "sqlite" | "mysql"): 
             It returns <code>{'{ kind: "transaction_conflict" }'}</code> for a serialization failure
             (SQLSTATE <code>40001</code>) or a deadlock (<code>40P01</code>), which the adapter
             retries in the work it runs itself; see <a href="#isolation-level">Isolation level</a>.
+            It returns <code>{'{ kind: "lock_not_available" }'}</code> for a lock that{" "}
+            <code>lock_timeout</code> or <code>NOWAIT</code> gave up on (<code>55P03</code>), which
+            the schema migrations retry.
           </>
         ) : dialect === "mysql" ? (
           <>

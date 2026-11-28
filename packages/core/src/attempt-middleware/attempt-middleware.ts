@@ -20,8 +20,8 @@ type RunningJob<TStateAdapter extends StateAdapter<any, any, any, Mode>> = Resol
  * Wraps job processing with cross-cutting logic.
  *
  * `wrapHandler` wraps the entire attempt handler. It receives the handler call's `jobs`: one job,
- * or every job of the batch for a processor with a `batchLimit` above 1. The `next(ctx)` callback
- * runs the inner layers with typed context merged into `attemptHandler`'s options, and resolves
+ * or every job of the batch for a `batchAttemptHandler`. The `next(ctx)` callback
+ * runs the inner layers with typed context merged into the handler's options (`attemptHandler` or `batchAttemptHandler`), and resolves
  * once the handler returns; a handler's throw rejects it. Each job's outcome is decided by the
  * attempt handler's `applyJobOutcome` or `applyJobOutcomes` call that committed it.
  *

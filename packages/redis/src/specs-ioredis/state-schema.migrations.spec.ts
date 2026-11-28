@@ -1,12 +1,18 @@
 // oxlint-disable no-empty-pattern -- vitest fixtures must destructure their context
 import { acquireRedis } from "@queuert/testcontainers";
+import { createMigrator } from "@queuert/typed-sql";
 import { Redis } from "ioredis";
 import { SchemaFencedError } from "queuert";
 import { it as baseIt, describe, expect } from "vitest";
 
-import { createRedisSchemaMigrations } from "../migration-store/migration-store.redis.ts";
-import { createRedisSchema } from "../state-adapter/schema.redis.ts";
+import { createRedisMigrationStore } from "../migration-store/migration-store.redis.ts";
+import {
+  type RedisStoreContext,
+  createRedisTransaction,
+} from "../state-adapter/redis-transaction.ts";
 import { createRedisStateAdapter } from "../state-adapter/state-adapter.redis.ts";
+import { createRedisSchemaMigrations } from "../state-adapter/state-schema.migrations.redis.ts";
+import { createRedisSchema, opaqueRecordFields } from "../state-adapter/state-schema.redis.ts";
 import type { RedisStateProvider } from "../state-provider/state-provider.redis.ts";
 import { createIoredisStateProvider } from "./state-provider.ioredis.ts";
 
@@ -26,10 +32,55 @@ const it = baseIt.extend("setup", async ({}, { onCleanup }) => {
     await client.quit();
   });
   const keyPrefix = `{queuert-${crypto.randomUUID()}}:`;
-  const createStateAdapter = () =>
-    createRedisStateAdapter({ stateProvider: createIoredisStateProvider({ client }), keyPrefix });
+  const createStateAdapter = (
+    stateProvider: RedisStateProvider = createIoredisStateProvider({ client }),
+  ) => createRedisStateAdapter({ stateProvider, keyPrefix });
   return { client, keyPrefix, createStateAdapter };
 });
+
+const migrateThroughHistory = async (client: Redis, keyPrefix: string) => {
+  const stateProvider = createIoredisStateProvider({ client });
+  const schema = createRedisSchema(keyPrefix);
+  const store = {
+    provider: stateProvider,
+    sequenceKey: schema.keys.sequence,
+    setVersionsKey: schema.keys.setVersions,
+    opaqueFields: opaqueRecordFields,
+    commitKeyPrefix: schema.keys.commit(""),
+  };
+  const withTransaction = async <T>(fn: (txCtx: RedisStoreContext) => Promise<T>) => {
+    const transaction = createRedisTransaction(store, undefined);
+    const result = await fn({ transaction });
+    expect(await transaction.commit()).toBe(true);
+    return result;
+  };
+  return createMigrator({
+    migrations: createRedisSchemaMigrations({ schema, stateProvider, withTransaction }),
+    store: createRedisMigrationStore({
+      stateProvider,
+      withTransaction,
+      migrationsKey: schema.keys.migrations,
+      migrationLockKey: schema.keys.migrationLock,
+    }),
+  }).migrateToLatest();
+};
+
+const persistentKeyspace = async (client: Redis, keyPrefix: string) => {
+  const entries = await Promise.all(
+    (await client.keys(`${keyPrefix}*`)).map(async (key) => {
+      if ((await client.pttl(key)) !== -1) return [];
+      const type = await client.type(key);
+      const content =
+        type === "set"
+          ? (await client.smembers(key)).toSorted()
+          : type === "hash"
+            ? (await client.hkeys(key)).map((field) => field.replace(keyPrefix, "")).toSorted()
+            : null;
+      return [{ key: key.slice(keyPrefix.length), type, content }];
+    }),
+  );
+  return entries.flat().toSorted((a, b) => a.key.localeCompare(b.key));
+};
 
 describe("Redis state adapter migrations", () => {
   it("fences writes until migrateToLatest has run, while reads work", async ({ setup }) => {
@@ -64,6 +115,32 @@ describe("Redis state adapter migrations", () => {
     expect((await setup.client.smembers(`${setup.keyPrefix}migrations`)).toSorted()).toEqual(ALL);
     expect(await setup.client.smembers(`${setup.keyPrefix}schema-fences`)).toEqual(["2"]);
     expect(await setup.client.exists(`${setup.keyPrefix}migration-lock`)).toBe(0);
+  });
+
+  it("sets up a fresh keyspace in one step with the keys the migration history leaves", async ({
+    setup,
+  }) => {
+    await using stateAdapter = setup.createStateAdapter();
+    const historyPrefix = `{queuert-${crypto.randomUUID()}}:`;
+
+    const fresh = await stateAdapter.migrateToLatest();
+    const history = await migrateThroughHistory(setup.client, historyPrefix);
+
+    expect(fresh).toEqual({ applied: ALL, skipped: [], reverted: [], unrecognized: [] });
+    expect(history).toEqual(fresh);
+    expect(await persistentKeyspace(setup.client, setup.keyPrefix)).toEqual(
+      await persistentKeyspace(setup.client, historyPrefix),
+    );
+    expect(await persistentKeyspace(setup.client, setup.keyPrefix)).toEqual([
+      { key: "migrations", type: "set", content: ALL },
+      { key: "schema-fences", type: "set", content: ["2"] },
+      { key: "sequence", type: "string", content: null },
+      {
+        key: "set-versions",
+        type: "hash",
+        content: ["migrations", "schema-fences"],
+      },
+    ]);
   });
 
   it("applies each migration once when processes migrate at the same time", async ({ setup }) => {
@@ -256,5 +333,84 @@ describe("Redis state adapter migrations", () => {
       { consecutiveFailures: 1, lastAttemptError: "card declined", lastRescheduleReason: null },
       { consecutiveFailures: 0, lastAttemptError: null, lastRescheduleReason: null, input: [] },
     ]);
+  });
+
+  it("keeps a job write that lands while 002_schema_v2 rewrites consecutive failures", async ({
+    setup,
+  }) => {
+    const { client, keyPrefix } = setup;
+    const jobKey = `${keyPrefix}job:failed`;
+    const jobData = (consecutiveFailures?: number) =>
+      JSON.stringify({
+        id: "failed",
+        typeName: "charge-card",
+        chainId: "failed",
+        chainIndex: 0,
+        chainStatus: "running",
+        status: "pending",
+        createdAt: 0,
+        scheduledAt: 0,
+        attempt: 2,
+        lastAttemptAt: 0,
+        seq: "0000000000failed",
+        ...(consecutiveFailures === undefined ? {} : { consecutiveFailures }),
+      });
+    await client.hset(jobKey, {
+      v: "1",
+      d: jobData(),
+      u: JSON.stringify({ input: null, lastAttemptError: "card declined", blockers: [] }),
+    });
+    await client.zadd(`${keyPrefix}jobs:createdAt:all:charge-card`, 0, "failed");
+    await client.hset(`${keyPrefix}job-type-names`, "charge-card", "1");
+    await client.sadd(`${keyPrefix}schema-fences`, "1");
+    await client.sadd(`${keyPrefix}migrations`, "001_schema_fence_v1");
+    const base = createIoredisStateProvider({ client });
+    let writeBetween = true;
+    await using stateAdapter = setup.createStateAdapter({
+      eval: async (script, keys, args) => {
+        const reply = await base.eval(script, keys, args);
+        if (writeBetween && args[3] === `${keyPrefix}job:`) {
+          writeBetween = false;
+          await client.hset(jobKey, {
+            v: String(await client.incr(`${keyPrefix}sequence`)),
+            d: jobData(2),
+          });
+        }
+        return reply;
+      },
+    });
+
+    expect((await stateAdapter.migrateToLatest()).applied).toEqual(["002_schema_v2"]);
+
+    expect(writeBetween).toBe(false);
+    expect(await stateAdapter.getJobs({ jobIds: ["failed"] })).toMatchObject([
+      { consecutiveFailures: 2, lastAttemptError: "card declined" },
+    ]);
+  });
+
+  it("leaves the records that hold consecutiveFailures untouched when 002_schema_v2 runs again", async ({
+    setup,
+  }) => {
+    const { client, keyPrefix } = setup;
+    await using stateAdapter = setup.createStateAdapter();
+    await stateAdapter.migrateToLatest();
+    const chains = await stateAdapter.withTransaction(async (txCtx) =>
+      stateAdapter.createJobs({
+        txCtx,
+        jobs: ["charge-card", "send-receipt"].map((typeName) => ({
+          id: stateAdapter.config.generateJobId(),
+          typeName,
+          input: null,
+        })),
+      }),
+    );
+    const readVersions = async () =>
+      Promise.all(chains.map(async (chain) => client.hget(`${keyPrefix}job:${chain.id}`, "v")));
+    const versions = await readVersions();
+    await client.srem(`${keyPrefix}migrations`, "002_schema_v2");
+
+    expect((await stateAdapter.migrateToLatest()).applied).toEqual(["002_schema_v2"]);
+
+    expect(await readVersions()).toEqual(versions);
   });
 });

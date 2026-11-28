@@ -395,7 +395,7 @@ export type AttemptHandler<
 ) => Promise<void>;
 
 /**
- * Handler function called once per batch of jobs, for a processor with a `batchLimit` above 1.
+ * Handler function called once per batch of jobs, for a processor's `batchAttemptHandler`.
  *
  * Receives `jobs` (the running jobs of the batch, all of one type, each with its completed blocker
  * chains and its own `job.signal`), `applyJobOutcomes` (commits outcomes for named jobs inside the
@@ -412,6 +412,8 @@ export type AttemptHandler<
  * a call still running when the handler ends races the failure of its jobs.
  *
  * The batch takes one worker runner concurrency slot until the handler ends.
+ *
+ * @experimental
  */
 export type BatchAttemptHandler<
   TStateAdapter extends StateAdapter<any, any, any, Mode>,

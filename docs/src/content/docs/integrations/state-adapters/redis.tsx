@@ -271,7 +271,9 @@ const Page = () => (
           one in the <code>{"{keyPrefix}"}migrations</code> set. Run it on every boot: processes
           that run it at once take turns through a lease in{" "}
           <code>{"{keyPrefix}"}migration-lock</code>, so one migrates and the others wait and then
-          find nothing left to do.
+          find nothing left to do. On an empty keyspace it sets up the latest schema in one step and
+          records every schema migration as applied; a keyspace an earlier release created runs only
+          the migrations it is missing.
         </p>
       </Details>
       <Details summary={<span id="write-fence">Write fence</span>}>
@@ -285,7 +287,7 @@ const Page = () => (
           run, the set is empty and every such write is fenced. A breaking migration removes the
           versions of older code, so older processes fail those writes instead of corrupting state.
           Reads still work, and older workers report the error through <code>workerError</code> and
-          keep retrying. Stop them once you have deployed the newer version.
+          keep retrying, so a rolling deployment replaces them without stopping them first.
         </p>
         <p>
           The check runs when the transaction commits, so a transaction that began before a breaking

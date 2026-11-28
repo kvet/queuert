@@ -30,8 +30,8 @@ export type MysqlErrorClassification =
  * another one: MySQL rejects multi-table updates over `JSON_TABLE` on a connection without one.
  *
  * Transactions passed to Queuert may run at READ COMMITTED, REPEATABLE READ or SERIALIZABLE, as a
- * session default or per transaction, including mixed levels. Transactions the provider opens
- * itself run at READ COMMITTED.
+ * session default or per transaction, including mixed levels; REPEATABLE READ and SERIALIZABLE
+ * are experimental. Transactions the provider opens itself run at READ COMMITTED.
  *
  * @typeParam TTxContext - The transaction context type containing database client/connection info
  *

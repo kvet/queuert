@@ -7,6 +7,10 @@ import { createProcessors } from "./create-job-type-processors.ts";
 
 type Defs = {
   foo: { entry: true; input: { v: number }; output: { ok: true } };
+  bar: { entry: true; input: null; output: null };
+  baz: { entry: true; input: null; output: null };
+  qux: { entry: true; input: null; output: null };
+  quux: { entry: true; input: null; output: null };
 };
 const jobTypes = defineJobTypes<Defs>();
 
@@ -24,8 +28,16 @@ describe("createProcessors config validation", () => {
           foo: {
             backoffConfig: { initialDelayMs: 1000, maxDelayMs: Number.NaN, multiplier: 0 },
             batchLimit: 0,
-            attemptHandler: async () => {},
+            batchAttemptHandler: async () => {},
           },
+          bar: { batchLimit: undefined, batchAttemptHandler: async () => {} } as never,
+          baz: { batchLimit: 5, attemptHandler: async () => {} } as never,
+          qux: {} as never,
+          quux: {
+            attemptHandler: async () => {},
+            batchAttemptHandler: async () => {},
+            batchLimit: 5,
+          } as never,
         },
       });
     }).toThrow(
@@ -37,6 +49,10 @@ describe("createProcessors config validation", () => {
           '  - processors["foo"].backoffConfig.maxDelayMs must be a non-negative number (got NaN)',
           '  - processors["foo"].backoffConfig.multiplier must be a positive finite number (got 0)',
           '  - processors["foo"].batchLimit must be a positive integer (got 0)',
+          '  - processors["bar"].batchLimit must be a positive integer (got undefined)',
+          '  - processors["baz"].batchLimit requires batchAttemptHandler',
+          '  - processors["qux"] must have exactly one of attemptHandler and batchAttemptHandler',
+          '  - processors["quux"] must have exactly one of attemptHandler and batchAttemptHandler',
         ].join("\n"),
       }),
     );

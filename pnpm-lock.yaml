@@ -494,6 +494,82 @@ importers:
         specifier: 12.2.1
         version: 12.2.1(bare-buffer@3.7.3)
 
+  benchmarks/schema-migration:
+    dependencies:
+      '@queuert/mysql':
+        specifier: workspace:*
+        version: link:../../packages/mysql
+      '@queuert/mysql-schema-v1':
+        specifier: npm:@queuert/mysql@0.18.0
+        version: '@queuert/mysql@0.18.0(queuert@0.18.0)'
+      '@queuert/postgres':
+        specifier: workspace:*
+        version: link:../../packages/postgres
+      '@queuert/postgres-schema-v1':
+        specifier: npm:@queuert/postgres@0.18.0
+        version: '@queuert/postgres@0.18.0(queuert@0.18.0)'
+      '@queuert/redis':
+        specifier: workspace:*
+        version: link:../../packages/redis
+      '@queuert/redis-schema-v1':
+        specifier: npm:@queuert/redis@0.18.0
+        version: '@queuert/redis@0.18.0(queuert@0.18.0)'
+      '@queuert/sqlite':
+        specifier: workspace:*
+        version: link:../../packages/sqlite
+      '@queuert/sqlite-schema-v1':
+        specifier: npm:@queuert/sqlite@0.18.0
+        version: '@queuert/sqlite@0.18.0(queuert@0.18.0)'
+      benchmark-results:
+        specifier: workspace:*
+        version: link:../../packages-internal/benchmark-results
+      better-sqlite3:
+        specifier: 13.2.0
+        version: 13.2.0
+      example-mysql-state-mysql2:
+        specifier: workspace:*
+        version: link:../../examples/mysql/state-mysql2
+      example-postgresql-state-pg:
+        specifier: workspace:*
+        version: link:../../examples/postgresql/state-pg
+      example-redis-state-ioredis:
+        specifier: workspace:*
+        version: link:../../examples/redis/state-ioredis
+      example-sqlite-state-better-sqlite3:
+        specifier: workspace:*
+        version: link:../../examples/sqlite/state-better-sqlite3
+      ioredis:
+        specifier: 6.0.0
+        version: 6.0.0
+      mysql2:
+        specifier: 3.24.6
+        version: 3.24.6(@types/node@24.19.2)
+      pg:
+        specifier: 8.23.1
+        version: 8.23.1
+      queuert-schema-v1:
+        specifier: npm:queuert@0.18.0
+        version: queuert@0.18.0
+    devDependencies:
+      '@queuert/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages-internal/tsconfig
+      '@testcontainers/postgresql':
+        specifier: 12.2.1
+        version: 12.2.1(bare-buffer@3.7.3)
+      '@testcontainers/redis':
+        specifier: 12.2.1
+        version: 12.2.1(bare-buffer@3.7.3)
+      '@types/better-sqlite3':
+        specifier: 9.6.0
+        version: 9.6.0
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
+      testcontainers:
+        specifier: 12.2.1
+        version: 12.2.1(bare-buffer@3.7.3)
+
   benchmarks/type-complexity:
     dependencies:
       benchmark-results:
@@ -3402,6 +3478,30 @@ packages:
 
   '@quansync/fs@1.1.0':
     resolution: {integrity: sha512-qAPG/t3HqML1TlN7sY/pTbEjzFVAKsMjNNMGheyDosro+kT4iw2KCUoHcVdmliwWjorm4elZbgNQyU2eD97eDg==}
+
+  '@queuert/mysql@0.18.0':
+    resolution: {integrity: sha512-I02m/VQMmQ2LhmRB3pt7ITyaNO0piGpb5zS6AWbeBGYjGa7mhvLbe6ZYLnByfUJvVorFockJo5Fb0ooVWHfnHg==}
+    engines: {node: '>=24'}
+    peerDependencies:
+      queuert: 0.18.0
+
+  '@queuert/postgres@0.18.0':
+    resolution: {integrity: sha512-PvUcN8BoUWifxvUhjQaaY6BHy2SPExWZFffuC6sye6WX0VEeOPXH/fdIUzHwrWxRNNOsC0itByVRi0q9jDwPvw==}
+    engines: {node: '>=24'}
+    peerDependencies:
+      queuert: 0.18.0
+
+  '@queuert/redis@0.18.0':
+    resolution: {integrity: sha512-ts46SeRpE/uZhuFVn46EQM9UUwFwvkZlPRBY0TXxH+X5Kg2nCLiDF513hXOjBdN4kcNN4FVoK54NKrfxLCtAhA==}
+    engines: {node: '>=24'}
+    peerDependencies:
+      queuert: 0.18.0
+
+  '@queuert/sqlite@0.18.0':
+    resolution: {integrity: sha512-bUVo9J/7yZ1oLNoIyD8zmOSjr46tPd9fqCa//zHutoi0aiqDJe3w+aa1DrplFQS39722/0EQCwZWuvaNNBvoPw==}
+    engines: {node: '>=24'}
+    peerDependencies:
+      queuert: 0.18.0
 
   '@radix-ui/primitive@1.1.3':
     resolution: {integrity: sha512-JTF99U/6XIjCBo0wqkU5sK10glYe27MRRsfwoiq5zzOEZLHU3A3KCMa5X/azekYRCJ0HlwI0crAXS/5dEHTzDg==}
@@ -6412,6 +6512,10 @@ packages:
   queue-microtask@1.2.3:
     resolution: {integrity: sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A==}
 
+  queuert@0.18.0:
+    resolution: {integrity: sha512-xPshbGX5U35Moohz2kxnzNlS6phN4zLgaKR0sKMm29i9Q02XN18hn1B5/ZQF2jsR5k2RMAXG35ShmbmRhlb6AA==}
+    engines: {node: '>=24'}
+
   quick-format-unescaped@4.0.4:
     resolution: {integrity: sha512-tYC1Q1hgyRuHgloV/YXs2w15unPVh8qfu/qCTfhTYamaw7fyhumKa2yGpdSo87vY32rIclj+4fWYQXUMs9EHvg==}
 
@@ -8330,6 +8434,22 @@ snapshots:
   '@quansync/fs@1.1.0':
     dependencies:
       quansync: 1.0.0
+
+  '@queuert/mysql@0.18.0(queuert@0.18.0)':
+    dependencies:
+      queuert: 0.18.0
+
+  '@queuert/postgres@0.18.0(queuert@0.18.0)':
+    dependencies:
+      queuert: 0.18.0
+
+  '@queuert/redis@0.18.0(queuert@0.18.0)':
+    dependencies:
+      queuert: 0.18.0
+
+  '@queuert/sqlite@0.18.0(queuert@0.18.0)':
+    dependencies:
+      queuert: 0.18.0
 
   '@radix-ui/primitive@1.1.3': {}
 
@@ -11347,6 +11467,8 @@ snapshots:
   quansync@1.0.0: {}
 
   queue-microtask@1.2.3: {}
+
+  queuert@0.18.0: {}
 
   quick-format-unescaped@4.0.4: {}
 

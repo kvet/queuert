@@ -43,6 +43,9 @@ export const createDrizzlePgStateProvider = <TSchema extends Record<string, unkn
       ) {
         return { kind: "transaction_conflict" };
       }
+      if (candidates.some((candidate) => candidate?.code === "55P03")) {
+        return { kind: "lock_not_available" };
+      }
       const driverError = candidates.find((candidate) => candidate?.code === "42P01");
       if (driverError === undefined) return undefined;
       const tableName = /relation "([^"]+)" does not exist/.exec(String(driverError.message))?.[1];

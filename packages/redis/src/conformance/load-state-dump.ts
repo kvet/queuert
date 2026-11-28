@@ -3,15 +3,15 @@ import { type DumpJobRow, type StateDump, createDumpRowMapper } from "queuert/co
 
 import { encodeRecord } from "../state-adapter/redis-transaction.ts";
 import {
-  type IndexEntries,
-  createRedisSchema,
-  opaqueRecordFields,
-} from "../state-adapter/schema.redis.ts";
-import {
   type StoredJob,
   type StoredWorker,
   nextSeq,
 } from "../state-adapter/state-adapter.redis.ts";
+import {
+  type IndexEntries,
+  createRedisSchema,
+  opaqueRecordFields,
+} from "../state-adapter/state-schema.redis.ts";
 import type { RedisStateProvider } from "../state-provider/state-provider.redis.ts";
 
 const WRITE_SCRIPT = `

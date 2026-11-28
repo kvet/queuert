@@ -177,7 +177,7 @@ describe("attempt handler job", () => {
 });
 
 describe("batched attempt handler", () => {
-  it("gives a handler with a batchLimit the batch's jobs, applyJobOutcomes and fenceJobs", () => {
+  it("gives a batchAttemptHandler the batch's jobs, applyJobOutcomes and fenceJobs", () => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: { userId: string }; output: { sent: boolean } };
     }>();
@@ -189,7 +189,7 @@ describe("batched attempt handler", () => {
         processors: {
           test: {
             batchLimit: 50,
-            attemptHandler: async ({ jobs, applyJobOutcomes, fenceJobs }) => {
+            batchAttemptHandler: async ({ jobs, applyJobOutcomes, fenceJobs }) => {
               expectTypeOf(jobs[0].input).toEqualTypeOf<{ userId: string }>();
               expectTypeOf(jobs[0].status).toEqualTypeOf<"running">();
               expectTypeOf(jobs[0].signal).toEqualTypeOf<AbortSignal>();
@@ -225,7 +225,7 @@ describe("batched attempt handler", () => {
         processors: {
           test: {
             batchLimit: 2,
-            attemptHandler: async ({ jobs: [first, second], applyJobOutcomes }) => {
+            batchAttemptHandler: async ({ jobs: [first, second], applyJobOutcomes }) => {
               const [sent, failed] = await applyJobOutcomes({
                 ...txCtx,
                 items: [
@@ -243,7 +243,7 @@ describe("batched attempt handler", () => {
     ).toBeFunction();
   });
 
-  it("gives a handler with a batchLimit of 1 a single job", () => {
+  it("gives a batchAttemptHandler with a batchLimit of 1 the batch shape", () => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
@@ -255,9 +255,12 @@ describe("batched attempt handler", () => {
         processors: {
           test: {
             batchLimit: 1,
-            attemptHandler: async ({ job, applyJobOutcome }) => {
-              expectTypeOf(job.status).toEqualTypeOf<"running">();
-              await applyJobOutcome({ ...txCtx, output: null });
+            batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
+              expectTypeOf(jobs[0].status).toEqualTypeOf<"running">();
+              await applyJobOutcomes({
+                ...txCtx,
+                items: jobs.map((job) => ({ job, output: null })),
+              });
             },
           },
         },
@@ -265,7 +268,7 @@ describe("batched attempt handler", () => {
     ).toBeFunction();
   });
 
-  it("gives a handler with a batchLimit typed as number either shape", () => {
+  it("accepts a batchLimit typed as number", () => {
     const jobTypes = defineJobTypes<{
       test: { entry: true; input: null; output: null };
     }>();
@@ -278,14 +281,77 @@ describe("batched attempt handler", () => {
         processors: {
           test: {
             batchLimit,
-            attemptHandler: async (options) => {
-              await (options.jobs
-                ? options.applyJobOutcomes({
-                    ...txCtx,
-                    items: options.jobs.map((job) => ({ job, output: null })),
-                  })
-                : options.applyJobOutcome({ ...txCtx, output: null }));
+            batchAttemptHandler: async ({ jobs, applyJobOutcomes }) => {
+              await applyJobOutcomes({
+                ...txCtx,
+                items: jobs.map((job) => ({ job, output: null })),
+              });
             },
+          },
+        },
+      }),
+    ).toBeFunction();
+  });
+
+  it("rejects a batchAttemptHandler whose batchLimit may be missing", () => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+    const limit = 10 as number | undefined;
+
+    expectTypeOf((client: InProcessClient<typeof jobTypes>) =>
+      createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          // @ts-expect-error -- batchAttemptHandler requires a batchLimit
+          test: {
+            ...(limit === undefined ? {} : { batchLimit: limit }),
+            batchAttemptHandler: async () => {},
+          },
+        },
+      }),
+    ).toBeFunction();
+  });
+
+  it("rejects a batchLimit next to attemptHandler", () => {
+    const jobTypes = defineJobTypes<{
+      test: { entry: true; input: null; output: null };
+    }>();
+
+    expectTypeOf((client: InProcessClient<typeof jobTypes>) =>
+      createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          // @ts-expect-error -- batchLimit belongs to batchAttemptHandler
+          test: {
+            batchLimit: 10,
+            attemptHandler: async () => {},
+          },
+        },
+      }),
+    ).toBeFunction();
+  });
+
+  it("rejects a processor with neither handler or with both", () => {
+    const jobTypes = defineJobTypes<{
+      neither: { entry: true; input: null; output: null };
+      both: { entry: true; input: null; output: null };
+    }>();
+
+    expectTypeOf((client: InProcessClient<typeof jobTypes>) =>
+      createProcessors({
+        client,
+        jobTypes,
+        processors: {
+          // @ts-expect-error -- a processor needs attemptHandler or batchAttemptHandler
+          neither: {},
+          // @ts-expect-error -- a processor takes only one of the two handlers
+          both: {
+            batchLimit: 10,
+            attemptHandler: async () => {},
+            batchAttemptHandler: async () => {},
           },
         },
       }),

@@ -6,26 +6,27 @@ import { createDeploymentSpawner, startPaused, startTogether } from "@queuert/he
 import { acquirePostgres } from "@queuert/testcontainers";
 import { type MigrationResult, createMigrator, createTemplateApplier } from "@queuert/typed-sql";
 import { Pool } from "pg";
+import { SchemaFencedError } from "queuert";
 import { it as baseIt, describe, expect, vi } from "vitest";
 
+import { createPgStateAdapter } from "../state-adapter/state-adapter.pg.ts";
 import {
   createMigrationStore,
-  createPgStateAdapter,
   createSchemaMigrations,
-} from "../state-adapter/state-adapter.pg.ts";
+} from "../state-adapter/state-schema.migrations.pg.ts";
 import {
   type PgPoolContext,
   createPgPoolProvider,
 } from "../state-provider/state-provider.pg-pool.ts";
 import type { PgStateProvider } from "../state-provider/state-provider.pg.ts";
-import { LEASE_TTL_MS, MARKER } from "./state-adapter-migration.process.ts";
+import { LEASE_TTL_MS, MARKER } from "./state-schema.migrations.process.ts";
 
 const INSTALL = "001_schema_v1";
 const ALL = createSchemaMigrations({} as Provider, createTemplateApplier({})).map(
   (migration) => migration.name,
 );
 const spawnDeployment = createDeploymentSpawner<MigrationResult>(
-  join(import.meta.dirname, "state-adapter-migration.process.ts"),
+  join(import.meta.dirname, "state-schema.migrations.process.ts"),
   join(import.meta.dirname, "..", ".."),
 );
 
@@ -147,6 +148,39 @@ const indexDefinition = async (provider: Provider, indexName: string): Promise<s
   return row.indexdef;
 };
 
+const catalog = async (provider: Provider, schema: string): Promise<unknown[]> => [
+  ...(await query(
+    provider,
+    `SELECT c.relname, c.relkind, c.reloptions, c.relacl,
+       replace(CASE WHEN c.relkind = 'i' THEN pg_get_indexdef(c.oid) END, '${schema}.', '') AS indexdef,
+       (SELECT json_agg(json_build_object(
+          'name', a.attname,
+          'type', format_type(a.atttypid, a.atttypmod),
+          'not_null', a.attnotnull,
+          'default', pg_get_expr(d.adbin, d.adrelid)
+        ) ORDER BY a.attnum)
+        FROM pg_attribute a
+        LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+        WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped) AS columns,
+       (SELECT json_agg(json_build_object('name', co.conname, 'definition', pg_get_constraintdef(co.oid))
+          ORDER BY co.conname)
+        FROM pg_constraint co WHERE co.conrelid = c.oid) AS constraints,
+       (SELECT json_agg(tg.tgname ORDER BY tg.tgname)
+        FROM pg_trigger tg WHERE tg.tgrelid = c.oid AND NOT tg.tgisinternal) AS triggers
+     FROM pg_class c
+     WHERE c.relnamespace = '${schema}'::regnamespace
+     ORDER BY c.relname`,
+  )),
+  ...(await query(
+    provider,
+    `SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS arguments,
+       replace(pg_get_functiondef(p.oid), '${schema}.', '') AS definition
+     FROM pg_proc p
+     WHERE p.pronamespace = '${schema}'::regnamespace
+     ORDER BY p.proname`,
+  )),
+];
+
 describe("migrateToLatest", () => {
   it("names its migrations NNN_name, in ascending order", () => {
     for (const name of ALL) expect(name).toMatch(/^\d{3}_[a-z][a-z0-9_]*$/);
@@ -218,6 +252,56 @@ describe("migrateToLatest", () => {
       "CREATE INDEX queuert_job_running_idx ON public.queuert_job USING btree (type_name, attempt_at) WHERE (status = 'running'::text)",
     );
   });
+
+  it.for([
+    { tablePrefix: "queuert_", idType: "uuid" },
+    { tablePrefix: "custom_", idType: "text" },
+  ])(
+    "creates the schema the migration history creates, in one transaction, with table prefix $tablePrefix and $idType ids",
+    { timeout: 120_000 },
+    async ({ tablePrefix, idType }, { database: { provider } }) => {
+      await query(provider, "CREATE SCHEMA history");
+      await query(provider, "CREATE SCHEMA snapshot");
+      const historyTemplate = createTemplateApplier({
+        schema: "history",
+        table_prefix: tablePrefix,
+        job_id_type: idType,
+        worker_id_type: idType,
+      });
+      expect(
+        await createMigrator({
+          migrations: createSchemaMigrations(provider, historyTemplate),
+          store: createMigrationStore(provider, historyTemplate),
+        }).migrateToLatest(),
+      ).toEqual({ applied: ALL, skipped: [], reverted: [], unrecognized: [] });
+      const statements: string[] = [];
+      await using adapter = createPgStateAdapter({
+        stateProvider: {
+          ...provider,
+          executeSql: async (options) => {
+            statements.push(options.sql);
+            return provider.executeSql(options);
+          },
+        },
+        schema: "snapshot",
+        tablePrefix,
+        jobIdType: idType,
+        workerIdType: idType,
+        generateJobId: (): string => randomUUID(),
+        generateWorkerId: (): string => randomUUID(),
+      });
+
+      expect(await adapter.migrateToLatest()).toEqual({
+        applied: ALL,
+        skipped: [],
+        reverted: [],
+        unrecognized: [],
+      });
+
+      expect(statements.filter((statement) => statement.includes("job_v2"))).toEqual([]);
+      expect(await catalog(provider, "snapshot")).toEqual(await catalog(provider, "history"));
+    },
+  );
 
   it("is a no-op on a second run", { timeout: 120_000 }, async ({ database: { adapter } }) => {
     await adapter.migrateToLatest();
@@ -375,7 +459,7 @@ describe("upgrading from 001_schema_v1", () => {
             executeSql: async (options) => {
               const step = options.sql.includes("WITH source AS")
                 ? "copy"
-                : options.sql.includes("LOCK TABLE")
+                : options.sql.includes("IN ACCESS EXCLUSIVE MODE")
                   ? "cutover"
                   : undefined;
               if (step !== undefined) {
@@ -423,6 +507,10 @@ describe("upgrading from 001_schema_v1", () => {
       const referencedHeadId = "ffffffff-ffff-4fff-bfff-fffffffffff0";
       const partialDependentId = "00000000-0000-4000-8000-000000000007";
       const completingBlockerId = "00000000-0000-4000-8000-000000000008";
+      const firstBlockerId = "00000000-0000-4000-8000-000000000009";
+      const secondBlockerId = "00000000-0000-4000-8000-00000000000a";
+      const updatedDependentId = "ffffffff-ffff-4fff-bfff-fffffffffff1";
+      const unblockedDependentId = "00000000-0000-4000-8000-00000000000b";
       await query(
         provider,
         `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status)
@@ -440,7 +528,11 @@ describe("upgrading from 001_schema_v1", () => {
                 ('${referencedDependentId}', 'dependent', '${referencedDependentId}', 0, 'blocked', 'running'),
                 ('${referencedHeadId}', 'blocker', '${referencedHeadId}', 0, 'pending', 'running'),
                 ('${partialDependentId}', 'dependent', '${partialDependentId}', 0, 'blocked', 'running'),
-                ('${completingBlockerId}', 'blocker', '${completingBlockerId}', 0, 'pending', 'running')`,
+                ('${completingBlockerId}', 'blocker', '${completingBlockerId}', 0, 'pending', 'running'),
+                ('${firstBlockerId}', 'blocker', '${firstBlockerId}', 0, 'pending', 'running'),
+                ('${secondBlockerId}', 'blocker', '${secondBlockerId}', 0, 'pending', 'running'),
+                ('${updatedDependentId}', 'dependent', '${updatedDependentId}', 0, 'blocked', 'running'),
+                ('${unblockedDependentId}', 'dependent', '${unblockedDependentId}', 0, 'blocked', 'running')`,
       );
       await query(
         provider,
@@ -448,7 +540,10 @@ describe("upgrading from 001_schema_v1", () => {
          VALUES ('${deletedDependentId}', '${flaggedBlockerId}', 0),
                 ('${referencedDependentId}', '${referencedHeadId}', 0),
                 ('${partialDependentId}', '${completingBlockerId}', 0),
-                ('${partialDependentId}', '${referencedHeadId}', 1)`,
+                ('${partialDependentId}', '${referencedHeadId}', 1),
+                ('${updatedDependentId}', '${firstBlockerId}', 0),
+                ('${updatedDependentId}', '${secondBlockerId}', 1),
+                ('${unblockedDependentId}', '${completingBlockerId}', 0)`,
       );
       let releaseCopy!: () => void;
       const copyReleased = new Promise<void>((resolve) => {
@@ -518,6 +613,14 @@ describe("upgrading from 001_schema_v1", () => {
         `UPDATE queuert_job SET status = 'completed', chain_status = 'completed'
          WHERE id = '${completingBlockerId}'`,
       );
+      await query(
+        provider,
+        `UPDATE queuert_job SET status = 'pending' WHERE id = '${unblockedDependentId}'`,
+      );
+      await query(
+        provider,
+        `UPDATE queuert_job SET trace_context = 'updated' WHERE id = '${updatedDependentId}'`,
+      );
       releaseCopy();
       expect(await interrupted).toMatchObject({
         message: expect.stringContaining("copy interrupted"),
@@ -547,7 +650,11 @@ describe("upgrading from 001_schema_v1", () => {
         { id: referencedDependentId, status: "blocked", blocking: false, blockers_remaining: 1 },
         { id: partialDependentId, status: "blocked", blocking: false, blockers_remaining: 1 },
         { id: completingBlockerId, status: "completed", blocking: true, blockers_remaining: 0 },
+        { id: firstBlockerId, status: "pending", blocking: true, blockers_remaining: 0 },
+        { id: secondBlockerId, status: "pending", blocking: true, blockers_remaining: 0 },
+        { id: unblockedDependentId, status: "pending", blocking: false, blockers_remaining: 0 },
         { id: referencedHeadId, status: "running", blocking: true, blockers_remaining: 0 },
+        { id: updatedDependentId, status: "blocked", blocking: false, blockers_remaining: 2 },
         { id: lateDependentId, status: "blocked", blocking: false, blockers_remaining: 1 },
       ]);
       expect(
@@ -566,6 +673,141 @@ describe("upgrading from 001_schema_v1", () => {
         schema_fence_v1: false,
         schema_fence_v2: true,
       });
+
+      await adapter.withTransaction(async (txCtx) => {
+        await adapter.completeJobs({ txCtx, jobs: [{ jobId: firstBlockerId, output: null }] });
+        return adapter.unblockJobs({ txCtx, blockedByChainId: firstBlockerId });
+      });
+      expect(
+        await query(
+          provider,
+          `SELECT status, blockers_remaining FROM queuert_job WHERE id = '${updatedDependentId}'`,
+        ),
+      ).toEqual([{ status: "blocked", blockers_remaining: 1 }]);
+    },
+  );
+
+  it(
+    "fences every write of the current code while it copies",
+    { timeout: 120_000 },
+    async ({ database: { provider, adapter } }) => {
+      await migrateToInstall(provider);
+      const pendingId = randomUUID();
+      const blockerId = randomUUID();
+      const workerId = randomUUID();
+      const workerToken = randomUUID();
+      await query(
+        provider,
+        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status)
+         SELECT id, 'filler', id, 0, 'pending', 'running'
+         FROM (SELECT gen_random_uuid() AS id FROM generate_series(1, 2000)) ids`,
+      );
+      await query(
+        provider,
+        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status)
+         VALUES ('${pendingId}', 'pending', '${pendingId}', 0, 'pending', 'running'),
+                ('${blockerId}', 'blocker', '${blockerId}', 0, 'pending', 'running')`,
+      );
+      await query(
+        provider,
+        `INSERT INTO queuert_worker (id, type_names, concurrency, lease_until, token)
+         VALUES ('${workerId}', ARRAY['pending'], 1, now() + interval '1 hour', '${workerToken}')`,
+      );
+      let releaseCopy!: () => void;
+      const copyReleased = new Promise<void>((resolve) => {
+        releaseCopy = resolve;
+      });
+      let reachCopy!: () => void;
+      const copyReached = new Promise<void>((resolve) => {
+        reachCopy = resolve;
+      });
+      let batches = 0;
+      const pausedAdapter = createPgStateAdapter({
+        stateProvider: {
+          ...provider,
+          executeSql: async (options) => {
+            if (options.sql.includes("WITH source AS") && ++batches === 2) {
+              reachCopy();
+              await copyReleased;
+            }
+            return provider.executeSql(options);
+          },
+        },
+        generateJobId: (): string => randomUUID(),
+        generateWorkerId: (): string => randomUUID(),
+      });
+      const migrated = pausedAdapter.migrateToLatest();
+      await copyReached;
+
+      const writes: Record<string, () => Promise<unknown>> = {
+        createJobs: async () =>
+          adapter.withTransaction(async (txCtx) =>
+            adapter.createJobs({
+              txCtx,
+              jobs: [{ typeName: "created", id: randomUUID(), input: null }],
+            }),
+          ),
+        continueJobs: async () =>
+          adapter.withTransaction(async (txCtx) =>
+            adapter.continueJobs({
+              txCtx,
+              jobs: [
+                { typeName: "next", id: randomUUID(), input: null, continueFromId: pendingId },
+              ],
+            }),
+          ),
+        addJobsBlockers: async () =>
+          adapter.withTransaction(async (txCtx) =>
+            adapter.addJobsBlockers({
+              txCtx,
+              jobBlockers: [{ jobId: pendingId, blockedByChainIds: [blockerId] }],
+            }),
+          ),
+        startJobAttempts: async () =>
+          adapter.startJobAttempts({
+            batchLimits: { pending: 1 },
+            workerId,
+            workerToken,
+            limit: 1,
+          }),
+        completeJobs: async () =>
+          adapter.withTransaction(async (txCtx) =>
+            adapter.completeJobs({ txCtx, jobs: [{ jobId: pendingId, output: null }] }),
+          ),
+        rescheduleJobs: async () =>
+          adapter.rescheduleJobs({ jobs: [{ jobId: pendingId, error: "boom" }] }),
+        unblockJobs: async () =>
+          adapter.withTransaction(async (txCtx) =>
+            adapter.unblockJobs({ txCtx, blockedByChainId: blockerId }),
+          ),
+        deleteChains: async () =>
+          adapter.withTransaction(async (txCtx) =>
+            adapter.deleteChains({ txCtx, chainIds: [pendingId] }),
+          ),
+        startWorker: async () =>
+          adapter.startWorker({
+            workerId: randomUUID(),
+            typeNames: ["pending"],
+            concurrency: 1,
+            leaseMs: 60_000,
+          }),
+        extendWorkerLease: async () =>
+          adapter.extendWorkerLease({ workerId, workerToken, leaseMs: 60_000 }),
+        stopWorker: async () => adapter.stopWorker({ workerId, workerToken }),
+      };
+      const outcomes: Record<string, unknown> = {};
+      for (const [name, write] of Object.entries(writes)) {
+        outcomes[name] = await write().then(
+          () => "written",
+          (error: unknown) => (error instanceof SchemaFencedError ? "fenced" : error),
+        );
+      }
+      releaseCopy();
+
+      expect(outcomes).toEqual(
+        Object.fromEntries(Object.keys(writes).map((name) => [name, "fenced"])),
+      );
+      expect(await migrated).toMatchObject({ applied: ["002_schema_v2"] });
     },
   );
 
@@ -706,6 +948,139 @@ describe("upgrading from 001_schema_v1", () => {
   );
 
   it(
+    "installs its triggers without deadlocking a 0.18 transaction that writes job_blocker before job",
+    { timeout: 120_000 },
+    async ({ database: { connectionString, provider } }) => {
+      await migrateToInstall(provider);
+      const pool = new Pool({ connectionString });
+      try {
+        const writer = await pool.connect();
+        await writer.query("BEGIN");
+        await writer.query("LOCK TABLE queuert_job_blocker IN ROW EXCLUSIVE MODE");
+        let reachBlockerLock!: () => void;
+        const blockerLockReached = new Promise<void>((resolve) => {
+          reachBlockerLock = resolve;
+        });
+        const migratingAdapter = createPgStateAdapter({
+          stateProvider: {
+            ...provider,
+            executeSql: async (options) => {
+              if (options.sql.includes("job_blocker IN SHARE ROW EXCLUSIVE MODE"))
+                reachBlockerLock();
+              return provider.executeSql(options);
+            },
+          },
+          generateJobId: (): string => randomUUID(),
+          generateWorkerId: (): string => randomUUID(),
+        });
+        const migrated = migratingAdapter.migrateToLatest();
+        await blockerLockReached;
+        await writer.query("LOCK TABLE queuert_job IN ROW EXCLUSIVE MODE");
+        await writer.query("COMMIT");
+        writer.release();
+
+        expect(await migrated).toMatchObject({ applied: ["002_schema_v2"] });
+      } finally {
+        await pool.end();
+      }
+    },
+  );
+
+  it(
+    "waits out a transaction that holds the job table past the cutover's lock timeout",
+    { timeout: 120_000 },
+    async ({ database: { connectionString, provider } }) => {
+      await migrateToInstall(provider);
+      const pool = new Pool({ connectionString });
+      try {
+        const holder = await pool.connect();
+        let cutovers = 0;
+        let released: Promise<void> | undefined;
+        const blockedAdapter = createPgStateAdapter({
+          stateProvider: {
+            ...provider,
+            executeSql: async (options) => {
+              if (options.sql.includes("IN ACCESS EXCLUSIVE MODE") && ++cutovers === 1) {
+                await holder.query("BEGIN");
+                await holder.query("LOCK TABLE queuert_job IN ACCESS SHARE MODE");
+                released = sleep(6_000).then(async () => {
+                  await holder.query("COMMIT");
+                  holder.release();
+                });
+              }
+              return provider.executeSql(options);
+            },
+          },
+          generateJobId: (): string => randomUUID(),
+          generateWorkerId: (): string => randomUUID(),
+        });
+
+        expect(await blockedAdapter.migrateToLatest()).toMatchObject({
+          applied: ["002_schema_v2"],
+        });
+        await released;
+        expect(cutovers).toBeGreaterThanOrEqual(2);
+      } finally {
+        await pool.end();
+      }
+    },
+  );
+
+  it(
+    "keeps the copy of a run whose cutover failed, and cuts over without copying again",
+    { timeout: 120_000 },
+    async ({ database: { provider } }) => {
+      await migrateToInstall(provider);
+      const jobId = randomUUID();
+      await query(
+        provider,
+        `INSERT INTO queuert_job (id, type_name, chain_id, chain_index, status, chain_status)
+         VALUES ('${jobId}', 'copied', '${jobId}', 0, 'pending', 'running')`,
+      );
+      const interruptedAdapter = createPgStateAdapter({
+        stateProvider: {
+          ...provider,
+          executeSql: async (options) => {
+            if (options.sql.includes("IN ACCESS EXCLUSIVE MODE"))
+              throw new Error("cutover interrupted");
+            return provider.executeSql(options);
+          },
+        },
+        generateJobId: (): string => randomUUID(),
+        generateWorkerId: (): string => randomUUID(),
+      });
+      expect(
+        await interruptedAdapter.migrateToLatest().then(
+          () => undefined,
+          (error: unknown) => error,
+        ),
+      ).toMatchObject({ message: expect.stringContaining("cutover interrupted") });
+      await query(provider, `UPDATE queuert_job SET type_name = 'updated' WHERE id = '${jobId}'`);
+      let copies = 0;
+      const resumingAdapter = createPgStateAdapter({
+        stateProvider: {
+          ...provider,
+          executeSql: async (options) => {
+            if (options.sql.includes("WITH source AS")) copies++;
+            return provider.executeSql(options);
+          },
+        },
+        generateJobId: (): string => randomUUID(),
+        generateWorkerId: (): string => randomUUID(),
+      });
+
+      expect(await resumingAdapter.migrateToLatest()).toMatchObject({
+        applied: ["002_schema_v2"],
+      });
+
+      expect(copies).toBe(0);
+      expect(
+        await query(provider, `SELECT type_name, status FROM queuert_job WHERE id = '${jobId}'`),
+      ).toEqual([{ type_name: "updated", status: "pending" }]);
+    },
+  );
+
+  it(
     "finishes a run that stopped after the cutover, leaving nothing of the copy behind",
     { timeout: 120_000 },
     async ({ database: { provider, adapter } }) => {
@@ -724,9 +1099,20 @@ describe("upgrading from 001_schema_v1", () => {
         await query(
           provider,
           `SELECT to_regclass('public.queuert_job_v2') AS job_v2,
-                  to_regclass('public.queuert_job_v2_dirty') AS job_v2_dirty`,
+                  to_regclass('public.queuert_job_v2_dirty') AS job_v2_dirty,
+                  to_regclass('public.queuert_job_v2_dirty_blocked') AS job_v2_dirty_blocked,
+                  to_regclass('public.queuert_job_v2_completed') AS job_v2_completed,
+                  to_regclass('public.queuert_job_v2_copied') AS job_v2_copied`,
         ),
-      ).toEqual([{ job_v2: null, job_v2_dirty: null }]);
+      ).toEqual([
+        {
+          job_v2: null,
+          job_v2_dirty: null,
+          job_v2_dirty_blocked: null,
+          job_v2_completed: null,
+          job_v2_copied: null,
+        },
+      ]);
       expect(
         await query(
           provider,
